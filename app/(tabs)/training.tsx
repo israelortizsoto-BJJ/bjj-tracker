@@ -3,7 +3,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Button,
@@ -71,30 +71,6 @@ function dayLabel(ymd: string) {
   const weekday = dt.toLocaleDateString(undefined, { weekday: "short" }); // Mon
   const monthDay = dt.toLocaleDateString(undefined, { month: "short", day: "numeric" }); // Jan 21
   return `${weekday} • ${monthDay}`;
-}
-
-function weekRangeLabel(weekDates: string[]) {
-  if (!weekDates.length) return "This Week";
-  const start = weekDates[0];
-  const end = weekDates[weekDates.length - 1];
-
-  const [sy, sm, sd] = start.split("-").map(Number);
-  const [ey, em, ed] = end.split("-").map(Number);
-
-  const startDate = new Date(sy, sm - 1, sd);
-  const endDate = new Date(ey, em - 1, ed);
-
-  const startLabel = startDate.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-
-  const endLabel = endDate.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-
-  return `This Week (${startLabel} – ${endLabel})`;
 }
 
 function addDaysYMD(ymd: string, deltaDays: number) {
@@ -184,7 +160,6 @@ export default function Training() {
   const [searchQuery, setSearchQuery] = useState("");
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
-  const scrollRef = useRef<ScrollView>(null);
 
 // 3D) Gestures / interaction (week swipe)
 // tweakable
@@ -229,95 +204,11 @@ onMoveShouldSetPanResponderCapture: (_, g) => {
   // ✅ IMPORTANT: include viewMode so responder behavior updates when you toggle tabs
   [viewMode, setWeekStartYMD]
 );
-// Double-tap detector
-const lastWeekTapRef = useRef<number>(0);
 
-function goToCurrentWeek() {
-  // IMPORTANT: replace this with whatever your app uses to anchor week view:
-  // Example:
-  // setWeekStartYMD(getWeekStartYMD(today));
-  // setSelectedDate(today);
-
-  setSelectedDate(today);
-
-  // If you have weekStartYMD state:
-  // setWeekStartYMD(getWeekStartYMD(today));
-}
-
-function onWeekCardPress() {
-  const now = Date.now();
-  const delta = now - lastWeekTapRef.current;
-
-  if (delta < 300) {
-    // double tap
-    setViewMode("week");
-    goToCurrentWeek();
-  } else {
-    // single tap
-    setViewMode("week");
-    // (optional) keep this if you want: setSelectedDate(today);
-  }
-
-  lastWeekTapRef.current = now;
-}
 // 3C) Simple constants  
   const today = todayYMD();
   const yesterday = addDaysYMD(today, -1);
-function toggleDay(ymd: string) {
-  setExpandedDays((prev) => ({ ...prev, [ymd]: !(prev[ymd] ?? true) }));
-}
-type TechniqueKey = string;
 
-function normalizeKey(v: unknown): string {
-  return String(v ?? "")
-    .trim()
-    .toLowerCase();
-}
-
-function topN<K extends string>(
-  counts: Record<K, number>,
-  n = 5
-): Array<{ key: K; count: number }> {
-  return (Object.entries(counts) as Array<[K, number]>)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([key, count]) => ({ key, count }));
-}
-
-/**
- * Counts techniques (and optionally drills/systems later) from sessions.
- * Assumes a single technique string per session for now.
- */
-function countTechniques(sessions: Session[]) {
-  const counts: Record<TechniqueKey, number> = {};
-
-  for (const s of sessions) {
-    const k = normalizeKey(s.technique);
-    if (!k) continue;
-    counts[k] = (counts[k] ?? 0) + 1;
-  }
-
-  return {
-    counts,
-    top5: topN(counts, 5),
-  };
-}
-
-/**
- * If you later want “systems” distribution too:
- */
-function countSystems(sessions: Session[]) {
-  const counts: Record<string, number> = {};
-  for (const s of sessions) {
-    const k = normalizeKey(s.system);
-    if (!k) continue;
-    counts[k] = (counts[k] ?? 0) + 1;
-  }
-  return {
-    counts,
-    top5: topN(counts as Record<string, number>, 5),
-  };
-}
 // ------------------------------------------------------------
 // 4) Data loading + sync (effects)
 //    4A) refresh() -> loads AsyncStorage into state
@@ -342,7 +233,6 @@ useFocusEffect(
 // -----------------------------------------------------------
 // 5) Derived data (computed "view model" for rendering)
 // -----------------------------------------------------------
-const isYesterdayActive = viewMode === "day" && selectedDate === yesterday;  
 const sessionsByDate = useMemo(() => {
     const map: Record<string, Session[]> = {};
     for (const s of sessions) {
@@ -378,7 +268,7 @@ if (next[today] === undefined) next[today] = true;
 
     return next;
   });
-}, [viewMode, weekDates, sessionsByDate]);
+}, [viewMode, weekDates, sessionsByDate, today]);
 
 // Week grouped-by-day (best for your Week UI)
 
@@ -444,36 +334,34 @@ const filteredSessions = useMemo(() => {
 }, [baseSessionsRaw, systemFilter]);
 
 // 5X) Filter + sort helpers (used by week/day rendering)
-const matchesFilters = (s: Session) => {
-  // System filter
-  if (systemFilter !== "All" && s.system !== systemFilter) return false;
 
-  // Search filter
-  const q = searchQuery.trim().toLowerCase();
-  if (!q) return true;
+const filterAndSort = useCallback(
+  (list: Session[]) => {
+    const q = searchQuery.trim().toLowerCase();
 
-  const haystack = [
-    s.system,
-    s.technique,
-    s.drill,
-    s.notes,
-    s.youtubeUrl,
-  ]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+    return list
+      .filter((s: Session) => {
+        // System filter
+        if (systemFilter !== "All" && s.system !== systemFilter) return false;
 
-  return haystack.includes(q);
-};
+        // Search filter
+        if (!q) return true;
 
-const filterAndSort = (list: Session[]) =>
-  list
-    .filter(matchesFilters)
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
+        const haystack = [s.system, s.technique, s.drill, s.notes, s.youtubeUrl]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return haystack.includes(q);
+      })
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+  },
+  [systemFilter, searchQuery]
+);
 const searchedSessions = useMemo(() => {
   const q = searchQuery.trim().toLowerCase();
   if (!q) return filteredSessions;
@@ -494,26 +382,6 @@ const searchedSessions = useMemo(() => {
   });
 }, [filteredSessions, searchQuery]);
 
-const weekGroups = useMemo(() => {
-  return weekDates.map((ymd) => {
-    const list = sessionsByDate[ymd] ?? [];
-    // ------------------------------------------------------------
-    // 7) Render helpers (UI sub-sections)
-    // ------------------------------------------------------------
-    
-    // ------------------------------------------------------------
-    // 6) Render (UI)
-    //    - Calendar + filter chips + search
-    //    - Day/Week header
-    //    - Sessions list (collapsible groups in Week view)
-    // ------------------------------------------------------------
-    return {
-      ymd,
-      sessions: filterAndSort(list),
-    };
-  });
-  
-}, [weekDates, sessionsByDate, systemFilter, searchQuery]);
 const renderTitleAndIntro = () => (
   <>
     <Text style={{ fontSize: 22, fontWeight: "700" }}>Training Calendar</Text>
