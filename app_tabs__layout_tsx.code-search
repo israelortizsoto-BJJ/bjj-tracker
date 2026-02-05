@@ -1,0 +1,29 @@
+# Query: app/(tabs)/_layout.tsx
+# ContextLines: 1
+
+1 result - 1 file
+
+import { Tabs } from "expo-router";
+import React from "react";
+
+export default function TabLayout() {
+  return (
+    <Tabs
+      initialRouteName="profile"
+      screenOptions={{
+        headerShown: true,
+        tabBarStyle: { backgroundColor: "#0b0b0f", borderTopColor: "#2a2a3a" },
+        tabBarActiveTintColor: "#ffffff",
+        tabBarInactiveTintColor: "#b9b9c4",
+        headerStyle: { backgroundColor: "#0b0b0f" },
+        headerTitleStyle: { color: "#fff" },
+      }}
+    >
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+      <Tabs.Screen name="healthy" options={{ title: "Healthy" }} />
+      <Tabs.Screen name="gear" options={{ title: "Gear" }} />
+      <Tabs.Screen name="jj101" options={{ title: "JJ 101" }} />
+      <Tabs.Screen name="training" options={{ title: "Training" }} />
+    </Tabs>
+  );
+}
