@@ -370,6 +370,28 @@ const weeklyGoalStreakWeeks = useMemo(() => {
   return streak;
 }, [sessionsByDate, today]);
 
+const viewedWeekStart = useMemo(() => weekDates[0], [weekDates]);
+
+const thisWeekTotal = useMemo(() => {
+  return weekSessionsRaw.length;
+}, [weekSessionsRaw]);
+
+const lastWeekTotal = useMemo(() => {
+  const lastWeekStart = addDaysYMD(viewedWeekStart, -7);
+  let count = 0;
+
+  for (let i = 0; i < 7; i++) {
+    const d = addDaysYMD(lastWeekStart, i);
+    count += sessionsByDate[d]?.length ?? 0;
+  }
+
+  return count;
+}, [sessionsByDate, viewedWeekStart]);
+
+const weekDelta = useMemo(
+  () => thisWeekTotal - lastWeekTotal,
+  [thisWeekTotal, lastWeekTotal]
+);
   
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
@@ -690,6 +712,20 @@ const renderNewSessionCTA = () => (
 >
   Weekly goal streak: {weeklyGoalStreakWeeks} week
   {weeklyGoalStreakWeeks === 1 ? "" : "s"} (3+)
+</Text>
+<Text
+  style={{
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+  }}
+>
+  Vs last week:{" "}
+  {weekDelta === 0
+    ? "—"
+    : (weekDelta > 0 ? "▲ +" : "▼ ") + Math.abs(weekDelta)}
+  {" "}({lastWeekTotal} last week)
 </Text>
 </View>
 
