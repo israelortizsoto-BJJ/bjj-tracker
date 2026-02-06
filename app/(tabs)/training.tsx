@@ -301,28 +301,52 @@ const weekSessionsRaw = useMemo(() => {
 
   const thisWeekCount = useMemo(() => weekSessionsRaw.length, [weekSessionsRaw]);
   const topSystemThisWeek = useMemo(() => {
-  const counts: Record<string, number> = {};
+    const counts: Record<string, number> = {};
 
-  for (const s of weekSessionsRaw) {
-    const key = (s.system ?? "").trim();
-    if (!key) continue;
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-
-  let bestKey = "";
-  let bestCount = 0;
-
-  // deterministic: highest count, then alphabetical
-  for (const key of Object.keys(counts).sort()) {
-    const c = counts[key]!;
-    if (c > bestCount) {
-      bestCount = c;
-      bestKey = key;
+    for (const s of weekSessionsRaw) {
+      const key = (s.system ?? "").trim();
+      if (!key) continue;
+      counts[key] = (counts[key] ?? 0) + 1;
     }
-  }
 
-  return bestKey ? { system: bestKey, count: bestCount } : null;
-}, [weekSessionsRaw]);
+    let bestKey = "";
+    let bestCount = 0;
+
+    // deterministic: highest count, then alphabetical
+    for (const key of Object.keys(counts).sort()) {
+      const c = counts[key]!;
+      if (c > bestCount) {
+        bestCount = c;
+        bestKey = key;
+      }
+    }
+
+    return bestKey ? { system: bestKey, count: bestCount } : null;
+  }, [weekSessionsRaw]);
+
+  const topTechniqueThisWeek = useMemo(() => {
+    const counts: Record<string, number> = {};
+
+    for (const s of weekSessionsRaw) {
+      const key = (s.technique ?? "").trim();
+      if (!key) continue;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+
+    let bestKey = "";
+    let bestCount = 0;
+
+    // deterministic: highest count, then alphabetical
+    for (const key of Object.keys(counts).sort()) {
+      const c = counts[key]!;
+      if (c > bestCount) {
+        bestCount = c;
+        bestKey = key;
+      }
+    }
+
+    return bestKey ? { technique: bestKey, count: bestCount } : null;
+  }, [weekSessionsRaw]);
 
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
@@ -619,6 +643,19 @@ const renderNewSessionCTA = () => (
 >
   Top system:{" "}
   {topSystemThisWeek ? `${topSystemThisWeek.system} (${topSystemThisWeek.count})` : "—"}
+</Text>
+  <Text
+  style={{
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+  }}
+>
+  Top technique:{" "}
+  {topTechniqueThisWeek
+    ? topTechniqueThisWeek.technique + " (" + topTechniqueThisWeek.count + ")"
+    : "—"}
 </Text>
 </View>
 
