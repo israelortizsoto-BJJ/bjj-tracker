@@ -347,7 +347,30 @@ const weekSessionsRaw = useMemo(() => {
 
     return bestKey ? { technique: bestKey, count: bestCount } : null;
   }, [weekSessionsRaw]);
+  const WEEKLY_GOAL = 3;
 
+const weeklyGoalStreakWeeks = useMemo(() => {
+  let weekStart = dateToYMD(startOfWeekMonday(today));
+  let streak = 0;
+
+  while (true) {
+    let count = 0;
+
+    for (let i = 0; i < 7; i++) {
+      const d = addDaysYMD(weekStart, i);
+      count += sessionsByDate[d]?.length ?? 0;
+    }
+
+    if (count < WEEKLY_GOAL) break;
+
+    streak += 1;
+    weekStart = addDaysYMD(weekStart, -7);
+  }
+
+  return streak;
+}, [sessionsByDate, today]);
+
+  
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
     for (const date of Object.keys(sessionsByDate)) {
@@ -656,6 +679,17 @@ const renderNewSessionCTA = () => (
   {topTechniqueThisWeek
     ? topTechniqueThisWeek.technique + " (" + topTechniqueThisWeek.count + ")"
     : "—"}
+</Text>
+<Text
+  style={{
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+  }}
+>
+  Weekly goal streak: {weeklyGoalStreakWeeks} week
+  {weeklyGoalStreakWeeks === 1 ? "" : "s"} (3+)
 </Text>
 </View>
 
