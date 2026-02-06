@@ -393,6 +393,35 @@ const weekDelta = useMemo(
   [thisWeekTotal, lastWeekTotal]
 );
   
+const currentFocusSystem14d = useMemo(() => {
+  const counts: Record<string, number> = {};
+
+  for (let i = 0; i < 14; i++) {
+    const day = addDaysYMD(today, -i);
+    const list = sessionsByDate[day] ?? [];
+
+    for (const s of list) {
+      const key = (s.system ?? "").trim();
+      if (!key) continue;
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+  }
+
+  let bestKey = "";
+  let bestCount = 0;
+
+  // deterministic: highest count, then alphabetical
+  for (const key of Object.keys(counts).sort()) {
+    const c = counts[key]!;
+    if (c > bestCount) {
+      bestCount = c;
+      bestKey = key;
+    }
+  }
+
+  return bestKey ? { system: bestKey, count: bestCount } : null;
+}, [sessionsByDate, today]);
+
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
     for (const date of Object.keys(sessionsByDate)) {
@@ -700,6 +729,22 @@ const renderNewSessionCTA = () => (
   Top technique:{" "}
   {topTechniqueThisWeek
     ? topTechniqueThisWeek.technique + " (" + topTechniqueThisWeek.count + ")"
+    : "—"}
+</Text>
+<Text
+  style={{
+    color: "#cbd5e1",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 4,
+  }}
+>
+  Current focus (14d):{" "}
+  {currentFocusSystem14d
+    ? currentFocusSystem14d.system +
+      " (" +
+      currentFocusSystem14d.count +
+      ")"
     : "—"}
 </Text>
 <Text
