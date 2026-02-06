@@ -7,15 +7,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Button,
-  Keyboard,
+  Dimensions,
   PanResponder,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
+  View
 } from "react-native";
 
 import { Calendar } from "react-native-calendars";
@@ -46,6 +45,11 @@ function todayYMD() {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+const CARD_W = Math.min(360, Dimensions.get("window").width - 32);
+const SCREEN_W = Dimensions.get("window").width;
+const GAP = 12;
+const SIDE_PAD = Math.max(0, (SCREEN_W - CARD_W) / 2);
+const SNAP = CARD_W + GAP;
 
 function startOfWeekMonday(ymd: string) {
   const [y, m, d] = ymd.split("-").map(Number);
@@ -298,8 +302,6 @@ const weekSessionsRaw = useMemo(() => {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
 }, [weekDates, sessionsByDate]);
-
-  const thisWeekCount = useMemo(() => weekSessionsRaw.length, [weekSessionsRaw]);
   const topSystemThisWeek = useMemo(() => {
     const counts: Record<string, number> = {};
 
@@ -671,10 +673,11 @@ const renderNewSessionCTA = () => (
 );
   // Main Return.  
   return (
-  <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={{ flex: 1 }}>
+  <View style={{ flex: 1 }}>
     <ScrollView
     keyboardShouldPersistTaps="handled"
+    keyboardDismissMode="on-drag"
+    directionalLockEnabled
     contentContainerStyle={{ padding: 16, gap: 12 }}
     >
       {renderTitleAndIntro()}
@@ -689,89 +692,165 @@ const renderNewSessionCTA = () => (
 {renderNewSessionCTA()}
 
 {/* First Insight Moment */}
-<View
-  style={{
-    marginTop: 10,
-    marginBottom: 6,
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: "#0f172a", // dark slate
-  }}
+<View style={{ marginTop: 10, marginBottom: 6 }} pointerEvents="box-none">
+<ScrollView
+  horizontal
+  showsHorizontalScrollIndicator={false}
+  contentContainerStyle={{
+  paddingVertical: 8,
+  paddingLeft: SIDE_PAD,
+  paddingRight: SIDE_PAD,
+}}
+  nestedScrollEnabled
+  directionalLockEnabled
+  decelerationRate="fast"
+  snapToInterval={SNAP}
+  snapToAlignment="center"
+  disableIntervalMomentum
+  bounces={false}
 >
-  <Text
+
+  {/* Card 1: Sessions This Week */}
+  <View
     style={{
-      color: "#e5e7eb", // near-white
-      fontSize: 14,
-      fontWeight: "800",
+      width: CARD_W,
+      marginRight: GAP,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
     }}
   >
-    This week: {thisWeekCount} sessions
-  </Text>
-  <Text
-  style={{
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-  }}
->
-  Top system:{" "}
-  {topSystemThisWeek ? `${topSystemThisWeek.system} (${topSystemThisWeek.count})` : "—"}
-</Text>
-  <Text
-  style={{
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-  }}
->
-  Top technique:{" "}
-  {topTechniqueThisWeek
-    ? topTechniqueThisWeek.technique + " (" + topTechniqueThisWeek.count + ")"
-    : "—"}
-</Text>
-<Text
-  style={{
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-  }}
->
-  Current focus (14d):{" "}
-  {currentFocusSystem14d
-    ? currentFocusSystem14d.system +
-      " (" +
-      currentFocusSystem14d.count +
-      ")"
-    : "—"}
-</Text>
-<Text
-  style={{
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-  }}
->
-  Weekly goal streak: {weeklyGoalStreakWeeks} week
-  {weeklyGoalStreakWeeks === 1 ? "" : "s"} (3+)
-</Text>
-<Text
-  style={{
-    color: "#cbd5e1",
-    fontSize: 12,
-    fontWeight: "600",
-    marginTop: 4,
-  }}
->
-  Vs last week:{" "}
-  {weekDelta === 0
-    ? "—"
-    : (weekDelta > 0 ? "▲ +" : "▼ ") + Math.abs(weekDelta)}
-  {" "}({lastWeekTotal} last week)
-</Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 28, fontWeight: "900" }}>
+      {thisWeekTotal}
+    </Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 6 }}>
+      Sessions This Week
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+      Goal: 3+
+    </Text>
+  </View>
+
+  {/* Card 2: Top System */}
+  <View
+    style={{
+      width: CARD_W,
+      marginRight: GAP,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
+    }}
+  >
+    <Text style={{ color: UI.textPrimary, fontSize: 20, fontWeight: "900" }}>
+      {topSystemThisWeek ? topSystemThisWeek.system : "—"}
+    </Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 8 }}>
+      Top System
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+      {topSystemThisWeek ? topSystemThisWeek.count + " sessions" : ""}
+    </Text>
+  </View>
+
+  {/* Card 3: Top Technique */}
+  <View
+    style={{
+      width: CARD_W,
+      marginRight: GAP,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
+    }}
+  >
+    <Text
+      style={{ color: UI.textPrimary, fontSize: 18, fontWeight: "900" }}
+      numberOfLines={2}
+    >
+      {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
+    </Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 8 }}>
+      Top Technique
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+      {topTechniqueThisWeek ? topTechniqueThisWeek.count + " session" + (topTechniqueThisWeek.count === 1 ? "" : "s") : ""}
+    </Text>
+  </View>
+
+  {/* Card 4: Current Focus (14d) */}
+  <View
+    style={{
+      width: CARD_W,
+      marginRight: GAP,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
+    }}
+  >
+    <Text style={{ color: UI.textPrimary, fontSize: 20, fontWeight: "900" }}>
+      {currentFocusSystem14d ? currentFocusSystem14d.system : "—"}
+    </Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 8 }}>
+      Current Focus (14d)
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+      {currentFocusSystem14d ? currentFocusSystem14d.count + " sessions" : ""}
+    </Text>
+  </View>
+
+  {/* Card 5: Weekly Goal Streak */}
+  <View
+    style={{
+      width: CARD_W,
+      marginRight: GAP,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
+    }}
+  >
+    <Text style={{ color: UI.textPrimary, fontSize: 28, fontWeight: "900" }}>
+      {weeklyGoalStreakWeeks}
+    </Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 6 }}>
+      Weekly Goal Streak
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+      3+ sessions/week
+    </Text>
+  </View>
+
+  {/* Card 6: Vs Last Week */}
+  <View
+    style={{
+      width: CARD_W,
+      marginRight: GAP,
+      padding: 16,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
+    }}
+  >
+    <Text style={{ color: UI.textPrimary, fontSize: 28, fontWeight: "900" }}>
+      {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
+    </Text>
+    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 6 }}>
+      Vs Last Week
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+      {lastWeekTotal} last week
+    </Text>
+  </View>
+</ScrollView>
 </View>
 
 {/* Sessions list */}
@@ -1015,7 +1094,6 @@ const renderNewSessionCTA = () => (
 <Button title="↻ Refresh" onPress={refresh} />
 </ScrollView>
 </View>
-</TouchableWithoutFeedback>
 );
 }
   
