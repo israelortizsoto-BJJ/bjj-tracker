@@ -144,6 +144,20 @@ const UI = {
   textHeader: "#111827",   // slate dark for light surfaces
   badgeBg: "#111827",
 };
+const INSIGHT_STYLES = {
+  hero: { color: UI.textPrimary, fontSize: 28, fontWeight: "900" as const },
+  title: { color: UI.textPrimary, fontSize: 14, fontWeight: "800" as const, marginTop: 6 },
+  sub: { color: UI.textSecondary, fontSize: 12, marginTop: 4 },
+};
+const INSIGHT_CARD_CONTAINER = {
+  width: CARD_W,
+  marginRight: GAP,
+  padding: 16,
+  borderRadius: 18,
+  borderWidth: 1,
+  borderColor: UI.border,
+  backgroundColor: UI.bgCard,
+} as const;
 // ------------------------------
 // 3) Component setup (state + navigation + derived constants)
 // ------------------------------
@@ -162,6 +176,9 @@ export default function Training() {
   const [weekStartYMD, setWeekStartYMD] = useState(startOfWeekMondayYMD(todayYMD()));
   const [systemFilter, setSystemFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  // Insight cards (horizontal carousel)
+  const [insightIndex, setInsightIndex] = useState(0);
+  const INSIGHTS_COUNT: number = 6;
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
@@ -237,6 +254,12 @@ useFocusEffect(
 // -----------------------------------------------------------
 // 5) Derived data (computed "view model" for rendering)
 // -----------------------------------------------------------
+const hasInsights = INSIGHTS_COUNT > 0;
+const isSingleInsight = INSIGHTS_COUNT === 1;
+const showDots = INSIGHTS_COUNT > 1;
+const snapEnabled = INSIGHTS_COUNT > 1;
+const safeInsightIndex = Math.max(0, Math.min(insightIndex, INSIGHTS_COUNT - 1));
+
 const sessionsByDate = useMemo(() => {
     const map: Record<string, Session[]> = {};
     for (const s of sessions) {
@@ -704,153 +727,159 @@ const renderNewSessionCTA = () => (
   nestedScrollEnabled
   directionalLockEnabled
   decelerationRate="fast"
-  snapToInterval={SNAP}
   snapToAlignment="center"
-  disableIntervalMomentum
   bounces={false}
+  snapToInterval={snapEnabled ? SNAP : undefined}
+disableIntervalMomentum={snapEnabled}
+onMomentumScrollEnd={
+  snapEnabled
+    ? (e) => {
+        const index = Math.round(e.nativeEvent.contentOffset.x / SNAP);
+        setInsightIndex(index);
+      }
+    : undefined
+}
 >
-
   {/* Card 1: Sessions This Week */}
   <View
-    style={{
-      width: CARD_W,
-      marginRight: GAP,
-      padding: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: UI.bgCard,
-    }}
-  >
-    <Text style={{ color: UI.textPrimary, fontSize: 28, fontWeight: "900" }}>
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
+  ]}
+>
+   <Text style={INSIGHT_STYLES.hero}>
       {thisWeekTotal}
     </Text>
-    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 6 }}>
+    <Text style={INSIGHT_STYLES.title}>
       Sessions This Week
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+    <Text style={INSIGHT_STYLES.sub}>
       Goal: 3+
     </Text>
   </View>
 
   {/* Card 2: Top System */}
   <View
-    style={{
-      width: CARD_W,
-      marginRight: GAP,
-      padding: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: UI.bgCard,
-    }}
-  >
-    <Text style={{ color: UI.textPrimary, fontSize: 20, fontWeight: "900" }}>
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
+  ]}
+>
+    <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
       {topSystemThisWeek ? topSystemThisWeek.system : "—"}
     </Text>
-    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 8 }}>
+    <Text style={INSIGHT_STYLES.title}>
       Top System
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+    <Text style={INSIGHT_STYLES.sub}>
       {topSystemThisWeek ? topSystemThisWeek.count + " sessions" : ""}
     </Text>
   </View>
 
   {/* Card 3: Top Technique */}
   <View
-    style={{
-      width: CARD_W,
-      marginRight: GAP,
-      padding: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: UI.bgCard,
-    }}
-  >
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
+  ]}
+>
     <Text
-      style={{ color: UI.textPrimary, fontSize: 18, fontWeight: "900" }}
+      style={INSIGHT_STYLES.hero}
       numberOfLines={2}
     >
       {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
     </Text>
-    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 8 }}>
+    <Text style={INSIGHT_STYLES.title}>
       Top Technique
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+    <Text style={INSIGHT_STYLES.sub}>
       {topTechniqueThisWeek ? topTechniqueThisWeek.count + " session" + (topTechniqueThisWeek.count === 1 ? "" : "s") : ""}
     </Text>
   </View>
 
   {/* Card 4: Current Focus (14d) */}
   <View
-    style={{
-      width: CARD_W,
-      marginRight: GAP,
-      padding: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: UI.bgCard,
-    }}
-  >
-    <Text style={{ color: UI.textPrimary, fontSize: 20, fontWeight: "900" }}>
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
+  ]}
+>
+   <Text style={INSIGHT_STYLES.hero}>
       {currentFocusSystem14d ? currentFocusSystem14d.system : "—"}
     </Text>
-    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 8 }}>
+    <Text style={INSIGHT_STYLES.title}>
       Current Focus (14d)
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+    <Text style={INSIGHT_STYLES.sub}>
       {currentFocusSystem14d ? currentFocusSystem14d.count + " sessions" : ""}
     </Text>
   </View>
 
   {/* Card 5: Weekly Goal Streak */}
   <View
-    style={{
-      width: CARD_W,
-      marginRight: GAP,
-      padding: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: UI.bgCard,
-    }}
-  >
-    <Text style={{ color: UI.textPrimary, fontSize: 28, fontWeight: "900" }}>
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
+  ]}
+>
+    <Text style={INSIGHT_STYLES.hero}>
       {weeklyGoalStreakWeeks}
     </Text>
-    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 6 }}>
+    <Text style={INSIGHT_STYLES.title}>
       Weekly Goal Streak
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+    <Text style={INSIGHT_STYLES.sub}>
       3+ sessions/week
     </Text>
   </View>
 
   {/* Card 6: Vs Last Week */}
   <View
-    style={{
-      width: CARD_W,
-      marginRight: GAP,
-      padding: 16,
-      borderRadius: 18,
-      borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: UI.bgCard,
-    }}
-  >
-    <Text style={{ color: UI.textPrimary, fontSize: 28, fontWeight: "900" }}>
+  style={[
+    INSIGHT_CARD_CONTAINER,
+   { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
+  ]}
+>
+    <Text style={INSIGHT_STYLES.hero}>
       {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
     </Text>
-    <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "800", marginTop: 6 }}>
+    <Text style={INSIGHT_STYLES.title}>
       Vs Last Week
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 12, marginTop: 4 }}>
+    <Text style={INSIGHT_STYLES.sub}>
       {lastWeekTotal} last week
     </Text>
   </View>
 </ScrollView>
+{showDots && (
+  <View
+    pointerEvents="none"
+    style={{
+      position: "absolute",
+      bottom: 10,
+      left: 0,
+      right: 0,
+      flexDirection: "row",
+      justifyContent: "center",
+      gap: 6,
+    }}
+  >
+    {Array.from({ length: INSIGHTS_COUNT }).map((_, i) => (
+      <View
+        key={i}
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: 3,
+          backgroundColor:
+            i === safeInsightIndex
+              ? "rgba(255,255,255,0.9)"
+              : "rgba(255,255,255,0.3)",
+        }}
+      />
+    ))}
+  </View>
+)}
 </View>
 
 {/* Sessions list */}
