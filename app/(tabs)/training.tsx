@@ -178,7 +178,7 @@ export default function Training() {
   const [searchQuery, setSearchQuery] = useState("");
   // Insight cards (horizontal carousel)
   const [insightIndex, setInsightIndex] = useState(0);
-  const INSIGHTS_COUNT: number = 6;
+  
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
@@ -254,11 +254,7 @@ useFocusEffect(
 // -----------------------------------------------------------
 // 5) Derived data (computed "view model" for rendering)
 // -----------------------------------------------------------
-const hasInsights = INSIGHTS_COUNT > 0;
-const isSingleInsight = INSIGHTS_COUNT === 1;
-const showDots = INSIGHTS_COUNT > 1;
-const snapEnabled = INSIGHTS_COUNT > 1;
-const safeInsightIndex = Math.max(0, Math.min(insightIndex, INSIGHTS_COUNT - 1));
+
 
 const sessionsByDate = useMemo(() => {
     const map: Record<string, Session[]> = {};
@@ -417,7 +413,6 @@ const weekDelta = useMemo(
   () => thisWeekTotal - lastWeekTotal,
   [thisWeekTotal, lastWeekTotal]
 );
-  
 const currentFocusSystem14d = useMemo(() => {
   const counts: Record<string, number> = {};
 
@@ -446,6 +441,117 @@ const currentFocusSystem14d = useMemo(() => {
 
   return bestKey ? { system: bestKey, count: bestCount } : null;
 }, [sessionsByDate, today]);
+
+const insightCards = [
+  // Card 1: Sessions This Week
+  (
+    <View
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 0 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero}>{thisWeekTotal}</Text>
+      <Text style={INSIGHT_STYLES.title}>Sessions This Week</Text>
+      <Text style={INSIGHT_STYLES.sub}>Goal: 3+</Text>
+    </View>
+  ),
+
+  // Card 2: Top System
+  (
+    <View
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 1 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
+        {topSystemThisWeek ? topSystemThisWeek.system : "—"}
+      </Text>
+      <Text style={INSIGHT_STYLES.title}>Top System</Text>
+      <Text style={INSIGHT_STYLES.sub}>
+        {topSystemThisWeek ? `${topSystemThisWeek.count} sessions` : ""}
+      </Text>
+    </View>
+  ),
+
+  // Card 3: Top Technique
+  (
+    <View
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 2 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
+        {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
+      </Text>
+      <Text style={INSIGHT_STYLES.title}>Top Technique</Text>
+      <Text style={INSIGHT_STYLES.sub}>
+        {topTechniqueThisWeek
+          ? `${topTechniqueThisWeek.count} session${topTechniqueThisWeek.count === 1 ? "" : "s"}`
+          : ""}
+      </Text>
+    </View>
+  ),
+
+  // Card 4: Current Focus (14d)
+  (
+    <View
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 3 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero}>
+        {currentFocusSystem14d ? currentFocusSystem14d.system : "—"}
+      </Text>
+      <Text style={INSIGHT_STYLES.title}>Current Focus (14d)</Text>
+      <Text style={INSIGHT_STYLES.sub}>
+        {currentFocusSystem14d ? `${currentFocusSystem14d.count} sessions` : ""}
+      </Text>
+    </View>
+  ),
+
+  // Card 5: Weekly Goal Streak
+  (
+    <View
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 4 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero}>{weeklyGoalStreakWeeks}</Text>
+      <Text style={INSIGHT_STYLES.title}>Weekly Goal Streak</Text>
+      <Text style={INSIGHT_STYLES.sub}>3+ sessions/week</Text>
+    </View>
+  ),
+
+  // Card 6: Vs Last Week
+  (
+    <View
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 5 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero}>
+        {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
+      </Text>
+      <Text style={INSIGHT_STYLES.title}>Vs Last Week</Text>
+      <Text style={INSIGHT_STYLES.sub}>{lastWeekTotal} last week</Text>
+    </View>
+  ),
+];
+
+const insightsCount = insightCards.length;
+
+const hasInsights = insightsCount > 0;
+const showDots = insightsCount > 1;
+const snapEnabled = insightsCount > 1;
+const safeInsightIndex = Math.max(0, Math.min(insightIndex, insightsCount - 1));
+
+
 
   const markedDates = useMemo(() => {
     const marks: Record<string, any> = {};
@@ -740,116 +846,9 @@ onMomentumScrollEnd={
     : undefined
 }
 >
-  {/* Card 1: Sessions This Week */}
-  <View
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
-  ]}
->
-   <Text style={INSIGHT_STYLES.hero}>
-      {thisWeekTotal}
-    </Text>
-    <Text style={INSIGHT_STYLES.title}>
-      Sessions This Week
-    </Text>
-    <Text style={INSIGHT_STYLES.sub}>
-      Goal: 3+
-    </Text>
-  </View>
-
-  {/* Card 2: Top System */}
-  <View
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
-  ]}
->
-    <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
-      {topSystemThisWeek ? topSystemThisWeek.system : "—"}
-    </Text>
-    <Text style={INSIGHT_STYLES.title}>
-      Top System
-    </Text>
-    <Text style={INSIGHT_STYLES.sub}>
-      {topSystemThisWeek ? topSystemThisWeek.count + " sessions" : ""}
-    </Text>
-  </View>
-
-  {/* Card 3: Top Technique */}
-  <View
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
-  ]}
->
-    <Text
-      style={INSIGHT_STYLES.hero}
-      numberOfLines={2}
-    >
-      {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
-    </Text>
-    <Text style={INSIGHT_STYLES.title}>
-      Top Technique
-    </Text>
-    <Text style={INSIGHT_STYLES.sub}>
-      {topTechniqueThisWeek ? topTechniqueThisWeek.count + " session" + (topTechniqueThisWeek.count === 1 ? "" : "s") : ""}
-    </Text>
-  </View>
-
-  {/* Card 4: Current Focus (14d) */}
-  <View
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
-  ]}
->
-   <Text style={INSIGHT_STYLES.hero}>
-      {currentFocusSystem14d ? currentFocusSystem14d.system : "—"}
-    </Text>
-    <Text style={INSIGHT_STYLES.title}>
-      Current Focus (14d)
-    </Text>
-    <Text style={INSIGHT_STYLES.sub}>
-      {currentFocusSystem14d ? currentFocusSystem14d.count + " sessions" : ""}
-    </Text>
-  </View>
-
-  {/* Card 5: Weekly Goal Streak */}
-  <View
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
-  ]}
->
-    <Text style={INSIGHT_STYLES.hero}>
-      {weeklyGoalStreakWeeks}
-    </Text>
-    <Text style={INSIGHT_STYLES.title}>
-      Weekly Goal Streak
-    </Text>
-    <Text style={INSIGHT_STYLES.sub}>
-      3+ sessions/week
-    </Text>
-  </View>
-
-  {/* Card 6: Vs Last Week */}
-  <View
-  style={[
-    INSIGHT_CARD_CONTAINER,
-   { opacity: safeInsightIndex === 5 ? 1 : 0.92 }
-  ]}
->
-    <Text style={INSIGHT_STYLES.hero}>
-      {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
-    </Text>
-    <Text style={INSIGHT_STYLES.title}>
-      Vs Last Week
-    </Text>
-    <Text style={INSIGHT_STYLES.sub}>
-      {lastWeekTotal} last week
-    </Text>
-  </View>
+{insightCards.map((card, i) => (
+  <View key={i}>{card}</View>
+))}
 </ScrollView>
 {showDots && (
   <View
@@ -864,7 +863,7 @@ onMomentumScrollEnd={
       gap: 6,
     }}
   >
-    {Array.from({ length: INSIGHTS_COUNT }).map((_, i) => (
+    {Array.from({ length: insightsCount }).map((_, i) => (
       <View
         key={i}
         style={{
