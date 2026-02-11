@@ -6,8 +6,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
+  Alert,
   Button,
   Dimensions,
+  Linking,
   PanResponder,
   Pressable,
   ScrollView,
@@ -16,7 +18,6 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-
 import { Calendar } from "react-native-calendars";
 
 type Session = {
@@ -82,6 +83,28 @@ function addDaysYMD(ymd: string, deltaDays: number) {
   const date = new Date(y, m - 1, d);
   date.setDate(date.getDate() + deltaDays);
   return dateToYMD(date);
+}
+function normalizeUrl(url?: string) {
+  if (!url) return "";
+  const u = url.trim();
+  if (!u) return "";
+  return u.startsWith("http://") || u.startsWith("https://") ? u : `https://${u}`;
+}
+
+async function openUrl(url?: string) {
+  const u = normalizeUrl(url);
+  if (!u) return;
+
+  try {
+    const can = await Linking.canOpenURL(u);
+    if (!can) {
+      Alert.alert("Can't open link", "Please check the YouTube URL.");
+      return;
+    }
+    await Linking.openURL(u);
+  } catch {
+    Alert.alert("Can't open link", "Please check the YouTube URL.");
+  }
 }
 
 function sessionTitle(s: Session) {
@@ -443,6 +466,27 @@ const currentFocusSystem14d = useMemo(() => {
 }, [sessionsByDate, today]);
 
 const insightCards = [
+  // Card 0: Narrative Intro
+(
+  <View
+    style={[
+      INSIGHT_CARD_CONTAINER,
+      { opacity: insightIndex === 0 ? 1 : 0.92 },
+    ]}
+  >
+    <Text style={INSIGHT_STYLES.hero} numberOfLines={1} ellipsizeMode="tail">
+      Your Game
+    </Text>
+
+    <Text style={INSIGHT_STYLES.title}>
+      Training patterns
+    </Text>
+
+    <Text style={INSIGHT_STYLES.sub}>
+      Reveal how you're building your jiu-jitsu
+    </Text>
+  </View>
+),
   // Card 1: Sessions This Week
   (
     <View
@@ -483,9 +527,13 @@ const insightCards = [
         { opacity: insightIndex === 2 ? 1 : 0.92 },
       ]}
     >
-      <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
-        {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
-      </Text>
+     <Text
+      style={INSIGHT_STYLES.hero}
+      numberOfLines={1}
+      ellipsizeMode="tail"
+      >
+      {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
+    </Text>
       <Text style={INSIGHT_STYLES.title}>Top Technique</Text>
       <Text style={INSIGHT_STYLES.sub}>
         {topTechniqueThisWeek
@@ -911,8 +959,8 @@ onMomentumScrollEnd={
 
   </View>
     {weekDates.map((ymd) => {
-      const dayListRaw = weekSessionsByDate[ymd] ?? [];
-      const dayList = filterAndSort(dayListRaw);
+      const dayListRaw: Session[] = weekSessionsByDate[ymd] ?? [];
+      const dayList: Session[] = filterAndSort(dayListRaw);
       if (dayList.length === 0) return null;
 
       return (
@@ -959,7 +1007,11 @@ onMomentumScrollEnd={
                 return (
                   <Pressable
                     key={s.id}
-                    onPress={() => router.push(`/training/${s.id}`)}
+                    onPress={(e) => {
+  // If a child handled the tap (YT pill), don’t navigate.
+  if ((e as any)?.defaultPrevented) return;
+  router.push(`/training/${s.id}`);
+}}
                     style={{
                       paddingVertical: 12,
                       paddingHorizontal: 12,
@@ -978,42 +1030,67 @@ onMomentumScrollEnd={
                         alignItems: "center",
                       }}
                     >
-                      <Text style={{ fontWeight: "800", color: "white", flex: 1 }}>
-                        {sessionTitle(s)}
-                      </Text>
-
-                      {badges.length > 0 && (
+                     <Text
+                      style={{ fontWeight: "800", color: "white", flex: 1, flexShrink: 1, minWidth: 0 }}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      {sessionTitle(s)}
+                    </Text>
+                       {badges.length > 0 && (
                         <View style={{ flexDirection: "row", gap: 6 }}>
-                          {badges.map((b) => (
-                            <View
-                              key={b}
-                              style={{
-                                paddingHorizontal: 8,
-                                paddingVertical: 4,
-                                borderRadius: 999,
-                                backgroundColor: "#1b1c2a",
-                                borderWidth: 1,
-                                borderColor: "#2a2a3a",
-                              }}
-                            >
-                              <Text
+                       {badges.map((b) => {
+                           const label = String(b);
+                            const isYT = label.toLowerCase() === "yt" && !!s.youtubeUrl?.trim();
+
+                            return (
+                              <Pressable
+                                key={label}
+                                disabled={!isYT}
+                              onPress={(e) => {
+  if (!isYT) return;
+
+  // stop the row Pressable from also firing
+  e.stopPropagation?.();
+  (e as any).preventDefault?.();
+
+  console.log("YT pill pressed", s.youtubeUrl);
+  openUrl(s.youtubeUrl);
+}}
+                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                                 style={{
-                                  color: "#cfcfe6",
-                                  fontSize: 12,
-                                  fontWeight: "700",
-                                }}
+  opacity: isYT ? 1 : 0.35,
+}}
                               >
-                                {b}
-                              </Text>
-                            </View>
-                          ))}
-                        </View>
-                      )}
+                                <View
+                                  style={{
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 4,
+                                    borderRadius: 999,
+                                    backgroundColor: "#1b1c2a",
+                                    borderWidth: 1,
+                                    borderColor: "#2a2a3a",
+                                  }}
+                                >
+                                  <Text style={{ color: "#cfcfe6", fontSize: 12, fontWeight: "700" }}>
+                                    {label}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                            );
+                              })}
+                              </View>
+                            )}
+
                     </View>
 
                     {!!sessionSummary(s) && (
-                      <Text numberOfLines={2} style={{ color: "#b9b9c4" }}>
-                        {sessionSummary(s)}
+                      <Text
+                        style={{ color: "#b9b9c4" }}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
+                      {sessionSummary(s)}
                       </Text>
                     )}
                   </Pressable>
@@ -1057,7 +1134,11 @@ onMomentumScrollEnd={
       return (
         <Pressable
           key={s.id}
-          onPress={() => router.push(`/training/${s.id}`)}
+          onPress={(e) => {
+          // If a child already handled the tap (YT pill), don't navigate.
+          if ((e as any)?.defaultPrevented) return;
+          router.push(`/training/${s.id}`);
+        }}
           style={{
             paddingVertical: 12,
             paddingHorizontal: 12,
@@ -1076,41 +1157,64 @@ onMomentumScrollEnd={
               alignItems: "center",
             }}
           >
-            <Text style={{ fontWeight: "800", color: "white", flex: 1 }}>
+            <Text
+              style={{ fontWeight: "800", color: "white", flex: 1, flexShrink: 1, minWidth: 0 }}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
               {sessionTitle(s)}
             </Text>
 
             {badges.length > 0 && (
               <View style={{ flexDirection: "row", gap: 6 }}>
-                {badges.map((b) => (
-                  <View
-                    key={b}
-                    style={{
-                      paddingHorizontal: 8,
-                      paddingVertical: 4,
-                      borderRadius: 999,
-                      backgroundColor: "#1b1c2a",
-                      borderWidth: 1,
-                      borderColor: "#2a2a3a",
+               {badges.map((b) => {
+                const label = String(b);
+                const isYT = label.toLowerCase() === "yt" && !!s.youtubeUrl?.trim();
+
+                return (
+                  <Pressable
+                    key={label}
+                    disabled={!isYT}
+                    onPress={(e) => {
+                      if (!isYT) return;
+
+                      // ✅ stop the row Pressable from also firing
+                      e.stopPropagation?.();
+                      (e as any).preventDefault?.();
+
+                      console.log("YT pill pressed (day)", s.youtubeUrl);
+                      openUrl(s.youtubeUrl);
                     }}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                    style={{ opacity: isYT ? 1 : 0.35 }}
                   >
-                    <Text
+                    <View
                       style={{
-                        color: "#cfcfe6",
-                        fontSize: 12,
-                        fontWeight: "700",
+                        paddingHorizontal: 8,
+                        paddingVertical: 4,
+                        borderRadius: 999,
+                        backgroundColor: "#1b1c2a",
+                        borderWidth: 1,
+                        borderColor: "#2a2a3a",
                       }}
                     >
-                      {b}
-                    </Text>
-                  </View>
-                ))}
+                      <Text style={{ color: "#cfcfe6", fontSize: 12, fontWeight: "700" }}>
+                        {label}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
               </View>
             )}
           </View>
 
           {!!sessionSummary(s) && (
-            <Text numberOfLines={2} style={{ color: "#b9b9c4" }}>
+            <Text
+              style={{ color: "#b9b9c4" }}
+              numberOfLines={2}
+              ellipsizeMode="tail"
+            >
               {sessionSummary(s)}
             </Text>
           )}
