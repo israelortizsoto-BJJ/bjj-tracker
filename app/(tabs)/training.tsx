@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Alert,
+  Modal,
   Button,
   Dimensions,
   Linking,
@@ -16,6 +17,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Image,
   View
 } from "react-native";
 import { Calendar } from "react-native-calendars";
@@ -32,6 +34,8 @@ type Session = {
   imageUri?: string | null;
   videoUri?: string | null;
 };
+
+type PreviewState = null | { type: "image" | "video"; uri: string };
 
 const STORAGE_KEY = "bjj.sessions.v1";
 
@@ -131,6 +135,26 @@ function sessionBadges(s: Session) {
   if (s.videoUri) badges.push("VID");
   return badges;
 }
+
+type BadgeAction =
+  | { type: "yt"; uri: string }
+  | { type: "image"; uri: string }
+  | { type: "video"; uri: string };
+
+function getBadgeAction(labelRaw: any, s: Session): BadgeAction | null {
+  const label = String(labelRaw).trim().toLowerCase();
+
+  if (label === "yt" && !!s.youtubeUrl?.trim()) {
+    return { type: "yt", uri: s.youtubeUrl.trim() };
+  }
+  if (label === "img" && !!s.imageUri?.trim()) {
+    return { type: "image", uri: s.imageUri.trim() };
+  }
+  if (label === "vid" && !!s.videoUri?.trim()) {
+    return { type: "video", uri: s.videoUri.trim() };
+  }
+  return null;
+}
 async function loadSessions(): Promise<Session[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
   if (!raw) return [];
@@ -199,6 +223,7 @@ export default function Training() {
   const [weekStartYMD, setWeekStartYMD] = useState(startOfWeekMondayYMD(todayYMD()));
   const [systemFilter, setSystemFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
+  const [preview, setPreview] = useState<PreviewState>(null);
   // Insight cards (horizontal carousel)
   const [insightIndex, setInsightIndex] = useState(0);
   
@@ -929,7 +954,7 @@ onMomentumScrollEnd={
 )}
 </View>
 
-{/* Sessions list */}
+{/* 6E Sessions list */}
 {viewMode === "week" ? (
   <View style={{ flex: 1 }}>
     {/* Swipe rail: captures horizontal swipes to change week WITHOUT stealing vertical scroll or Pressables.
@@ -1040,28 +1065,35 @@ onMomentumScrollEnd={
                        {badges.length > 0 && (
                         <View style={{ flexDirection: "row", gap: 6 }}>
                        {badges.map((b) => {
-                           const label = String(b);
-                            const isYT = label.toLowerCase() === "yt" && !!s.youtubeUrl?.trim();
+  const label = String(b);
+  const action = getBadgeAction(label, s);
+  const isInteractive = !!action;
 
-                            return (
-                              <Pressable
-                                key={label}
-                                disabled={!isYT}
-                              onPress={(e) => {
-  if (!isYT) return;
+  return (
+    <Pressable
+      key={label}
+      disabled={!isInteractive}
+      onPress={(e) => {
+        if (!action) return;
 
-  // stop the row Pressable from also firing
-  e.stopPropagation?.();
-  (e as any).preventDefault?.();
+        // stop the row Pressable from also firing
+        e.stopPropagation?.();
+        (e as any).preventDefault?.();
 
-  console.log("YT pill pressed", s.youtubeUrl);
-  openUrl(s.youtubeUrl);
-}}
-                                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                                style={{
-  opacity: isYT ? 1 : 0.35,
-}}
-                              >
+        if (action.type === "yt") {
+          openUrl(action.uri);
+          return;
+        }
+
+        // IMG / VID
+        setPreview({ type: action.type, uri: action.uri });
+      }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      style={{
+        opacity: isInteractive ? 1 : 0.35,
+        // keep the rest of your existing pill style lines BELOW this
+      }}
+    >
                                 <View
                                   style={{
                                     paddingHorizontal: 8,
@@ -1168,45 +1200,53 @@ onMomentumScrollEnd={
             {badges.length > 0 && (
               <View style={{ flexDirection: "row", gap: 6 }}>
                {badges.map((b) => {
-                const label = String(b);
-                const isYT = label.toLowerCase() === "yt" && !!s.youtubeUrl?.trim();
+  const label = String(b);
+  const action = getBadgeAction(label, s);
+  const isInteractive = !!action;
 
-                return (
-                  <Pressable
-                    key={label}
-                    disabled={!isYT}
-                    onPress={(e) => {
-                      if (!isYT) return;
+  return (
+    <Pressable
+      key={label}
+      disabled={!isInteractive}
+      onPress={(e) => {
+        if (!action) return;
 
-                      // ✅ stop the row Pressable from also firing
-                      e.stopPropagation?.();
-                      (e as any).preventDefault?.();
+        // stop the row Pressable from also firing
+        e.stopPropagation?.();
+        (e as any).preventDefault?.();
 
-                      console.log("YT pill pressed (day)", s.youtubeUrl);
-                      openUrl(s.youtubeUrl);
-                    }}
-                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                    style={{ opacity: isYT ? 1 : 0.35 }}
-                  >
-                    <View
-                      style={{
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        borderRadius: 999,
-                        backgroundColor: "#1b1c2a",
-                        borderWidth: 1,
-                        borderColor: "#2a2a3a",
-                      }}
-                    >
-                      <Text style={{ color: "#cfcfe6", fontSize: 12, fontWeight: "700" }}>
-                        {label}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
+        if (action.type === "yt") {
+          openUrl(action.uri);
+          return;
+        }
+
+        // IMG / VID
+        setPreview({ type: action.type, uri: action.uri });
+      }}
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      style={{ opacity: isInteractive ? 1 : 0.35 }}
+    >
+      {/* keep your existing pill UI exactly like week renderer */}
+      <View
+        style={{
+          paddingHorizontal: 8,
+          paddingVertical: 4,
+          borderRadius: 999,
+          backgroundColor: "#1b1c2a",
+          borderWidth: 1,
+          borderColor: "#2a2a3a",
+        }}
+      >
+        <Text style={{ color: "#fcfce6", fontSize: 12, fontWeight: "700" }}>
+          {label}
+        </Text>
+      </View>
+    </Pressable>
+  );
+})}
               </View>
             )}
+
           </View>
 
           {!!sessionSummary(s) && (
@@ -1218,13 +1258,80 @@ onMomentumScrollEnd={
               {sessionSummary(s)}
             </Text>
           )}
+
         </Pressable>
       );
     })}
   </>
 )}
+
 <Button title="↻ Refresh" onPress={refresh} />
 </ScrollView>
+<Modal
+  visible={!!preview}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setPreview(null)}
+>
+  <Pressable
+    style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)" }}
+    onPress={() => setPreview(null)}
+  >
+    <Pressable
+      onPress={(e) => e.stopPropagation()}
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 16,
+      }}
+    >
+      <Pressable
+        onPress={() => setPreview(null)}
+        style={{ alignSelf: "flex-end", paddingVertical: 10, paddingHorizontal: 12 }}
+      >
+        <Text style={{ color: "white", fontSize: 16 }}>Close</Text>
+      </Pressable>
+
+     {preview && preview.type === "image" && (
+  <Image
+    source={{ uri: preview.uri }}
+    style={{ width: "100%", height: Math.round(SCREEN_W * 0.9), borderRadius: 12 }}
+    resizeMode="contain"
+  />
+)}
+
+      {preview?.type === "video" && (
+        <View
+          style={{
+            width: "100%",
+            height: "75%",
+            borderRadius: 12,
+            overflow: "hidden",
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
+          <Text style={{ color: "white", marginBottom: 12 }}>
+            Video preview (MVP)
+          </Text>
+
+          <Pressable
+            onPress={() => openUrl(preview.uri)}
+            style={{
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              backgroundColor: "rgba(255,255,255,0.15)",
+            }}
+          >
+            <Text style={{ color: "white" }}>Open Video</Text>
+          </Pressable>
+        </View>
+      )}
+    </Pressable>
+  </Pressable>
+</Modal>
 </View>
 );
 }
