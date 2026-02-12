@@ -5,19 +5,21 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ResizeMode, Video } from "expo-av";
+import * as MediaLibrary from "expo-media-library";
 import {
   Alert,
-  Modal,
   Button,
   Dimensions,
+  Image,
   Linking,
+  Modal,
   PanResponder,
   Pressable,
   ScrollView,
   Text,
   TextInput,
   TouchableOpacity,
-  Image,
   View
 } from "react-native";
 import { Calendar } from "react-native-calendars";
@@ -33,9 +35,15 @@ type Session = {
   youtubeUrl: string;
   imageUri?: string | null;
   videoUri?: string | null;
+  imageAssetId?: string | null;
+  videoAssetId?: string | null;
 };
 
-type PreviewState = null | { type: "image" | "video"; uri: string };
+type PreviewState =
+  | null
+  | { type: "image"; uri: string; assetId?: string | null }
+  | { type: "video"; uri: string; assetId?: string | null };
+
 
 const STORAGE_KEY = "bjj.sessions.v1";
 
@@ -109,6 +117,71 @@ async function openUrl(url?: string) {
   } catch {
     Alert.alert("Can't open link", "Please check the YouTube URL.");
   }
+}
+
+async function openMediaUri(uri?: string) {
+  const u = uri?.trim();
+  if (!u) return;
+
+  try {
+    const can = await Linking.canOpenURL(u);
+    if (!can) {
+      Alert.alert("Can't open media", "This device can't open this media URI.");
+      return;
+    }
+    await Linking.openURL(u);
+  } catch {
+    Alert.alert("Can't open media", "Unable to open this media URI.");
+  }
+}
+
+async function resolveMediaUri(
+  uri?: string | null,
+  assetId?: string | null
+): Promise<string | null> {
+  const u = uri?.trim();
+  if (!u) return null;
+
+  // Already a real file path
+  if (u.startsWith("file://")) return u;
+
+  // iOS Photos library URIs (camera roll)
+  if ((u.startsWith("ph://") || u.startsWith("assets-library://")) && assetId) {
+    try {
+      const info = await MediaLibrary.getAssetInfoAsync(assetId);
+      return info.localUri ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+async function resolvePlayableVideoUri(
+  uri: string | null,
+  assetId: string | null
+): Promise<string | null> {
+  const u = uri?.trim();
+  if (!u) return null;
+
+  // If we already have a file path, try it directly
+  if (u.startsWith("file://")) return u;
+
+  // iOS camera roll URIs need asset resolution
+  if ((u.startsWith("ph://") || u.startsWith("assets-library://")) && assetId) {
+    try {
+      const info = await MediaLibrary.getAssetInfoAsync(assetId);
+      return info.localUri ?? info.uri ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  // If it's some other URL (https), allow it
+  if (u.startsWith("http://") || u.startsWith("https://")) return u;
+
+  return null;
 }
 
 function sessionTitle(s: Session) {
@@ -224,6 +297,7 @@ export default function Training() {
   const [systemFilter, setSystemFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [preview, setPreview] = useState<PreviewState>(null);
+  const [playableVideoUri, setPlayableVideoUri] = useState<string | null>(null);
   // Insight cards (horizontal carousel)
   const [insightIndex, setInsightIndex] = useState(0);
   
@@ -299,10 +373,31 @@ useFocusEffect(
     refresh();
   }, [refresh])
 );
+useEffect(() => {
+  let cancelled = false;
+
+  async function run() {
+    // reset each time preview changes
+    setPlayableVideoUri(null);
+
+    if (!preview || preview.type !== "video") return;
+
+    const resolved = await resolveMediaUri(preview.uri, preview.assetId ?? null);
+    if (cancelled) return;
+
+    setPlayableVideoUri(resolved);
+  }
+
+  run();
+
+  return () => {
+    cancelled = true;
+  };
+}, [preview]);
+
 // -----------------------------------------------------------
 // 5) Derived data (computed "view model" for rendering)
 // -----------------------------------------------------------
-
 
 const sessionsByDate = useMemo(() => {
     const map: Record<string, Session[]> = {};
@@ -1086,7 +1181,11 @@ onMomentumScrollEnd={
         }
 
         // IMG / VID
-        setPreview({ type: action.type, uri: action.uri });
+        setPreview({
+  type: action.type,
+  uri: action.uri,
+  assetId: action.type === "image" ? s.imageAssetId : s.videoAssetId,
+});
       }}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={{
@@ -1221,7 +1320,11 @@ onMomentumScrollEnd={
         }
 
         // IMG / VID
-        setPreview({ type: action.type, uri: action.uri });
+        setPreview({
+  type: action.type,
+  uri: action.uri,
+  assetId: action.type === "image" ? s.imageAssetId : s.videoAssetId,
+});
       }}
       hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={{ opacity: isInteractive ? 1 : 0.35 }}
@@ -1293,42 +1396,29 @@ onMomentumScrollEnd={
         <Text style={{ color: "white", fontSize: 16 }}>Close</Text>
       </Pressable>
 
-     {preview && preview.type === "image" && (
+    {preview && preview.type === "video" && (
+  <View style={{ width: "100%", gap: 12 }}>
+    {playableVideoUri ? (
+      <Video
+        source={{ uri: playableVideoUri }}
+        style={{ width: "100%", height: Math.round(SCREEN_W * 0.9), borderRadius: 12 }}
+        useNativeControls
+        resizeMode={ResizeMode.CONTAIN}
+      />
+    ) : (
+      <Text style={{ color: "white" }}>
+        Resolving video from camera roll...
+      </Text>
+    )}
+  </View>
+)}
+{preview && preview.type === "image" && (
   <Image
     source={{ uri: preview.uri }}
     style={{ width: "100%", height: Math.round(SCREEN_W * 0.9), borderRadius: 12 }}
     resizeMode="contain"
   />
 )}
-
-      {preview?.type === "video" && (
-        <View
-          style={{
-            width: "100%",
-            height: "75%",
-            borderRadius: 12,
-            overflow: "hidden",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "white", marginBottom: 12 }}>
-            Video preview (MVP)
-          </Text>
-
-          <Pressable
-            onPress={() => openUrl(preview.uri)}
-            style={{
-              paddingVertical: 12,
-              paddingHorizontal: 16,
-              borderRadius: 10,
-              backgroundColor: "rgba(255,255,255,0.15)",
-            }}
-          >
-            <Text style={{ color: "white" }}>Open Video</Text>
-          </Pressable>
-        </View>
-      )}
     </Pressable>
   </Pressable>
 </Modal>
