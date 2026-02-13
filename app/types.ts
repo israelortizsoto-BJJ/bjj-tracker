@@ -20,3 +20,4 @@ export type Session = {
   imageAssetId?: string | null;
   videoAssetId?: string | null;
 };
+
