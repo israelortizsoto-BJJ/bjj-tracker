@@ -24,20 +24,8 @@ import {
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 
-type Session = {
-  id: string;
-  createdAt: string;
-  date: string; // YYYY-MM-DD
-  system: string;
-  technique: string;
-  drill: string;
-  notes: string;
-  youtubeUrl: string;
-  imageUri?: string | null;
-  videoUri?: string | null;
-  imageAssetId?: string | null;
-  videoAssetId?: string | null;
-};
+import type { Session } from "../types";
+
 
 type PreviewState =
   | null

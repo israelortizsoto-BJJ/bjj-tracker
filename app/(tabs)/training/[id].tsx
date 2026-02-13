@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import type { Session } from "../../types";
 
 const STORAGE_KEY = "bjj.sessions.v1";
 
@@ -68,26 +69,6 @@ function todayYMD() {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-type Session = {
-  id: string;
-  createdAt: string;
-  date: string; // YYYY-MM-DD
-  system: string;
-
-  // New (more specific technique breakdown)
-  position?: string;
-  grips?: string;
-  finish?: string;
-
-  // Legacy (keep for backward compatibility while we transition)
-  technique?: string;
-
-  drill: string;
-  notes: string;
-  youtubeUrl: string;
-  imageUri?: string | null;
-  videoUri?: string | null;
-};
 
 async function loadSessions(): Promise<Session[]> {
   const raw = await AsyncStorage.getItem(STORAGE_KEY);
@@ -127,6 +108,8 @@ export default function TrainingSessionEditor() {
   const [date, setDate] = useState(prefillDate || todayYMD());
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [videoUri, setVideoUri] = useState<string | null>(null);
+  const [imageAssetId, setImageAssetId] = useState<string | null>(null);
+  const [videoAssetId, setVideoAssetId] = useState<string | null>(null);
   const videoRef = useRef<Video>(null);
   const [videoKey, setVideoKey] = useState(0);
   const canSave = useMemo(() => {
@@ -175,6 +158,7 @@ setImageUri(null);
 setVideoUri(null);
   }, [isNew, prefillDate])
 );
+// Block 4: useEffect to load session if editing existing, or set defaults if new
   useEffect(() => {
     (async () => {
       const sessions = await loadSessions();
@@ -200,10 +184,13 @@ setVideoUri(null);
       setYoutubeUrl(found.youtubeUrl || "");
       setImageUri(found.imageUri ?? null);
       setVideoUri(found.videoUri ?? null);
+      setImageAssetId(found.imageAssetId ?? null);
+      setVideoAssetId(found.videoAssetId ?? null);
       setDate(found.date || todayYMD());
 
       setLoading(false);
     })();
+    // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
   }, [isNew, router, sessionId]);
 
     async function ensureMediaPermissions() {
@@ -223,9 +210,12 @@ async function pickImage() {
   });
 
   if (!result.canceled && result.assets?.[0]?.uri) {
-    const persisted = await persistMedia(result.assets[0].uri, "image");
-    setImageUri(persisted);
-  }
+  const asset = result.assets[0];
+  const persisted = await persistMedia(asset.uri, "image");
+
+  setImageUri(persisted);
+  setImageAssetId(asset.assetId ?? null);
+}
 }
 
 async function pickVideo() {
@@ -236,9 +226,12 @@ async function pickVideo() {
   });
 
   if (!result.canceled && result.assets?.[0]?.uri) {
-    const persisted = await persistMedia(result.assets[0].uri, "video");
-    setVideoUri(persisted);
-  }
+  const asset = result.assets[0];
+  const persisted = await persistMedia(asset.uri, "video");
+
+  setVideoUri(persisted);
+  setVideoAssetId(asset.assetId ?? null);
+}
 }
   async function onSave() {
     const now = new Date().toISOString();
@@ -264,6 +257,8 @@ async function pickVideo() {
       youtubeUrl,
       imageUri,
       videoUri,
+      imageAssetId: imageAssetId ?? existingSession?.imageAssetId ?? null,
+      videoAssetId: videoAssetId ?? existingSession?.videoAssetId ?? null,
     };
 
     const next = isNew
