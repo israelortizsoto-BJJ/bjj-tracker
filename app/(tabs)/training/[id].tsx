@@ -9,15 +9,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
+  Modal,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import type { Session } from "../../types";
+
+import { buildTechniqueIndex } from "../../fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
+
+// Fundamentals: build static search index once (do NOT move inside component)
+const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
 
 const STORAGE_KEY = "bjj.sessions.v1";
 
@@ -100,8 +107,15 @@ export default function TrainingSessionEditor() {
   const [position, setPosition] = useState("");
   const [grips, setGrips] = useState("");
   const [finish, setFinish] = useState("");
+  
+// MVP taxonomy picker (new)
+  const [gear, setGear] = useState<"gi" | "nogi">("gi");
+  const [techniqueId, setTechniqueId] = useState("");
+  const [techPickerOpen, setTechPickerOpen] = useState(false);
+  const [techQuery, setTechQuery] = useState("");
+
 // Legacy (keep for old sessions while we transition)
-  const [technique, setTechnique] = useState(""); 
+  const [technique, setTechnique] = useState("");
   const [drill, setDrill] = useState("");
   const [notes, setNotes] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
@@ -178,7 +192,10 @@ setVideoUri(null);
   
 
       setSystem(found.system || SYSTEMS[0]);
-      setTechnique(found.technique || "");
+
+      setTechniqueId(found.techniqueId || "");
+      setGear(found.gear || "gi");
+      setTechnique(found.technique || ""); // legacy label still supported
       setDrill(found.drill || "");
       setNotes(found.notes || "");
       setYoutubeUrl(found.youtubeUrl || "");
@@ -192,6 +209,19 @@ setVideoUri(null);
     })();
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
   }, [isNew, router, sessionId]);
+
+  // Block 5: Derived data (technique search results)
+const techResults = useMemo(() => {
+  const q = techQuery.trim().toLowerCase();
+  if (!q) return [];
+
+  return TECH_INDEX.filter((t: any) => {
+    const label = String(t?.label ?? "").toLowerCase();
+    const path = String(t?.path ?? "").toLowerCase();
+    return label.includes(q) || path.includes(q);
+  }).slice(0, 20);
+}, [techQuery, TECH_INDEX]);
+
 
     async function ensureMediaPermissions() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -353,14 +383,72 @@ return; // prevents any router.replace below from firing immediately
   </View>
 </View>
         <Text style={styles.label}>Technique of the Day</Text>
-        <TextInput
-          autoFocus
-          value={technique}
-          onChangeText={setTechnique}
-          placeholder="What did you learn?"
-          placeholderTextColor="#6f6f86"
-          style={styles.input}
-        />
+
+<TouchableOpacity
+  style={styles.input}
+  onPress={() => setTechPickerOpen(true)}
+>
+  <Text>
+    {techniqueId
+      ? String(TECH_INDEX.find((t: any) => t.id === techniqueId)?.path ?? "Selected technique")
+      : "Pick a technique…"}
+  </Text>
+</TouchableOpacity>
+
+<Modal visible={techPickerOpen} animationType="slide">
+  <SafeAreaView style={styles.container}>
+    <View style={styles.headerRow}>
+      <Text style={styles.h1}>Pick Technique</Text>
+      <TouchableOpacity onPress={() => setTechPickerOpen(false)}>
+        <Text style={styles.headerDeleteText}>Close</Text>
+      </TouchableOpacity>
+    </View>
+
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Gear</Text>
+      <View style={styles.pillRow}>
+        {(["gi", "nogi"] as const).map((g) => (
+          <TouchableOpacity
+            key={g}
+            style={[styles.pill, gear === g && styles.pillSelected]}
+            onPress={() => setGear(g)}
+          >
+            <Text style={[styles.pillText, gear === g && styles.pillTextSelected]}>
+              {g}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+
+    <TextInput
+      value={techQuery}
+      onChangeText={setTechQuery}
+      placeholder="Search technique…"
+      style={styles.input}
+      autoFocus
+    />
+
+    <ScrollView style={{ marginTop: 12 }}>
+      {techResults
+        .filter((t: any) => t.gear === gear)
+        .map((t: any) => (
+          <TouchableOpacity
+            key={t.id}
+            style={styles.row}
+            onPress={() => {
+              setTechniqueId(t.id);
+              setTechnique(t.label); // legacy sync for now
+              setTechPickerOpen(false);
+            }}
+          >
+            <Text style={styles.rowTitle}>{t.label}</Text>
+            <Text style={styles.helperText}>{t.path}</Text>
+          </TouchableOpacity>
+        ))}
+    </ScrollView>
+  </SafeAreaView>
+</Modal>
         <Text style={styles.helperText}>
         Format: position → grips → finish (ex: De La Riva • sleeve+pants • sweep)
         </Text>
@@ -706,6 +794,9 @@ headerSaveText: {
   pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a" },
   pillText: { color: "#cfcfe6", fontSize: 12 },
   pillTextActive: { color: "white", fontWeight: "700" },
+  pillSelected: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a" },
+  pillTextSelected: { color: "white", fontWeight: "700" },
+  rowTitle: { flex: 1 },
   row: { flexDirection: "row", gap: 10, marginTop: 12 },
   rowItem: { flex: 1 },
   card: {
