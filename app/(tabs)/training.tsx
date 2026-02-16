@@ -107,21 +107,7 @@ async function openUrl(url?: string) {
   }
 }
 
-async function openMediaUri(uri?: string) {
-  const u = uri?.trim();
-  if (!u) return;
 
-  try {
-    const can = await Linking.canOpenURL(u);
-    if (!can) {
-      Alert.alert("Can't open media", "This device can't open this media URI.");
-      return;
-    }
-    await Linking.openURL(u);
-  } catch {
-    Alert.alert("Can't open media", "Unable to open this media URI.");
-  }
-}
 
 async function resolveMediaUri(
   uri?: string | null,
@@ -146,31 +132,7 @@ async function resolveMediaUri(
   return null;
 }
 
-async function resolvePlayableVideoUri(
-  uri: string | null,
-  assetId: string | null
-): Promise<string | null> {
-  const u = uri?.trim();
-  if (!u) return null;
 
-  // If we already have a file path, try it directly
-  if (u.startsWith("file://")) return u;
-
-  // iOS camera roll URIs need asset resolution
-  if ((u.startsWith("ph://") || u.startsWith("assets-library://")) && assetId) {
-    try {
-      const info = await MediaLibrary.getAssetInfoAsync(assetId);
-      return info.localUri ?? info.uri ?? null;
-    } catch {
-      return null;
-    }
-  }
-
-  // If it's some other URL (https), allow it
-  if (u.startsWith("http://") || u.startsWith("https://")) return u;
-
-  return null;
-}
 
 function sessionTitle(s: Session) {
   // Auto-title: System + Technique (fallbacks)
@@ -576,12 +538,13 @@ const currentFocusSystem14d = useMemo(() => {
 const insightCards = [
   // Card 0: Narrative Intro
 (
-  <View
-    style={[
-      INSIGHT_CARD_CONTAINER,
-      { opacity: insightIndex === 0 ? 1 : 0.92 },
-    ]}
-  >
+ <View
+  key="insight-0"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 0 ? 1 : 0.92 },
+  ]}
+>
     <Text style={INSIGHT_STYLES.hero} numberOfLines={1} ellipsizeMode="tail">
       Your Game
     </Text>
@@ -591,18 +554,19 @@ const insightCards = [
     </Text>
 
     <Text style={INSIGHT_STYLES.sub}>
-      Reveal how you're building your jiu-jitsu
+      Reveal how you&apos;re building your jiu-jitsu
     </Text>
   </View>
 ),
   // Card 1: Sessions This Week
   (
     <View
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 0 ? 1 : 0.92 },
-      ]}
-    >
+  key="insight-1"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 0 ? 1 : 0.92 },
+  ]}
+>
       <Text style={INSIGHT_STYLES.hero}>{thisWeekTotal}</Text>
       <Text style={INSIGHT_STYLES.title}>Sessions This Week</Text>
       <Text style={INSIGHT_STYLES.sub}>Goal: 3+</Text>
@@ -612,11 +576,12 @@ const insightCards = [
   // Card 2: Top System
   (
     <View
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 1 ? 1 : 0.92 },
-      ]}
-    >
+  key="insight-2"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 1 ? 1 : 0.92 },
+  ]}
+>
       <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
         {topSystemThisWeek ? topSystemThisWeek.system : "—"}
       </Text>
@@ -630,11 +595,12 @@ const insightCards = [
   // Card 3: Top Technique
   (
     <View
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 2 ? 1 : 0.92 },
-      ]}
-    >
+  key="insight-3"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 2 ? 1 : 0.92 },
+  ]}
+>
      <Text
       style={INSIGHT_STYLES.hero}
       numberOfLines={1}
@@ -654,11 +620,12 @@ const insightCards = [
   // Card 4: Current Focus (14d)
   (
     <View
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 3 ? 1 : 0.92 },
-      ]}
-    >
+  key="insight-4"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 3 ? 1 : 0.92 },
+  ]}
+>
       <Text style={INSIGHT_STYLES.hero}>
         {currentFocusSystem14d ? currentFocusSystem14d.system : "—"}
       </Text>
@@ -672,11 +639,12 @@ const insightCards = [
   // Card 5: Weekly Goal Streak
   (
     <View
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 4 ? 1 : 0.92 },
-      ]}
-    >
+  key="insight-5"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 4 ? 1 : 0.92 },
+  ]}
+>
       <Text style={INSIGHT_STYLES.hero}>{weeklyGoalStreakWeeks}</Text>
       <Text style={INSIGHT_STYLES.title}>Weekly Goal Streak</Text>
       <Text style={INSIGHT_STYLES.sub}>3+ sessions/week</Text>
@@ -686,11 +654,12 @@ const insightCards = [
   // Card 6: Vs Last Week
   (
     <View
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 5 ? 1 : 0.92 },
-      ]}
-    >
+  key="insight-6"
+  style={[
+    INSIGHT_CARD_CONTAINER,
+    { opacity: insightIndex === 5 ? 1 : 0.92 },
+  ]}
+>
       <Text style={INSIGHT_STYLES.hero}>
         {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
       </Text>
@@ -702,7 +671,6 @@ const insightCards = [
 
 const insightsCount = insightCards.length;
 
-const hasInsights = insightsCount > 0;
 const showDots = insightsCount > 1;
 const snapEnabled = insightsCount > 1;
 const safeInsightIndex = Math.max(0, Math.min(insightIndex, insightsCount - 1));

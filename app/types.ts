@@ -9,6 +9,10 @@ export type Session = {
   grips?: string;
   finish?: string;
 
+  // MVP taxonomy (new)
+  gear?: "gi" | "nogi";
+  techniqueId?: string; // points to fundamentals taxonomy leaf ID
+
   // Legacy (keep for backward compatibility while we transition)
   technique: string;
 

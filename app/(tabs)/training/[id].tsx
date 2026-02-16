@@ -211,16 +211,16 @@ setVideoUri(null);
   }, [isNew, router, sessionId]);
 
   // Block 5: Derived data (technique search results)
-const techResults = useMemo(() => {
-  const q = techQuery.trim().toLowerCase();
-  if (!q) return [];
+    const techResults = useMemo(() => {
+      const q = techQuery.trim().toLowerCase();
+      if (!q) return [];
 
-  return TECH_INDEX.filter((t: any) => {
-    const label = String(t?.label ?? "").toLowerCase();
-    const path = String(t?.path ?? "").toLowerCase();
-    return label.includes(q) || path.includes(q);
-  }).slice(0, 20);
-}, [techQuery, TECH_INDEX]);
+      return TECH_INDEX.filter((t: any) => {
+        const label = String(t?.label ?? "").toLowerCase();
+        const path = String(t?.path ?? "").toLowerCase();
+        return label.includes(q) || path.includes(q);
+      }).slice(0, 20);
+    }, [techQuery]);
 
 
     async function ensureMediaPermissions() {
