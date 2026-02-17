@@ -1,6 +1,6 @@
-// app/fundamentals/taxonomy.ts
+import type { Gear } from "@/app/types";
 
-export type Gear = "gi" | "nogi" | "both";
+// app/fundamentals/taxonomy.ts
 
 export type TaxTechnique = {
   id: string; // stable ID (never change once logged)

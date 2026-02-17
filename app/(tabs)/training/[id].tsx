@@ -20,9 +20,9 @@ import {
 } from "react-native";
 import type { Session } from "../../types";
 
-import { buildTechniqueIndex } from "../../fundamentals/index";
+import { buildTechniqueIndex, getTechniqueById } from "../../fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
-
+ 
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
 
@@ -32,7 +32,13 @@ function techniqueToLabel(t: any): string {
   // If path is already a string, use it
   if (typeof t.path === "string") return t.path;
 
-  // If path is an object like { level1Label, level2Label }
+  // NEW shape: path.l1/ l2/ l3 with { id, label }
+  if (t.path && typeof t.path === "object" && t.path.l1?.label) {
+    const parts = [t.path.l1?.label, t.path.l2?.label, t.path.l3?.label].filter(Boolean);
+    return parts.join(" > ") || "Selected technique";
+  }
+
+  // OLD/legacy shape: level1Label / level2Label
   if (t.path && typeof t.path === "object") {
     const parts = [t.path.level1Label, t.path.level2Label].filter(Boolean);
     return parts.join(" > ") || "Selected technique";
@@ -205,13 +211,15 @@ setVideoUri(null);
         return;
       }
 
-  
-
       setSystem(found.system || "ALL");
 
       setTechniqueId(found.techniqueId || "");
-      setGear(found.gear || "gi");
+      const loadedGear = found.gear === "both" ? "gi" : (found.gear ?? "gi");
+      setGear(loadedGear);
       setTechnique(found.technique || ""); // legacy label still supported
+      setPosition(found.position || "");
+      setGrips(found.grips || "");
+      setFinish(found.finish || "");
       setDrill(found.drill || "");
       setNotes(found.notes || "");
       setYoutubeUrl(found.youtubeUrl || "");
@@ -227,6 +235,10 @@ setVideoUri(null);
   }, [isNew, router, sessionId]);
 
   // Block 5: Derived data (technique search results)
+ const selected = techniqueId ? getTechniqueById(TECH_INDEX, techniqueId) : null;
+
+const techniqueLabel = selected?.label || "";
+const techniquePath = selected ? techniqueToLabel(selected) : "";
   const techResults = useMemo(() => {
     const q = techQuery.trim().toLowerCase();
     const a = TECH_INDEX;
@@ -315,7 +327,9 @@ async function pickVideo() {
 
   techniqueId,        // ✅ NEW (structured picker)
   technique,          // legacy label (keep for now)
-
+  position,
+  grips,
+  finish,
   drill,
   notes,
   youtubeUrl,
@@ -434,28 +448,20 @@ return; // prevents any router.replace below from firing immediately
         <Text style={styles.label}>Technique of the Day</Text>
 
 {/* Technique picker field (shows selected label + path) */}
-{(() => {
-  const selected = techniqueId
-    ? TECH_INDEX.find((t: any) => t.id === techniqueId)
-    : null;
+<TouchableOpacity style={styles.input} onPress={() => setTechPickerOpen(true)}>
+  <Text
+    style={[
+  styles.inputValueText,
+  (techniqueLabel || technique) ? null : styles.inputPlaceholderText,
+]}
+  >
+    {techniqueLabel || "Pick a technique..."}
+  </Text>
 
-  return (
-    <TouchableOpacity style={styles.input} onPress={() => setTechPickerOpen(true)}>
-      <Text
-        style={[
-          styles.inputValueText,
-          !selected ? styles.inputPlaceholderText : null,
-        ]}
-      >
-        {selected ? String(selected.label ?? "Technique") : "Pick a technique..."}
-      </Text>
-
-      {!!selected && (
-        <Text style={styles.inputSubValueText}>{techniqueToLabel(selected)}</Text>
-      )}
-    </TouchableOpacity>
-  );
-})()}
+  {!!techniquePath && (
+    <Text style={styles.inputSubValueText}>{techniquePath}</Text>
+  )}
+</TouchableOpacity>
 
 <Modal visible={techPickerOpen} animationType="slide">
   <SafeAreaView style={styles.container}>
@@ -486,7 +492,7 @@ return; // prevents any router.replace below from firing immediately
         style={styles.row}
         onPress={() => {
           setTechniqueId(t.id);
-          setTechnique(techniqueToLabel(t)); // legacy sync for now
+          setTechnique(String(t.label ?? "")); // legacy sync for now
           setTechPickerOpen(false);
         }}
       >

@@ -1,3 +1,5 @@
+export type Gear = "gi" | "nogi" | "both";
+
 export type Session = {
   id: string;
   createdAt: string;
@@ -10,7 +12,7 @@ export type Session = {
   finish?: string;
 
   // MVP taxonomy (new)
-  gear?: "gi" | "nogi";
+  gear?: Gear;
   techniqueId?: string; // points to fundamentals taxonomy leaf ID
 
   // Legacy (keep for backward compatibility while we transition)
