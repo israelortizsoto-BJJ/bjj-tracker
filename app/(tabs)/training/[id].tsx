@@ -194,12 +194,67 @@ setImageUri(null);
 setVideoUri(null);
   }, [isNew, prefillDate])
 );
+
+// Block 3.5: hard reset when opening a NEW session screen (prevents state carryover)
+useFocusEffect(
+  React.useCallback(() => {
+    if (!isNew) return;
+
+    // Reset fields so "New Session" never inherits the last edited session
+    setSystem("ALL");
+    setTechniqueId("");     // new picker
+    setTechnique("");       // legacy label
+    setPosition("");
+    setGrips("");
+    setFinish("");
+    setDrill("");
+    setNotes("");
+    setYoutubeUrl("");
+
+    // attachments
+    setImageUri(null);
+    setVideoUri(null);
+    setImageAssetId(null);
+    setVideoAssetId(null);
+
+    // UI state
+    setTechQuery("");
+    setTechPickerOpen(false);
+
+    // date
+    setDate(prefillDate || todayYMD());
+
+    // we’re "ready" instantly for new
+    setLoading(false);
+  }, [isNew, prefillDate])
+);
 // Block 4: useEffect to load session if editing existing, or set defaults if new
   useEffect(() => {
     (async () => {
       const sessions = await loadSessions();
 
       if (isNew) {
+        // Reset fields so "New Session" never inherits the last edited session
+        setSystem("ALL");          // important: system was sticking too
+        setTechniqueId("");        // new picker
+        setTechnique("");          // legacy label
+        setPosition("");
+        setGrips("");
+        setFinish("");
+        setDrill("");
+        setNotes("");
+        setYoutubeUrl("");
+
+        // attachments
+        setImageUri(null);
+        setVideoUri(null);
+        setImageAssetId(null);
+        setVideoAssetId(null);
+
+        // date default for new sessions
+        setDate(prefillDate || todayYMD());
+
+        // MVP decision: keep gear sticky (don’t reset setGear)
         setLoading(false);
         return;
       }
@@ -234,12 +289,19 @@ setVideoUri(null);
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
   }, [isNew, router, sessionId]);
 
-  // Block 5: Derived data (technique search results)
+ // Block 5: Derived data (selected technique + MVP-safe display strings)
  const selected = techniqueId ? getTechniqueById(TECH_INDEX, techniqueId) : null;
 
 const techniqueLabel = selected?.label || "";
 const techniquePath = selected ? techniqueToLabel(selected) : "";
-  const techResults = useMemo(() => {
+// MVP-safe display strings (handles legacy + new)
+const displayTechniqueLabel =
+  techniqueLabel || (technique ? String(technique) : "") || "";
+
+const displayTechniquePath = techniquePath || "";
+
+// Block 6: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
+const techResults = useMemo(() => {
     const q = techQuery.trim().toLowerCase();
     const a = TECH_INDEX;
 
@@ -452,10 +514,10 @@ return; // prevents any router.replace below from firing immediately
   <Text
     style={[
   styles.inputValueText,
-  (techniqueLabel || technique) ? null : styles.inputPlaceholderText,
+  !displayTechniqueLabel ? styles.inputPlaceholderText : null,
 ]}
   >
-    {techniqueLabel || "Pick a technique..."}
+   {displayTechniqueLabel || "Pick a technique..."}
   </Text>
 
   {!!techniquePath && (
