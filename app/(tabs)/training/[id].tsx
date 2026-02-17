@@ -433,21 +433,29 @@ return; // prevents any router.replace below from firing immediately
 </View>
         <Text style={styles.label}>Technique of the Day</Text>
 
-<TouchableOpacity
-  style={styles.input}
-  onPress={() => setTechPickerOpen(true)}
->
-  <Text
-    style={[
-      styles.inputValueText,
-      !techniqueId ? styles.inputPlaceholderText : null,
-    ]}
-  >
-    {techniqueId
-      ? techniqueToLabel(TECH_INDEX.find((t: any) => t.id === techniqueId))
-      : "Pick a technique..."}
-  </Text>
-</TouchableOpacity>
+{/* Technique picker field (shows selected label + path) */}
+{(() => {
+  const selected = techniqueId
+    ? TECH_INDEX.find((t: any) => t.id === techniqueId)
+    : null;
+
+  return (
+    <TouchableOpacity style={styles.input} onPress={() => setTechPickerOpen(true)}>
+      <Text
+        style={[
+          styles.inputValueText,
+          !selected ? styles.inputPlaceholderText : null,
+        ]}
+      >
+        {selected ? String(selected.label ?? "Technique") : "Pick a technique..."}
+      </Text>
+
+      {!!selected && (
+        <Text style={styles.inputSubValueText}>{techniqueToLabel(selected)}</Text>
+      )}
+    </TouchableOpacity>
+  );
+})()}
 
 <Modal visible={techPickerOpen} animationType="slide">
   <SafeAreaView style={styles.container}>
@@ -639,6 +647,11 @@ inputValueText: {
 
 inputPlaceholderText: {
   color: "#6f6f86",
+},
+inputSubValueText: {
+  marginTop: 4,
+  color: "rgba(255,255,255,0.65)",
+  fontSize: 12,
 },
 specificTrainingInput: {
   borderColor: "#3b3f55",
