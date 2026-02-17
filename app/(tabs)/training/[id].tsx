@@ -26,6 +26,34 @@ import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
 
+function techniqueToLabel(t: any): string {
+  if (!t) return "";
+
+  // If path is already a string, use it
+  if (typeof t.path === "string") return t.path;
+
+  // If path is an object like { level1Label, level2Label }
+  if (t.path && typeof t.path === "object") {
+    const parts = [t.path.level1Label, t.path.level2Label].filter(Boolean);
+    return parts.join(" > ") || "Selected technique";
+  }
+
+  return "Selected technique";
+}
+// Block 2: Level 1 "Systems" from taxonomy (Option A)
+// We store the *level1Id* in `system`, not the label.
+
+const TAX_L1 = (
+  (FUNDAMENTALS_TAXONOMY as any).level1 ??
+  (FUNDAMENTALS_TAXONOMY as any).level1s ??
+  (FUNDAMENTALS_TAXONOMY as any).levels?.[0] ??
+  []
+) as Array<{ id: string; label: string }>;
+
+const SYSTEMS_L1 = [
+  { id: "ALL", label: "All" },
+  ...TAX_L1.map((l1) => ({ id: l1.id, label: l1.label })),
+];
 const STORAGE_KEY = "bjj.sessions.v1";
 
 const MEDIA_DIR =
@@ -56,19 +84,6 @@ async function persistMedia(uri: string, kind: "image" | "video") {
   return dest;
 }
 
-const SYSTEMS = [
-  "Guard Retention",
-  "Half Guard",
-  "Closed Guard",
-  "Open Guard",
-  "Passing",
-  "Side Control",
-  "Mount",
-  "Back Control",
-  "Escapes",
-  "Takedowns",
-  "Submissions",
-];
 function todayYMD() {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -103,7 +118,7 @@ export default function TrainingSessionEditor() {
   const [draftId, setDraftId] = useState(makeId());
 
   const [loading, setLoading] = useState(true);
-  const [system, setSystem] = useState(SYSTEMS[0]);
+  const [system, setSystem] = useState<string>("ALL");
   const [position, setPosition] = useState("");
   const [grips, setGrips] = useState("");
   const [finish, setFinish] = useState("");
@@ -131,7 +146,8 @@ export default function TrainingSessionEditor() {
   position.trim().length > 0 ||
   grips.trim().length > 0 ||
   finish.trim().length > 0 ||
-  technique.trim().length > 0 || // legacy
+  techniqueId.trim().length > 0 || // new picker
+  technique.trim().length > 0 ||   // legacy
     drill.trim().length > 0 ||
     notes.trim().length > 0 ||
     youtubeUrl.trim().length > 0 ||
@@ -155,7 +171,7 @@ async function replayVideo() {
     setDraftId(makeId());
     setDate(prefillDate || todayYMD());
 
-   setSystem(SYSTEMS[0]);
+   setSystem("ALL");
 
 // New structured learning fields
 setPosition("");
@@ -191,7 +207,7 @@ setVideoUri(null);
 
   
 
-      setSystem(found.system || SYSTEMS[0]);
+      setSystem(found.system || "ALL");
 
       setTechniqueId(found.techniqueId || "");
       setGear(found.gear || "gi");
@@ -211,18 +227,31 @@ setVideoUri(null);
   }, [isNew, router, sessionId]);
 
   // Block 5: Derived data (technique search results)
-    const techResults = useMemo(() => {
-      const q = techQuery.trim().toLowerCase();
-      if (!q) return [];
+  const techResults = useMemo(() => {
+    const q = techQuery.trim().toLowerCase();
+    const a = TECH_INDEX;
 
-      return TECH_INDEX.filter((t: any) => {
-        const label = String(t?.label ?? "").toLowerCase();
-        const path = String(t?.path ?? "").toLowerCase();
-        return label.includes(q) || path.includes(q);
-      }).slice(0, 20);
-    }, [techQuery]);
+  const b = a.filter((t: any) => {
+    const tg = String(t?.gear ?? "both").toLowerCase();
+    if (gear === "gi") return tg === "gi" || tg === "both";
+    if (gear === "nogi") return tg === "nogi" || tg === "both";
+    return true;
+  });
 
+  const c = b.filter((t: any) => {
+    if (!system || system === "ALL") return true;
+    const l1 = String(t?.path?.level1Id ?? "");
+    return l1 === String(system);
+  });
 
+  const d = c.filter((t: any) => {
+    if (!q) return true;
+    const hs = String(t?.haystack ?? "").toLowerCase();
+    return hs.includes(q);
+  });
+
+  return d.slice(0, 50);
+}, [techQuery, gear, system]);
     async function ensureMediaPermissions() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -277,19 +306,25 @@ async function pickVideo() {
   : (existingSession?.date || date || todayYMD());
 
     const payload: Session = {
-      id: realId,
-      createdAt: isNew ? now : existingSession?.createdAt || now,
-      date: finalDate,
-      system,
-      technique,
-      drill,
-      notes,
-      youtubeUrl,
-      imageUri,
-      videoUri,
-      imageAssetId: imageAssetId ?? existingSession?.imageAssetId ?? null,
-      videoAssetId: videoAssetId ?? existingSession?.videoAssetId ?? null,
-    };
+  id: realId,
+  createdAt: isNew ? now : existingSession?.createdAt || now,
+  date: finalDate,
+
+  gear,
+  system,
+
+  techniqueId,        // ✅ NEW (structured picker)
+  technique,          // legacy label (keep for now)
+
+  drill,
+  notes,
+  youtubeUrl,
+
+  imageUri,
+  videoUri,
+  imageAssetId: imageAssetId ?? existingSession?.imageAssetId ?? null,
+  videoAssetId: videoAssetId ?? existingSession?.videoAssetId ?? null,
+};
 
     const next = isNew
       ? [payload, ...sessions]
@@ -361,23 +396,37 @@ return; // prevents any router.replace below from firing immediately
 
 <View style={styles.divider} />
 
-        <View style={styles.section}>
+<View style={styles.section}>
+  <Text style={styles.sectionTitle}>Gear</Text>
+    <View style={styles.pillRow}>
+      {(["gi", "nogi"] as const).map((g) => (
+        <TouchableOpacity
+          key={g}
+          onPress={() => setGear(g)}
+          style={[styles.pill, gear === g ? styles.pillActive : null]}
+        >
+          <Text style={[styles.pillText, gear === g ? styles.pillTextActive : null]}>
+            {g}
+          </Text>
+        </TouchableOpacity>
+      ))}
+</View>        
   <Text style={styles.sectionTitle}>BJJ System</Text>
   <View style={styles.pillRow}>
-    {SYSTEMS.map((s) => (
+    {SYSTEMS_L1.map((s) => (
       <TouchableOpacity
-        key={s}
-        onPress={() => setSystem(s)}
-        style={[styles.pill, system === s ? styles.pillActive : null]}
+        key={s.id}
+        onPress={() => setSystem(s.id)}
+        style={[styles.pill, system === s.id ? styles.pillActive : null]}
       >
-        <Text
-          style={[
-            styles.pillText,
-            system === s ? styles.pillTextActive : null,
-          ]}
-        >
-          {s}
-        </Text>
+       <Text
+        style={[
+          styles.pillText,
+          system === s.id ? styles.pillTextActive : null,
+        ]}
+      >
+        {s.label}
+</Text>
       </TouchableOpacity>
     ))}
   </View>
@@ -388,10 +437,15 @@ return; // prevents any router.replace below from firing immediately
   style={styles.input}
   onPress={() => setTechPickerOpen(true)}
 >
-  <Text>
+  <Text
+    style={[
+      styles.inputValueText,
+      !techniqueId ? styles.inputPlaceholderText : null,
+    ]}
+  >
     {techniqueId
-      ? String(TECH_INDEX.find((t: any) => t.id === techniqueId)?.path ?? "Selected technique")
-      : "Pick a technique…"}
+      ? techniqueToLabel(TECH_INDEX.find((t: any) => t.id === techniqueId))
+      : "Pick a technique..."}
   </Text>
 </TouchableOpacity>
 
@@ -404,23 +458,6 @@ return; // prevents any router.replace below from firing immediately
       </TouchableOpacity>
     </View>
 
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Gear</Text>
-      <View style={styles.pillRow}>
-        {(["gi", "nogi"] as const).map((g) => (
-          <TouchableOpacity
-            key={g}
-            style={[styles.pill, gear === g && styles.pillSelected]}
-            onPress={() => setGear(g)}
-          >
-            <Text style={[styles.pillText, gear === g && styles.pillTextSelected]}>
-              {g}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-
     <TextInput
       value={techQuery}
       onChangeText={setTechQuery}
@@ -429,24 +466,32 @@ return; // prevents any router.replace below from firing immediately
       autoFocus
     />
 
-    <ScrollView style={{ marginTop: 12 }}>
-      {techResults
-        .filter((t: any) => t.gear === gear)
-        .map((t: any) => (
-          <TouchableOpacity
-            key={t.id}
-            style={styles.row}
-            onPress={() => {
-              setTechniqueId(t.id);
-              setTechnique(t.label); // legacy sync for now
-              setTechPickerOpen(false);
-            }}
-          >
-            <Text style={styles.rowTitle}>{t.label}</Text>
-            <Text style={styles.helperText}>{t.path}</Text>
-          </TouchableOpacity>
-        ))}
-    </ScrollView>
+    <View style={{ flex: 1, marginTop: 12 }}>
+  <Text style={{ color: "#fff", marginBottom: 8 }}>
+    Results: {techResults.length}
+  </Text>
+
+  <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+    {techResults.map((t: any) => (
+      <TouchableOpacity
+        key={t.id}
+        style={styles.row}
+        onPress={() => {
+          setTechniqueId(t.id);
+          setTechnique(techniqueToLabel(t)); // legacy sync for now
+          setTechPickerOpen(false);
+        }}
+      >
+        <Text style={[styles.rowTitle, { color: "#fff" }]}>
+          {String(t.label ?? "Technique")}
+        </Text>
+        <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+          {techniqueToLabel(t)}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </ScrollView>
+</View>
   </SafeAreaView>
 </Modal>
         <Text style={styles.helperText}>
@@ -586,6 +631,14 @@ helperText: {
   marginTop: 6,
   marginBottom: 10,
   fontSize: 12,
+},
+inputValueText: {
+  color: "#9bb1ff", // soft blue accent
+  fontSize: 16,
+},
+
+inputPlaceholderText: {
+  color: "#6f6f86",
 },
 specificTrainingInput: {
   borderColor: "#3b3f55",
