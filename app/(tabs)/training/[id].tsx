@@ -10,7 +10,6 @@ import {
   Alert,
   Image,
   Modal,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,10 +17,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import type { Session } from "../../types";
-
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildTechniqueIndex, getTechniqueById } from "../../fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
+import type { Session } from "../../types";
  
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
@@ -54,7 +54,7 @@ const TAX_L1 = (
   (FUNDAMENTALS_TAXONOMY as any).level1s ??
   (FUNDAMENTALS_TAXONOMY as any).levels?.[0] ??
   []
-) as Array<{ id: string; label: string }>;
+) as { id: string; label: string }[];
 
 const SYSTEMS_L1 = [
   { id: "ALL", label: "All" },
@@ -117,6 +117,7 @@ async function saveSessions(sessions: Session[]) {
 export default function TrainingSessionEditor() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const insets = useSafeAreaInsets();
   const prefillDate = String(params.date || "");
   const sessionId = String(params.id || "");
   const isNew = useMemo(() => sessionId === "new", [sessionId]);
@@ -137,7 +138,6 @@ export default function TrainingSessionEditor() {
 
 // Legacy (keep for old sessions while we transition)
   const [technique, setTechnique] = useState("");
-  const [drill, setDrill] = useState("");
   const [notes, setNotes] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [date, setDate] = useState(prefillDate || todayYMD());
@@ -154,13 +154,12 @@ export default function TrainingSessionEditor() {
   finish.trim().length > 0 ||
   techniqueId.trim().length > 0 || // new picker
   technique.trim().length > 0 ||   // legacy
-    drill.trim().length > 0 ||
     notes.trim().length > 0 ||
     youtubeUrl.trim().length > 0 ||
     !!imageUri ||
     !!videoUri
   );
-}, [position, grips, finish, technique, drill, notes, youtubeUrl, imageUri, videoUri]);
+}, [position, grips, finish, techniqueId, technique, notes, youtubeUrl, imageUri, videoUri]);
 
 async function replayVideo() {
   try {
@@ -187,7 +186,6 @@ setFinish("");
 // Legacy fields (keep during transition)
 setTechnique("");
 
-setDrill("");
 setNotes("");
 setYoutubeUrl("");
 setImageUri(null);
@@ -207,7 +205,6 @@ useFocusEffect(
     setPosition("");
     setGrips("");
     setFinish("");
-    setDrill("");
     setNotes("");
     setYoutubeUrl("");
 
@@ -241,7 +238,6 @@ useFocusEffect(
         setPosition("");
         setGrips("");
         setFinish("");
-        setDrill("");
         setNotes("");
         setYoutubeUrl("");
 
@@ -275,7 +271,6 @@ useFocusEffect(
       setPosition(found.position || "");
       setGrips(found.grips || "");
       setFinish(found.finish || "");
-      setDrill(found.drill || "");
       setNotes(found.notes || "");
       setYoutubeUrl(found.youtubeUrl || "");
       setImageUri(found.imageUri ?? null);
@@ -287,7 +282,7 @@ useFocusEffect(
       setLoading(false);
     })();
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
-  }, [isNew, router, sessionId]);
+  }, [isNew, router, sessionId, prefillDate]);
 
  // Block 5: Derived data (selected technique + MVP-safe display strings)
  const selected = techniqueId ? getTechniqueById(TECH_INDEX, techniqueId) : null;
@@ -297,8 +292,6 @@ const techniquePath = selected ? techniqueToLabel(selected) : "";
 // MVP-safe display strings (handles legacy + new)
 const displayTechniqueLabel =
   techniqueLabel || (technique ? String(technique) : "") || "";
-
-const displayTechniquePath = techniquePath || "";
 
 // Block 6: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
 const techResults = useMemo(() => {
@@ -350,6 +343,21 @@ async function pickImage() {
   setImageAssetId(asset.assetId ?? null);
 }
 }
+function onAddYoutube() {
+  Alert.prompt(
+    "Add YouTube link",
+    "Paste a YouTube URL (or leave blank to cancel).",
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Save",
+        onPress: (val?: string) => setYoutubeUrl((val ?? "").trim()),
+      },
+    ],
+    "plain-text",
+    youtubeUrl
+  );
+}
 
 async function pickVideo() {
   if (!(await ensureMediaPermissions())) return;
@@ -366,6 +374,12 @@ async function pickVideo() {
   setVideoAssetId(asset.assetId ?? null);
 }
 }
+function onClearTechnique() {
+  setTechniqueId("");   // ✅ correct for your state type
+  setTechnique("");     // legacy fallback
+  setTechQuery("");     // optional
+}
+
   async function onSave() {
     const now = new Date().toISOString();
     
@@ -379,29 +393,48 @@ async function pickVideo() {
   ? (paramDate || date || todayYMD())
   : (existingSession?.date || date || todayYMD());
 
-    const payload: Session = {
+  
+// --- Technique display (legacy fallback) ---
+const selected = techniqueId.trim()
+  ? getTechniqueById(TECH_INDEX, techniqueId)
+  : null;
+
+const techniqueLabel = selected?.label || "";
+const displayTechniqueLabel =
+  techniqueLabel || (technique ? String(technique) : "") || "";
+  
+
+const payload: Session = {
   id: realId,
   createdAt: isNew ? now : existingSession?.createdAt || now,
   date: finalDate,
 
-  gear,
-  system,
+  // REQUIRED in Session type
+  system: system ?? existingSession?.system ?? "",
 
-  techniqueId,        // ✅ NEW (structured picker)
-  technique,          // legacy label (keep for now)
+  // Optional
+  gear: gear ?? existingSession?.gear,
+
+  // Optional (but must be string if present)
+  techniqueId: techniqueId.trim() ? techniqueId : undefined,
+
+  // REQUIRED legacy + required text fields
+  technique: displayTechniqueLabel,
+  drill: "",
+notes: notes ?? "",
+  youtubeUrl: youtubeUrl ?? "",
+
+  // Optional specifics
   position,
   grips,
   finish,
-  drill,
-  notes,
-  youtubeUrl,
 
-  imageUri,
-  videoUri,
+  // Optional media
+  imageUri: imageUri ?? null,
+  videoUri: videoUri ?? null,
   imageAssetId: imageAssetId ?? existingSession?.imageAssetId ?? null,
   videoAssetId: videoAssetId ?? existingSession?.videoAssetId ?? null,
 };
-
     const next = isNew
       ? [payload, ...sessions]
       : sessions.map((s) => (s.id === realId ? payload : s));
@@ -451,10 +484,17 @@ return; // prevents any router.replace below from firing immediately
       </SafeAreaView>
     );
   }
-
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scroll, { paddingBottom: 180 }]}
+        enableOnAndroid
+        enableAutomaticScroll
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        extraScrollHeight={24}
+      >
         <View style={styles.headerRow}>
   <View style={styles.headerTextBlock}>
     <Text style={styles.h1}>{isNew ? "New Session" : "Edit Session"}</Text>
@@ -472,21 +512,21 @@ return; // prevents any router.replace below from firing immediately
 
 <View style={styles.divider} />
 
-<View style={styles.section}>
   <Text style={styles.sectionTitle}>Gear</Text>
-    <View style={styles.pillRow}>
-      {(["gi", "nogi"] as const).map((g) => (
-        <TouchableOpacity
-          key={g}
-          onPress={() => setGear(g)}
-          style={[styles.pill, gear === g ? styles.pillActive : null]}
-        >
-          <Text style={[styles.pillText, gear === g ? styles.pillTextActive : null]}>
-            {g}
-          </Text>
-        </TouchableOpacity>
-      ))}
-</View>        
+  <View style={styles.pillRow}>
+    {(["gi", "nogi"] as const).map((g) => (
+      <TouchableOpacity
+        key={g}
+        onPress={() => setGear(g)}
+        style={[styles.pill, gear === g ? styles.pillActive : null]}
+      >
+        <Text style={[styles.pillText, gear === g ? styles.pillTextActive : null]}>
+          {g}
+        </Text>
+      </TouchableOpacity>
+    ))}
+  </View>
+
   <Text style={styles.sectionTitle}>BJJ System</Text>
   <View style={styles.pillRow}>
     {SYSTEMS_L1.map((s) => (
@@ -495,44 +535,56 @@ return; // prevents any router.replace below from firing immediately
         onPress={() => setSystem(s.id)}
         style={[styles.pill, system === s.id ? styles.pillActive : null]}
       >
-       <Text
-        style={[
-          styles.pillText,
-          system === s.id ? styles.pillTextActive : null,
-        ]}
-      >
-        {s.label}
-</Text>
+        <Text style={[styles.pillText, system === s.id ? styles.pillTextActive : null]}>
+          {s.label}
+        </Text>
       </TouchableOpacity>
     ))}
   </View>
-</View>
+
         <Text style={styles.label}>Technique of the Day</Text>
 
 {/* Technique picker field (shows selected label + path) */}
-<TouchableOpacity style={styles.input} onPress={() => setTechPickerOpen(true)}>
-  <Text
-    style={[
-  styles.inputValueText,
-  !displayTechniqueLabel ? styles.inputPlaceholderText : null,
-]}
+<View style={styles.techRow}>
+  <TouchableOpacity
+    style={[styles.input, styles.techField]}
+    onPress={() => setTechPickerOpen(true)}
   >
-   {displayTechniqueLabel || "Pick a technique..."}
-  </Text>
+    <Text
+      style={[
+        styles.inputValueText,
+        !displayTechniqueLabel ? styles.inputPlaceholderText : null,
+      ]}
+    >
+      {displayTechniqueLabel || "Pick a technique..."}
+    </Text>
 
-  {!!techniquePath && (
-    <Text style={styles.inputSubValueText}>{techniquePath}</Text>
+    {!!techniquePath && (
+      <Text style={styles.inputSubValueText}>{techniquePath}</Text>
+    )}
+  </TouchableOpacity>
+
+  {!!displayTechniqueLabel && (
+    <TouchableOpacity style={styles.clearBtn} onPress={onClearTechnique}>
+      <Text style={styles.clearBtnText}>Clear</Text>
+    </TouchableOpacity>
   )}
-</TouchableOpacity>
+</View>
 
-<Modal visible={techPickerOpen} animationType="slide">
-  <SafeAreaView style={styles.container}>
-    <View style={styles.headerRow}>
-      <Text style={styles.h1}>Pick Technique</Text>
-      <TouchableOpacity onPress={() => setTechPickerOpen(false)}>
-        <Text style={styles.headerDeleteText}>Close</Text>
-      </TouchableOpacity>
-    </View>
+<Modal
+  visible={techPickerOpen}
+  animationType="slide"
+  presentationStyle="fullScreen"
+  statusBarTranslucent={false}
+>
+  <SafeAreaView style={styles.modalContainer} edges={["top","left","right"]}>
+    <View style={[styles.headerRow, { paddingTop: insets.top }]}>
+  <Text style={styles.h1}>Pick Technique</Text>
+
+  <TouchableOpacity onPress={() => setTechPickerOpen(false)}>
+    <Text style={styles.headerDeleteText}>Close</Text>
+  </TouchableOpacity>
+</View>
 
     <TextInput
       value={techQuery}
@@ -570,94 +622,118 @@ return; // prevents any router.replace below from firing immediately
 </View>
   </SafeAreaView>
 </Modal>
-        <Text style={styles.helperText}>
-        Format: position → grips → finish (ex: De La Riva • sleeve+pants • sweep)
-        </Text>
-        <Text style={styles.label}>Specific Training</Text>
-        <TextInput
-          value={drill}
-          onChangeText={setDrill}
-          placeholder="What drill did you repeat?"
-          placeholderTextColor="#6f6f86"
-          style={[styles.input, styles.specificTrainingInput]}
-        />
-
-        <Text style={styles.label}>Notes</Text>
-        <TextInput
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Key details, cues, questions…"
-          placeholderTextColor="#6f6f86"
-          style={[styles.input, styles.textarea]}
-          multiline
-          textAlignVertical="top"
-        />
-
-        <Text style={styles.label}>YouTube Link</Text>
-        <TextInput
-          value={youtubeUrl}
-          onChangeText={setYoutubeUrl}
-          placeholder="https://youtube.com/…"
-          placeholderTextColor="#6f6f86"
-          style={styles.input}
-          autoCapitalize="none"
-        />
-
-     <View style={styles.section}>
-  <Text style={styles.sectionTitle}>Attachments</Text>
-
- <View style={styles.attachmentButtonsRow}>
-    <TouchableOpacity style={styles.attachmentButton} onPress={pickImage}>
-      <Text style={styles.attachmentButtonText}>📷 Add Image</Text>
-    </TouchableOpacity>
-
-    <TouchableOpacity style={styles.attachmentButton} onPress={pickVideo}>
-      <Text style={styles.attachmentButtonText}>🎥 Add Video</Text>
-    </TouchableOpacity>
-  </View>
-
-  {!!imageUri && (
-    <View style={styles.attachmentPreview}>
-      <Image source={{ uri: imageUri }} style={styles.previewImg} resizeMode="cover" />
-<TouchableOpacity style={styles.headerDeleteBtn} onPress={() => setImageUri(null)}>
-  <Text style={styles.headerDeleteText}>Remove Image</Text>
-</TouchableOpacity>
-    </View>
-  )}
-
-  {!!videoUri && (
-    <View style={styles.attachmentPreview}>
-  <Text style={styles.sectionTitle}>Video Preview</Text>
-      <Video
-        key={videoKey}
-        ref={videoRef}
-        source={{ uri: videoUri }}
-        style={styles.previewImg}
-        useNativeControls
-        resizeMode={ResizeMode.CONTAIN}
-        isLooping={false}
-        onPlaybackStatusUpdate={(status) => {
-          if (!status || typeof status !== "object") return;
-          // @ts-ignore
-          if (status.didJustFinish) setVideoKey((k) => k + 1);
-        }}
-      />
+        <Text style={styles.label}>Training Sequence</Text>
+<Text style={styles.helperText}>
+Format: start position (grips) → transition → outcome (pass, sweep, submit)
+</Text>
+<TextInput
+  value={notes}
+  scrollEnabled={false}
+  onChangeText={setNotes}
+  placeholder="Ex: Closed guard (sleeve+collar) → hip bump → mount → armbar"
+  placeholderTextColor="#6f6f86"
+  style={[styles.input, styles.textarea]}
+  multiline
+  textAlignVertical="top"
+/>
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Attachments</Text>
 
       <View style={styles.attachmentButtonsRow}>
-  <TouchableOpacity style={styles.attachmentButton} onPress={replayVideo}>
-    <Text style={styles.attachmentButtonText}>↻ Replay</Text>
-  </TouchableOpacity>
+        <TouchableOpacity style={styles.attachmentButton} onPress={pickImage}>
+          <Text style={styles.attachmentButtonText}>📷 Add Image</Text>
+        </TouchableOpacity>
 
-  <TouchableOpacity
-  style={styles.attachmentButton}
-  onPress={() => setVideoUri(null)}
->
-  <Text style={styles.attachmentDangerText}>Remove Video</Text>
-</TouchableOpacity>
-</View>
+        <TouchableOpacity style={styles.attachmentButton} onPress={pickVideo}>
+          <Text style={styles.attachmentButtonText}>🎥 Add Video</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.attachmentButton} onPress={onAddYoutube}>
+          <Text
+            style={styles.attachmentButtonText}
+            numberOfLines={1}
+            ellipsizeMode="tail"
+          >
+            🔗 YouTube {youtubeUrl?.trim() ? "✓" : ""}
+          </Text>
+        </TouchableOpacity>
+      </View>
     </View>
-  )}
-</View>
+
+    {imageUri ? (
+      <View style={styles.attachmentPreview}>
+        <Image
+          source={{ uri: imageUri }}
+          style={styles.previewImg}
+          resizeMode="cover"
+        />
+        <TouchableOpacity
+          style={styles.headerDeleteBtn}
+          onPress={() => setImageUri(null)}
+        >
+          <Text style={styles.headerDeleteText}>Remove Image</Text>
+        </TouchableOpacity>
+      </View>
+    ) : null}
+
+    {videoUri ? (
+      <View style={styles.attachmentPreview}>
+        <Text style={styles.sectionTitle}>Video Preview</Text>
+        <Video
+          key={videoKey}
+          ref={videoRef}
+          source={{ uri: videoUri }}
+          style={styles.previewImg}
+          useNativeControls
+          resizeMode={ResizeMode.CONTAIN}
+          isLooping={false}
+          onPlaybackStatusUpdate={(status) => {
+            if (!status || typeof status !== "object") return;
+            // @ts-ignore
+            if (status.didJustFinish) setVideoKey((k) => k + 1);
+          }}
+        />
+      <View style={styles.attachmentButtonsRow}>
+          <TouchableOpacity
+            style={styles.attachmentButton}
+            onPress={replayVideo}
+          >
+            <Text style={styles.attachmentButtonText}>↻ Replay</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.attachmentButton}
+            onPress={() => setVideoUri(null)}
+          >
+            <Text style={styles.attachmentDangerText}>Remove Video</Text>
+          </TouchableOpacity>
+        </View>
+        
+        {youtubeUrl?.trim() ? (
+          <View style={styles.attachmentCard}>
+            <View style={styles.attachmentTitleRow}>
+              <Text style={styles.attachmentTitle}>YouTube</Text>
+              <TouchableOpacity
+                onPress={() => setYoutubeUrl("")}
+                style={styles.attachmentRemoveBtn}
+              >
+                <Text style={styles.attachmentDangerText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text
+              style={styles.attachmentMeta}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {youtubeUrl}
+            </Text>
+          </View>
+        ) : null}
+
+       
+      </View>
+    ) : null}
 {/* ---------- Actions ---------- */}
 <View style={styles.section}>
   <Text style={styles.sectionTitle}>Actions</Text>
@@ -675,7 +751,7 @@ return; // prevents any router.replace below from firing immediately
 
   </View>
 </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -688,6 +764,11 @@ const styles = StyleSheet.create({
 // - section wrappers & dividers
 // --------------------------------------------------
   container: { flex: 1, backgroundColor: "#0b0b0f" },
+  modalContainer: {
+  flex: 1,
+  backgroundColor: "#0b0b0f",
+  paddingTop: 12, // <-- key: forces space even if inset fails
+},
   scroll: { padding: 16, paddingBottom: 40 },
   h1: { fontSize: 24, fontWeight: "700", color: "white" },
   headerTextBlock: {
@@ -721,6 +802,29 @@ inputSubValueText: {
   color: "rgba(255,255,255,0.65)",
   fontSize: 12,
 },
+techRow: {
+  flexDirection: "row",
+  alignItems: "stretch",
+  gap: 10,
+},
+techField: {
+  flex: 1,
+},
+clearBtn: {
+  paddingHorizontal: 12,
+  paddingVertical: 10,
+  justifyContent: "center",
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "rgba(255,255,255,0.18)",
+  backgroundColor: "transparent",
+},
+
+clearBtnText: {
+  fontSize: 13,
+  fontWeight: "500",
+  color: "rgba(255,255,255,0.65)",
+},
 specificTrainingInput: {
   borderColor: "#3b3f55",
   backgroundColor: "#0f0f16",
@@ -739,11 +843,11 @@ sectionTitle: {
 },
   // Attachments
   attachmentButtonsRow: {
-    flexDirection: "row",
-    gap: 10,
-    flexWrap: "wrap",
-    marginTop: 6,
-  },
+  flexDirection: "row",
+  flexWrap: "wrap",
+  gap: 10,
+  marginTop: 6,
+},
 
   attachmentCard: {
     marginTop: 10,
@@ -806,12 +910,16 @@ actionsRow: {
 },
 
 attachmentButton: {
+  flexGrow: 1,
+  flexBasis: "48%",
   paddingVertical: 10,
   paddingHorizontal: 14,
   borderRadius: 999,
   borderWidth: 1,
   borderColor: "#2a2a3a",
   backgroundColor: "#161621",
+  alignItems: "center",
+  justifyContent: "center",
 },
 
 attachmentButtonText: {
