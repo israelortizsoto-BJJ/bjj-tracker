@@ -26,6 +26,12 @@ import { Calendar } from "react-native-calendars";
 
 import type { Session } from "../types";
 
+import {
+  buildTechniqueIndex,
+  getTechniqueById,
+  type TechniqueIndexItem,
+} from "../fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
 
 type PreviewState =
   | null
@@ -84,6 +90,17 @@ function addDaysYMD(ymd: string, deltaDays: number) {
   date.setDate(date.getDate() + deltaDays);
   return dateToYMD(date);
 }
+
+function resolveTechniqueLabelForInsight(
+  s: Session,
+  index: TechniqueIndexItem[]
+) {
+  const id = (s.techniqueId ?? "").trim();
+  const selected = id ? getTechniqueById(index, id) : null;
+  const techniqueLabel = selected?.label || "";
+  return techniqueLabel || (s.technique ? String(s.technique) : "") || "";
+}
+
 function normalizeUrl(url?: string) {
   if (!url) return "";
   const u = url.trim();
@@ -131,8 +148,6 @@ async function resolveMediaUri(
 
   return null;
 }
-
-
 
 function sessionTitle(s: Session) {
   // Auto-title: System + Technique (fallbacks)
@@ -253,7 +268,11 @@ export default function Training() {
   
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
-
+// 3D) Gestures / interaction (week swipe)
+  const TECH_INDEX = useMemo<TechniqueIndexItem[]>(
+    () => buildTechniqueIndex(FUNDAMENTALS_TAXONOMY),
+    []
+  );
 // 3D) Gestures / interaction (week swipe)
 // tweakable
 const swipeThreshold = 40;
@@ -535,6 +554,28 @@ const currentFocusSystem14d = useMemo(() => {
   return bestKey ? { system: bestKey, count: bestCount } : null;
 }, [sessionsByDate, today]);
 
+const giNoGi14d = useMemo(() => {
+  let gi = 0;
+  let nogi = 0;
+
+  for (let i = 0; i < 14; i++) {
+    const day = addDaysYMD(today, -i);
+    const list = sessionsByDate[day] ?? [];
+
+    for (const s of list) {
+      const g = (s.gear ?? "").toString().toLowerCase().trim();
+      if (g === "gi") gi += 1;
+      else if (g === "no-gi" || g === "nogi") nogi += 1;
+    }
+  }
+
+  const total = gi + nogi;
+  if (total === 0) return null;
+
+  const primary = gi === nogi ? "Gi & No-Gi" : gi > nogi ? "Gi" : "No-Gi";
+  return { gi, nogi, primary };
+}, [sessionsByDate, today]);
+
 const insightCards = [
   // Card 0: Narrative Intro
 (
@@ -635,14 +676,32 @@ const insightCards = [
       </Text>
     </View>
   ),
+// Card 5: Gi vs No-Gi (14d)
+(
+  <View
+    key="insight-5"
+    style={[
+      INSIGHT_CARD_CONTAINER,
+      { opacity: insightIndex === 4 ? 1 : 0.92 },
+    ]}
+  >
+    <Text style={INSIGHT_STYLES.hero}>
+      {giNoGi14d ? giNoGi14d.primary : "—"}
+    </Text>
+    <Text style={INSIGHT_STYLES.title}>Gi vs No-Gi (14d)</Text>
+    <Text style={INSIGHT_STYLES.sub}>
+      {giNoGi14d ? `Gi ${giNoGi14d.gi} • No-Gi ${giNoGi14d.nogi}` : ""}
+    </Text>
+  </View>
+),
 
-  // Card 5: Weekly Goal Streak
+  // Card 6: Weekly Goal Streak
   (
     <View
-  key="insight-5"
+  key="insight-6"
   style={[
     INSIGHT_CARD_CONTAINER,
-    { opacity: insightIndex === 4 ? 1 : 0.92 },
+    { opacity: insightIndex === 5 ? 1 : 0.92 },
   ]}
 >
       <Text style={INSIGHT_STYLES.hero}>{weeklyGoalStreakWeeks}</Text>
@@ -651,13 +710,13 @@ const insightCards = [
     </View>
   ),
 
-  // Card 6: Vs Last Week
+  // Card 7: Vs Last Week
   (
     <View
-  key="insight-6"
+  key="insight-7"
   style={[
     INSIGHT_CARD_CONTAINER,
-    { opacity: insightIndex === 5 ? 1 : 0.92 },
+    { opacity: insightIndex === 6 ? 1 : 0.92 },
   ]}
 >
       <Text style={INSIGHT_STYLES.hero}>
