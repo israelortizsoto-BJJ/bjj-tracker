@@ -258,6 +258,7 @@ export default function Training() {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [weekStartYMD, setWeekStartYMD] = useState(startOfWeekMondayYMD(todayYMD()));
   const [systemFilter, setSystemFilter] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -327,9 +328,14 @@ onMoveShouldSetPanResponderCapture: (_, g) => {
 //    4B) Effects: route param sync (params.date) + useFocusEffect refresh
 // ------------------------------------------------------------  
 const refresh = useCallback(async () => {
-    const data = await loadSessions();
-    setSessions(data);
-  }, []);
+  setIsLoadingSessions(true);
+  try {
+    const next = await loadSessions();
+    setSessions(next);
+  } finally {
+    setIsLoadingSessions(false);
+  }
+}, []);
 
 useEffect(() => {
   if (typeof params.date === "string" && params.date) {
@@ -1003,66 +1009,71 @@ const renderNewSessionCTA = () => (
 {renderDayWeekHeader()}
 {renderNewSessionCTA()}
 
-{/* First Insight Moment */}
-<View style={{ marginTop: 10, marginBottom: 6 }} pointerEvents="box-none">
-<ScrollView
-  horizontal
-  showsHorizontalScrollIndicator={false}
-  contentContainerStyle={{
-  paddingVertical: 8,
-  paddingLeft: SIDE_PAD,
-  paddingRight: SIDE_PAD,
-}}
-  nestedScrollEnabled
-  directionalLockEnabled
-  decelerationRate="fast"
-  snapToAlignment="center"
-  bounces={false}
-  snapToInterval={snapEnabled ? SNAP : undefined}
-disableIntervalMomentum={snapEnabled}
-onMomentumScrollEnd={
-  snapEnabled
-    ? (e) => {
-        const index = Math.round(e.nativeEvent.contentOffset.x / SNAP);
-        setInsightIndex(index);
-      }
-    : undefined
-}
->
-{insightCards.map((card, i) => (
-  <View key={i}>{card}</View>
-))}
-</ScrollView>
-{showDots && (
-  <View
-    pointerEvents="none"
-    style={{
-      position: "absolute",
-      bottom: 10,
-      left: 0,
-      right: 0,
-      flexDirection: "row",
-      justifyContent: "center",
-      gap: 6,
-    }}
-  >
-    {Array.from({ length: insightsCount }).map((_, i) => (
-      <View
-        key={i}
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor:
-            i === safeInsightIndex
-              ? "rgba(255,255,255,0.9)"
-              : "rgba(255,255,255,0.3)",
+{/* 6D First Insight Moment */}
+{isLoadingSessions ? null : (
+  <View style={{ marginTop: 10, marginBottom: 6 }} pointerEvents="box-none">
+    <View style={{ position: "relative" }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
+        directionalLockEnabled
+        decelerationRate="fast"
+        snapToAlignment="center"
+        bounces={false}
+        snapToInterval={snapEnabled ? SNAP : undefined}
+        disableIntervalMomentum={snapEnabled}
+        onMomentumScrollEnd={
+          snapEnabled
+            ? (e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / SNAP);
+                setInsightIndex(index);
+              }
+            : undefined
+        }
+        contentContainerStyle={{
+          paddingVertical: 8,
+          paddingLeft: SIDE_PAD,
+          paddingRight: SIDE_PAD,
         }}
-      />
-    ))}
+      >
+        {insightCards.map((card, i) => (
+          <View key={i}>{card}</View>
+        ))}
+      </ScrollView>
+
+      {showDots && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            bottom: 10,
+            left: 0,
+            right: 0,
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          {Array.from({ length: insightsCount }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor:
+                  i === safeInsightIndex
+                    ? "rgba(255,255,255,0.9)"
+                    : "rgba(255,255,255,0.3)",
+              }}
+            />
+          ))}
+        </View>
+      )}
+    </View>
   </View>
 )}
-</View>
 
 {/* 6E Sessions list */}
 {viewMode === "week" ? (
