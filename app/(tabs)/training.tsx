@@ -40,7 +40,18 @@ type PreviewState =
 
 
 const STORAGE_KEY = "bjj.sessions.v1";
+// System id -> label (for week list + cards)
+const SYSTEM_LABEL_BY_ID = new Map<string, string>([
+  ["ALL", "All"],
+  ["All", "All"], // backward compat
+  ...FUNDAMENTALS_TAXONOMY.map((l1) => [l1.id, l1.label] as const),
+]);
 
+function resolveSystemLabel(systemId: string | undefined | null) {
+  const key = (systemId ?? "").trim();
+  if (!key) return "—";
+  return SYSTEM_LABEL_BY_ID.get(key) ?? key;
+}
 // ------------------------------
 // 2) Pure helper functions
 // ------------------------------
@@ -84,11 +95,11 @@ function dayLabel(ymd: string) {
   return `${weekday} • ${monthDay}`;
 }
 
-function addDaysYMD(ymd: string, deltaDays: number) {
+function addDaysYMD(ymd: string, delta: number) {
   const [y, m, d] = ymd.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  date.setDate(date.getDate() + deltaDays);
-  return dateToYMD(date);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  return dateToYMD(dt); // IMPORTANT: uses your padded formatter
 }
 
 function resolveTechniqueLabelForInsight(
@@ -152,7 +163,8 @@ async function resolveMediaUri(
 function sessionTitle(s: Session) {
   // Auto-title: System + Technique (fallbacks)
   const tech = (s.technique || "").trim();
-  return tech ? `${s.system} • ${tech}` : s.system;
+  const sys = resolveSystemLabel(s.system);
+  return tech ? `${sys} • ${tech}` : sys;
 }
 
 function sessionSummary(s: Session) {
@@ -487,27 +499,43 @@ const weekSessionsRaw = useMemo(() => {
     return bestKey ? { technique: bestKey, count: bestCount } : null;
   }, [weekSessionsRaw]);
   const WEEKLY_GOAL = 3;
+  const currentWeekStartYMD = dateToYMD(startOfWeekMonday(today));
+  const currentWeekStart = currentWeekStartYMD;
+  const completedWeekStreak = useMemo(() => {
+    const MAX_WEEKS_LOOKBACK = 12;
+    let streak = 0;
 
-const weeklyGoalStreakWeeks = useMemo(() => {
-  let weekStart = dateToYMD(startOfWeekMonday(today));
-  let streak = 0;
+  
+    let cursorWeekStart = addDaysYMD(currentWeekStart, -7); // start at last *completed* week
 
-  while (true) {
-    let count = 0;
+    for (let w = 0; w < MAX_WEEKS_LOOKBACK; w++) {
+      let weekCount = 0;
 
-    for (let i = 0; i < 7; i++) {
-      const d = addDaysYMD(weekStart, i);
-      count += sessionsByDate[d]?.length ?? 0;
+      for (let i = 0; i < 7; i++) {
+        const d = addDaysYMD(cursorWeekStart, i);
+        weekCount += sessionsByDate[d]?.length ?? 0;
+      }
+
+      if (weekCount < WEEKLY_GOAL) break;
+
+      streak += 1;
+      cursorWeekStart = addDaysYMD(cursorWeekStart, -7);
     }
 
-    if (count < WEEKLY_GOAL) break;
+    return streak;
+  }, [sessionsByDate, currentWeekStartYMD]);
 
-    streak += 1;
-    weekStart = addDaysYMD(weekStart, -7);
+ const currentWeekCount = useMemo(() => {
+  let count = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = addDaysYMD(currentWeekStartYMD, i);
+    count += sessionsByDate[d]?.length ?? 0;
   }
+  return count;
+}, [sessionsByDate, currentWeekStartYMD]);
 
-  return streak;
-}, [sessionsByDate, today]);
+const displayWeekStreak =
+  completedWeekStreak + (currentWeekCount >= WEEKLY_GOAL ? 1 : 0);
 
 const viewedWeekStart = useMemo(() => weekDates[0], [weekDates]);
 
@@ -710,7 +738,7 @@ const insightCards = [
     { opacity: insightIndex === 5 ? 1 : 0.92 },
   ]}
 >
-      <Text style={INSIGHT_STYLES.hero}>{weeklyGoalStreakWeeks}</Text>
+      <Text style={INSIGHT_STYLES.hero}>{displayWeekStreak}</Text>
       <Text style={INSIGHT_STYLES.title}>Weekly Goal Streak</Text>
       <Text style={INSIGHT_STYLES.sub}>3+ sessions/week</Text>
     </View>
