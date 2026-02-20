@@ -34,6 +34,7 @@ export type TaxLevel1 = {
 };
 
 export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
+    
   // ===========================
   // LEVEL 1: Standing
   // ===========================
@@ -432,6 +433,28 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
             techniques: [],
           },
           {
+        id: "l1.guard_bottom.l2.open_guard.l3.dlr",
+        label: "De La Riva (DLR)",
+        gear: "both",
+        techniques: [
+            {
+            id: "l1.guard_bottom.l2.open_guard.l3.dlr.tech.dlr_entry",
+            label: "DLR Entry",
+            gear: "both",
+            },
+            {
+            id: "l1.guard_bottom.l2.open_guard.l3.dlr.tech.dlr_sweep",
+            label: "DLR Sweep",
+            gear: "both",
+            },
+            {
+            id: "l1.guard_bottom.l2.open_guard.l3.dlr.tech.dlr_back_take",
+            label: "DLR Back Take",
+            gear: "both",
+            },
+        ],
+        },
+          {
             id: "l1.guard_bottom.l2.open_guard.l3.sweeps",
             label: "Sweeps",
             gear: "both",
@@ -566,7 +589,6 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
       },
     ],
   },
-
   // ===========================
   // LEVEL 1: Top Passing
   // ===========================
@@ -766,3 +788,91 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
     ],
   },
 ];
+// ===========================
+// PURE HELPERS (no hooks/state)
+// ===========================
+
+export type TaxTechniqueRef = {
+  technique: TaxTechnique;
+  path: {
+    l1: { id: string; label: string };
+    l2: { id: string; label: string };
+    l3?: { id: string; label: string }; // category (optional)
+  };
+};
+
+function gearMatches(nodeGear: Gear, selected: "gi" | "nogi") {
+  return nodeGear === "both" || nodeGear === selected;
+}
+
+export function flattenTechniques(taxonomy: TaxLevel1[]): TaxTechniqueRef[] {
+  const out: TaxTechniqueRef[] = [];
+
+  for (const l1 of taxonomy) {
+    for (const l2 of l1.nodes) {
+      // A) direct techniques on Level2
+      if (l2.techniques?.length) {
+        for (const tech of l2.techniques) {
+          out.push({
+            technique: tech,
+            path: {
+              l1: { id: l1.id, label: l1.label },
+              l2: { id: l2.id, label: l2.label },
+            },
+          });
+        }
+      }
+
+      // B) category buckets on Level2
+      if (l2.categories?.length) {
+        for (const cat of l2.categories) {
+          for (const tech of cat.techniques) {
+            out.push({
+              technique: tech,
+              path: {
+                l1: { id: l1.id, label: l1.label },
+                l2: { id: l2.id, label: l2.label },
+                l3: { id: cat.id, label: cat.label },
+              },
+            });
+          }
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+export function findTechniqueById(
+  taxonomy: TaxLevel1[],
+  techniqueId: string
+): TaxTechniqueRef | null {
+  const all = flattenTechniques(taxonomy);
+  return all.find((x) => x.technique.id === techniqueId) ?? null;
+}
+
+export function getTechniquePathLabel(
+  taxonomy: TaxLevel1[],
+  techniqueId: string
+): string {
+  const found = findTechniqueById(taxonomy, techniqueId);
+  if (!found) return "";
+
+  const { l1, l2, l3 } = found.path;
+  return l3
+    ? `${l1.label} > ${l2.label} > ${l3.label} > ${found.technique.label}`
+    : `${l1.label} > ${l2.label} > ${found.technique.label}`;
+}
+
+export function listTechniques(
+  taxonomy: TaxLevel1[],
+  opts: { gear: "gi" | "nogi"; l1Id?: string; l2Id?: string }
+): TaxTechniqueRef[] {
+  return flattenTechniques(taxonomy).filter((ref) => {
+    const okGear = gearMatches(ref.technique.gear ?? "both", opts.gear);
+    const okL1 = !opts.l1Id || ref.path.l1.id === opts.l1Id;
+    const okL2 = !opts.l2Id || ref.path.l2.id === opts.l2Id;
+    return okGear && okL1 && okL2;
+  });
+}

@@ -49,13 +49,11 @@ function techniqueToLabel(t: any): string {
 // Block 2: Level 1 "Systems" from taxonomy (Option A)
 // We store the *level1Id* in `system`, not the label.
 
-const TAX_L1 = (
-  (FUNDAMENTALS_TAXONOMY as any).level1 ??
-  (FUNDAMENTALS_TAXONOMY as any).level1s ??
-  (FUNDAMENTALS_TAXONOMY as any).levels?.[0] ??
-  []
-) as { id: string; label: string }[];
+// Block 2: Level 1 "Systems" from taxonomy
+// We store the *level1Id* in `system`, not the label.
 
+const TAX_L1 = FUNDAMENTALS_TAXONOMY;
+console.log("TAX_L1 length", TAX_L1.length, "keys", Object.keys(FUNDAMENTALS_TAXONOMY as any));
 const SYSTEMS_L1 = [
   { id: "ALL", label: "All" },
   ...TAX_L1.map((l1) => ({ id: l1.id, label: l1.label })),
@@ -403,7 +401,7 @@ const techniqueLabel = selected?.label || "";
 const displayTechniqueLabel =
   techniqueLabel || (technique ? String(technique) : "") || "";
   
-
+// legacy fields kept until v1 migration (techniqueId is source of truth)
 const payload: Session = {
   id: realId,
   createdAt: isNew ? now : existingSession?.createdAt || now,
