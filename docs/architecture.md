@@ -147,7 +147,8 @@ Why:
 Makes omissions intentional.
 
 ---
-
+## Architecture Decisions Pending
+- 
 ## 11. Planned Evolution (Not Commitments)
 
 - Backend (Supabase or Firebase)

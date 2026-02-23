@@ -5,9 +5,31 @@ Branch: dev
 Repo: israelortizsoto-BJJ/bjj-tracker  
 
 ---
+## Quick Check (Run before you commit)
 
-## Product Snapshot
+- [ ] App boots (no red screen)
+- [ ] Navigate: Profile → Training → Session Detail → back
+- [ ] Do the change manually in UI (the thing you actually edited)
+- [ ] If AsyncStorage touched: Save → force close → reopen → confirm persisted
+- [ ] `npx tsc --noEmit` (clean)
+- [ ] `git diff` (no surprise changes / no debug logs)
+- [ ] Search for duplicates / dead code (delete, don’t comment out)
+- [ ] Commit message matches what changed (1 sentence truth)
 
+## Current Focus (Next 1–3 tasks)
+
+1) Profile: finalize keyboard behavior + validation
+2) Training: image/video pills in Week & Yesterday
+3) Insights: first "Consistency Trend" card
+
+
+## 🚧 Open Questions / Decisions Pending (Active)
+
+- How should weight be used later? (insights vs profile-only)
+- When to introduce Coach Share / Coach Mode?
+- Do we support multiple academies in future?
+
+(Full list at bottom)
 One-line goal  
 Mobile app for logging BJJ training sessions, techniques, and progress with structured taxonomy.
 
@@ -18,7 +40,7 @@ MVP success metric
 Users open the app weekly without being reminded.
 
 ---
-
+## Product Snapshot
 ## Tech Stack
 
 - Expo (React Native)
@@ -111,3 +133,7 @@ Intentional for MVP.
 - Fixed weekly streak logic
 - Added profile onboarding + belt glow + weight
 - Added DLR taxonomy
+
+## Open Questions / Decisions Pending
+
+- 
