@@ -2,22 +2,8 @@
 
 import type { Gear } from "@/app/types";
 import type { TaxLevel1, TaxTechnique } from "./taxonomy";
-
-export type TechniqueIndexItem = {
-  id: string;
-  label: string;
-  gear: Gear;
-  path: {
-    level1Id: string;
-    level1Label: string;
-    level2Id: string;
-    level2Label: string;
-    level3Id?: string;
-    level3Label?: string;
-  };
-  haystack: string;
-  keywords: string[];
-};
+import type { TechniqueIndexItem } from "./types";
+export type { TechniqueIndexItem };
 
 // ---------------------------
 // Pure helpers

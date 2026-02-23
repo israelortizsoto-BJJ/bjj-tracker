@@ -1,4 +1,5 @@
 // app/storage/migrations/index.ts
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { STORAGE_VERSION, StorageKeys } from "../storageKeys";
 
@@ -15,9 +16,35 @@ export async function ensureStorageUpToDate(): Promise<void> {
     await AsyncStorage.setItem(StorageKeys.storageVersion, "0");
   }
 
-  // v0 -> v1 baseline migration (no-op for now)
-  if (currentVersion < 1) {
-    // future: add real steps here
+  // v1 -> v2: rescue legacy keys into contract keys (no overwrite)
+  if (currentVersion < 2) {
+    // Sessions: only copy forward if new key is empty
+    const newSessions = await AsyncStorage.getItem(StorageKeys.sessions);
+    if (!newSessions) {
+      const legacyCandidates = ["bjj.sessions.v1", "bjj_sessions_v1"];
+
+      for (const legacyKey of legacyCandidates) {
+        const legacy = await AsyncStorage.getItem(legacyKey);
+        if (legacy) {
+          await AsyncStorage.setItem(StorageKeys.sessions, legacy);
+          break;
+        }
+      }
+    }
+
+    // Profile: only copy forward if new key is empty
+    const newProfile = await AsyncStorage.getItem(StorageKeys.profile);
+    if (!newProfile) {
+      const legacyProfileCandidates = ["bjj_profile_v1"];
+
+      for (const legacyKey of legacyProfileCandidates) {
+        const legacy = await AsyncStorage.getItem(legacyKey);
+        if (legacy) {
+          await AsyncStorage.setItem(StorageKeys.profile, legacy);
+          break;
+        }
+      }
+    }
   }
 
   // Always stamp latest version at end

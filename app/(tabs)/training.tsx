@@ -24,9 +24,10 @@ import {
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 
-import type { Session } from "../types";
-
+import { buildTechniqueIndex, getTechniqueById } from "../fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
+import type { TechniqueIndexItem } from "../fundamentals/types";
+import type { Session } from "../types";
 
 type PreviewState =
   | null
@@ -47,6 +48,33 @@ function resolveSystemLabel(systemId: string | undefined | null) {
   if (!key) return "—";
   return SYSTEM_LABEL_BY_ID.get(key) ?? key;
 }
+
+function resolveTechniqueLabelById(
+  index: TechniqueIndexItem[],
+  techniqueId: string | undefined | null
+) {
+  const id = (techniqueId ?? "").trim();
+  if (!id) return "—";
+  const selected = getTechniqueById(index, id);
+  return selected?.label ?? id;
+}
+type TopKeyCount = { key: string; count: number };
+
+function pickTopKey(counts: Record<string, number>): TopKeyCount | null {
+  let bestKey = "";
+  let bestCount = 0;
+
+  for (const key of Object.keys(counts).sort()) {
+    const c = counts[key]!;
+    if (c > bestCount) {
+      bestCount = c;
+      bestKey = key;
+    }
+  }
+
+  return bestKey ? { key: bestKey, count: bestCount } : null;
+}
+
 // ------------------------------
 // 2) Pure helper functions
 // ------------------------------
@@ -267,6 +295,11 @@ export default function Training() {
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
+// Technique index (for resolving techniqueId -> label)
+const TECH_INDEX = useMemo<TechniqueIndexItem[]>(
+  () => buildTechniqueIndex(FUNDAMENTALS_TAXONOMY),
+  []
+);
 // 3D) Gestures / interaction (week swipe)
 // tweakable
 const swipeThreshold = 40;
@@ -457,28 +490,17 @@ const weekSessionsRaw = useMemo(() => {
   }, [weekSessionsRaw]);
 
   const topTechniqueThisWeek = useMemo(() => {
-    const counts: Record<string, number> = {};
+  const counts: Record<string, number> = {};
 
-    for (const s of weekSessionsRaw) {
-      const key = (s.technique ?? "").trim();
-      if (!key) continue;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
+  for (const s of weekSessionsRaw) {
+    const key = (s.techniqueId ?? "").trim();
+    if (!key) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
 
-    let bestKey = "";
-    let bestCount = 0;
-
-    // deterministic: highest count, then alphabetical
-    for (const key of Object.keys(counts).sort()) {
-      const c = counts[key]!;
-      if (c > bestCount) {
-        bestCount = c;
-        bestKey = key;
-      }
-    }
-
-    return bestKey ? { technique: bestKey, count: bestCount } : null;
-  }, [weekSessionsRaw]);
+  const picked = pickTopKey(counts);
+  return picked ? { techniqueId: picked.key, count: picked.count } : null;
+}, [weekSessionsRaw]);
   const WEEKLY_GOAL = 3;
   const currentWeekStartYMD = dateToYMD(startOfWeekMonday(today));
   const completedWeekStreak = useMemo(() => {
@@ -663,7 +685,9 @@ const insightCards = [
       numberOfLines={1}
       ellipsizeMode="tail"
       >
-      {topTechniqueThisWeek ? topTechniqueThisWeek.technique : "—"}
+      {topTechniqueThisWeek
+  ? resolveTechniqueLabelById(TECH_INDEX, topTechniqueThisWeek.techniqueId)
+  : "—"}
     </Text>
       <Text style={INSIGHT_STYLES.title}>Top Technique</Text>
       <Text style={INSIGHT_STYLES.sub}>
