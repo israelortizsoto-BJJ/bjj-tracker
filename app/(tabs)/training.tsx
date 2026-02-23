@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { StorageKeys } from "../storage/storageKeys";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -26,11 +26,6 @@ import { Calendar } from "react-native-calendars";
 
 import type { Session } from "../types";
 
-import {
-  buildTechniqueIndex,
-  getTechniqueById,
-  type TechniqueIndexItem,
-} from "../fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
 
 type PreviewState =
@@ -39,7 +34,7 @@ type PreviewState =
   | { type: "video"; uri: string; assetId?: string | null };
 
 
-const STORAGE_KEY = "bjj.sessions.v1";
+
 // System id -> label (for week list + cards)
 const SYSTEM_LABEL_BY_ID = new Map<string, string>([
   ["ALL", "All"],
@@ -100,16 +95,6 @@ function addDaysYMD(ymd: string, delta: number) {
   const dt = new Date(y, m - 1, d);
   dt.setDate(dt.getDate() + delta);
   return dateToYMD(dt); // IMPORTANT: uses your padded formatter
-}
-
-function resolveTechniqueLabelForInsight(
-  s: Session,
-  index: TechniqueIndexItem[]
-) {
-  const id = (s.techniqueId ?? "").trim();
-  const selected = id ? getTechniqueById(index, id) : null;
-  const techniqueLabel = selected?.label || "";
-  return techniqueLabel || (s.technique ? String(s.technique) : "") || "";
 }
 
 function normalizeUrl(url?: string) {
@@ -206,7 +191,7 @@ function getBadgeAction(labelRaw: any, s: Session): BadgeAction | null {
   return null;
 }
 async function loadSessions(): Promise<Session[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  const raw = await AsyncStorage.getItem(StorageKeys.sessions);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -281,11 +266,7 @@ export default function Training() {
   
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
-// 3D) Gestures / interaction (week swipe)
-  const TECH_INDEX = useMemo<TechniqueIndexItem[]>(
-    () => buildTechniqueIndex(FUNDAMENTALS_TAXONOMY),
-    []
-  );
+
 // 3D) Gestures / interaction (week swipe)
 // tweakable
 const swipeThreshold = 40;
@@ -500,13 +481,12 @@ const weekSessionsRaw = useMemo(() => {
   }, [weekSessionsRaw]);
   const WEEKLY_GOAL = 3;
   const currentWeekStartYMD = dateToYMD(startOfWeekMonday(today));
-  const currentWeekStart = currentWeekStartYMD;
   const completedWeekStreak = useMemo(() => {
     const MAX_WEEKS_LOOKBACK = 12;
     let streak = 0;
 
   
-    let cursorWeekStart = addDaysYMD(currentWeekStart, -7); // start at last *completed* week
+    let cursorWeekStart = addDaysYMD(currentWeekStartYMD, -7); // start at last *completed* week
 
     for (let w = 0; w < MAX_WEEKS_LOOKBACK; w++) {
       let weekCount = 0;

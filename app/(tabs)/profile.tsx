@@ -10,8 +10,8 @@ import {
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { StorageKeys } from "../storage/storageKeys";
 
-const PROFILE_KEY = "bjj_profile_v1";
 const DEFAULT_PROFILE: Profile = {
   belt: "White",
   stripes: "0",
@@ -48,7 +48,7 @@ const beltAccent = (b: string) => {
 };
 
 async function loadProfile(): Promise<Profile> {
-  const raw = await AsyncStorage.getItem(PROFILE_KEY);
+  const raw = await AsyncStorage.getItem(StorageKeys.profile);
   if (!raw) return DEFAULT_PROFILE;
 
   try {
@@ -67,7 +67,7 @@ async function loadProfile(): Promise<Profile> {
 }
 
 async function saveProfile(p: Profile) {
-  await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+  await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(p));
 }
 
 export default function ProfileScreen() {

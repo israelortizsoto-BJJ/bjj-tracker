@@ -21,6 +21,7 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { buildTechniqueIndex, getTechniqueById } from "../../fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
+import { StorageKeys } from "../../storage/storageKeys";
 import type { Session } from "../../types";
  
 // Fundamentals: build static search index once (do NOT move inside component)
@@ -58,7 +59,7 @@ const SYSTEMS_L1 = [
   { id: "ALL", label: "All" },
   ...TAX_L1.map((l1) => ({ id: l1.id, label: l1.label })),
 ];
-const STORAGE_KEY = "bjj.sessions.v1";
+
 
 const MEDIA_DIR =
   FileSystem.documentDirectory ? `${FileSystem.documentDirectory}media/` : null;
@@ -97,7 +98,7 @@ function todayYMD() {
 }
 
 async function loadSessions(): Promise<Session[]> {
-  const raw = await AsyncStorage.getItem(STORAGE_KEY);
+  const raw = await AsyncStorage.getItem(StorageKeys.sessions);
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw);
@@ -108,7 +109,7 @@ async function loadSessions(): Promise<Session[]> {
 }
 
 async function saveSessions(sessions: Session[]) {
-  await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(sessions));
 }
 
 // State Variables Block1 //

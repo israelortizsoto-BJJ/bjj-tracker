@@ -2,8 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Button, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { StorageKeys } from "../storage/storageKeys";
 
-const PROFILE_KEY = "bjj_profile_v1";
 
 type Profile = {
   belt: string;
@@ -18,7 +18,7 @@ export default function Welcome() {
 
   useEffect(() => {
     (async () => {
-      const raw = await AsyncStorage.getItem(PROFILE_KEY);
+      const raw = await AsyncStorage.getItem(StorageKeys.profile);
       if (raw) {
         try {
           const p = JSON.parse(raw) as Profile;
