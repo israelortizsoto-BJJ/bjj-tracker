@@ -453,7 +453,7 @@ const weekSessionsRaw = useMemo(() => {
       }
     }
 
-    return bestKey ? { system: bestKey, count: bestCount } : null;
+    return bestKey ? { systemId: bestKey, count: bestCount } : null;
   }, [weekSessionsRaw]);
 
   const topTechniqueThisWeek = useMemo(() => {
@@ -565,7 +565,7 @@ const currentFocusSystem14d = useMemo(() => {
     }
   }
 
-  return bestKey ? { system: bestKey, count: bestCount } : null;
+ return bestKey ? { systemId: bestKey, count: bestCount } : null;
 }, [sessionsByDate, today]);
 
 const giNoGi14d = useMemo(() => {
@@ -638,7 +638,7 @@ const insightCards = [
   ]}
 >
       <Text style={INSIGHT_STYLES.hero} numberOfLines={2}>
-        {topSystemThisWeek ? topSystemThisWeek.system : "—"}
+       {topSystemThisWeek ? resolveSystemLabel(topSystemThisWeek.systemId) : "—"}
       </Text>
       <Text style={INSIGHT_STYLES.title}>Top System</Text>
       <Text style={INSIGHT_STYLES.sub}>
@@ -673,23 +673,33 @@ const insightCards = [
   ),
 
   // Card 4: Current Focus (14d)
-  (
-    <View
-  key="insight-4"
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: insightIndex === 3 ? 1 : 0.92 },
-  ]}
->
-      <Text style={INSIGHT_STYLES.hero}>
-        {currentFocusSystem14d ? currentFocusSystem14d.system : "—"}
-      </Text>
-      <Text style={INSIGHT_STYLES.title}>Current Focus (14d)</Text>
-      <Text style={INSIGHT_STYLES.sub}>
-        {currentFocusSystem14d ? `${currentFocusSystem14d.count} sessions` : ""}
-      </Text>
-    </View>
-  ),
+(
+  <View
+    key="insight-4"
+    style={[
+      INSIGHT_CARD_CONTAINER,
+      { opacity: insightIndex === 3 ? 1 : 0.92 },
+    ]}
+  >
+    <Text
+      style={INSIGHT_STYLES.hero}
+      numberOfLines={2}
+      ellipsizeMode="tail"
+    >
+      {currentFocusSystem14d
+        ? resolveSystemLabel(currentFocusSystem14d.systemId)
+        : "—"}
+    </Text>
+
+    <Text style={INSIGHT_STYLES.title}>Current Focus (14d)</Text>
+
+    <Text style={INSIGHT_STYLES.sub}>
+      {currentFocusSystem14d
+        ? `${currentFocusSystem14d.count} session${currentFocusSystem14d.count === 1 ? "" : "s"}`
+        : ""}
+    </Text>
+  </View>
+),
 // Card 5: Gi vs No-Gi (14d)
 (
   <View
