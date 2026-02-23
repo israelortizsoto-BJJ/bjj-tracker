@@ -642,7 +642,9 @@ const insightCards = [
       </Text>
       <Text style={INSIGHT_STYLES.title}>Top System</Text>
       <Text style={INSIGHT_STYLES.sub}>
-        {topSystemThisWeek ? `${topSystemThisWeek.count} sessions` : ""}
+        {topSystemThisWeek
+  ? `${topSystemThisWeek.count} session${topSystemThisWeek.count === 1 ? "" : "s"}`
+  : ""}
       </Text>
     </View>
   ),
