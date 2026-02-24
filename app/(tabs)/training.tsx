@@ -29,6 +29,10 @@ import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
 import type { TechniqueIndexItem } from "../fundamentals/types";
 import type { Session } from "../types";
 
+import { computeCurrentFocus14d, computeGiNoGi14d, computeTopSystemThisWeek } from "../domain/metrics";
+
+
+
 type PreviewState =
   | null
   | { type: "image"; uri: string; assetId?: string | null }
@@ -464,30 +468,11 @@ const weekSessionsRaw = useMemo(() => {
   return list.sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
   );
+
 }, [weekDates, sessionsByDate]);
-  const topSystemThisWeek = useMemo(() => {
-    const counts: Record<string, number> = {};
-
-    for (const s of weekSessionsRaw) {
-      const key = (s.system ?? "").trim();
-      if (!key) continue;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-
-    let bestKey = "";
-    let bestCount = 0;
-
-    // deterministic: highest count, then alphabetical
-    for (const key of Object.keys(counts).sort()) {
-      const c = counts[key]!;
-      if (c > bestCount) {
-        bestCount = c;
-        bestKey = key;
-      }
-    }
-
-    return bestKey ? { systemId: bestKey, count: bestCount } : null;
-  }, [weekSessionsRaw]);
+    const topSystemThisWeek = useMemo(() => {
+  return computeTopSystemThisWeek(weekSessionsRaw);
+}, [weekSessionsRaw]);
 
   const topTechniqueThisWeek = useMemo(() => {
   const counts: Record<string, number> = {};
@@ -562,55 +547,13 @@ const weekDelta = useMemo(
   [thisWeekTotal, lastWeekTotal]
 );
 const currentFocusSystem14d = useMemo(() => {
-  const counts: Record<string, number> = {};
-
-  for (let i = 0; i < 14; i++) {
-    const day = addDaysYMD(today, -i);
-    const list = sessionsByDate[day] ?? [];
-
-    for (const s of list) {
-      const key = (s.system ?? "").trim();
-      if (!key) continue;
-      counts[key] = (counts[key] ?? 0) + 1;
-    }
-  }
-
-  let bestKey = "";
-  let bestCount = 0;
-
-  // deterministic: highest count, then alphabetical
-  for (const key of Object.keys(counts).sort()) {
-    const c = counts[key]!;
-    if (c > bestCount) {
-      bestCount = c;
-      bestKey = key;
-    }
-  }
-
- return bestKey ? { systemId: bestKey, count: bestCount } : null;
+  return computeCurrentFocus14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
 
 const giNoGi14d = useMemo(() => {
-  let gi = 0;
-  let nogi = 0;
-
-  for (let i = 0; i < 14; i++) {
-    const day = addDaysYMD(today, -i);
-    const list = sessionsByDate[day] ?? [];
-
-    for (const s of list) {
-      const g = (s.gear ?? "").toString().toLowerCase().trim();
-      if (g === "gi") gi += 1;
-      else if (g === "no-gi" || g === "nogi") nogi += 1;
-    }
-  }
-
-  const total = gi + nogi;
-  if (total === 0) return null;
-
-  const primary = gi === nogi ? "Gi & No-Gi" : gi > nogi ? "Gi" : "No-Gi";
-  return { gi, nogi, primary };
+  return computeGiNoGi14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
+console.log("giNoGi14d", giNoGi14d);
 
 const insightCards = [
   // Card 0: Narrative Intro
