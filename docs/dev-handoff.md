@@ -5,6 +5,28 @@ Branch: dev
 Repo: israelortizsoto-BJJ/bjj-tracker  
 
 ---
+### “Stable Checkpoint”
+### 2026-02-23
+
+- Storage contract stabilized:
+  - app/storage/storageKeys.ts
+  - app/storage/migrations/index.ts
+- Versioned migration flow in place (v2)
+- Legacy rescue for sessions + profile
+- Migrations executed on app boot via app/_layout.tsx
+
+- Technique index contract stabilized:
+  - Canonical type: app/fundamentals/types.ts
+  - Re-exported from app/fundamentals/index.ts
+  - TechniqueIndexItem.path is object (not string)
+
+- Insight cards aligned to ID-based contract:
+  - Top System → systemId + resolver
+  - Current Focus (14d) → systemId + resolver
+  - Top Technique pluralization polish
+
+- TypeScript + ESLint clean
+
 ## Quick Check (Run before you commit)
 
 - [ ] App boots (no red screen)
@@ -67,7 +89,8 @@ Rule: Logic lives in Blocks 2–5. Render is dumb.
 
 ## Data Model
 
-Storage key: bjj.sessions.v1
+Storage key (canonical): StorageKeys.sessions (see app/storage/storageKeys.ts)
+Legacy keys (rescued via migration): bjj.sessions.v1, bjj_sessions_v1
 
 Session fields:
 - techniqueId (primary structured ID)
