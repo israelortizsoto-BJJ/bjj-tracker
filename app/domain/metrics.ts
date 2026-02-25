@@ -7,6 +7,7 @@ import type { Session } from "../types"; // <-- adjust if your Session type live
 export type TopSystemMetric = { systemId: string; count: number };
 export type Focus14dMetric = { systemId: string; count: number };
 export type GiNoGi14dMetric = { gi: number; nogi: number; primary: string };
+export type TopTechniqueMetric = { techniqueId: string; count: number };
 
 // --- Internal helpers (UTC-safe to match YYYY-MM-DD parsing behavior) ---
 
@@ -42,7 +43,15 @@ function countSystemsFromSessions(list: Session[]): Record<string, number> {
   }
   return counts;
 }
-
+function countTechniquesFromSessions(list: Session[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const s of list) {
+    const key = (s.techniqueId ?? "").trim();
+    if (!key) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
+}
 // --- Exported metrics ---
 
 export function computeTopSystemThisWeek(weekSessionsRaw: Session[]): TopSystemMetric | null {
@@ -50,7 +59,19 @@ export function computeTopSystemThisWeek(weekSessionsRaw: Session[]): TopSystemM
   const picked = pickTopKeyDeterministic(counts);
   return picked ? { systemId: picked.key, count: picked.count } : null;
 }
+export function computeTopTechniqueThisWeek(
+  weekSessionsRaw: Session[]
+): TopTechniqueMetric | null {
+  const counts = countTechniquesFromSessions(weekSessionsRaw);
+  for (const s of weekSessionsRaw) {
+    const key = (s.techniqueId ?? "").trim();
+    if (!key) continue;
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
 
+  const picked = pickTopKeyDeterministic(counts);
+  return picked ? { techniqueId: picked.key, count: picked.count } : null;
+}
 export function computeCurrentFocus14d(
   sessionsByDate: Record<string, Session[]>,
   todayYMD: string

@@ -29,7 +29,15 @@ import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
 import type { TechniqueIndexItem } from "../fundamentals/types";
 import type { Session } from "../types";
 
-import { computeCompletedWeekStreak, computeCurrentFocus14d, computeGiNoGi14d, computeLastWeekTotal, computeTopSystemThisWeek, computeWeekCount } from "../domain/metrics";
+import {
+  computeCompletedWeekStreak,
+  computeCurrentFocus14d,
+  computeGiNoGi14d,
+  computeLastWeekTotal,
+  computeTopSystemThisWeek,
+  computeTopTechniqueThisWeek,
+  computeWeekCount,
+} from "../domain/metrics";
 
 
 
@@ -62,22 +70,8 @@ function resolveTechniqueLabelById(
   const selected = getTechniqueById(index, id);
   return selected?.label ?? id;
 }
-type TopKeyCount = { key: string; count: number };
 
-function pickTopKey(counts: Record<string, number>): TopKeyCount | null {
-  let bestKey = "";
-  let bestCount = 0;
 
-  for (const key of Object.keys(counts).sort()) {
-    const c = counts[key]!;
-    if (c > bestCount) {
-      bestCount = c;
-      bestKey = key;
-    }
-  }
-
-  return bestKey ? { key: bestKey, count: bestCount } : null;
-}
 
 // ------------------------------
 // 2) Pure helper functions
@@ -475,16 +469,7 @@ const weekSessionsRaw = useMemo(() => {
 }, [weekSessionsRaw]);
 
   const topTechniqueThisWeek = useMemo(() => {
-  const counts: Record<string, number> = {};
-
-  for (const s of weekSessionsRaw) {
-    const key = (s.techniqueId ?? "").trim();
-    if (!key) continue;
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-
-  const picked = pickTopKey(counts);
-  return picked ? { techniqueId: picked.key, count: picked.count } : null;
+  return computeTopTechniqueThisWeek(weekSessionsRaw);
 }, [weekSessionsRaw]);
   const WEEKLY_GOAL = 3;
   const currentWeekStartYMD = dateToYMD(startOfWeekMonday(today));
@@ -524,12 +509,6 @@ const currentFocusSystem14d = useMemo(() => {
 const giNoGi14d = useMemo(() => {
   return computeGiNoGi14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
-console.log("topSystemThisWeek", topSystemThisWeek);
-console.log("currentFocusSystem14d", currentFocusSystem14d);
-console.log("giNoGi14d", giNoGi14d);
-console.log("currentWeekCount", currentWeekCount);
-console.log("completedWeekStreak", completedWeekStreak);
-console.log("lastWeekTotal", lastWeekTotal);
 
 const insightCards = [
   // Card 0: Narrative Intro
