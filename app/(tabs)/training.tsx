@@ -37,6 +37,7 @@ import {
   computeTopSystemThisWeek,
   computeTopTechniqueThisWeek,
   computeWeekCount,
+  computeWeekTotals,
 } from "../domain/metrics";
 
 
@@ -510,6 +511,15 @@ const currentFocusSystem14d = useMemo(() => {
 const giNoGi14d = useMemo(() => {
   return computeGiNoGi14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
+const weekTotals4w = useMemo(() => {
+  return computeWeekTotals(sessionsByDate, currentWeekStartYMD, 4);
+}, [sessionsByDate, currentWeekStartYMD]);
+
+const trendDelta = useMemo(() => {
+  const thisW = weekTotals4w[0] ?? 0;
+  const lastW = weekTotals4w[1] ?? 0;
+  return thisW - lastW;
+}, [weekTotals4w]);
 
 const insightCards = [
   // Card 0: Narrative Intro
@@ -662,12 +672,12 @@ const insightCards = [
   // Card 7: Vs Last Week
   (
     <View
-  key="insight-7"
-  style={[
-    INSIGHT_CARD_CONTAINER,
-    { opacity: insightIndex === 6 ? 1 : 0.92 },
-  ]}
->
+      key="insight-7"
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 6 ? 1 : 0.92 },
+      ]}
+    >
       <Text style={INSIGHT_STYLES.hero}>
         {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
       </Text>
@@ -675,10 +685,30 @@ const insightCards = [
       <Text style={INSIGHT_STYLES.sub}>{lastWeekTotal} last week</Text>
     </View>
   ),
+
+  // Card 8: Consistency Trend (4w)
+  (
+    <View
+      key="insight-8"
+      style={[
+        INSIGHT_CARD_CONTAINER,
+        { opacity: insightIndex === 7 ? 1 : 0.92 },
+      ]}
+    >
+      <Text style={INSIGHT_STYLES.hero}>
+        {trendDelta === 0
+          ? "—"
+          : (trendDelta > 0 ? "+" : "−") + String(Math.abs(trendDelta))}
+      </Text>
+
+      <Text style={INSIGHT_STYLES.title}>Consistency Trend (4w)</Text>
+      <Text style={INSIGHT_STYLES.sub}>
+        {(weekTotals4w[0] ?? 0)} this week • {(weekTotals4w[1] ?? 0)} last week
+      </Text>
+    </View>
+  ),  
 ];
-
 const insightsCount = insightCards.length;
-
 const showDots = insightsCount > 1;
 const snapEnabled = insightsCount > 1;
 const safeInsightIndex = Math.max(0, Math.min(insightIndex, insightsCount - 1));
