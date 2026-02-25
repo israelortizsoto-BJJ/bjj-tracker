@@ -29,7 +29,7 @@ import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
 import type { TechniqueIndexItem } from "../fundamentals/types";
 import type { Session } from "../types";
 
-import { computeCurrentFocus14d, computeGiNoGi14d, computeTopSystemThisWeek } from "../domain/metrics";
+import { computeCompletedWeekStreak, computeCurrentFocus14d, computeGiNoGi14d, computeLastWeekTotal, computeTopSystemThisWeek, computeWeekCount } from "../domain/metrics";
 
 
 
@@ -489,37 +489,17 @@ const weekSessionsRaw = useMemo(() => {
   const WEEKLY_GOAL = 3;
   const currentWeekStartYMD = dateToYMD(startOfWeekMonday(today));
   const completedWeekStreak = useMemo(() => {
-    const MAX_WEEKS_LOOKBACK = 12;
-    let streak = 0;
-
-  
-    let cursorWeekStart = addDaysYMD(currentWeekStartYMD, -7); // start at last *completed* week
-
-    for (let w = 0; w < MAX_WEEKS_LOOKBACK; w++) {
-      let weekCount = 0;
-
-      for (let i = 0; i < 7; i++) {
-        const d = addDaysYMD(cursorWeekStart, i);
-        weekCount += sessionsByDate[d]?.length ?? 0;
-      }
-
-      if (weekCount < WEEKLY_GOAL) break;
-
-      streak += 1;
-      cursorWeekStart = addDaysYMD(cursorWeekStart, -7);
-    }
-
-    return streak;
-  }, [sessionsByDate, currentWeekStartYMD]);
+  return computeCompletedWeekStreak(
+    sessionsByDate,
+    currentWeekStartYMD,
+    WEEKLY_GOAL
+  );
+}, [sessionsByDate, currentWeekStartYMD]);
 
  const currentWeekCount = useMemo(() => {
-  let count = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = addDaysYMD(currentWeekStartYMD, i);
-    count += sessionsByDate[d]?.length ?? 0;
-  }
-  return count;
+  return computeWeekCount(sessionsByDate, currentWeekStartYMD);
 }, [sessionsByDate, currentWeekStartYMD]);
+
 
 const displayWeekStreak =
   completedWeekStreak + (currentWeekCount >= WEEKLY_GOAL ? 1 : 0);
@@ -531,15 +511,7 @@ const thisWeekTotal = useMemo(() => {
 }, [weekSessionsRaw]);
 
 const lastWeekTotal = useMemo(() => {
-  const lastWeekStart = addDaysYMD(viewedWeekStart, -7);
-  let count = 0;
-
-  for (let i = 0; i < 7; i++) {
-    const d = addDaysYMD(lastWeekStart, i);
-    count += sessionsByDate[d]?.length ?? 0;
-  }
-
-  return count;
+  return computeLastWeekTotal(sessionsByDate, viewedWeekStart);
 }, [sessionsByDate, viewedWeekStart]);
 
 const weekDelta = useMemo(
@@ -553,7 +525,7 @@ const currentFocusSystem14d = useMemo(() => {
 const giNoGi14d = useMemo(() => {
   return computeGiNoGi14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
-console.log("giNoGi14d", giNoGi14d);
+
 
 const insightCards = [
   // Card 0: Narrative Intro
