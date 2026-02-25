@@ -290,7 +290,7 @@ export default function Training() {
   const [playableVideoUri, setPlayableVideoUri] = useState<string | null>(null);
   // Insight cards (horizontal carousel)
   const [insightIndex, setInsightIndex] = useState(0);
-  
+
 // Collapsible week groups (expanded/collapsed by day)
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
@@ -337,13 +337,13 @@ onMoveShouldSetPanResponderCapture: (_, g) => {
           setWeekStartYMD((prev) => addDaysYMD(prev, 7));
         } else {
         }
-      },    
+      },
     }),
   // ✅ IMPORTANT: include viewMode so responder behavior updates when you toggle tabs
   [viewMode, setWeekStartYMD]
 );
 
-// 3C) Simple constants  
+// 3C) Simple constants
   const today = todayYMD();
   const yesterday = addDaysYMD(today, -1);
 
@@ -351,7 +351,7 @@ onMoveShouldSetPanResponderCapture: (_, g) => {
 // 4) Data loading + sync (effects)
 //    4A) refresh() -> loads AsyncStorage into state
 //    4B) Effects: route param sync (params.date) + useFocusEffect refresh
-// ------------------------------------------------------------  
+// ------------------------------------------------------------
 const refresh = useCallback(async () => {
   setIsLoadingSessions(true);
   try {
@@ -706,7 +706,7 @@ const insightCards = [
         {(weekTotals4w[0] ?? 0)} this week • {(weekTotals4w[1] ?? 0)} last week
       </Text>
     </View>
-  ),  
+  ),
 ];
 const insightsCount = insightCards.length;
 const showDots = insightsCount > 1;
@@ -931,7 +931,7 @@ const renderDayWeekHeader = () => (
       onPress={() => {
       setViewMode("week");
       setSelectedDate(today);
-        
+
   // If you're not currently on the current week, snap back to current week.
       setWeekStartYMD(startOfWeekMondayYMD(today));
 }}
@@ -962,7 +962,7 @@ const renderNewSessionCTA = () => (
     />
   </View>
 );
-  // Main Return.  
+  // Main Return.
   return (
   <View style={{ flex: 1 }}>
     <ScrollView
@@ -1053,7 +1053,7 @@ const renderNewSessionCTA = () => (
   <View style={{ flex: 1 }}>
     {/* Swipe rail: captures horizontal swipes to change week WITHOUT stealing vertical scroll or Pressables.
         Keep handlers on this invisible rail only (not the whole list). */}
-    
+
   {/* Week header (uses the same source-of-truth as swipe: weekStartYMD) */}
   	{/* Important: clips swipe rail so it can't steal taps on first row */}
   <View style={{ gap: 2, marginTop: 6, position: "relative", overflow: "hidden" }}>
@@ -1424,4 +1424,4 @@ const renderNewSessionCTA = () => (
 </View>
 );
 }
-  
+
