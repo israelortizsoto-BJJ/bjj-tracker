@@ -1,11 +1,30 @@
 # BJJ Tracker — Developer Handoff
 
-Last Updated: 2026-02-22  
+Last Updated: 2026-02-24
 Branch: dev  
 Repo: israelortizsoto-BJJ/bjj-tracker  
 
 ---
 ### “Stable Checkpoint”
+### 2026-02-24
+
+- Block 2 (Domain Metrics Extraction) completed:
+  - Created canonical metrics module: app/domain/metrics.ts
+  - Training tab now calls domain metrics instead of inline computations
+
+- Extracted metrics (domain-owned):
+  - Top System (This Week)
+  - Top Technique (This Week)
+  - Current Focus (14d)
+  - Gi vs No-Gi (14d)
+  - Week count helpers
+  - Completed week streak
+  - Last week total (for weekly delta)
+
+- Cleanup:
+  - Removed unused local helpers from Training tab (pickTopKey, TopKeyCount)
+  - TypeScript + ESLint clean (gated before commit)
+
 ### 2026-02-23
 
 - Storage contract stabilized:
@@ -28,6 +47,7 @@ Repo: israelortizsoto-BJJ/bjj-tracker
 - TypeScript + ESLint clean
 
 ## Quick Check (Run before you commit)
+Tip: avoid pasting `git diff` into chat—use `git diff > /tmp/diff.txt` and `tail -n 80 /tmp/diff.txt`.
 
 - [ ] App boots (no red screen)
 - [ ] Navigate: Profile → Training → Session Detail → back
@@ -36,14 +56,16 @@ Repo: israelortizsoto-BJJ/bjj-tracker
 - [ ] `npx tsc --noEmit` (clean)
 - [ ] `git diff` (no surprise changes / no debug logs)
 - [ ] Search for duplicates / dead code (delete, don’t comment out)
+- [ ] Preferred proof command:
+      `git rev-parse --short HEAD && git show -s --format=%s HEAD && npx tsc --noEmit && npm run lint && echo "✅ TS + Lint PASS"`
+- [ ] Use bjjproof/bp for safe proof + commit workflow (diff saved to /tmp/diff.txt; review tail)
 - [ ] Commit message matches what changed (1 sentence truth)
 
 ## Current Focus (Next 1–3 tasks)
 
-1) Profile: finalize keyboard behavior + validation
-2) Training: image/video pills in Week & Yesterday
-3) Insights: first "Consistency Trend" card
-
+1) Profile: finalize keyboard behavior + validation (only if it blocks MVP)
+2) Insights: add first "Consistency Trend" card (keep domain-first approach)
+3) Docs: add Quick Check reinforcement + new terminal commands (bjj / bjjproof / bp)
 
 ## 🚧 Open Questions / Decisions Pending (Active)
 
@@ -129,6 +151,7 @@ Do not mix ScrollView and KeyboardAwareScrollView.
 ---
 
 ## Known Constraints
+ Metrics may surface systemId "ALL" if legacy sessions stored that value; behavior unchanged for MVP.
 
 - Expo AV deprecated warning
 - Media limited in Expo Go
@@ -137,7 +160,16 @@ Do not mix ScrollView and KeyboardAwareScrollView.
 Intentional for MVP.
 
 ---
+## Dev Commands (Local)
 
+- Start Expo (cache clear):
+  - `bjj`
+
+- Proof + commit workflow (gates → diff tail → stage → commit → push → log):
+  - `bjjproof "commit message"`
+  - `bp "commit message"` (alias)
+
+---
 ## Restart Checklist
 
 1. npm install
