@@ -33,11 +33,10 @@ import {
   computeCompletedWeekStreak,
   computeCurrentFocus14d,
   computeGiNoGi14d,
-  computeLastWeekTotal,
   computeTopSystemThisWeek,
   computeTopTechniqueThisWeek,
   computeWeekCount,
-  computeWeekTotals,
+  computeWeekTotals
 } from "../domain/metrics";
 
 
@@ -490,20 +489,9 @@ const weekSessionsRaw = useMemo(() => {
 const displayWeekStreak =
   completedWeekStreak + (currentWeekCount >= WEEKLY_GOAL ? 1 : 0);
 
-const viewedWeekStart = useMemo(() => weekDates[0], [weekDates]);
-
 const thisWeekTotal = useMemo(() => {
   return weekSessionsRaw.length;
 }, [weekSessionsRaw]);
-
-const lastWeekTotal = useMemo(() => {
-  return computeLastWeekTotal(sessionsByDate, viewedWeekStart);
-}, [sessionsByDate, viewedWeekStart]);
-const weekDelta = useMemo(
-  () => thisWeekTotal - lastWeekTotal,
-  [thisWeekTotal, lastWeekTotal]
-);
-
 const currentFocusSystem14d = useMemo(() => {
   return computeCurrentFocus14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
@@ -669,30 +657,13 @@ const insightCards = [
     </View>
   ),
 
-  // Card 7: Vs Last Week
+  // Card 7: Consistency Trend (4w)
   (
     <View
       key="insight-7"
       style={[
         INSIGHT_CARD_CONTAINER,
         { opacity: insightIndex === 6 ? 1 : 0.92 },
-      ]}
-    >
-      <Text style={INSIGHT_STYLES.hero}>
-        {weekDelta === 0 ? "—" : (weekDelta > 0 ? "+" : "") + String(weekDelta)}
-      </Text>
-      <Text style={INSIGHT_STYLES.title}>Vs Last Week</Text>
-      <Text style={INSIGHT_STYLES.sub}>{lastWeekTotal} last week</Text>
-    </View>
-  ),
-
-  // Card 8: Consistency Trend (4w)
-  (
-    <View
-      key="insight-8"
-      style={[
-        INSIGHT_CARD_CONTAINER,
-        { opacity: insightIndex === 7 ? 1 : 0.92 },
       ]}
     >
       <Text style={INSIGHT_STYLES.hero}>
