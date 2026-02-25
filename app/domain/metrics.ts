@@ -63,12 +63,6 @@ export function computeTopTechniqueThisWeek(
   weekSessionsRaw: Session[]
 ): TopTechniqueMetric | null {
   const counts = countTechniquesFromSessions(weekSessionsRaw);
-  for (const s of weekSessionsRaw) {
-    const key = (s.techniqueId ?? "").trim();
-    if (!key) continue;
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-
   const picked = pickTopKeyDeterministic(counts);
   return picked ? { techniqueId: picked.key, count: picked.count } : null;
 }
@@ -158,4 +152,16 @@ export function computeLastWeekTotal(
 ): number {
   const lastWeekStart = ymdShift(viewedWeekStartYMD, -7);
   return computeWeekCount(sessionsByDate, lastWeekStart);
+}
+export function computeWeekTotals(
+  sessionsByDate: Record<string, Session[]>,
+  currentWeekStartYMD: string,
+  weeks = 4
+): number[] {
+  const totals: number[] = [];
+  for (let w = 0; w < weeks; w++) {
+    const weekStart = ymdShift(currentWeekStartYMD, -7 * w);
+    totals.push(computeWeekCount(sessionsByDate, weekStart));
+  }
+  return totals;
 }

@@ -502,6 +502,7 @@ const weekDelta = useMemo(
   () => thisWeekTotal - lastWeekTotal,
   [thisWeekTotal, lastWeekTotal]
 );
+
 const currentFocusSystem14d = useMemo(() => {
   return computeCurrentFocus14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
