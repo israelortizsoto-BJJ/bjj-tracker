@@ -513,7 +513,6 @@ const thisWeekTotal = useMemo(() => {
 const lastWeekTotal = useMemo(() => {
   return computeLastWeekTotal(sessionsByDate, viewedWeekStart);
 }, [sessionsByDate, viewedWeekStart]);
-
 const weekDelta = useMemo(
   () => thisWeekTotal - lastWeekTotal,
   [thisWeekTotal, lastWeekTotal]
@@ -525,7 +524,12 @@ const currentFocusSystem14d = useMemo(() => {
 const giNoGi14d = useMemo(() => {
   return computeGiNoGi14d(sessionsByDate, today);
 }, [sessionsByDate, today]);
-
+console.log("topSystemThisWeek", topSystemThisWeek);
+console.log("currentFocusSystem14d", currentFocusSystem14d);
+console.log("giNoGi14d", giNoGi14d);
+console.log("currentWeekCount", currentWeekCount);
+console.log("completedWeekStreak", completedWeekStreak);
+console.log("lastWeekTotal", lastWeekTotal);
 
 const insightCards = [
   // Card 0: Narrative Intro
