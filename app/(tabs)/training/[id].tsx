@@ -19,10 +19,10 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { buildTechniqueIndex, getTechniqueById } from "../../fundamentals/index";
-import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
-import { StorageKeys } from "../../storage/storageKeys";
-import type { Session } from "../../types";
+import { buildTechniqueIndex, getTechniqueById } from "../../_fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../../_fundamentals/taxonomy";
+import { StorageKeys } from "../../_storage/storageKeys";
+import type { Session } from "../../_types";
  
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
@@ -54,10 +54,9 @@ function techniqueToLabel(t: any): string {
 // We store the *level1Id* in `system`, not the label.
 
 const TAX_L1 = FUNDAMENTALS_TAXONOMY;
-console.log("TAX_L1 length", TAX_L1.length, "keys", Object.keys(FUNDAMENTALS_TAXONOMY as any));
 const SYSTEMS_L1 = [
   { id: "ALL", label: "All" },
-  ...TAX_L1.map((l1) => ({ id: l1.id, label: l1.label })),
+  ...TAX_L1.map((l1: { id: string; label: string }) => ({ id: l1.id, label: l1.label })),
 ];
 
 
