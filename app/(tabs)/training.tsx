@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { StorageKeys } from "../_storage/storageKeys";
+import { StorageKeys } from "../storage/storageKeys";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,11 +23,11 @@ import {
   View
 } from "react-native";
 import { Calendar } from "react-native-calendars";
-
-import { buildTechniqueIndex, getTechniqueById } from "../_fundamentals/index";
-import { FUNDAMENTALS_TAXONOMY } from "../_fundamentals/taxonomy";
-import type { TechniqueIndexItem } from "../_fundamentals/types";
-import type { Session } from "../_types";
+import { toDateKey } from "../_domain/dateKey";
+import { buildTechniqueIndex, getTechniqueById } from "../fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
+import type { TechniqueIndexItem } from "../fundamentals/types";
+import type { Session } from "../types";
 
 import {
   computeCompletedWeekStreak,
@@ -37,7 +37,7 @@ import {
   computeTopTechniqueThisWeek,
   computeWeekCount,
   computeWeekTotals
-} from "../_domain/metrics";
+} from "../domain/metrics";
 
 
 
@@ -355,7 +355,11 @@ const refresh = useCallback(async () => {
   setIsLoadingSessions(true);
   try {
     const next = await loadSessions();
-    setSessions(next);
+const normalized = next.map((s) => ({
+  ...s,
+  date: toDateKey(s.date) || todayYMD(),
+}));
+setSessions(normalized);
   } finally {
     setIsLoadingSessions(false);
   }
@@ -488,6 +492,7 @@ const weekSessionsRaw = useMemo(() => {
 
 const displayWeekStreak =
   completedWeekStreak + (currentWeekCount >= WEEKLY_GOAL ? 1 : 0);
+
 
 const thisWeekTotal = useMemo(() => {
   return weekSessionsRaw.length;
@@ -927,9 +932,12 @@ const renderNewSessionCTA = () => (
   <View style={{ gap: 8 }}>
     <Button
       title="+ New Session for selected day"
-      onPress={() =>
-        router.push(`/training/new?date=${encodeURIComponent(selectedDate)}`)
-      }
+      onPress={() => {
+  const systemParam =
+    systemFilter !== "All" ? `&system=${encodeURIComponent(systemFilter)}` : "";
+
+  router.push(`/training/new?date=${encodeURIComponent(selectedDate)}${systemParam}`);
+}}
     />
   </View>
 );

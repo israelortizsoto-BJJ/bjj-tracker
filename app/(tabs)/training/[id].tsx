@@ -19,11 +19,12 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { buildTechniqueIndex, getTechniqueById } from "../../_fundamentals/index";
-import { FUNDAMENTALS_TAXONOMY } from "../../_fundamentals/taxonomy";
-import { StorageKeys } from "../../_storage/storageKeys";
-import type { Session } from "../../_types";
- 
+import { toDateKey } from "../../_domain/dateKey";
+import { buildTechniqueIndex, getTechniqueById } from "../../fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
+import { StorageKeys } from "../../storage/storageKeys";
+import type { Session } from "../../types";
+
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
 
@@ -117,13 +118,14 @@ export default function TrainingSessionEditor() {
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const prefillDate = String(params.date || "");
+  const prefillSystem = typeof params.system === "string" ? params.system : "";
   const sessionId = String(params.id || "");
   const isNew = useMemo(() => sessionId === "new", [sessionId]);
   const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const [draftId, setDraftId] = useState(makeId());
 
   const [loading, setLoading] = useState(true);
-  const [system, setSystem] = useState<string>("ALL");
+  const [system, setSystem] = useState<string>(prefillSystem || "ALL");
   const [position, setPosition] = useState("");
   const [grips, setGrips] = useState("");
   const [finish, setFinish] = useState("");
@@ -387,9 +389,11 @@ function onClearTechnique() {
     const existingSession = sessions.find((s) => s.id === realId);
     const paramDate = typeof params.date === "string" ? params.date : "";
 
-  const finalDate = isNew
+  const finalDateRaw = isNew
   ? (paramDate || date || todayYMD())
   : (existingSession?.date || date || todayYMD());
+
+const finalDate = toDateKey(finalDateRaw) || todayYMD();
 
   
 // --- Technique display (legacy fallback) ---
