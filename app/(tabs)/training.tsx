@@ -227,21 +227,13 @@ async function loadSessions(): Promise<Session[]> {
   }
 }
 
-
-const SYSTEMS = [
-  "Guard Retention",
-  "Half Guard",
-  "Closed Guard",
-  "Open Guard",
-  "Passing",
-  "Side Control",
-  "Mount",
-  "Back Control",
-  "Escapes",
-  "Takedowns",
-  "Submissions",
+const SYSTEM_FILTERS: { id: string; label: string }[] = [
+  { id: "ALL", label: "All" },
+  ...FUNDAMENTALS_TAXONOMY.map((l1: { id: string; label: string }) => ({
+    id: l1.id,
+    label: l1.label,
+  })),
 ];
-const SYSTEM_FILTERS = ["All", ...SYSTEMS];
 
 const UI = {
   bgCard: "#0f172a",       // softer than pure black
@@ -283,7 +275,7 @@ export default function Training() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [weekStartYMD, setWeekStartYMD] = useState(startOfWeekMondayYMD(todayYMD()));
-  const [systemFilter, setSystemFilter] = useState<string>("All");
+  const [systemFilter, setSystemFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [preview, setPreview] = useState<PreviewState>(null);
   const [playableVideoUri, setPlayableVideoUri] = useState<string | null>(null);
@@ -401,6 +393,9 @@ useEffect(() => {
 // -----------------------------------------------------------
 // 5) Derived data (computed "view model" for rendering)
 // -----------------------------------------------------------
+
+const systemFilterLabel =
+  SYSTEM_FILTERS.find((s) => s.id === systemFilter)?.label ?? "All";
 
 const sessionsByDate = useMemo(() => {
     const map: Record<string, Session[]> = {};
@@ -721,7 +716,7 @@ const baseSessionsRaw = useMemo<Session[]>(() => {
 }, [viewMode, weekSessionsRaw, todaysSessionsRaw]);
 
 const filteredSessions = useMemo(() => {
-  if (systemFilter === "All") return baseSessionsRaw ?? [];
+  if (systemFilter === "ALL") return baseSessionsRaw ?? [];
   return baseSessionsRaw.filter((s) => s.system === systemFilter);
 }, [baseSessionsRaw, systemFilter]);
 
@@ -734,7 +729,7 @@ const filterAndSort = useCallback(
     return list
       .filter((s: Session) => {
         // System filter
-        if (systemFilter !== "All" && s.system !== systemFilter) return false;
+        if (systemFilter !== "ALL" && s.system !== systemFilter) return false;
 
         // Search filter
         if (!q) return true;
@@ -787,33 +782,33 @@ const renderFilterChips = () => (
   <View style={{ marginTop: 6 }}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={{ flexDirection: "row", gap: 8 }}>
-        {SYSTEM_FILTERS.map((name) => {
-          const active = systemFilter === name;
-          return (
-            <Pressable
-              key={name}
-              onPress={() => setSystemFilter(name)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: "#2a2a3a",
-                backgroundColor: active ? "#1b1c2a" : "#161621",
-              }}
-            >
-              <Text
-                style={{
-                  color: active ? "white" : "#cfcfe6",
-                  fontWeight: "700",
-                  fontSize: 12,
-                }}
-              >
-                {name}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {SYSTEM_FILTERS.map(({ id, label }) => {
+  const active = systemFilter === id;
+  return (
+    <Pressable
+      key={id}
+      onPress={() => setSystemFilter(id)}
+      style={{
+        paddingVertical: 8,
+        paddingHorizontal: 12,
+        borderRadius: 999,
+        borderWidth: 1,
+        borderColor: "#2a2a3a",
+        backgroundColor: active ? "#1b1c2a" : "#161621",
+      }}
+    >
+      <Text
+        style={{
+          color: active ? "white" : "#cfcfe6",
+          fontWeight: "700",
+          fontSize: 12,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+})}
       </View>
     </ScrollView>
   </View>
@@ -1228,7 +1223,7 @@ const renderNewSessionCTA = () => (
     </Text>
 
     <Text style={{ color: UI.textSecondary, fontSize: 13 }}>
-      {systemFilter !== "All" ? `for ${systemFilter}.` : "for this date."}
+      {systemFilter !== "ALL" ? `for ${systemFilterLabel}.` : "for this date."}
     </Text>
 
     <Text style={{ color: UI.textSecondary, fontSize: 13 }}>
