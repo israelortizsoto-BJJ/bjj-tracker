@@ -602,8 +602,11 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
         label: "Outside Passing",
         gear: "both",
         techniques: [
-          { id: "l1.top_passing.l2.outside_passing.tech.toreando_pass", label: "Toreando Pass", gear: "both" },
-          { id: "l1.top_passing.l2.outside_passing.tech.leg_drag_pass", label: "Leg Drag Pass", gear: "both" },
+          { id: "l1.top_passing.l2.outside_passing.tech.toreando_pass", label: "Toreando Pass", gear: "both", keywords: ["bullfighter", "torreando"] },
+          { id: "l1.top_passing.l2.outside_passing.tech.leg_drag_pass", label: "Leg Drag Pass", gear: "both", keywords: ["leg drag"] },
+          { id: "l1.top_passing.l2.outside_passing.tech.long_step_pass", label: "Long Step Pass", gear: "both", keywords: ["long step"] },
+          { id: "l1.top_passing.l2.outside_passing.tech.x_pass", label: "X-Pass", gear: "both", keywords: ["x pass"] },
+          { id: "l1.top_passing.l2.outside_passing.tech.cartwheel_pass", label: "Cartwheel Pass", gear: "both", keywords: ["cartwheel"] },
         ],
       },
       {
@@ -611,8 +614,10 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
         label: "Inside Passing",
         gear: "both",
         techniques: [
-          { id: "l1.top_passing.l2.inside_passing.tech.knee_cut_pass", label: "Knee Cut Pass", gear: "both" },
-          { id: "l1.top_passing.l2.inside_passing.tech.smash_pass", label: "Smash Pass", gear: "both" },
+          { id: "l1.top_passing.l2.inside_passing.tech.knee_cut_pass", label: "Knee Cut Pass", gear: "both", keywords: ["knee slice", "knee cut"] },
+          { id: "l1.top_passing.l2.inside_passing.tech.smash_pass", label: "Smash Pass", gear: "both", keywords: ["smash pass", "over under style"] },
+          { id: "l1.top_passing.l2.inside_passing.tech.double_under_pass", label: "Double Under Pass", gear: "both", keywords: ["double under", "stack pass"] },
+          { id: "l1.top_passing.l2.inside_passing.tech.headquarters_passing", label: "Headquarters (HQ) Passing", gear: "both", keywords: ["hq", "headquarters"] },
         ],
       },
       {
@@ -620,8 +625,10 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
         label: "Pressure Passing",
         gear: "both",
         techniques: [
-          { id: "l1.top_passing.l2.pressure_passing.tech.body_lock_pass", label: "Body Lock Pass", gear: "both" },
-          { id: "l1.top_passing.l2.pressure_passing.tech.over_under_pass", label: "Over Under Pass", gear: "both" },
+          { id: "l1.top_passing.l2.pressure_passing.tech.body_lock_pass", label: "Body Lock Pass", gear: "both", keywords: ["body lock"] },
+          { id: "l1.top_passing.l2.pressure_passing.tech.over_under_pass", label: "Over Under Pass", gear: "both", keywords: ["over under", "stack style"] },
+          { id: "l1.top_passing.l2.pressure_passing.tech.stack_pass", label: "Stack Pass", gear: "both", keywords: ["stack"] },
+          { id: "l1.top_passing.l2.pressure_passing.tech.leg_weave_pass", label: "Leg Weave Pass", gear: "both", keywords: ["leg weave"] },
         ],
       },
       {
@@ -631,6 +638,8 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
         techniques: [
           { id: "l1.top_passing.l2.half_guard_top.tech.crossface_underhook_pass", label: "Crossface + Underhook Pass", gear: "both" },
           { id: "l1.top_passing.l2.half_guard_top.tech.backstep_pass", label: "Backstep Pass", gear: "both" },
+          { id: "l1.top_passing.l2.half_guard_top.tech.knee_slice_from_half_guard", label: "Knee Slice from Half Guard", gear: "both", keywords: ["knee cut", "knee slice"] },
+          { id: "l1.top_passing.l2.half_guard_top.tech.smash_pass_from_half_guard", label: "Smash Pass from Half Guard", gear: "both", keywords: ["smash pass"] },
         ],
       },
     ],
@@ -663,6 +672,18 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
         ],
       },
       {
+        id: "l1.pins_top_control.l2.knee_on_belly",
+        label: "Knee on Belly",
+        gear: "both",
+        techniques: [
+          { id: "l1.pins_top_control.l2.knee_on_belly.tech.kob_control", label: "KOB Control", gear: "both", keywords: ["knee on belly", "knee ride"] },
+          { id: "l1.pins_top_control.l2.knee_on_belly.tech.kob_to_mount", label: "KOB to Mount", gear: "both" },
+          { id: "l1.pins_top_control.l2.knee_on_belly.tech.kob_to_side_control", label: "KOB to Side Control", gear: "both" },
+          { id: "l1.pins_top_control.l2.knee_on_belly.tech.far_side_armbar", label: "Far-Side Armbar", gear: "both", keywords: ["armbar"] },
+          { id: "l1.pins_top_control.l2.knee_on_belly.tech.baseball_bat_choke", label: "Baseball Bat Choke (Gi)", gear: "gi", keywords: ["baseball bat"] },
+        ],
+      },
+      {
         id: "l1.pins_top_control.l2.mount",
         label: "Mount",
         gear: "both",
@@ -680,33 +701,61 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
           },
         ],
       },
-      { id: "l1.pins_top_control.l2.knee_on_belly", label: "Knee on Belly", gear: "both", techniques: [] },
-      { id: "l1.pins_top_control.l2.north_south", label: "North South", gear: "both", techniques: [] },
+      {
+        id: "l1.pins_top_control.l2.north_south",
+        label: "North South",
+        gear: "both",
+        techniques: [
+          { id: "l1.pins_top_control.l2.north_south.tech.north_south_control", label: "North-South Control", gear: "both", keywords: ["north south"] },
+          { id: "l1.pins_top_control.l2.north_south.tech.north_south_choke", label: "North-South Choke", gear: "both", keywords: ["ns choke"] },
+          { id: "l1.pins_top_control.l2.north_south.tech.kimura_from_north_south", label: "Kimura (North-South)", gear: "both", keywords: ["kimura"] },
+          { id: "l1.pins_top_control.l2.north_south.tech.north_south_to_side_control", label: "North-South to Side Control", gear: "both" },
+        ],
+      },
     ],
   },
 
   // ===========================
   // LEVEL 1: Back Control
   // ===========================
-  {
-    id: "l1.back_control",
-    label: "Back Control",
-    gear: "both",
-    nodes: [
-      { id: "l1.back_control.l2.controls", label: "Controls", gear: "both", techniques: [] },
-      {
-        id: "l1.back_control.l2.strangles",
-        label: "Strangles",
-        gear: "both",
-        techniques: [
-          { id: "l1.back_control.l2.strangles.tech.rear_naked_choke", label: "Rear Naked Choke", gear: "both", keywords: ["rnc"] },
-          { id: "l1.back_control.l2.strangles.tech.short_choke", label: "Short Choke", gear: "both" },
-          { id: "l1.back_control.l2.strangles.tech.bow_and_arrow", label: "Bow and Arrow (Gi)", gear: "gi", keywords: ["bow & arrow"] },
-        ],
-      },
-      { id: "l1.back_control.l2.transitions", label: "Transitions", gear: "both", techniques: [] },
-    ],
-  },
+ {
+  id: "l1.back_control",
+  label: "Back Control",
+  gear: "both",
+  nodes: [
+    {
+      id: "l1.back_control.l2.controls",
+      label: "Controls",
+      gear: "both",
+      techniques: [
+        { id: "l1.back_control.l2.controls.tech.seatbelt_control", label: "Seatbelt Control", gear: "both", keywords: ["seat belt"] },
+        { id: "l1.back_control.l2.controls.tech.hook_control", label: "Hook Control", gear: "both", keywords: ["hooks"] },
+        { id: "l1.back_control.l2.controls.tech.body_triangle", label: "Body Triangle", gear: "both", keywords: ["triangle body lock"] },
+        { id: "l1.back_control.l2.controls.tech.hand_fighting", label: "Hand Fighting", gear: "both", keywords: ["hand fight"] },
+      ],
+    },
+    {
+      id: "l1.back_control.l2.strangles",
+      label: "Strangles",
+      gear: "both",
+      techniques: [
+        { id: "l1.back_control.l2.strangles.tech.rear_naked_choke", label: "Rear Naked Choke", gear: "both", keywords: ["rnc"] },
+        { id: "l1.back_control.l2.strangles.tech.short_choke", label: "Short Choke", gear: "both" },
+        { id: "l1.back_control.l2.strangles.tech.bow_and_arrow", label: "Bow and Arrow (Gi)", gear: "gi", keywords: ["bow & arrow"] },
+      ],
+    },
+    {
+      id: "l1.back_control.l2.transitions",
+      label: "Transitions",
+      gear: "both",
+      techniques: [
+        { id: "l1.back_control.l2.transitions.tech.chair_sit_back_take", label: "Chair Sit Back Take", gear: "both", keywords: ["chair sit"] },
+        { id: "l1.back_control.l2.transitions.tech.back_to_mount", label: "Back to Mount", gear: "both" },
+        { id: "l1.back_control.l2.transitions.tech.back_retention_follow", label: "Back Retention (Hip Follow)", gear: "both", keywords: ["hip follow", "follow the hips"] },
+      ],
+    },
+  ],
+},
 
   // ===========================
   // LEVEL 1: Turtle / Scramble
@@ -749,44 +798,66 @@ export const FUNDAMENTALS_TAXONOMY: TaxLevel1[] = [
     ],
   },
 
-  // ===========================
-  // LEVEL 1: Escapes / Defense
-  // ===========================
-  {
-    id: "l1.escapes_defense",
-    label: "Escapes / Defense",
-    gear: "both",
-    nodes: [
-      {
-        id: "l1.escapes_defense.l2.escape_side_control",
-        label: "Escape Side Control",
-        gear: "both",
-        techniques: [
-          { id: "l1.escapes_defense.l2.escape_side_control.tech.hip_escape_to_guard", label: "Hip Escape to Guard", gear: "both", keywords: ["shrimp"] },
-          { id: "l1.escapes_defense.l2.escape_side_control.tech.underhook_to_knees", label: "Underhook to Knees", gear: "both" },
-        ],
-      },
-      {
-        id: "l1.escapes_defense.l2.escape_mount",
-        label: "Escape Mount",
-        gear: "both",
-        techniques: [
-          { id: "l1.escapes_defense.l2.escape_mount.tech.elbow_knee_escape", label: "Elbow Knee Escape", gear: "both" },
-          { id: "l1.escapes_defense.l2.escape_mount.tech.trap_and_roll", label: "Trap and Roll", gear: "both", keywords: ["upa"] },
-        ],
-      },
-      {
-        id: "l1.escapes_defense.l2.escape_back",
-        label: "Escape Back",
-        gear: "both",
-        techniques: [
-          { id: "l1.escapes_defense.l2.escape_back.tech.hand_fighting_escape", label: "Hand Fighting Escape", gear: "both" },
-          { id: "l1.escapes_defense.l2.escape_back.tech.hip_slide_escape", label: "Hip Slide Escape", gear: "both" },
-        ],
-      },
-      { id: "l1.escapes_defense.l2.escape_submissions", label: "Escape Submissions", gear: "both", techniques: [] },
-    ],
-  },
+// ===========================
+// LEVEL 1: Escapes / Defense
+// ===========================
+{
+  id: "l1.escapes_defense",
+  label: "Escapes / Defense",
+  gear: "both",
+  nodes: [
+    {
+      id: "l1.escapes_defense.l2.escape_side_control",
+      label: "Escape Side Control",
+      gear: "both",
+      techniques: [
+        { id: "l1.escapes_defense.l2.escape_side_control.tech.hip_escape_to_guard", label: "Hip Escape to Guard", gear: "both", keywords: ["shrimp"] },
+        { id: "l1.escapes_defense.l2.escape_side_control.tech.underhook_to_knees", label: "Underhook to Knees", gear: "both" },
+
+        // additions (common variations)
+        { id: "l1.escapes_defense.l2.escape_side_control.tech.frame_and_shrimp", label: "Frames + Shrimp", gear: "both", keywords: ["frames", "hip escape"] },
+        { id: "l1.escapes_defense.l2.escape_side_control.tech.bridge_and_recover_guard", label: "Bridge + Recover Guard", gear: "both", keywords: ["bridge", "recover guard"] },
+      ],
+    },
+    {
+      id: "l1.escapes_defense.l2.escape_mount",
+      label: "Escape Mount",
+      gear: "both",
+      techniques: [
+        { id: "l1.escapes_defense.l2.escape_mount.tech.elbow_knee_escape", label: "Elbow Knee Escape", gear: "both" },
+        { id: "l1.escapes_defense.l2.escape_mount.tech.trap_and_roll", label: "Trap and Roll", gear: "both", keywords: ["upa"] },
+
+        // additions (very common in modern no-gi)
+        { id: "l1.escapes_defense.l2.escape_mount.tech.kipping_escape", label: "Kipping Escape (No-Gi)", gear: "nogi", keywords: ["kipping", "mount kip"] },
+        { id: "l1.escapes_defense.l2.escape_mount.tech.half_guard_recover", label: "Recover Half Guard", gear: "both", keywords: ["half guard recover"] },
+      ],
+    },
+    {
+      id: "l1.escapes_defense.l2.escape_back",
+      label: "Escape Back",
+      gear: "both",
+      techniques: [
+        { id: "l1.escapes_defense.l2.escape_back.tech.hand_fighting_escape", label: "Hand Fighting Escape", gear: "both" },
+        { id: "l1.escapes_defense.l2.escape_back.tech.hip_slide_escape", label: "Hip Slide Escape", gear: "both" },
+
+        // additions (common finishes to escapes)
+        { id: "l1.escapes_defense.l2.escape_back.tech.shoulder_to_mat_escape", label: "Shoulder-to-Mat Escape", gear: "both", keywords: ["shoulder escape", "back escape"] },
+        { id: "l1.escapes_defense.l2.escape_back.tech.turn_in_to_guard", label: "Turn-In to Guard", gear: "both", keywords: ["turn in", "guard recover"] },
+      ],
+    },
+    {
+      id: "l1.escapes_defense.l2.escape_submissions",
+      label: "Escape Submissions",
+      gear: "both",
+      techniques: [
+        { id: "l1.escapes_defense.l2.escape_submissions.tech.triangle_defense_posture", label: "Triangle Defense (Posture + Knee Line)", gear: "both", keywords: ["triangle defense"] },
+        { id: "l1.escapes_defense.l2.escape_submissions.tech.armbar_defense_stack", label: "Armbar Defense (Stack)", gear: "both", keywords: ["armbar defense"] },
+        { id: "l1.escapes_defense.l2.escape_submissions.tech.kimura_defense_hide_hand", label: "Kimura Defense (Hide the Hand)", gear: "both", keywords: ["kimura defense"] },
+        { id: "l1.escapes_defense.l2.escape_submissions.tech.guillotine_defense_safe_side", label: "Guillotine Defense (Safe Side)", gear: "both", keywords: ["guillotine defense"] },
+      ],
+    },
+  ],
+},
 ];
 // ===========================
 // PURE HELPERS (no hooks/state)
