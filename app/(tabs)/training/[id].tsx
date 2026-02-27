@@ -163,6 +163,7 @@ export default function TrainingSessionEditor() {
 // MVP taxonomy picker (new)
   const [gear, setGear] = useState<"gi" | "nogi">("gi");
   const [techniqueId, setTechniqueId] = useState("");
+  const [customTechnique, setCustomTechnique] = useState("");
   const [techPickerOpen, setTechPickerOpen] = useState(false);
   const [techQuery, setTechQuery] = useState("");
 
@@ -272,9 +273,10 @@ useFocusEffect(
     if (!isNew) return;
 
     // Reset fields so "New Session" never inherits the last edited session
-    setSystem(effectivePrefillSystem);
-    setTechniqueId("");     // new picker
-    setTechnique("");       // legacy label
+    setSystem(effectivePrefillSystem); setCustomTechnique("");
+    setTechniqueId(""); setCustomTechnique("");    // new picker
+    setTechnique(""); setCustomTechnique("");      // legacy label
+    setCustomTechnique("");
     setPosition("");
     setGrips("");
     setFinish("");
@@ -338,6 +340,7 @@ useFocusEffect(
       setSystem(found.system || "ALL");
 
       setTechniqueId(found.techniqueId || "");
+      setCustomTechnique(found.customTechnique || "");
       const loadedGear = found.gear === "both" ? "gi" : (found.gear ?? "gi");
       setGear(loadedGear);
       setTechnique(found.technique || ""); // legacy label still supported
@@ -364,7 +367,10 @@ const techniqueLabel = selected?.label || "";
 const techniquePath = selected ? techniqueToLabel(selected) : "";
 // MVP-safe display strings (handles legacy + new)
 const displayTechniqueLabel =
-  techniqueLabel || (technique ? String(technique) : "") || "";
+  techniqueLabel ||
+  (technique ? String(technique) : "") ||
+  (!techniqueId.trim() && customTechnique.trim() ? customTechnique.trim() : "") ||
+  "";
 
 // Block 6: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
 const techResults = useMemo(() => {
@@ -512,7 +518,10 @@ const selected = techniqueId.trim()
 
 const techniqueLabel = selected?.label || "";
 const displayTechniqueLabel =
-  techniqueLabel || (technique ? String(technique) : "") || "";
+  techniqueLabel ||
+  (technique ? String(technique) : "") ||
+  (customTechnique ? String(customTechnique) : "") ||
+  "";
   
 // legacy fields kept until v1 migration (techniqueId is source of truth)
 const payload: Session = {
@@ -528,6 +537,7 @@ const payload: Session = {
 
   // Optional (but must be string if present)
   techniqueId: techniqueId.trim() ? techniqueId : undefined,
+  customTechnique: customTechnique.trim() ? customTechnique.trim() : undefined,
 
   // REQUIRED legacy + required text fields
   technique: displayTechniqueLabel,
@@ -675,13 +685,24 @@ return; // prevents any router.replace below from firing immediately
     )}
   </TouchableOpacity>
 
-  {!!displayTechniqueLabel && (
+ {(!!displayTechniqueLabel || !!customTechnique.trim()) && (
     <TouchableOpacity style={styles.clearBtn} onPress={onClearTechnique}>
       <Text style={styles.clearBtnText}>Clear</Text>
     </TouchableOpacity>
   )}
 </View>
-
+  {!techniqueId.trim() ? (
+    <View style={{ marginTop: 10 }}>
+      <Text style={styles.label}>Custom Technique (optional)</Text>
+      <TextInput
+        value={customTechnique}
+        onChangeText={setCustomTechnique}
+        placeholder="Type your technique… (ex: Knee cut → far-side underhook)"
+        placeholderTextColor="#6f6f86"
+        style={styles.input}
+      />
+    </View>
+  ) : null}
 <Modal
   visible={techPickerOpen}
   animationType="slide"

@@ -25,5 +25,6 @@ export type Session = {
   videoUri?: string | null;
   imageAssetId?: string | null;
   videoAssetId?: string | null;
+  customTechnique?: string;
 };
 
