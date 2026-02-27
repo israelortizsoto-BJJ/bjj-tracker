@@ -119,13 +119,15 @@ export default function TrainingSessionEditor() {
   const insets = useSafeAreaInsets();
   const prefillDate = String(params.date || "");
   const prefillSystem = typeof params.system === "string" ? params.system : "";
+  const effectivePrefillSystem =
+  prefillSystem && prefillSystem !== "ALL" ? prefillSystem : "ALL";
   const sessionId = String(params.id || "");
   const isNew = useMemo(() => sessionId === "new", [sessionId]);
   const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const [draftId, setDraftId] = useState(makeId());
 
   const [loading, setLoading] = useState(true);
-  const [system, setSystem] = useState<string>(prefillSystem || "ALL");
+  const [system, setSystem] = useState<string>(effectivePrefillSystem);
   const [position, setPosition] = useState("");
   const [grips, setGrips] = useState("");
   const [finish, setFinish] = useState("");
@@ -176,7 +178,7 @@ async function replayVideo() {
     setDraftId(makeId());
     setDate(prefillDate || todayYMD());
 
-   setSystem("ALL");
+   setSystem(effectivePrefillSystem);
 
 // New structured learning fields
 setPosition("");
@@ -190,7 +192,7 @@ setNotes("");
 setYoutubeUrl("");
 setImageUri(null);
 setVideoUri(null);
-  }, [isNew, prefillDate])
+  }, [isNew, prefillDate, effectivePrefillSystem])
 );
 
 // Block 3.5: hard reset when opening a NEW session screen (prevents state carryover)
@@ -199,7 +201,7 @@ useFocusEffect(
     if (!isNew) return;
 
     // Reset fields so "New Session" never inherits the last edited session
-    setSystem("ALL");
+    setSystem(effectivePrefillSystem);
     setTechniqueId("");     // new picker
     setTechnique("");       // legacy label
     setPosition("");
@@ -223,7 +225,7 @@ useFocusEffect(
 
     // we’re "ready" instantly for new
     setLoading(false);
-  }, [isNew, prefillDate])
+ }, [isNew, prefillDate, effectivePrefillSystem])
 );
 // Block 4: useEffect to load session if editing existing, or set defaults if new
   useEffect(() => {
@@ -232,7 +234,7 @@ useFocusEffect(
 
       if (isNew) {
         // Reset fields so "New Session" never inherits the last edited session
-        setSystem("ALL");          // important: system was sticking too
+        setSystem(effectivePrefillSystem);      // important: system was sticking too
         setTechniqueId("");        // new picker
         setTechnique("");          // legacy label
         setPosition("");
@@ -282,7 +284,7 @@ useFocusEffect(
       setLoading(false);
     })();
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
-  }, [isNew, router, sessionId, prefillDate]);
+  }, [isNew, router, sessionId, prefillDate, effectivePrefillSystem]);
 
  // Block 5: Derived data (selected technique + MVP-safe display strings)
  const selected = techniqueId ? getTechniqueById(TECH_INDEX, techniqueId) : null;
