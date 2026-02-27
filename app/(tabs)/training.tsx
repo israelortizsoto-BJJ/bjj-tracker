@@ -929,7 +929,7 @@ const renderNewSessionCTA = () => (
       title="+ New Session for selected day"
       onPress={() => {
   const systemParam =
-    systemFilter !== "All" ? `&system=${encodeURIComponent(systemFilter)}` : "";
+    systemFilter !== "ALL" ? `&system=${encodeURIComponent(systemFilter)}` : "";
 
   router.push(`/training/new?date=${encodeURIComponent(selectedDate)}${systemParam}`);
 }}
