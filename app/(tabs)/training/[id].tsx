@@ -413,6 +413,29 @@ const techResults = useMemo(() => {
     }
     return true;
   }
+  const groupedTechResults = useMemo(() => {
+  if (techSortMode !== "SYSTEM") return null;
+
+  const groups = new Map<string, any[]>();
+
+  for (const t of techResultsForDisplay as any[]) {
+    const p = t.path;
+    const title =
+      `${p?.level1Label ?? "Unknown"} > ${p?.level2Label ?? "Unknown"}`
+      + (p?.level3Label ? ` > ${p.level3Label}` : "");
+
+    const arr = groups.get(title) ?? [];
+    arr.push(t);
+    groups.set(title, arr);
+  }
+
+  const titles = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b));
+
+  return titles.map((title) => ({
+    title,
+    items: groups.get(title) ?? [],
+  }));
+}, [techResultsForDisplay, techSortMode]);
 async function pickImage() {
   if (!(await ensureMediaPermissions())) return;
 
@@ -784,7 +807,48 @@ return; // prevents any router.replace below from firing immediately
   ) : null}
 
   {/* Main results list (existing behavior) */}
-  {techResultsForDisplay.map((t: any) => (
+  {/* Main results list */}
+{techSortMode === "SYSTEM" && groupedTechResults ? (
+  groupedTechResults.map((g) => (
+    <View key={g.title} style={{ marginBottom: 14 }}>
+      <Text style={{ color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>
+        {g.title}
+      </Text>
+
+      {g.items.map((t: any) => (
+        <TouchableOpacity
+          key={t.id}
+          style={styles.row}
+          onPress={async () => {
+            setTechniqueId(t.id);
+            setTechnique(String(t.label ?? "")); // legacy sync for now
+            await pushRecent(t.id);
+            setTechPickerOpen(false);
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
+              <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+                {`${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={async () => toggleFavorite(t.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={{ color: favoriteTechIds.includes(t.id) ? "#fff" : "rgba(255,255,255,0.35)", fontSize: 18 }}>
+                ★
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  ))
+) : (
+  techResultsForDisplay.map((t: any) => (
     <TouchableOpacity
       key={t.id}
       style={styles.row}
@@ -800,8 +864,8 @@ return; // prevents any router.replace below from firing immediately
           <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
           <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
             {techSortMode === "AZ"
-  ? techniqueToLabel(t)
-  : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
+              ? techniqueToLabel(t)
+              : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
           </Text>
         </View>
 
@@ -815,7 +879,8 @@ return; // prevents any router.replace below from firing immediately
         </TouchableOpacity>
       </View>
     </TouchableOpacity>
-  ))}
+  ))
+)}
 </ScrollView>
 </View>
   </SafeAreaView>
