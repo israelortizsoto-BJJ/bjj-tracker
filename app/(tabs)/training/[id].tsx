@@ -96,6 +96,10 @@ function todayYMD() {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+const RECENT_TECH_IDS_KEY = "mm.tech.recentIds.v1";
+const FAVORITE_TECH_IDS_KEY = "mm.tech.favoriteIds.v1";
+const RECENT_LIMIT = 10;
+
 
 async function loadSessions(): Promise<Session[]> {
   const raw = await AsyncStorage.getItem(StorageKeys.sessions);
@@ -110,6 +114,30 @@ async function loadSessions(): Promise<Session[]> {
 
 async function saveSessions(sessions: Session[]) {
   await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(sessions));
+}
+// Technique picker prefs (Recent + Favorites)
+async function loadTechPickerPrefs() {
+  try {
+    const [r, f] = await Promise.all([
+      AsyncStorage.getItem(RECENT_TECH_IDS_KEY),
+      AsyncStorage.getItem(FAVORITE_TECH_IDS_KEY),
+    ]);
+
+    const recent = r ? (JSON.parse(r) as string[]) : [];
+    const favs = f ? (JSON.parse(f) as string[]) : [];
+
+    return { recent, favs };
+  } catch {
+    return { recent: [] as string[], favs: [] as string[] };
+  }
+}
+
+async function saveRecentTechIds(next: string[]) {
+  await AsyncStorage.setItem(RECENT_TECH_IDS_KEY, JSON.stringify(next));
+}
+
+async function saveFavoriteTechIds(next: string[]) {
+  await AsyncStorage.setItem(FAVORITE_TECH_IDS_KEY, JSON.stringify(next));
 }
 
 // State Variables Block1 //
@@ -137,6 +165,49 @@ export default function TrainingSessionEditor() {
   const [techniqueId, setTechniqueId] = useState("");
   const [techPickerOpen, setTechPickerOpen] = useState(false);
   const [techQuery, setTechQuery] = useState("");
+
+useEffect(() => {
+  if (!techPickerOpen) return;
+
+  (async () => {
+    const { recent, favs } = await loadTechPickerPrefs();
+    setRecentTechIds(recent);
+    setFavoriteTechIds(favs);
+  })();
+}, [techPickerOpen]);
+
+  // Technique picker enhancements
+type TechSortMode = "AZ" | "SYSTEM";
+const [techSortMode, setTechSortMode] = useState<TechSortMode>("AZ");
+const [recentTechIds, setRecentTechIds] = useState<string[]>([]);
+const [favoriteTechIds, setFavoriteTechIds] = useState<string[]>([]);
+const pushRecent = async (techId: string) => {
+  const next = [techId, ...recentTechIds.filter((x) => x !== techId)].slice(0, RECENT_LIMIT);
+  setRecentTechIds(next);
+  await saveRecentTechIds(next);
+};
+
+const toggleFavorite = async (techId: string) => {
+  const isFav = favoriteTechIds.includes(techId);
+  const next = isFav
+    ? favoriteTechIds.filter((x) => x !== techId)
+    : [techId, ...favoriteTechIds];
+  setFavoriteTechIds(next);
+  await saveFavoriteTechIds(next);
+};
+const favoriteItems = useMemo(() => {
+  const items = favoriteTechIds
+    .map((id) => getTechniqueById(TECH_INDEX, id))
+    .filter(Boolean) as any[];
+  return items.slice().sort((a, b) => String(a.label).localeCompare(String(b.label)));
+}, [favoriteTechIds]);
+
+const recentItems = useMemo(() => {
+  return recentTechIds
+    .map((id) => getTechniqueById(TECH_INDEX, id))
+    .filter(Boolean) as any[];
+}, [recentTechIds]);
+
 
 // Legacy (keep for old sessions while we transition)
   const [technique, setTechnique] = useState("");
@@ -321,6 +392,19 @@ const techResults = useMemo(() => {
 
   return d.slice(0, 50);
 }, [techQuery, gear, system]);
+  const techResultsForDisplay = useMemo(() => {
+  if (techSortMode === "AZ") return techResults;
+
+  return techResults.slice().sort((a: any, b: any) => {
+    const ap = a.path;
+    const bp = b.path;
+
+    const aKey = `${ap?.level1Label ?? ""}|${ap?.level2Label ?? ""}|${ap?.level3Label ?? ""}|${a.label ?? ""}`;
+    const bKey = `${bp?.level1Label ?? ""}|${bp?.level2Label ?? ""}|${bp?.level3Label ?? ""}|${b.label ?? ""}`;
+
+    return aKey.localeCompare(bKey);
+  });
+  }, [techResults, techSortMode]);
     async function ensureMediaPermissions() {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -597,32 +681,142 @@ return; // prevents any router.replace below from firing immediately
       style={styles.input}
       autoFocus
     />
+<View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+  <TouchableOpacity
+    onPress={() => setTechSortMode("AZ")}
+    style={[styles.pill, techSortMode === "AZ" ? styles.pillActive : null]}
+  >
+    <Text style={[styles.pillText, techSortMode === "AZ" ? styles.pillTextActive : null]}>
+      A–Z
+    </Text>
+  </TouchableOpacity>
 
+  <TouchableOpacity
+    onPress={() => setTechSortMode("SYSTEM")}
+    style={[styles.pill, techSortMode === "SYSTEM" ? styles.pillActive : null]}
+  >
+    <Text style={[styles.pillText, techSortMode === "SYSTEM" ? styles.pillTextActive : null]}>
+      System
+    </Text>
+  </TouchableOpacity>
+</View>
     <View style={{ flex: 1, marginTop: 12 }}>
   <Text style={{ color: "#fff", marginBottom: 8 }}>
     Results: {techResults.length}
   </Text>
 
   <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-    {techResults.map((t: any) => (
-      <TouchableOpacity
-        key={t.id}
-        style={styles.row}
-        onPress={() => {
-          setTechniqueId(t.id);
-          setTechnique(String(t.label ?? "")); // legacy sync for now
-          setTechPickerOpen(false);
-        }}
-      >
-        <Text style={[styles.rowTitle, { color: "#fff" }]}>
-          {String(t.label ?? "Technique")}
-        </Text>
-        <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
-          {techniqueToLabel(t)}
-        </Text>
-      </TouchableOpacity>
-    ))}
-  </ScrollView>
+  {/* Favorites + Recent only show when NOT searching */}
+  {techQuery.trim().length === 0 && favoriteItems.length > 0 ? (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[styles.sectionTitle, { color: "#fff" }]}>★ Favorites</Text>
+
+      {favoriteItems.map((t: any) => (
+        <TouchableOpacity
+          key={`fav-${t.id}`}
+          style={styles.row}
+          onPress={async () => {
+            setTechniqueId(t.id);
+            setTechnique(String(t.label ?? "")); // legacy sync
+            await pushRecent(t.id);
+            setTechPickerOpen(false);
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
+              <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+                {techSortMode === "AZ"
+  ? techniqueToLabel(t)
+  : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={async () => toggleFavorite(t.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={{ color: "#fff", fontSize: 18 }}>★</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  ) : null}
+
+  {techQuery.trim().length === 0 && recentItems.length > 0 ? (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={[styles.sectionTitle, { color: "#fff" }]}>Recent</Text>
+
+      {recentItems.map((t: any) => (
+        <TouchableOpacity
+          key={`rec-${t.id}`}
+          style={styles.row}
+          onPress={async () => {
+            setTechniqueId(t.id);
+            setTechnique(String(t.label ?? "")); // legacy sync
+            await pushRecent(t.id);
+            setTechPickerOpen(false);
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <View style={{ flex: 1, paddingRight: 12 }}>
+              <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
+              <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+               {techSortMode === "AZ"
+  ? techniqueToLabel(t)
+  : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={async () => toggleFavorite(t.id)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={{ color: favoriteTechIds.includes(t.id) ? "#fff" : "rgba(255,255,255,0.35)", fontSize: 18 }}>
+                ★
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  ) : null}
+
+  {/* Main results list (existing behavior) */}
+  {techResultsForDisplay.map((t: any) => (
+    <TouchableOpacity
+      key={t.id}
+      style={styles.row}
+      onPress={async () => {
+        setTechniqueId(t.id);
+        setTechnique(String(t.label ?? "")); // legacy sync for now
+        await pushRecent(t.id);
+        setTechPickerOpen(false);
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={{ flex: 1, paddingRight: 12 }}>
+          <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
+          <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+            {techSortMode === "AZ"
+  ? techniqueToLabel(t)
+  : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          onPress={async () => toggleFavorite(t.id)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Text style={{ color: favoriteTechIds.includes(t.id) ? "#fff" : "rgba(255,255,255,0.35)", fontSize: 18 }}>
+            ★
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </TouchableOpacity>
+  ))}
+</ScrollView>
 </View>
   </SafeAreaView>
 </Modal>
@@ -1043,7 +1237,15 @@ headerSaveText: {
   pillSelected: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a" },
   pillTextSelected: { color: "white", fontWeight: "700" },
   rowTitle: { flex: 1 },
-  row: { flexDirection: "row", gap: 10, marginTop: 12 },
+  row: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  paddingVertical: 12,
+  paddingHorizontal: 12,
+  borderRadius: 12,
+  marginTop: 12,
+},
   rowItem: { flex: 1 },
   card: {
     marginTop: 12,
