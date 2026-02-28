@@ -709,7 +709,7 @@ const allSessionsSorted = useMemo(() => {
 }, [sessions]);
   // A3.1 Day list (from canonical list)
 const todaysSessionsRaw = useMemo(() => {
-  return allSessionsSorted.filter((s) => s.date === selectedDate);
+  return allSessionsSorted.filter((s) => toDateKey(s.date) === toDateKey(selectedDate));
 }, [allSessionsSorted, selectedDate]);
 const baseSessionsRaw = useMemo<Session[]>(() => {
   return viewMode === "week" ? weekSessionsRaw : todaysSessionsRaw;
