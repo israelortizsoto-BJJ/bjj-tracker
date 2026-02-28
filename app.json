@@ -9,12 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.ortizdigitalstudio.matmind",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
+  "supportsTablet": true,
+  "bundleIdentifier": "com.ortizdigitalstudio.matmind",
+  "buildNumber": "3",
+  "infoPlist": {
+    "ITSAppUsesNonExemptEncryption": false
+  }
+},
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
