@@ -98,7 +98,7 @@ function todayYMD() {
 }
 const RECENT_TECH_IDS_KEY = "mm.tech.recentIds.v1";
 const FAVORITE_TECH_IDS_KEY = "mm.tech.favoriteIds.v1";
-const RECENT_LIMIT = 10;
+
 
 
 async function loadSessions(): Promise<Session[]> {
@@ -115,6 +115,39 @@ async function loadSessions(): Promise<Session[]> {
 async function saveSessions(sessions: Session[]) {
   await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(sessions));
 }
+// --- Tech Picker Prefs: Caps + Dedupe (Pure Helpers) ---
+const RECENT_CAP = 3;
+const FAVS_CAP = 5;
+
+function normalizeId(id: unknown): string | null {
+  if (typeof id !== "string") return null;
+  const v = id.trim();
+  return v.length ? v : null;
+}
+
+function dedupePreserveOrder(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function sanitizeIds(raw: unknown, cap: number): string[] {
+  const arr = Array.isArray(raw) ? raw : [];
+  const normalized = (arr.map(normalizeId).filter(Boolean) as string[]);
+  return dedupePreserveOrder(normalized).slice(0, cap);
+}
+
+function sanitizeTechPickerPrefs(input: { recent: unknown; favs: unknown }) {
+  return {
+    recent: sanitizeIds(input.recent, RECENT_CAP),
+    favs: sanitizeIds(input.favs, FAVS_CAP),
+  };
+}
 // Technique picker prefs (Recent + Favorites)
 async function loadTechPickerPrefs() {
   try {
@@ -126,18 +159,20 @@ async function loadTechPickerPrefs() {
     const recent = r ? (JSON.parse(r) as string[]) : [];
     const favs = f ? (JSON.parse(f) as string[]) : [];
 
-    return { recent, favs };
+    return sanitizeTechPickerPrefs({ recent, favs });
   } catch {
-    return { recent: [] as string[], favs: [] as string[] };
+    return { recent: [], favs: [] };
   }
 }
 
 async function saveRecentTechIds(next: string[]) {
-  await AsyncStorage.setItem(RECENT_TECH_IDS_KEY, JSON.stringify(next));
+  const cleaned = sanitizeIds(next, RECENT_CAP);
+  await AsyncStorage.setItem(RECENT_TECH_IDS_KEY, JSON.stringify(cleaned));
 }
 
 async function saveFavoriteTechIds(next: string[]) {
-  await AsyncStorage.setItem(FAVORITE_TECH_IDS_KEY, JSON.stringify(next));
+  const cleaned = sanitizeIds(next, FAVS_CAP);
+  await AsyncStorage.setItem(FAVORITE_TECH_IDS_KEY, JSON.stringify(cleaned));
 }
 
 // State Variables Block1 //
@@ -183,28 +218,35 @@ const [techSortMode, setTechSortMode] = useState<TechSortMode>("AZ");
 const [recentTechIds, setRecentTechIds] = useState<string[]>([]);
 const [favoriteTechIds, setFavoriteTechIds] = useState<string[]>([]);
 const pushRecent = async (techId: string) => {
-  const next = [techId, ...recentTechIds.filter((x) => x !== techId)].slice(0, RECENT_LIMIT);
+  const nextRaw = [techId, ...recentTechIds.filter((x) => x !== techId)];
+  const next = sanitizeIds(nextRaw, RECENT_CAP);
   setRecentTechIds(next);
   await saveRecentTechIds(next);
 };
 
 const toggleFavorite = async (techId: string) => {
   const isFav = favoriteTechIds.includes(techId);
-  const next = isFav
+
+  const nextRaw = isFav
     ? favoriteTechIds.filter((x) => x !== techId)
     : [techId, ...favoriteTechIds];
+
+  const next = sanitizeIds(nextRaw, FAVS_CAP);
+
   setFavoriteTechIds(next);
   await saveFavoriteTechIds(next);
 };
 const favoriteItems = useMemo(() => {
-  const items = favoriteTechIds
+  const cappedIds = sanitizeIds(favoriteTechIds, FAVS_CAP);
+  const items = cappedIds
     .map((id) => getTechniqueById(TECH_INDEX, id))
     .filter(Boolean) as any[];
-  return items.slice().sort((a, b) => String(a.label).localeCompare(String(b.label)));
+ return items.sort((a, b) => String(a.label).localeCompare(String(b.label)));
 }, [favoriteTechIds]);
 
 const recentItems = useMemo(() => {
-  return recentTechIds
+  const cappedIds = sanitizeIds(recentTechIds, RECENT_CAP);
+  return cappedIds
     .map((id) => getTechniqueById(TECH_INDEX, id))
     .filter(Boolean) as any[];
 }, [recentTechIds]);
