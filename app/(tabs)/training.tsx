@@ -46,7 +46,32 @@ type PreviewState =
   | { type: "image"; uri: string; assetId?: string | null }
   | { type: "video"; uri: string; assetId?: string | null };
 
+const openBetaFeedbackEmail = async () => {
+  const subject = encodeURIComponent("MatMind Beta Feedback");
+  const body = encodeURIComponent(
+    [
+      "Device model:",
+      "iOS version:",
+      "",
+      "What you expected:",
+      "",
+      "What happened:",
+      "",
+      "Steps to reproduce (if you can):",
+      "",
+      "Screenshot/video:",
+    ].join("\n")
+  );
 
+  const url = `mailto:support@ortizdigitalstudio.com?subject=${subject}&body=${body}`;
+
+  const canOpen = await Linking.canOpenURL(url);
+  if (!canOpen) {
+    Alert.alert("Email not available", "Please email support@ortizdigitalstudio.com");
+    return;
+  }
+  await Linking.openURL(url);
+};
 
 // System id -> label (for week list + cards)
 const SYSTEM_LABEL_BY_ID = new Map<string, string>([
@@ -903,7 +928,7 @@ const renderDayWeekHeader = () => (
       setViewMode("week");
       setSelectedDate(today);
 
-  // If you're not currently on the current week, snap back to current week.
+  // If you're not currently on the current week, snap back to current week. START HERE: this ensures the week view always opens showing the current week, even if you were browsing a past/future week when you hit the button. If you're already browsing the current week, it just refreshes the data.
       setWeekStartYMD(startOfWeekMondayYMD(today));
 }}
       style={{
@@ -945,6 +970,26 @@ const renderNewSessionCTA = () => (
     directionalLockEnabled
     contentContainerStyle={{ padding: 16, gap: 12 }}
     >
+  <Pressable
+  onPress={openBetaFeedbackEmail}
+  style={({ pressed }) => ({
+    marginTop: 10,
+    marginBottom: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
+    backgroundColor: pressed ? "#0E0F14" : "#12131A",
+  })}
+>
+  <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>
+    Send Beta Feedback
+  </Text>
+  <Text style={{ color: "rgba(255,255,255,0.70)", fontSize: 13, marginTop: 4 }}>
+    Email support@ortizdigitalstudio.com
+  </Text>
+</Pressable>    
       {renderTitleAndIntro()}
 
       <Calendar
