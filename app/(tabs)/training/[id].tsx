@@ -736,6 +736,9 @@ return; // prevents any router.replace below from firing immediately
   {!techniqueId.trim() ? (
     <View style={{ marginTop: 10 }}>
       <Text style={styles.label}>Custom Technique (optional)</Text>
+      <Text style={styles.helperText}>
+      Use this if you can’t find your technique in the list above.
+      </Text>
       <TextInput
         value={customTechnique}
         onChangeText={setCustomTechnique}
