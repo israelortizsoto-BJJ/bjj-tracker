@@ -10,11 +10,10 @@ export default function TabLayout() {
   <Tabs.Screen name="training/[id]" options={{ href: null }} />
 
   {/* Hide future tabs until MVP */}
-  <Tabs.Screen name="health" options={{ href: null }} />
-  <Tabs.Screen name="gear" options={{ href: null }} />
-  <Tabs.Screen name="Fundamentals" options={{ href: null }} />
-  <Tabs.Screen name="welcome" options={{ href: null }} />
-  <Tabs.Screen name="jj101" options={{ href: null }} />
+  <Tabs.Screen name="health" options={{ href: null, title: "Health" }} />
+  <Tabs.Screen name="gear" options={{ href: null, title: "Gear" }} />
+  <Tabs.Screen name="fundamentals" options={{ href: null, title: "Fundamentals" }} />
+  <Tabs.Screen name="welcome" options={{ href: null, title: "Welcome" }} />
 </Tabs>
   );
 }
