@@ -7,9 +7,10 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "APP_VARIANT": "dev"
+        "APP_VARIANT": "dev",
+        "EXPO_NO_DOCTOR": "1"
       },
-      "prebuildCommand": "APP_VARIANT=dev npx expo prebuild --clean"
+      "prebuildCommand": "APP_VARIANT=dev npx expo prebuild --platform ios --no-install"
     },
     "production": {
       "distribution": "store"
