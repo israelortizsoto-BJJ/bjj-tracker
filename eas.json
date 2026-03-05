@@ -9,9 +9,6 @@
       "env": {
         "APP_VARIANT": "dev"
       },
-      "cache": {
-        "clear": true
-      },
       "prebuildCommand": "APP_VARIANT=dev npx expo prebuild --clean"
     },
     "production": {
