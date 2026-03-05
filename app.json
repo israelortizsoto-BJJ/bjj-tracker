@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "bjj-tracker",
+    "name": "MatMind Jiu Jitsu",
     "slug": "bjj-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,13 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-  "supportsTablet": true,
-  "bundleIdentifier": "com.ortizdigitalstudio.matmind",
-  "buildNumber": "4",
-  "infoPlist": {
-    "ITSAppUsesNonExemptEncryption": false
-  }
-},
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ortizdigitalstudio.matmind",
+      "buildNumber": "4",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -52,7 +52,9 @@
     },
     "extra": {
       "router": {},
-      "eas": { "projectId": "11fe4145-78fa-4d1c-9fac-33330c7e53f6" },
+      "eas": {
+        "projectId": "11fe4145-78fa-4d1c-9fac-33330c7e53f6"
+      },
       "EXPO_PUBLIC_SHOW_DEBUG": "0"
     }
   }
