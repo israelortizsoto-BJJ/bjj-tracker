@@ -1,8 +1,6 @@
 import appJson from "./app.json";
 import type { ExpoConfig } from "expo/config";
 
-
-
 const base = appJson.expo as ExpoConfig;
 const APP_VARIANT = process.env.APP_VARIANT ?? "prod";
 const isDev = APP_VARIANT === "dev";
