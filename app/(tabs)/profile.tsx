@@ -10,7 +10,8 @@ import {
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { StorageKeys } from "../storage/storageKeys";
+import { StorageKeys } from "../../src/storage/storageKeys";
+
 
 const DEFAULT_PROFILE: Profile = {
   belt: "White",
@@ -164,8 +165,8 @@ export default function ProfileScreen() {
   }
 
   return (
-  <SafeAreaView style={(StyleSheet.create({
-      container: { flex: 1, backgroundColor: "#0b0b0f" },
+  <SafeAreaView style={(StyleSheet.create({  
+    container: { flex: 1, backgroundColor: "#0b0b0f" },
       scroll: { padding: 16, paddingBottom: 40 },
       h1: { fontSize: 24, fontWeight: "700", color: "white" },
       subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
@@ -190,7 +191,7 @@ export default function ProfileScreen() {
         overflow: "hidden",
       },
       pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-    })).container}>
+    })).container}> 
     <KeyboardAwareScrollView
   contentContainerStyle={(StyleSheet.create({
           container: { flex: 1, backgroundColor: "#0b0b0f" },

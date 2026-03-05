@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
 import { Stack } from "expo-router";
+import { useEffect, useState } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { ensureStorageUpToDate } from "./storage/migrations";
+import { ensureStorageUpToDate } from "../src/storage/migrations";
 
 export default function RootLayout() {
   const [storageReady, setStorageReady] = useState(false);

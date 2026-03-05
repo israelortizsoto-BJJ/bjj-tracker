@@ -1,4 +1,4 @@
-import type { Gear } from "@/app/types";
+import type { Gear } from "@/src/types";
 
 // app/fundamentals/taxonomy.ts
 

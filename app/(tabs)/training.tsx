@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { StorageKeys } from "../storage/storageKeys";
+import { StorageKeys } from "../../src/storage/storageKeys";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -23,11 +23,13 @@ import {
   View
 } from "react-native";
 import { Calendar } from "react-native-calendars";
-import { toDateKey } from "../_domain/dateKey";
-import { buildTechniqueIndex, getTechniqueById } from "../fundamentals/index";
-import { FUNDAMENTALS_TAXONOMY } from "../fundamentals/taxonomy";
-import type { TechniqueIndexItem } from "../fundamentals/types";
-import type { Session } from "../types";
+import { toDateKey } from "../../src/_domain/dateKey";
+
+import { buildTechniqueIndex, getTechniqueById } from "../../src/fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
+import type { TechniqueIndexItem } from "../../src/fundamentals/types";
+
+import type { Session } from "../../src/types";
 
 import {
   computeCompletedWeekStreak,
@@ -36,8 +38,8 @@ import {
   computeTopSystemThisWeek,
   computeTopTechniqueThisWeek,
   computeWeekCount,
-  computeWeekTotals
-} from "../domain/metrics";
+  computeWeekTotals,
+} from "../../src/domain/metrics";
 
 
 

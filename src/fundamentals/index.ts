@@ -1,6 +1,6 @@
 // app/fundamentals/index.ts
 
-import type { Gear } from "@/app/types";
+import type { Gear } from "@/src/types";
 import type { TaxLevel1, TaxTechnique } from "./taxonomy";
 import type { TechniqueIndexItem } from "./types";
 export type { TechniqueIndexItem };

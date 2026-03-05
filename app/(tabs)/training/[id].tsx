@@ -19,11 +19,11 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { toDateKey } from "../../_domain/dateKey";
-import { buildTechniqueIndex, getTechniqueById } from "../../fundamentals/index";
-import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
-import { StorageKeys } from "../../storage/storageKeys";
-import type { Session } from "../../types";
+import { toDateKey } from "../../../src/_domain/dateKey";
+import { buildTechniqueIndex, getTechniqueById } from "../../../src/fundamentals/index";
+import { FUNDAMENTALS_TAXONOMY } from "../../../src/fundamentals/taxonomy";
+import { StorageKeys } from "../../../src/storage/storageKeys";
+import type { Session } from "../../../src/types";
 
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);

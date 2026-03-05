@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Button, SafeAreaView, StyleSheet, Text, View } from "react-native";
-import { StorageKeys } from "../storage/storageKeys";
+import { StorageKeys } from "../../src/storage/storageKeys";
 
 
 type Profile = {
