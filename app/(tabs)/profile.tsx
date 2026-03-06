@@ -768,10 +768,16 @@ export default function ProfileScreen() {
             paddingHorizontal: 14,
             borderRadius: 10,
             borderWidth: 1,
+            backgroundColor: "#111111",
+            borderColor: "#111111",
           }}
         >
-          <Text style={{ fontSize: 16 }}>Coaches & Programs</Text>
-          <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.65 }}>
+          <Text style={{ fontSize: 16, color: "#ffffff" }}>
+            Coaches & Programs
+          </Text>
+          <Text
+            style={{ marginTop: 4, fontSize: 12, opacity: 0.8, color: "#ffffff" }}
+          >
             Coach Share scaffold (dev only)
           </Text>
         </Pressable>

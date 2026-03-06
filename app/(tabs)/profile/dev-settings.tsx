@@ -1,6 +1,6 @@
 import { Stack, router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, ScrollView, Switch, Text, View } from "react-native";
+import { Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
 
 import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
 import {
@@ -9,6 +9,10 @@ import {
   type DevFlags,
 } from "../../../src/config/flags";
 import { isDev } from "../../../src/config/runtime";
+import {
+  clearCoachShareDemo,
+  seedCoachShareDemo,
+} from "../../../src/dev/seedCoachShare";
 
 function FlagRow({
   label,
@@ -64,6 +68,36 @@ function DevNavButton({
   );
 }
 
+function DevActionButton({
+  title,
+  subtitle,
+  onPress,
+}: {
+  title: string;
+  subtitle?: string;
+  onPress: () => void | Promise<void>;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        marginTop: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        borderWidth: 1,
+      }}
+    >
+      <Text style={{ fontSize: 16 }}>{title}</Text>
+      {subtitle ? (
+        <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.65 }}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
+
 export default function DevSettingsScreen() {
   const [ready, setReady] = useState(false);
   const [flags, setFlags] = useState<DevFlags>(DEFAULT_DEV_FLAGS);
@@ -89,7 +123,25 @@ export default function DevSettingsScreen() {
     setFlags(DEFAULT_DEV_FLAGS);
     await saveDevFlags(DEFAULT_DEV_FLAGS);
   }
-
+   async function seedCoachShare() {
+    try {
+      await seedCoachShareDemo();
+      Alert.alert("Coach Share seeded", "Demo data was written successfully.");
+    } catch (error) {
+      Alert.alert("Seed failed", error instanceof Error ? error.message : "Unknown error");
+    }
+  }
+    async function clearCoachShare() {
+    try {
+      await clearCoachShareDemo();
+      Alert.alert("Coach Share cleared", "Demo data was removed successfully.");
+    } catch (error) {
+      Alert.alert(
+        "Clear failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  }
   return (
     <>
       <Stack.Screen options={{ title: "Developer Settings" }} />
@@ -120,33 +172,50 @@ export default function DevSettingsScreen() {
         </View>
 
         {flags.enableHiddenTabs ? (
-          <View style={{ marginTop: 18 }}>
-            <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
-              DEV SHORTCUTS
-            </Text>
+  <View style={{ marginTop: 18 }}>
+    <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+      DEV SHORTCUTS
+    </Text>
 
-            <DevNavButton
-              title="Open Health (hidden)"
-              subtitle="Hidden route: /health"
-              path="/health"
-            />
-            <DevNavButton
-              title="Open Gear (hidden)"
-              subtitle="Hidden route: /gear"
-              path="/gear"
-            />
-            <DevNavButton
-              title="Open Fundamentals (hidden)"
-              subtitle="Hidden route: /Fundamentals"
-              path="/Fundamentals"
-            />
-            <DevNavButton
-              title="Open Welcome (dev)"
-              subtitle="Useful for testing onboarding flow"
-              path="/welcome"
-            />
-          </View>
-        ) : null}
+    <DevNavButton
+      title="Open Health (hidden)"
+      subtitle="Hidden route: /health"
+      path="/health"
+    />
+    <DevNavButton
+      title="Open Gear (hidden)"
+      subtitle="Hidden route: /gear"
+      path="/gear"
+    />
+    <DevNavButton
+      title="Open Fundamentals (hidden)"
+      subtitle="Hidden route: /Fundamentals"
+      path="/Fundamentals"
+    />
+    <DevNavButton
+      title="Open Welcome (dev)"
+      subtitle="Useful for testing onboarding flow"
+      path="/welcome"
+    />
+  </View>
+) : null}
+
+<View style={{ marginTop: 18 }}>
+  <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+    DEV DATA
+  </Text>
+
+  <DevActionButton
+    title="Seed Coach Share demo"
+    subtitle="Adds 1 coach, 1 pack, 1 enrollment, and 1 assignment"
+    onPress={seedCoachShare}
+  />
+    <DevActionButton
+    title="Clear Coach Share demo"
+    subtitle="Removes seeded coach, pack, enrollment, and assignment data"
+    onPress={clearCoachShare}
+  />
+</View>
 
         <Pressable
           onPress={reset}
