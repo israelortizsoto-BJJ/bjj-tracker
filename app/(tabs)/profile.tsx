@@ -15,6 +15,8 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { StorageKeys } from "../../src/storage/storageKeys";
 
 import { isDev } from "../../src/config/runtime";
+import { loadDevFlags } from "../../src/config/devFlagsStore";
+import { DEFAULT_DEV_FLAGS } from "../../src/config/flags";
 
 const DEFAULT_PROFILE: Profile = {
   belt: "White",
@@ -75,6 +77,16 @@ async function saveProfile(p: Profile) {
 }
 
 export default function ProfileScreen() {
+  const [devFlags, setDevFlags] = useState(DEFAULT_DEV_FLAGS);
+
+  useEffect(() => {
+    (async () => {
+      if (!isDev()) return;
+      const flags = await loadDevFlags();
+      setDevFlags(flags);
+    })();
+  }, []);
+
   const [loading, setLoading] = useState(true);
   const [belt, setBelt] = useState("White");
   const [stripes, setStripes] = useState("0");
@@ -743,6 +755,24 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: 16, color: "#ffffff" }}>Developer Settings</Text>
           <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.8, color: "#ffffff" }}>
             Dev-only feature flags
+          </Text>
+        </Pressable>
+      ) : null}
+
+      {isDev() && devFlags.enableCoachShareScaffold ? (
+        <Pressable
+          onPress={() => router.push("/profile/coaches")}
+          style={{
+            marginTop: 12,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 10,
+            borderWidth: 1,
+          }}
+        >
+          <Text style={{ fontSize: 16 }}>Coaches & Programs</Text>
+          <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.65 }}>
+            Coach Share scaffold (dev only)
           </Text>
         </Pressable>
       ) : null}

@@ -8,6 +8,7 @@ export default function TabLayout() {
 
   {/* Dev-only route (hidden from tab bar) */}
   <Tabs.Screen name="profile/dev-settings" options={{ href: null }} />
+  <Tabs.Screen name="profile/coaches" options={{ href: null }} />
       <Tabs.Screen name="training" options={{ title: "Training" }} />
 
       {/* Hidden routes (keep accessible via navigation, but hide from tab bar) */}
