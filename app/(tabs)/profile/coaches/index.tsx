@@ -128,6 +128,23 @@ export default function CoachesScreen() {
           </Text>
         </Pressable>
         
+                <Pressable
+          onPress={() => router.push("/profile/coaches/manage")}
+          style={{
+            marginTop: 12,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 10,
+            borderWidth: 1,
+            alignSelf: "flex-start",
+          }}
+        >
+          <Text style={{ fontSize: 16 }}>Manage Coach Link</Text>
+          <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.7 }}>
+            Review linked coach access and revoke later
+          </Text>
+        </Pressable>
+
         <Pressable
           onPress={() => void loadCoachShareData()}
           style={{

@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 
 export default function CoachJoinScreen() {
@@ -13,6 +13,20 @@ export default function CoachJoinScreen() {
           Enter a coach invite code to link guidance, packs, and assignments to
           your app. Parent-facing flow only. No child login required.
         </Text>
+
+        <Pressable
+          onPress={() => router.push("/profile/coaches")}
+          style={{
+            marginTop: 16,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 10,
+            borderWidth: 1,
+            alignSelf: "flex-start",
+          }}
+        >
+          <Text style={{ fontSize: 14 }}>Back to Coach Share</Text>
+        </Pressable>
 
         <View
           style={{
