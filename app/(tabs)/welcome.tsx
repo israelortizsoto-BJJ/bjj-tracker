@@ -3,7 +3,8 @@ import { useRouter } from "expo-router";
 import { isDev } from "../../src/config/runtime";
 import { useDevFlags } from "../../src/config/useDevFlags";
 import React, { useEffect, useState } from "react";
-import { Button, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { Button, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { StorageKeys } from "../../src/storage/storageKeys";
 
 

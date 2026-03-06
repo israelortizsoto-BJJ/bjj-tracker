@@ -4,13 +4,13 @@ import { router } from "expo-router";
 import {
   Alert,
   Button,
-  SafeAreaView,
   StyleSheet,
   Text,
   TextInput,
   View,
   Pressable,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { StorageKeys } from "../../src/storage/storageKeys";
 
