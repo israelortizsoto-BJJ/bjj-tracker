@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import { isDev } from "../../src/config/runtime";
+import { useDevFlags } from "../../src/config/useDevFlags";
 import React, { useEffect, useState } from "react";
 import { Button, SafeAreaView, StyleSheet, Text, View } from "react-native";
 import { StorageKeys } from "../../src/storage/storageKeys";
@@ -14,6 +16,7 @@ type Profile = {
 
 export default function Welcome() {
   const router = useRouter();
+  const { flags } = useDevFlags();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -59,6 +62,22 @@ export default function Welcome() {
         <Button title="Set up my profile" onPress={() => router.push("/profile")} />
         <View style={{ height: 10 }} />
         <Button title="Go to Training Log" onPress={() => router.replace("/training")} />
+
+
+        {isDev() && flags.enableHiddenTabs ? (
+          <>
+            <View style={{ height: 18 }} />
+            <Text style={{ color: "#b9b9c4", fontSize: 12, letterSpacing: 0.6 }}>
+              DEV SHORTCUTS
+            </Text>
+            <View style={{ height: 10 }} />
+            <Button title="Open Health (hidden)" onPress={() => router.push("/health")} />
+            <View style={{ height: 10 }} />
+            <Button title="Open Gear (hidden)" onPress={() => router.push("/gear")} />
+            <View style={{ height: 10 }} />
+            <Button title="Open Fundamentals (hidden)" onPress={() => router.push("/Fundamentals")} />
+          </>
+        ) : null}
       </View>
     </SafeAreaView>
   );

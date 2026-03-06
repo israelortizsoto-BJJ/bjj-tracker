@@ -1,14 +1,14 @@
+import { Stack, router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { View, Text, Switch, Pressable, ScrollView } from "react-native";
-import { Stack } from "expo-router";
+import { Pressable, ScrollView, Switch, Text, View } from "react-native";
 
-import { isDev } from "../../../src/config/runtime";
+import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
 import {
   DEFAULT_DEV_FLAGS,
   type DevFlagKey,
   type DevFlags,
 } from "../../../src/config/flags";
-import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
+import { isDev } from "../../../src/config/runtime";
 
 function FlagRow({
   label,
@@ -31,6 +31,36 @@ function FlagRow({
       <Text style={{ fontSize: 16 }}>{label}</Text>
       <Switch value={value} onValueChange={onChange} />
     </View>
+  );
+}
+
+function DevNavButton({
+  title,
+  subtitle,
+  path,
+}: {
+  title: string;
+  subtitle?: string;
+  path: Href;
+}) {
+  return (
+    <Pressable
+      onPress={() => router.push(path)}
+      style={{
+        marginTop: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 10,
+        borderWidth: 1,
+      }}
+    >
+      <Text style={{ fontSize: 16 }}>{title}</Text>
+      {subtitle ? (
+        <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.65 }}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -88,6 +118,35 @@ export default function DevSettingsScreen() {
             onChange={(v) => setFlag("enableDebugTools", v)}
           />
         </View>
+
+        {flags.enableHiddenTabs ? (
+          <View style={{ marginTop: 18 }}>
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+              DEV SHORTCUTS
+            </Text>
+
+            <DevNavButton
+              title="Open Health (hidden)"
+              subtitle="Hidden route: /health"
+              path="/health"
+            />
+            <DevNavButton
+              title="Open Gear (hidden)"
+              subtitle="Hidden route: /gear"
+              path="/gear"
+            />
+            <DevNavButton
+              title="Open Fundamentals (hidden)"
+              subtitle="Hidden route: /Fundamentals"
+              path="/Fundamentals"
+            />
+            <DevNavButton
+              title="Open Welcome (dev)"
+              subtitle="Useful for testing onboarding flow"
+              path="/welcome"
+            />
+          </View>
+        ) : null}
 
         <Pressable
           onPress={reset}
