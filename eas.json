@@ -10,7 +10,7 @@
         "APP_VARIANT": "dev",
         "EXPO_NO_DOCTOR": "1"
       },
-      "prebuildCommand": "APP_VARIANT=dev npx expo prebuild --no-install"
+      "prebuildCommand": "npx expo prebuild"
     },
     "production": {
       "distribution": "store"
