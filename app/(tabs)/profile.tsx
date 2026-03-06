@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useState } from "react";
+import { router } from "expo-router";
 import {
   Alert,
   Button,
@@ -8,10 +9,12 @@ import {
   Text,
   TextInput,
   View,
+  Pressable,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { StorageKeys } from "../../src/storage/storageKeys";
 
+import { isDev } from "../../src/config/runtime";
 
 const DEFAULT_PROFILE: Profile = {
   belt: "White",
@@ -723,7 +726,28 @@ export default function ProfileScreen() {
 
       <Button title="Save Profile" onPress={onSave} />
       <View style={{ height: 16 }} />
-    </KeyboardAwareScrollView>
+    
+      {isDev() ? (
+        <Pressable
+          onPress={() => router.push("/profile/dev-settings")}
+          style={{
+            marginTop: 16,
+            paddingVertical: 12,
+            paddingHorizontal: 14,
+            borderRadius: 10,
+            borderWidth: 1,
+            backgroundColor: "#111111",
+            borderColor: "#111111",
+            }}
+        >
+          <Text style={{ fontSize: 16, color: "#ffffff" }}>Developer Settings</Text>
+          <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.8, color: "#ffffff" }}>
+            Dev-only feature flags
+          </Text>
+        </Pressable>
+      ) : null}
+
+</KeyboardAwareScrollView>
   </SafeAreaView>
 );
 }

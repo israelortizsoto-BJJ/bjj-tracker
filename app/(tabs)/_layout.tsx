@@ -5,6 +5,9 @@ export default function TabLayout() {
     <Tabs screenOptions={{ headerShown: true }}>
       {/* Visible tabs */}
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+
+  {/* Dev-only route (hidden from tab bar) */}
+  <Tabs.Screen name="profile/dev-settings" options={{ href: null }} />
       <Tabs.Screen name="training" options={{ title: "Training" }} />
 
       {/* Hidden routes (keep accessible via navigation, but hide from tab bar) */}

@@ -34,3 +34,6 @@ coverage/
 
 expo-env.d.ts
 # @end expo-cli
+# Expo prebuild artifacts (keep repo managed)
+ios/
+android/
