@@ -356,6 +356,9 @@ onMoveShouldSetPanResponderCapture: (_, g) => {
 // 3C) Simple constants
   const today = todayYMD();
   const yesterday = addDaysYMD(today, -1);
+  const isTodayActive = viewMode === "day" && selectedDate === today;
+  const isYesterdayActive = viewMode === "day" && selectedDate === yesterday;
+  const isThisWeekActive = viewMode === "week";
 
 // ------------------------------------------------------------
 // 4) Data loading + sync (effects)
@@ -834,69 +837,67 @@ const renderSearchBar = () => (
     )}
   </View>
 );
+const DAY_WEEK_CHIP_BASE = {
+  flex: 1,
+  padding: 10,
+  borderRadius: 12,
+  borderWidth: 1,
+} as const;
+
+const getDayWeekChipStyle = (isActive: boolean) => ({
+  ...DAY_WEEK_CHIP_BASE,
+  borderColor: isActive ? "#4f7cff" : "#2a2a3a",
+  backgroundColor: isActive ? "#2b3f75" : "#161621",
+});
+
+const getDayWeekChipTitleStyle = (isActive: boolean) => ({
+  color: isActive ? "#ffffff" : UI.textPrimary,
+  fontWeight: "800" as const,
+});
+
+const getDayWeekChipSubtitleStyle = (isActive: boolean) => ({
+  color: isActive ? "#d6e4ff" : UI.textSecondary,
+});
+
 // 7C) Day / Week header row
 const renderDayWeekHeader = () => (
   <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-    {/* Today button */}
     <Pressable
       onPress={() => {
         setViewMode("day");
         setSelectedDate(today);
       }}
-      style={{
-        flex: 1,
-        padding: 10,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#2a2a3a",
-        backgroundColor: selectedDate === today ? "#1b1c2a" : "#161621",
-      }}
+      style={getDayWeekChipStyle(isTodayActive)}
     >
-      <Text style={{ color: "white", fontWeight: "800" }}>Today</Text>
-      <Text style={{ color: "#b9b9c4" }}>
+      <Text style={getDayWeekChipTitleStyle(isTodayActive)}>Today</Text>
+      <Text style={getDayWeekChipSubtitleStyle(isTodayActive)}>
         {(sessionsByDate[today]?.length ?? 0)} sessions
       </Text>
     </Pressable>
-    {/* Yesterday button */}
-    <Pressable
-    onPress={() => {
-    setViewMode("day");
-    setSelectedDate(yesterday);
-  }}
-  style={{
-    flex: 1,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: UI.border,
-    backgroundColor: selectedDate === yesterday ? UI.bgCardActive : UI.bgCard,
-  }}
->
-  <Text style={{ color: UI.textPrimary, fontWeight: "800" }}>Yesterday</Text>
-  <Text style={{ color: UI.textSecondary }}>
-    {(sessionsByDate[yesterday]?.length ?? 0)} sessions
-  </Text>
-</Pressable>
-    {/* This Week button */}
+
     <Pressable
       onPress={() => {
-      setViewMode("week");
-      setSelectedDate(today);
-
-  // If you're not currently on the current week, snap back to current week. START HERE: this ensures the week view always opens showing the current week, even if you were browsing a past/future week when you hit the button. If you're already browsing the current week, it just refreshes the data.
-      setWeekStartYMD(startOfWeekMondayYMD(today));
-}}
-      style={{
-        flex: 1,
-        padding: 10,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: "#2a2a3a",
-        backgroundColor: viewMode === "week" ? "#1b1c2a" : "#161621",
+        setViewMode("day");
+        setSelectedDate(yesterday);
       }}
+      style={getDayWeekChipStyle(isYesterdayActive)}
     >
-      <Text style={{ color: "white", fontWeight: "800" }}>This Week</Text>
-      <Text style={{ color: "#b9b9c4" }}>
+      <Text style={getDayWeekChipTitleStyle(isYesterdayActive)}>Yesterday</Text>
+      <Text style={getDayWeekChipSubtitleStyle(isYesterdayActive)}>
+        {(sessionsByDate[yesterday]?.length ?? 0)} sessions
+      </Text>
+    </Pressable>
+
+    <Pressable
+      onPress={() => {
+        setViewMode("week");
+        setSelectedDate(today);
+        setWeekStartYMD(startOfWeekMondayYMD(today));
+      }}
+      style={getDayWeekChipStyle(isThisWeekActive)}
+    >
+      <Text style={getDayWeekChipTitleStyle(isThisWeekActive)}>This Week</Text>
+      <Text style={getDayWeekChipSubtitleStyle(isThisWeekActive)}>
         {weekSessionsRaw.length} sessions
       </Text>
     </Pressable>
@@ -955,8 +956,8 @@ const renderNewSessionCTA = () => (
         onDayPress={(day) => setSelectedDate(day.dateString)}
       />
 
-      {renderDayWeekHeader()}
       {renderNewSessionCTA()}
+      {renderDayWeekHeader()}
 
       <Text
         style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7, marginTop: 10 }}
