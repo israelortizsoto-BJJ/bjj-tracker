@@ -116,7 +116,16 @@ export default function ProfileScreen() {
     }
 
     await saveProfile({ belt, stripes, academy, professor, lastPromotionDate, weight });
-    Alert.alert("Saved", "Your profile has been updated.");
+    Alert.alert(
+      "Saved",
+      "Your profile has been updated.",
+      [
+        {
+          text: "OK",
+          onPress: () => router.replace("/training"),
+        },
+      ],
+    );
   }
 
   if (loading) {
