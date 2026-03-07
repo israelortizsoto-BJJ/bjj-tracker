@@ -640,6 +640,29 @@ return; // prevents any router.replace below from firing immediately
     ]);
   }
 
+  async function onCancelSession() {
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    } catch {}
+
+    Alert.alert(
+      "Cancel this session?",
+      "Your unsaved changes will be lost.",
+      [
+        { text: "Keep Editing", style: "cancel" },
+        {
+          text: "Cancel Session",
+          style: "destructive",
+          onPress: () => {
+            router.replace(
+              `/training?date=${encodeURIComponent(prefillDate || date || todayYMD())}`,
+            );
+          },
+        },
+      ],
+    );
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -1068,6 +1091,10 @@ Format: start position (grips) → transition → outcome (pass, sweep, submit)
   <Text style={styles.sectionTitle}>Actions</Text>
 
   <View style={styles.actionsRow}>
+    <TouchableOpacity onPress={onCancelSession} style={styles.secondaryBtn}>
+      <Text style={styles.secondaryBtnText}>Cancel Session</Text>
+    </TouchableOpacity>
+
     <TouchableOpacity
       onPress={onSave}
       disabled={!canSave}
@@ -1077,7 +1104,6 @@ Format: start position (grips) → transition → outcome (pass, sweep, submit)
         Save Session
       </Text>
     </TouchableOpacity>
-
   </View>
 </View>
       </KeyboardAwareScrollView>
@@ -1236,6 +1262,23 @@ actionsRow: {
   flexDirection: "row",
   gap: 10,
   marginTop: 8,
+},
+
+secondaryBtn: {
+  flex: 1,
+  paddingVertical: 12,
+  borderRadius: 12,
+  borderWidth: 1,
+  borderColor: "#2a2a3a",
+  backgroundColor: "#161621",
+  alignItems: "center",
+  justifyContent: "center",
+},
+
+secondaryBtnText: {
+  color: "#cfcfe6",
+  fontWeight: "800",
+  fontSize: 16,
 },
 
 attachmentButton: {

@@ -254,14 +254,6 @@ async function loadSessions(): Promise<Session[]> {
   }
 }
 
-const SYSTEM_FILTERS: { id: string; label: string }[] = [
-  { id: "ALL", label: "All" },
-  ...FUNDAMENTALS_TAXONOMY.map((l1: { id: string; label: string }) => ({
-    id: l1.id,
-    label: l1.label,
-  })),
-];
-
 const UI = {
   bgCard: "#0f172a",       // softer than pure black
   bgCardActive: "#111827",
@@ -302,7 +294,7 @@ export default function Training() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
   const [weekStartYMD, setWeekStartYMD] = useState(startOfWeekMondayYMD(todayYMD()));
-  const [systemFilter, setSystemFilter] = useState<string>("ALL");
+  const [systemFilter] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [preview, setPreview] = useState<PreviewState>(null);
   const [playableVideoUri, setPlayableVideoUri] = useState<string | null>(null);
@@ -420,9 +412,6 @@ useEffect(() => {
 // -----------------------------------------------------------
 // 5) Derived data (computed "view model" for rendering)
 // -----------------------------------------------------------
-
-const systemFilterLabel =
-  SYSTEM_FILTERS.find((s) => s.id === systemFilter)?.label ?? "All";
 
 const sessionsByDate = useMemo(() => {
     const map: Record<string, Session[]> = {};
@@ -804,42 +793,6 @@ const renderTitleAndIntro = () => (
     </Text>
   </>
 );
-// 7A) Filter chips row
-const renderFilterChips = () => (
-  <View style={{ marginTop: 6 }}>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={{ flexDirection: "row", gap: 8 }}>
-        {SYSTEM_FILTERS.map(({ id, label }) => {
-  const active = systemFilter === id;
-  return (
-    <Pressable
-      key={id}
-      onPress={() => setSystemFilter(id)}
-      style={{
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        borderWidth: 1,
-        borderColor: "#2a2a3a",
-        backgroundColor: active ? "#1b1c2a" : "#161621",
-      }}
-    >
-      <Text
-        style={{
-          color: active ? "white" : "#cfcfe6",
-          fontWeight: "700",
-          fontSize: 12,
-        }}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-})}
-      </View>
-    </ScrollView>
-  </View>
-);
 // 7B) Search bar row
 const renderSearchBar = () => (
   <View
@@ -858,7 +811,7 @@ const renderSearchBar = () => (
     <TextInput
       value={searchQuery}
       onChangeText={setSearchQuery}
-      placeholder="Search technique, drill, notes..."
+      placeholder="Search your logged techniques, drills, and notes"
       placeholderTextColor="#b9b9c4"
       autoCapitalize="none"
       style={{ color: "white", fontSize: 14, flex: 1 }}
@@ -953,12 +906,9 @@ const renderDayWeekHeader = () => (
 const renderNewSessionCTA = () => (
   <View style={{ gap: 8 }}>
     <Button
-      title="+ New Session for selected day"
+      title="Add Session for Selected Day"
       onPress={() => {
-  const systemParam =
-    systemFilter !== "ALL" ? `&system=${encodeURIComponent(systemFilter)}` : "";
-
-  router.push(`/training/new?date=${encodeURIComponent(selectedDate)}${systemParam}`);
+  router.push(`/training/new?date=${encodeURIComponent(selectedDate)}`);
 }}
     />
   </View>
@@ -994,80 +944,27 @@ const renderNewSessionCTA = () => (
 </Pressable>    
       {renderTitleAndIntro()}
 
+      <Text
+        style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7, marginTop: 8 }}
+      >
+        LOG TRAINING
+      </Text>
+
       <Calendar
         markedDates={markedDates}
         onDayPress={(day) => setSelectedDate(day.dateString)}
       />
-{renderFilterChips()}
-{renderSearchBar()}
-{renderDayWeekHeader()}
-{renderNewSessionCTA()}
 
-{/* 6D First Insight Moment */}
-{isLoadingSessions ? null : (
-  <View style={{ marginTop: 10, marginBottom: 6 }} pointerEvents="box-none">
-    <View style={{ position: "relative" }}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        nestedScrollEnabled
-        directionalLockEnabled
-        decelerationRate="fast"
-        snapToAlignment="center"
-        bounces={false}
-        snapToInterval={snapEnabled ? SNAP : undefined}
-        disableIntervalMomentum={snapEnabled}
-        onMomentumScrollEnd={
-          snapEnabled
-            ? (e) => {
-                const index = Math.round(e.nativeEvent.contentOffset.x / SNAP);
-                setInsightIndex(index);
-              }
-            : undefined
-        }
-        contentContainerStyle={{
-          paddingVertical: 8,
-          paddingLeft: SIDE_PAD,
-          paddingRight: SIDE_PAD,
-        }}
+      {renderDayWeekHeader()}
+      {renderNewSessionCTA()}
+
+      <Text
+        style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7, marginTop: 10 }}
       >
-        {insightCards.map((card, i) => (
-          <View key={i}>{card}</View>
-        ))}
-      </ScrollView>
+        REVIEW TRAINING
+      </Text>
 
-      {showDots && (
-        <View
-          pointerEvents="none"
-          style={{
-            position: "absolute",
-            bottom: 10,
-            left: 0,
-            right: 0,
-            flexDirection: "row",
-            justifyContent: "center",
-            gap: 6,
-          }}
-        >
-          {Array.from({ length: insightsCount }).map((_, i) => (
-            <View
-              key={i}
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: 3,
-                backgroundColor:
-                  i === safeInsightIndex
-                    ? "rgba(255,255,255,0.9)"
-                    : "rgba(255,255,255,0.3)",
-              }}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  </View>
-)}
+      {renderSearchBar()}
 
 {/* 6E Sessions list */}
 {viewMode === "week" ? (
@@ -1270,11 +1167,11 @@ const renderNewSessionCTA = () => (
     </Text>
 
     <Text style={{ color: UI.textSecondary, fontSize: 13 }}>
-      {systemFilter !== "ALL" ? `for ${systemFilterLabel}.` : "for this date."}
+      For this date.
     </Text>
 
     <Text style={{ color: UI.textSecondary, fontSize: 13 }}>
-      Tap + to add one.
+      Tap Add Session for Selected Day to log one.
     </Text>
   </View>
 ) : (
@@ -1386,6 +1283,72 @@ const renderNewSessionCTA = () => (
       );
     })}
   </>
+)}
+
+{/* Insights */}
+{isLoadingSessions ? null : (
+  <View style={{ marginTop: 10, marginBottom: 6 }} pointerEvents="box-none">
+    <View style={{ position: "relative" }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        nestedScrollEnabled
+        directionalLockEnabled
+        decelerationRate="fast"
+        snapToAlignment="center"
+        bounces={false}
+        snapToInterval={snapEnabled ? SNAP : undefined}
+        disableIntervalMomentum={snapEnabled}
+        onMomentumScrollEnd={
+          snapEnabled
+            ? (e) => {
+                const index = Math.round(e.nativeEvent.contentOffset.x / SNAP);
+                setInsightIndex(index);
+              }
+            : undefined
+        }
+        contentContainerStyle={{
+          paddingVertical: 8,
+          paddingLeft: SIDE_PAD,
+          paddingRight: SIDE_PAD,
+        }}
+      >
+        {insightCards.map((card, i) => (
+          <View key={i}>{card}</View>
+        ))}
+      </ScrollView>
+
+      {showDots && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            bottom: 10,
+            left: 0,
+            right: 0,
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 6,
+          }}
+        >
+          {Array.from({ length: insightsCount }).map((_, i) => (
+            <View
+              key={i}
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor:
+                  i === safeInsightIndex
+                    ? "rgba(255,255,255,0.9)"
+                    : "rgba(255,255,255,0.3)",
+              }}
+            />
+          ))}
+        </View>
+      )}
+    </View>
+  </View>
 )}
 
 <Button title="↻ Refresh" onPress={refresh} />
