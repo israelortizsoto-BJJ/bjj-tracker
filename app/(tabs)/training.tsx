@@ -846,8 +846,8 @@ const DAY_WEEK_CHIP_BASE = {
 
 const getDayWeekChipStyle = (isActive: boolean) => ({
   ...DAY_WEEK_CHIP_BASE,
-  borderColor: isActive ? "#4f7cff" : "#2a2a3a",
-  backgroundColor: isActive ? "#2b3f75" : "#161621",
+  borderColor: isActive ? "#42567A" : "#2a2a3a",
+  backgroundColor: isActive ? "#2A3550" : "#161621",
 });
 
 const getDayWeekChipTitleStyle = (isActive: boolean) => ({
@@ -856,7 +856,7 @@ const getDayWeekChipTitleStyle = (isActive: boolean) => ({
 });
 
 const getDayWeekChipSubtitleStyle = (isActive: boolean) => ({
-  color: isActive ? "#d6e4ff" : UI.textSecondary,
+  color: isActive ? "#C9D4E8" : UI.textSecondary,
 });
 
 // 7C) Day / Week header row
