@@ -35,6 +35,29 @@ type Profile = {
   weight?: string;            // keep as string for easy input
 };
 
+function isValidYMDDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const dt = new Date(year, month - 1, day);
+
+  return (
+    dt.getFullYear() === year &&
+    dt.getMonth() === month - 1 &&
+    dt.getDate() === day
+  );
+}
+
+function formatYMDForDisplay(value: string) {
+  if (!isValidYMDDate(value)) return "";
+  const [year, month, day] = value.split("-").map(Number);
+  const dt = new Date(year, month - 1, day);
+  return dt.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 const BELTS = ["White", "Blue", "Purple", "Brown", "Black"];
 const beltAccent = (b: string) => {
   switch (b) {
@@ -115,7 +138,21 @@ export default function ProfileScreen() {
       return;
     }
 
-    await saveProfile({ belt, stripes, academy, professor, lastPromotionDate, weight });
+    const normalizedPromotionDate = lastPromotionDate.trim();
+
+    if (normalizedPromotionDate && !isValidYMDDate(normalizedPromotionDate)) {
+      Alert.alert("Last Promotion Date must use YYYY-MM-DD");
+      return;
+    }
+
+    await saveProfile({
+      belt,
+      stripes,
+      academy,
+      professor,
+      lastPromotionDate: normalizedPromotionDate,
+      weight,
+    });
     Alert.alert(
       "Saved",
       "Your profile has been updated.",
@@ -462,6 +499,14 @@ export default function ProfileScreen() {
           pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
         })).input}
       />
+      <Text style={{ color: "#9aa0a6", fontSize: 12, marginTop: 6 }}>
+        Use YYYY-MM-DD for now, for example 2025-09-14.
+      </Text>
+      {isValidYMDDate(lastPromotionDate.trim()) ? (
+        <Text style={{ color: "#cfcfe6", fontSize: 12, marginTop: 4 }}>
+          Display: {formatYMDForDisplay(lastPromotionDate.trim())}
+        </Text>
+      ) : null}
       <Text style={(StyleSheet.create({
           container: { flex: 1, backgroundColor: "#0b0b0f" },
           scroll: { padding: 16, paddingBottom: 40 },
