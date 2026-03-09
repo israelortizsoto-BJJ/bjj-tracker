@@ -192,3 +192,51 @@ Intentional for MVP.
 ## Open Questions / Decisions Pending
 
 - 
+
+---
+
+## End-of-day recap prompt
+
+Use this prompt at the end of each BJJ Tracker workday:
+
+Action: End-of-day BJJ Tracker recap. Think hard. Update BJJ Tracker using the living-files vs dated-files rule.
+
+Context
+- Project: BJJ Tracker / MatMind Jiu Jitsu
+- Branch: dev
+- Repo: bjj-tracker
+- Date: YYYY-MM-DD
+- Timezone: America/Los_Angeles
+
+Inputs I will paste
+1) Git proof:
+- git status -sb
+- git log -5
+
+2) What I worked on today:
+- [ ] …
+- [ ] …
+- [ ] …
+
+3) Testing / QA / release updates:
+- [ ] …
+- [ ] …
+
+4) Key product / UX / technical decisions:
+- [ ] …
+- [ ] …
+
+5) Open loops / bugs / risks:
+- [ ] …
+- [ ] …
+
+Request
+- First, tell me what should update the living files vs what should be captured as dated record.
+- Then give me exact terminal blocks to:
+  - update docs/dev-handoff.md if current truth changed
+  - create or update docs/recaps/YYYY-MM-DD_dev-recap.md
+- If relevant, also update:
+  - docs/decisions.md
+  - docs/definition-of-done.md
+- Keep the system clean. Do not create extra files unless the work exposed a real gap.
+- End by telling me the top 1–3 priorities for the next dev session.
