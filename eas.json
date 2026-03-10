@@ -13,7 +13,15 @@
       "prebuildCommand": "npx expo prebuild"
     },
     "production": {
-      "distribution": "store"
+      "distribution": "store",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "israel.ortizsoto@gmail.com"
+      }
     }
   }
 }

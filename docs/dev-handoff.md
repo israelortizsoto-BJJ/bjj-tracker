@@ -240,3 +240,15 @@ Request
   - docs/definition-of-done.md
 - Keep the system clean. Do not create extra files unless the work exposed a real gap.
 - End by telling me the top 1–3 priorities for the next dev session.
+
+---
+
+## Current release truth — 2026-03-09
+- Build 6 completed App Store Connect processing on 2026-03-09
+- Internal 20-minute stress test passed for core release goals
+- Main release focus passed: Training flow clarity and lower-friction session logging
+- Profile promotion date validation and save flow passed
+- Known issue: some older previously attached camera-roll videos did not persist correctly, while newly attached video in current build worked and persisted after hard close
+- Build number 5 was skipped during release-flow correction
+- Build 6 became the first correctly versioned production/TestFlight upload under the fixed release flow
+- Next move: release Build 6 to external testers and collect focused usage feedback
