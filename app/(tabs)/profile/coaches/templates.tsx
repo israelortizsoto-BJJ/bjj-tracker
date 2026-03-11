@@ -1,12 +1,12 @@
 import { Stack, router } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 export default function CoachTemplatesScreen() {
-  const handleUseTemplate = (templateTitle: string) => {
-    Alert.alert(
-      "Use This Template",
-      `Template "${templateTitle}" will be wired into Coach Share authoring flows later.`,
-    );
+  const handleUseTemplate = (templateId: string) => {
+    router.push({
+      pathname: "/profile/coaches/template-preview",
+      params: { templateId },
+    });
   };
 
   return (
@@ -58,7 +58,7 @@ export default function CoachTemplatesScreen() {
             </Text>
             <Pressable
               onPress={() =>
-                handleUseTemplate("Guard Pull Defense — Knee in the Middle")
+                handleUseTemplate("guard-pull-defense-knee-middle")
               }
               style={{
                 marginTop: 10,
@@ -94,7 +94,7 @@ export default function CoachTemplatesScreen() {
             </Text>
             <Pressable
               onPress={() =>
-                handleUseTemplate("Triangle Defense — Posture and Escape")
+                handleUseTemplate("triangle-defense-posture-escape")
               }
               style={{
                 marginTop: 10,
@@ -130,9 +130,7 @@ export default function CoachTemplatesScreen() {
             </Text>
             <Pressable
               onPress={() =>
-                handleUseTemplate(
-                  "Half Guard Passing — Heavy Chest and Table Hands",
-                )
+                handleUseTemplate("half-guard-passing-heavy-chest-table-hands")
               }
               style={{
                 marginTop: 10,
