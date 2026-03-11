@@ -9,6 +9,8 @@ import {
   getCompletionReceiptsQueue,
   getPackEnrollments,
   getPacksById,
+  setAssignmentsById as persistAssignmentsById,
+  setCompletionReceiptsQueue as persistCompletionReceiptsQueue,
 } from "../../../../src/storage/coachShareStore";
 import type {
   AssignmentMap,
@@ -134,6 +136,49 @@ export default function CoachesScreen() {
       ? new Date(currentAssignment.assignedAt)
       : undefined;
 
+  const handleMarkCurrentAssignmentComplete = useCallback(async () => {
+    if (!currentAssignment || currentAssignment.status !== "assigned") {
+      return;
+    }
+
+    const nowIso = new Date().toISOString();
+
+    const updatedAssignment = {
+      ...currentAssignment,
+      status: "completed" as const,
+      completedAt: nowIso,
+    };
+
+    const updatedAssignmentsById: AssignmentMap = {
+      ...assignmentsById,
+      [currentAssignment.id]: updatedAssignment,
+    };
+
+    const newReceipt: CompletionReceipt = {
+      id: `local-${Date.now()}`,
+      assignmentId: currentAssignment.id,
+      enrollmentId: currentAssignment.enrollmentId,
+      packId: currentAssignment.packId,
+      moduleId: currentAssignment.moduleId,
+      coachId: currentAssignment.coachId,
+      parentProfileId: currentAssignment.parentProfileId,
+      completedAt: nowIso,
+    };
+
+    const updatedCompletionReceiptsQueue = [
+      ...completionReceiptsQueue,
+      newReceipt,
+    ];
+
+    await Promise.all([
+      persistAssignmentsById(updatedAssignmentsById),
+      persistCompletionReceiptsQueue(updatedCompletionReceiptsQueue),
+    ]);
+
+    setAssignmentsById(updatedAssignmentsById);
+    setCompletionReceiptsQueue(updatedCompletionReceiptsQueue);
+  }, [assignmentsById, completionReceiptsQueue, currentAssignment]);
+
   return (
     <>
       <Stack.Screen options={{ title: "Coaches & Programs" }} />
@@ -247,6 +292,23 @@ export default function CoachesScreen() {
                   </Text>
                 </Text>
               </View>
+              {currentAssignment?.status === "assigned" ? (
+                <Pressable
+                  onPress={() => void handleMarkCurrentAssignmentComplete()}
+                  style={{
+                    marginTop: 10,
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    alignSelf: "flex-start",
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "500" }}>
+                    Mark Complete
+                  </Text>
+                </Pressable>
+              ) : null}
             </Section>
 
             <Section title="Module Focus">
