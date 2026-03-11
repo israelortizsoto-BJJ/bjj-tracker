@@ -25,7 +25,7 @@ Avoid putting dev-only navigation inside Welcome/onboarding screens (redirect lo
 Use Dev Settings “Dev Shortcuts” to reach hidden routes.
 
 ## Hidden routes stay hidden from the tab bar by default.
-Use `href: null` for dormant routes (Health/Gear/Fundamentals/Coach scaffolds).
+Use `href: null` for dormant routes and Coach Share subroutes.
 Access via Dev Shortcuts/flagged entry points, not visible tabs.
 
 ## No ad-hoc patching as a default workflow.
@@ -62,230 +62,144 @@ Keep a dedicated “build terminal” tab untouched while EAS runs; use a separa
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-10  
-**Status:** app code clean and pushed; local untracked `.cursor/` remains for trial setup only
+**Date:** 2026-03-11  
+**Status:** Coach Share moved from scaffold-only into a real parent flow plus a believable coach template-selection demo path; all changes committed and pushed
 
 ## Git checkpoint
+
 **Working tree:**
 - synced to `origin/dev`
 - only local untracked folder: `.cursor/`
 
 **Latest commit:**
-- `7ad404a` — Feat: add empty state for Training week view search
+- `d9fa4d9` — Feat: add Coach Share template selection handoff
 
-## Commits completed today
-- `7ad404a` — Feat: add empty state for Training week view search
-- `e599d3f` — Docs: add MatMind master prompt templates
-- `2343ba9` — Docs: update dev recap and lock iOS release flow
-- `19bb8e9` — Docs: add dev recap flow and update handoff ritual
+## What we completed this block
 
-## What we completed today
+### 1) Parent-facing Coach Share became real
 
-### 1) Cursor adoption setup — controlled trial foundation
+We turned the existing Coach Share scaffold into a parent-readable dashboard with:
+- linked coach
+- current assignment
+- module focus
+- program pack context
+- clean empty state
+- working scroll behavior
 
-**Action:** began controlled Cursor adoption for MatMind dev workflow.  
-**Why:** test whether Cursor can become the stronger coding lane without disrupting release cadence or blurring Dev/TestFlight lanes.
+Then we extended the parent loop so the parent can:
+- mark an assignment complete
+- persist that completion locally
+- see a Recent Completion acknowledgment after reload
 
-**Completed:**
-- installed Cursor on Mac
-- enabled `cursor` CLI in PATH
-- validated repo opens correctly from terminal with `cursor .`
-- fixed GitHub HTTPS auth cleanly by replacing expired token flow
-- pushed local docs commits successfully after auth reset
-- created local Cursor repo rule structure under `.cursor/rules/`
-- kept Cursor in supervised mode:
-  - review before apply
-  - no broad refactors
-  - terminal-first verification
+### 2) Coach-side authoring direction got a believable front door
 
-**Important note:**
-- `.cursor/` is currently **local only** and **not committed**
-- decision still pending on whether Cursor rules should become repo-tracked convention or remain local
+We added:
+- Create Program Pack entry
+- Use Template / Customize Existing Template / Start From Scratch choices
+- a hidden Program Pack Templates screen
+- realistic BJJ demo template packs:
+  - Guard Pull Defense — Knee in the Middle
+  - Triangle Defense — Posture and Escape
+  - Half Guard Passing — Heavy Chest and Table Hands
 
-### 2) First real Cursor product task — Training week empty state
+### 3) Template path now feels like a real workflow
 
-**Action:** used Cursor for one supervised, low-risk real product edit.  
-**Why:** validate Cursor on actual app work, not just docs or theory.
+We upgraded the coach-side template path so it no longer ends on an alert:
+- browse templates
+- preview selected template
+- continue into a selected-template handoff screen
+- understand that customization/assignment flows come next
 
-**Completed in** `app/(tabs)/training.tsx`:
-- added derived `weekHasVisibleSessions`
-- fixed Week view blank-state problem when search/filter hides all sessions
-- added explicit empty-state messaging:
-  - “No sessions match your search”
-  - “No sessions this week yet”
+## What passed
 
-**Why this mattered:**
-- Week view previously became blank with no explanation
-- this was a real UX improvement with tight scope and low risk
+### Gates
+- `npx tsc --noEmit` — passed repeatedly across slices
+- `npx eslint .` — passed repeatedly across slices
 
-### 3) Validation loop — Cursor task passed real app test
+### App validation
+Validated in app at each slice:
+- parent dashboard
+- completion flow
+- completion summary
+- pack creation entry
+- template selection
+- template preview
+- template-selected handoff
+- back navigation between key coach-side screens
 
-**Action:** verified the change in app before commit.  
-**Why:** Cursor changes should only be committed after app-level proof, not just diff review.
+## Locked product decisions
 
-**Tested successfully:**
-- Training → This Week
-- entered a search that matched nothing
-- confirmed empty-state message appeared
-- cleared search
-- confirmed normal session list returned
+### Coach Share Phase 1 remains narrow
+- no messaging
+- no kid login
+- parent-controlled flow
+- local-first state
+- no full coach editor yet
 
-**Result:**
-- first supervised Cursor product task passed
-- diff stayed contained to one file
-- commit and push completed cleanly
+### Coach authoring direction
+Coach will eventually have 3 paths:
+1. use template
+2. duplicate/customize template
+3. start from scratch
 
----
+### Template rule
+Templates should remain canonical/read-only.
+Coach customization should happen on copies later.
 
-## Locked decisions from today
+## Locked workflow decisions
 
-### Cursor lane decision
-Cursor is now approved for **controlled supervised use** on MatMind.
+### Cursor operating rule
+Use a new Cursor chat for every new feature/task.
 
-That means Cursor is approved for:
-- small UI polish
-- contained UX improvements
-- localized bug fixes
-- single-screen work
+### Validation rule
+Do not trust Cursor output on sight.
+Truth requires:
+1. scoped diff
+2. terminal gates
+3. app validation
+4. intentional commit
+
+### Cursor migration judgment
+Cursor performed well today on tightly scoped, supervised feature slices.
+It is approved for continued controlled use on:
+- local UI improvements
+- contained product slices
+- hidden-route scaffolds
 - 1–3 file tasks
-- terminal-first verified edits
 
-Cursor is **not yet** approved for:
+Cursor is still not approved for:
 - broad refactors
-- storage/model changes
-- release-critical work
-- EAS/TestFlight/config work
-- unsupervised edits
-- app-wide cleanup passes
+- storage/model migrations
+- release-critical config work
+- unsupervised cross-file cleanup
 
-### Cursor workflow rules to preserve
-For now:
-- always start from terminal at repo root
-- validate `git status -sb` before work
-- make Cursor explain plan before editing
-- review diff before accepting
-- test in app before commit
-- commit only after verification
-- keep `.cursor/` local until intentionally decided otherwise
+## Commits completed in this block
+- `be3d3cb` — Feat: make Coach Share dashboard parent-readable
+- `b55f27f` — Feat: add Coach Share completion flow
+- `4d98d8f` — Feat: add Coach Share completion summary
+- `18c2076` — Feat: add Coach Share pack creation entry scaffold
+- `d21d457` — Feat: add Coach Share template selection scaffold
+- `825468c` — Feat: add Coach Share template preview flow
+- `d9fa4d9` — Feat: add Coach Share template selection handoff
 
-### Network/testing rule reaffirmed
-For Expo/dev client testing:
-- Mac + iPhone must be on same Wi-Fi or same hotspot
-- firewall must not block Metro/Node
+## Best next-session recommendation
 
----
+Best next move:
+Build the smallest **customize-from-template scaffold** after template selection handoff.
 
-## What passed in app today
+Likely shape:
+- selected template shown
+- editable pack title only
+- read-only module list
+- note that module editing/assignment comes later
 
-### Training
-- Week view now shows a clear empty state when search hides all sessions
-- clearing search restores visible sessions correctly
-- no routing/storage/build side effects observed from this change
+Do not jump into full builder logic yet.
 
-### Workflow / tooling
-- GitHub auth fixed and working again for HTTPS push
-- `cursor` CLI installed and working
-- repo opens cleanly in Cursor from terminal
-- controlled review/apply flow worked as intended
+## Suggested restart commands for next session
+- `git status -sb`
+- `git log -5 --oneline`
+- `sed -n '1,260p' "docs/dev-handoff.md"`
 
----
-
-## Product / engineering decisions to preserve
-
-### Cursor adoption
-This is **not** full migration yet.
-This is a controlled proving phase.
-
-Interpretation:
-- Cursor earned continued use
-- Cursor did **not** yet earn full takeover of all coding work
-- VS Code remains fallback lane until Cursor proves itself on more tasks
-
-### Review standard
-Do not accept Cursor-generated changes blindly.
-Always require:
-1. task understanding
-2. exact files impacted
-3. smallest safe fix
-4. verification plan
-5. app test before commit
-
-### Scope discipline
-Prefer first-trial style tasks:
-- local
-- reversible
-- obvious before/after
-- minimal blast radius
-
-Avoid starting Cursor on:
-- routing changes
-- storage migrations
-- config/build changes
-- large UI architecture cleanup
-- hidden route / onboarding navigation work
-
----
-
-## Outstanding items
-
-### Highest priority workflow item
-Decide what to do with local `.cursor/`:
-- keep local only
-- or intentionally commit project rules later
-
-Do **not** commit it casually.
-
-### Highest priority product continuation
-Run **task two** of Cursor trial on another contained but slightly more reasoning-heavy app task.
-
-Best next category:
-- one slightly more logic-aware UI task
-- or one contained bug fix with tight scope
-
-### Existing product lanes still open
-- Coach Share real join/manage logic
-- parent completion/adherence flow
-- media parity for Coach Share
-- Profile internal cleanup/refactor
-- broader Training polish from tester feedback
-
----
-
-## Recommended next work session
-
-### Option 1 — Cursor trial task two
-**Action:** use Cursor on one more contained real product task.  
-**Why:** it passed task one; now it needs to prove repeatability.
-
-**Good fit:**
-- one localized Training/Profile bug fix
-- one UI/validation improvement
-- max 1–3 files
-- no build/release/storage/routing work
-
-**Goal:** determine whether Cursor is consistently cleaner/faster than VS Code lane.
-
-### Option 2 — Return to locked product priorities
-**Action:** continue product work outside the migration lane.  
-**Why:** do not let tooling exploration swallow product momentum.
-
-**Best candidates:**
-- Coach Share parent completion/adherence scaffold
-- Profile cleanup with no UX drift
-- Training feedback pass only after locking decisions first
-
----
-
-## Best next-step recommendation
-
-Start next session with:
-1. `git status -sb`
-2. `git log -5 --oneline`
-3. keep `.cursor/` untracked
-4. run **one more supervised Cursor task**
-5. judge whether Cursor stays cleaner than your current lane for a second consecutive real app task
-
-## Assumptions I made
-- I assumed today’s meaningful app work was the Cursor setup/auth reset plus the Training week empty-state change.
-- I assumed you wanted the handoff notes updated from the last manual version you pasted, rather than a full doc-file diff from `docs/`.
-- I did **not** include session times because you did not provide them.
+## Assumptions
+- I assumed today’s meaningful work should replace the previous Coach Share section in the living handoff rather than append duplicate notes.
+- I assumed `.cursor/` should remain local and untracked for now.
