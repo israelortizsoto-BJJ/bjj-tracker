@@ -788,6 +788,18 @@ const searchedSessions = useMemo(() => {
   });
 }, [filteredSessions, searchQuery]);
 
+const weekHasVisibleSessions = useMemo(() => {
+  if (viewMode !== "week") return true;
+
+  for (const ymd of weekDates) {
+    const dayListRaw: Session[] = weekSessionsByDate[ymd] ?? [];
+    const dayList: Session[] = filterAndSort(dayListRaw);
+    if (dayList.length > 0) return true;
+  }
+
+  return false;
+}, [viewMode, weekDates, weekSessionsByDate, filterAndSort]);
+
 const renderTitleAndIntro = () => (
   <>
     <Text style={{ fontSize: 22, fontWeight: "700" }}>Training Calendar</Text>
@@ -996,6 +1008,29 @@ const renderNewSessionCTA = () => (
   </Text>
 
   </View>
+    {!weekHasVisibleSessions ? (
+      <View
+        style={{
+          marginTop: 10,
+          padding: 12,
+          borderRadius: 14,
+          borderWidth: 1,
+          borderColor: UI.border,
+          backgroundColor: UI.bgCard,
+          gap: 6,
+        }}
+      >
+        <Text style={{ color: UI.textPrimary, fontWeight: "800", fontSize: 14 }}>
+          {weekSessionsRaw.length === 0 ? "No sessions this week yet" : "No sessions match your search"}
+        </Text>
+
+        <Text style={{ color: UI.textSecondary, fontSize: 13 }}>
+          {weekSessionsRaw.length === 0
+            ? "Log a session to start building your weekly streak."
+            : "Try clearing your search to see your sessions for this week."}
+        </Text>
+      </View>
+    ) : null}
     {weekDates.map((ymd) => {
       const dayListRaw: Session[] = weekSessionsByDate[ymd] ?? [];
       const dayList: Session[] = filterAndSort(dayListRaw);
