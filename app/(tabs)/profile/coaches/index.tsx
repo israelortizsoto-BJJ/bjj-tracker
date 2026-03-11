@@ -136,6 +136,49 @@ export default function CoachesScreen() {
       ? new Date(currentAssignment.assignedAt)
       : undefined;
 
+  const completedCurrentAssignment =
+    currentAssignment?.status === "completed" ? currentAssignment : undefined;
+
+  const latestCompletionReceipt =
+    completionReceiptsQueue.length > 0
+      ? completionReceiptsQueue[completionReceiptsQueue.length - 1]
+      : undefined;
+
+  const completionSourceAssignment =
+    completedCurrentAssignment ??
+    (latestCompletionReceipt
+      ? assignmentsById[latestCompletionReceipt.assignmentId]
+      : undefined);
+
+  const completionCompletedAtIso =
+    completedCurrentAssignment?.completedAt ??
+    latestCompletionReceipt?.completedAt ??
+    completionSourceAssignment?.completedAt;
+
+  const completionCompletedAtDate = completionCompletedAtIso
+    ? new Date(completionCompletedAtIso)
+    : undefined;
+
+  const completionPack =
+    completionSourceAssignment && packsById[completionSourceAssignment.packId]
+      ? packsById[completionSourceAssignment.packId]
+      : undefined;
+
+  const completionModule =
+    completionSourceAssignment && completionPack?.modules
+      ? completionPack.modules.find(
+          (module) => module.id === completionSourceAssignment.moduleId,
+        )
+      : undefined;
+
+  const completionAssignmentTitle =
+    completionSourceAssignment?.title ??
+    currentAssignment?.title ??
+    "Assignment completed";
+
+  const hasCompletionSummary =
+    Boolean(completedCurrentAssignment) || Boolean(latestCompletionReceipt);
+
   const handleMarkCurrentAssignmentComplete = useCallback(async () => {
     if (!currentAssignment || currentAssignment.status !== "assigned") {
       return;
@@ -337,6 +380,49 @@ export default function CoachesScreen() {
                 Modules: {currentPack?.modules.length ?? 0}
               </Text>
             </Section>
+
+            {hasCompletionSummary ? (
+              <Section title="Recent Completion">
+                <Text
+                  style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}
+                >
+                  {completionAssignmentTitle}
+                </Text>
+                {completionPack || completionModule ? (
+                  <Text
+                    style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}
+                  >
+                    {completionModule?.title
+                      ? `${completionModule.title}${
+                          completionPack?.title
+                            ? ` · ${completionPack.title}`
+                            : ""
+                        }`
+                      : completionPack?.title}
+                  </Text>
+                ) : null}
+                <View style={{ marginTop: 8 }}>
+                  <Text style={{ fontSize: 14 }}>
+                    Completed:{" "}
+                    <Text style={{ fontWeight: "500" }}>
+                      {completionCompletedAtDate
+                        ? completionCompletedAtDate.toLocaleDateString()
+                        : "—"}
+                    </Text>
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      marginTop: 2,
+                      opacity: 0.8,
+                    }}
+                  >
+                    Status:{" "}
+                    <Text style={{ fontWeight: "500" }}>Recorded locally</Text>
+                  </Text>
+                </View>
+              </Section>
+            ) : null}
 
             <Section title="Debug Data">
               <Text style={{ fontSize: 14 }}>Links: {coachLinks.length}</Text>
