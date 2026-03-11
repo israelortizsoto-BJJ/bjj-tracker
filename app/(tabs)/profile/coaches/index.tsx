@@ -1,6 +1,6 @@
 import { Stack, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
 import {
   getAssignmentsById,
@@ -94,21 +94,56 @@ export default function CoachesScreen() {
       void loadCoachShareData();
     }, [loadCoachShareData]),
   );
+  const allCoaches = Object.values(coachesById);
+  const allPacks = Object.values(packsById);
+  const allAssignments = Object.values(assignmentsById);
 
-  const firstCoach = Object.values(coachesById)[0];
-  const firstPack = Object.values(packsById)[0];
-  const firstAssignment = Object.values(assignmentsById)[0];
+  const firstCoach = allCoaches[0];
+  const firstPack = allPacks[0];
+
+  const assignedAssignments = allAssignments.filter(
+    (assignment) => assignment.status === "assigned",
+  );
+  const currentAssignment = assignedAssignments[0] ?? allAssignments[0];
+
+  const currentCoachFromAssignment = currentAssignment
+    ? coachesById[currentAssignment.coachId]
+    : undefined;
+  const currentCoach = currentCoachFromAssignment ?? firstCoach;
+
+  const currentPackFromAssignment = currentAssignment
+    ? packsById[currentAssignment.packId]
+    : undefined;
+  const currentPack = currentPackFromAssignment ?? firstPack;
+
+  const currentModule =
+    currentAssignment && currentPack?.modules
+      ? currentPack.modules.find(
+          (module) => module.id === currentAssignment.moduleId,
+        )
+      : undefined;
+
+  const currentModulePosition =
+    currentModule && currentPack?.modules
+      ? currentPack.modules.findIndex((module) => module.id === currentModule.id) +
+        1
+      : undefined;
+
+  const currentAssignmentAssignedDate =
+    currentAssignment && currentAssignment.assignedAt
+      ? new Date(currentAssignment.assignedAt)
+      : undefined;
 
   return (
     <>
       <Stack.Screen options={{ title: "Coaches & Programs" }} />
-      <View style={{ flex: 1, padding: 16 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6 }}>
           Coach Share
         </Text>
         <Text style={{ fontSize: 14, opacity: 0.75, lineHeight: 20 }}>
-          Parent-controlled coach guidance, curriculum packs, and assignments.
-          Dev scaffold only for now.
+          See what your coach has planned for your child this week, including
+          today&apos;s focus and the current program pack.
         </Text>
         
          <Pressable
@@ -170,38 +205,74 @@ export default function CoachesScreen() {
               No Coach Share data found yet.
             </Text>
             <Text style={{ fontSize: 14, opacity: 0.75, lineHeight: 20 }}>
-              Seed demo data from Developer Settings to preview the scaffold.
+              When you connect with a coach, their assignments and program
+              details will appear here.
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 12, opacity: 0.6, lineHeight: 18 }}>
+              For local preview, you can seed demo data from Developer Settings.
             </Text>
           </Section>
         ) : (
           <>
             <Section title="Coach">
               <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
-                {firstCoach?.displayName ?? "—"}
+                {currentCoach?.displayName ?? "—"}
               </Text>
               <Text style={{ fontSize: 14, opacity: 0.8 }}>
-                {firstCoach?.academyName ?? "—"}
+                {currentCoach?.academyName ?? "—"}
               </Text>
+            </Section>
+
+            <Section title="Assigned Now">
+              <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
+                {currentAssignment?.title ?? "No active assignment"}
+              </Text>
+              <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
+                {currentAssignment?.notes ??
+                  "Your coach&apos;s current assignment details will appear here."}
+              </Text>
+              <View style={{ marginTop: 8 }}>
+                <Text style={{ fontSize: 14 }}>
+                  Status:{" "}
+                  <Text style={{ fontWeight: "500" }}>
+                    {currentAssignment?.status ?? "—"}
+                  </Text>
+                </Text>
+                <Text style={{ fontSize: 14, marginTop: 2 }}>
+                  Assigned:{" "}
+                  <Text style={{ fontWeight: "500" }}>
+                    {currentAssignmentAssignedDate
+                      ? currentAssignmentAssignedDate.toLocaleDateString()
+                      : "—"}
+                  </Text>
+                </Text>
+              </View>
+            </Section>
+
+            <Section title="Module Focus">
+              <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
+                {currentModule?.title ?? "No specific module selected"}
+              </Text>
+              <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
+                {currentModule?.summary ??
+                  "When your coach assigns a module, the focus and summary will show here."}
+              </Text>
+              {currentModulePosition ? (
+                <Text style={{ fontSize: 14, marginTop: 8 }}>
+                  Position in pack: {currentModulePosition}
+                </Text>
+              ) : null}
             </Section>
 
             <Section title="Program Pack">
               <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
-                {firstPack?.title ?? "—"}
+                {currentPack?.title ?? "—"}
               </Text>
               <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
-                {firstPack?.description ?? "—"}
+                {currentPack?.description ?? "—"}
               </Text>
               <Text style={{ fontSize: 14, marginTop: 8 }}>
-                Modules: {firstPack?.modules.length ?? 0}
-              </Text>
-            </Section>
-
-            <Section title="Current Assignment">
-              <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
-                {firstAssignment?.title ?? "—"}
-              </Text>
-              <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
-                {firstAssignment?.notes ?? "—"}
+                Modules: {currentPack?.modules.length ?? 0}
               </Text>
             </Section>
 
@@ -225,7 +296,7 @@ export default function CoachesScreen() {
             </Section>
           </>
         )}
-      </View>
+      </ScrollView>
     </>
   );
 }
