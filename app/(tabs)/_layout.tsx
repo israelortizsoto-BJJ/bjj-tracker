@@ -11,6 +11,7 @@ export default function TabLayout() {
       <Tabs.Screen name="profile/coaches/index" options={{ href: null }} />
       <Tabs.Screen name="profile/coaches/join" options={{ href: null }} />
       <Tabs.Screen name="profile/coaches/manage" options={{ href: null }} />
+      <Tabs.Screen name="profile/coaches/create-pack" options={{ href: null }} />
       <Tabs.Screen name="training" options={{ title: "Training" }} />
 
       {/* Hidden routes (keep accessible via navigation, but hide from tab bar) */}
