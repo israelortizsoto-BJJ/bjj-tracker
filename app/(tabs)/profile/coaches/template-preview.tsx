@@ -1,7 +1,7 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 
-const TEMPLATE_CONTENT: Record<
+export const TEMPLATE_CONTENT: Record<
   string,
   { title: string; description: string; metadata: string }
 > = {
@@ -29,19 +29,22 @@ const TEMPLATE_CONTENT: Record<
 export default function TemplatePreviewScreen() {
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
 
-  const template =
-    (templateId ? TEMPLATE_CONTENT[templateId] : undefined) ??
-    TEMPLATE_CONTENT["guard-pull-defense-knee-middle"];
+  const effectiveTemplateId =
+    templateId && TEMPLATE_CONTENT[templateId]
+      ? templateId
+      : "guard-pull-defense-knee-middle";
+
+  const template = TEMPLATE_CONTENT[effectiveTemplateId];
 
   const handleBackToTemplates = () => {
     router.push("/profile/coaches/templates");
   };
 
   const handleContinueWithTemplate = () => {
-    Alert.alert(
-      "Continue with This Template",
-      "This will be wired into Coach Share authoring flows in a later step.",
-    );
+    router.push({
+      pathname: "/profile/coaches/template-selected",
+      params: { templateId: effectiveTemplateId },
+    });
   };
 
   return (
