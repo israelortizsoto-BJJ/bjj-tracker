@@ -1,12 +1,9 @@
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 
 export default function CreateProgramPackScreen() {
   const handleUseTemplate = () => {
-    Alert.alert(
-      "Use Template",
-      "Template-based program pack authoring will be added here.",
-    );
+    router.push("/profile/coaches/templates");
   };
 
   const handleCustomizeExisting = () => {
