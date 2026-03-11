@@ -1,254 +1,291 @@
-# BJJ Tracker — Developer Handoff
+# BJJ Tracker —
+Action: think-hard look through this Developer Handoff notes, plan out the day. If you are making assumptions, tell me when you are doing so. Let's get to work
 
-Last Updated: 2026-02-24
-Branch: dev  
-Repo: israelortizsoto-BJJ/bjj-tracker  
+## Non-negotiable: Dev/TestFlight coexistence.
+Keep two separate bundle IDs forever:
+- Prod/TestFlight: `com.ortizdigitalstudio.matmind`
+- Dev: `com.ortizdigitalstudio.matmind.dev`
 
----
-### “Stable Checkpoint”
-### 2026-02-24
+Never overwrite the TestFlight app with dev installs again.
+Keep Xcode target stable across variants.
+Do not change Expo name per variant (can break Xcode targets / EAS).
+Use `ios.infoPlist.CFBundleDisplayName` for the Dev icon label (“MatMind Dev”).
 
-- Block 2 (Domain Metrics Extraction) completed:
-  - Created canonical metrics module: app/domain/metrics.ts
-  - Training tab now calls domain metrics instead of inline computations
+## TestFlight is “beta reality.”
+Nothing affects testers until we ship a new TestFlight build.
+Validate bugs in TestFlight whenever possible, not only in Dev.
 
-- Extracted metrics (domain-owned):
-  - Top System (This Week)
-  - Top Technique (This Week)
-  - Current Focus (14d)
-  - Gi vs No-Gi (14d)
-  - Week count helpers
-  - Completed week streak
-  - Last week total (for weekly delta)
+## Feature flags stay (but “code flags,” not build CLI flags).
+Keep dev-only flags persisted locally (AsyncStorage) and guarded by `isDev()`.
+Flags live under `src/config/*` and are toggled in Dev Settings.
+Do not rely on EAS/Expo prebuild CLI flags for product behavior.
 
-- Cleanup:
-  - Removed unused local helpers from Training tab (pickTopKey, TopKeyCount)
-  - TypeScript + ESLint clean (gated before commit)
+## Dev tooling lives in Dev Settings, not onboarding flows.
+Avoid putting dev-only navigation inside Welcome/onboarding screens (redirect logic causes loops).
+Use Dev Settings “Dev Shortcuts” to reach hidden routes.
 
-### 2026-02-23
+## Hidden routes stay hidden from the tab bar by default.
+Use `href: null` for dormant routes (Health/Gear/Fundamentals/Coach scaffolds).
+Access via Dev Shortcuts/flagged entry points, not visible tabs.
 
-- Storage contract stabilized:
-  - app/storage/storageKeys.ts
-  - app/storage/migrations/index.ts
-- Versioned migration flow in place (v2)
-- Legacy rescue for sessions + profile
-- Migrations executed on app boot via app/_layout.tsx
+## No ad-hoc patching as a default workflow.
+Avoid brittle regex/sed/perl “injection” edits for features.
+Prefer clean, intentional file edits + TS/ESLint gates + clear commits.
+Only use patching as emergency repair, not normal iteration.
 
-- Technique index contract stabilized:
-  - Canonical type: app/fundamentals/types.ts
-  - Re-exported from app/fundamentals/index.ts
-  - TechniqueIndexItem.path is object (not string)
+## Gates are the source of truth (not VS Code/Cursor squiggles).
+Always run:
+- `npx tsc --noEmit`
+- `npx eslint .`
 
-- Insight cards aligned to ID-based contract:
-  - Top System → systemId + resolver
-  - Current Focus (14d) → systemId + resolver
-  - Top Technique pluralization polish
+before pushing meaningful app changes.
 
-- TypeScript + ESLint clean
+## Avoid reintroducing router landmines.
+Screen names must be unique in `app/(tabs)/_layout.tsx`.
+Don’t resurrect `jj101` (explicitly removed).
 
-## Quick Check (Run before you commit)
-Tip: avoid pasting `git diff` into chat—use `git diff > /tmp/diff.txt` and `tail -n 80 /tmp/diff.txt`.
+## Deprecation posture (planned + controlled).
+Replace deprecated `SafeAreaView` with `react-native-safe-area-context` (done).
+`expo-av` migration is planned (`expo-audio` / `expo-video`) — don’t rush into half-migrations.
 
-- [ ] App boots (no red screen)
-- [ ] Navigate: Profile → Training → Session Detail → back
-- [ ] Do the change manually in UI (the thing you actually edited)
-- [ ] If AsyncStorage touched: Save → force close → reopen → confirm persisted
-- [ ] `npx tsc --noEmit` (clean)
-- [ ] `git diff` (no surprise changes / no debug logs)
-- [ ] Search for duplicates / dead code (delete, don’t comment out)
-- [ ] Preferred proof command:
-      `git rev-parse --short HEAD && git show -s --format=%s HEAD && npx tsc --noEmit && npm run lint && echo "✅ TS + Lint PASS"`
-- [ ] Use bjjproof/bp for safe proof + commit workflow (diff saved to /tmp/diff.txt; review tail)
-- [ ] Commit message matches what changed (1 sentence truth)
+## Operational note to keep running:
+When connecting Dev Client:
+- Mac + iPhone on same hotspot/Wi-Fi
+- macOS Firewall off or allow Metro/Node
 
-## Current Focus (Next 1–3 tasks)
-
-1) Profile: finalize keyboard behavior + validation (only if it blocks MVP)
-2) Insights: add first "Consistency Trend" card (keep domain-first approach)
-3) Docs: add Quick Check reinforcement + new terminal commands (bjj / bjjproof / bp)
-
-## 🚧 Open Questions / Decisions Pending (Active)
-
-- How should weight be used later? (insights vs profile-only)
-- When to introduce Coach Share / Coach Mode?
-- Do we support multiple academies in future?
-
-(Full list at bottom)
-One-line goal  
-Mobile app for logging BJJ training sessions, techniques, and progress with structured taxonomy.
-
-Target users  
-Hobbyists • Competitors • Kids + Parents • Coaches
-
-MVP success metric  
-Users open the app weekly without being reminded.
-
----
-## Product Snapshot
-## Tech Stack
-
-- Expo (React Native)
-- TypeScript
-- Expo Router
-- AsyncStorage
+Keep a dedicated “build terminal” tab untouched while EAS runs; use a separate tab for edits.
 
 ---
 
-## Mental Model — Training Tab
+# BJJ Tracker — Developer Handoff Notes
 
-6-Block Structure:
+**Project:** BJJ Tracker / MatMind Jiu Jitsu  
+**Branch:** `dev`  
+**Repo:** `israelortizsoto-BJJ/bjj-tracker`  
+**Date:** 2026-03-10  
+**Status:** app code clean and pushed; local untracked `.cursor/` remains for trial setup only
 
-1. Imports & Types  
-2. Pure Helpers  
-3. Component Setup  
-4. Data Loading  
-5. Derived Data  
-6. Render  
+## Git checkpoint
+**Working tree:**
+- synced to `origin/dev`
+- only local untracked folder: `.cursor/`
 
-Rule: Logic lives in Blocks 2–5. Render is dumb.
+**Latest commit:**
+- `7ad404a` — Feat: add empty state for Training week view search
 
----
+## Commits completed today
+- `7ad404a` — Feat: add empty state for Training week view search
+- `e599d3f` — Docs: add MatMind master prompt templates
+- `2343ba9` — Docs: update dev recap and lock iOS release flow
+- `19bb8e9` — Docs: add dev recap flow and update handoff ritual
 
-## Data Model
+## What we completed today
 
-Storage key (canonical): StorageKeys.sessions (see app/storage/storageKeys.ts)
-Legacy keys (rescued via migration): bjj.sessions.v1, bjj_sessions_v1
+### 1) Cursor adoption setup — controlled trial foundation
 
-Session fields:
-- techniqueId (primary structured ID)
-- technique (legacy fallback string)
-- system (taxonomy id)
-- gear
-- position / grips / finish
-- notes
-- youtubeUrl
-- imageUri / videoUri
+**Action:** began controlled Cursor adoption for MatMind dev workflow.  
+**Why:** test whether Cursor can become the stronger coding lane without disrupting release cadence or blurring Dev/TestFlight lanes.
 
-Legacy fields remain intentionally (no migration yet).
+**Completed:**
+- installed Cursor on Mac
+- enabled `cursor` CLI in PATH
+- validated repo opens correctly from terminal with `cursor .`
+- fixed GitHub HTTPS auth cleanly by replacing expired token flow
+- pushed local docs commits successfully after auth reset
+- created local Cursor repo rule structure under `.cursor/rules/`
+- kept Cursor in supervised mode:
+  - review before apply
+  - no broad refactors
+  - terminal-first verification
 
----
+**Important note:**
+- `.cursor/` is currently **local only** and **not committed**
+- decision still pending on whether Cursor rules should become repo-tracked convention or remain local
 
-## Weekly Goal Streak
+### 2) First real Cursor product task — Training week empty state
 
-WEEKLY_GOAL = 3
+**Action:** used Cursor for one supervised, low-risk real product edit.  
+**Why:** validate Cursor on actual app work, not just docs or theory.
 
-- Completed prior weeks count.
-- Current week adds +1 once threshold is hit.
-- Designed for immediate motivation.
+**Completed in** `app/(tabs)/training.tsx`:
+- added derived `weekHasVisibleSessions`
+- fixed Week view blank-state problem when search/filter hides all sessions
+- added explicit empty-state messaging:
+  - “No sessions match your search”
+  - “No sessions this week yet”
 
----
+**Why this mattered:**
+- Week view previously became blank with no explanation
+- this was a real UX improvement with tight scope and low risk
 
-## Profile Tab Additions (2026-02-20)
+### 3) Validation loop — Cursor task passed real app test
 
-- TRAIN. REFLECT. IMPROVE.
-- Belt glow ring (accent by belt)
-- Last promotion date
-- Weight input
-- KeyboardAwareScrollView implemented
+**Action:** verified the change in app before commit.  
+**Why:** Cursor changes should only be committed after app-level proof, not just diff review.
 
-Do not mix ScrollView and KeyboardAwareScrollView.
+**Tested successfully:**
+- Training → This Week
+- entered a search that matched nothing
+- confirmed empty-state message appeared
+- cleared search
+- confirmed normal session list returned
 
----
-
-## Known Constraints
- Metrics may surface systemId "ALL" if legacy sessions stored that value; behavior unchanged for MVP.
-
-- Expo AV deprecated warning
-- Media limited in Expo Go
-- No migration plan yet
-
-Intentional for MVP.
-
----
-## Dev Commands (Local)
-
-- Start Expo (cache clear):
-  - `bjj`
-
-- Proof + commit workflow (gates → diff tail → stage → commit → push → log):
-  - `bjjproof "commit message"`
-  - `bp "commit message"` (alias)
-
----
-## Restart Checklist
-
-1. npm install
-2. npx tsc --noEmit
-3. Open Training tab
-4. Add session
-5. Confirm streak updates
-6. Confirm insights render
-7. Confirm profile saves
+**Result:**
+- first supervised Cursor product task passed
+- diff stayed contained to one file
+- commit and push completed cleanly
 
 ---
 
-## Session Delta Log
+## Locked decisions from today
 
-### 2026-02-20
-- Fixed weekly streak logic
-- Added profile onboarding + belt glow + weight
-- Added DLR taxonomy
+### Cursor lane decision
+Cursor is now approved for **controlled supervised use** on MatMind.
 
-## Open Questions / Decisions Pending
+That means Cursor is approved for:
+- small UI polish
+- contained UX improvements
+- localized bug fixes
+- single-screen work
+- 1–3 file tasks
+- terminal-first verified edits
 
-- 
+Cursor is **not yet** approved for:
+- broad refactors
+- storage/model changes
+- release-critical work
+- EAS/TestFlight/config work
+- unsupervised edits
+- app-wide cleanup passes
 
----
+### Cursor workflow rules to preserve
+For now:
+- always start from terminal at repo root
+- validate `git status -sb` before work
+- make Cursor explain plan before editing
+- review diff before accepting
+- test in app before commit
+- commit only after verification
+- keep `.cursor/` local until intentionally decided otherwise
 
-## End-of-day recap prompt
-
-Use this prompt at the end of each BJJ Tracker workday:
-
-Action: End-of-day BJJ Tracker recap. Think hard. Update BJJ Tracker using the living-files vs dated-files rule.
-
-Context
-- Project: BJJ Tracker / MatMind Jiu Jitsu
-- Branch: dev
-- Repo: bjj-tracker
-- Date: YYYY-MM-DD
-- Timezone: America/Los_Angeles
-
-Inputs I will paste
-1) Git proof:
-- git status -sb
-- git log -5
-
-2) What I worked on today:
-- [ ] …
-- [ ] …
-- [ ] …
-
-3) Testing / QA / release updates:
-- [ ] …
-- [ ] …
-
-4) Key product / UX / technical decisions:
-- [ ] …
-- [ ] …
-
-5) Open loops / bugs / risks:
-- [ ] …
-- [ ] …
-
-Request
-- First, tell me what should update the living files vs what should be captured as dated record.
-- Then give me exact terminal blocks to:
-  - update docs/dev-handoff.md if current truth changed
-  - create or update docs/recaps/YYYY-MM-DD_dev-recap.md
-- If relevant, also update:
-  - docs/decisions.md
-  - docs/definition-of-done.md
-- Keep the system clean. Do not create extra files unless the work exposed a real gap.
-- End by telling me the top 1–3 priorities for the next dev session.
+### Network/testing rule reaffirmed
+For Expo/dev client testing:
+- Mac + iPhone must be on same Wi-Fi or same hotspot
+- firewall must not block Metro/Node
 
 ---
 
-## Current release truth — 2026-03-09
-- Build 6 completed App Store Connect processing on 2026-03-09
-- Internal 20-minute stress test passed for core release goals
-- Main release focus passed: Training flow clarity and lower-friction session logging
-- Profile promotion date validation and save flow passed
-- Known issue: some older previously attached camera-roll videos did not persist correctly, while newly attached video in current build worked and persisted after hard close
-- Build number 5 was skipped during release-flow correction
-- Build 6 became the first correctly versioned production/TestFlight upload under the fixed release flow
-- Next move: release Build 6 to external testers and collect focused usage feedback
+## What passed in app today
+
+### Training
+- Week view now shows a clear empty state when search hides all sessions
+- clearing search restores visible sessions correctly
+- no routing/storage/build side effects observed from this change
+
+### Workflow / tooling
+- GitHub auth fixed and working again for HTTPS push
+- `cursor` CLI installed and working
+- repo opens cleanly in Cursor from terminal
+- controlled review/apply flow worked as intended
+
+---
+
+## Product / engineering decisions to preserve
+
+### Cursor adoption
+This is **not** full migration yet.
+This is a controlled proving phase.
+
+Interpretation:
+- Cursor earned continued use
+- Cursor did **not** yet earn full takeover of all coding work
+- VS Code remains fallback lane until Cursor proves itself on more tasks
+
+### Review standard
+Do not accept Cursor-generated changes blindly.
+Always require:
+1. task understanding
+2. exact files impacted
+3. smallest safe fix
+4. verification plan
+5. app test before commit
+
+### Scope discipline
+Prefer first-trial style tasks:
+- local
+- reversible
+- obvious before/after
+- minimal blast radius
+
+Avoid starting Cursor on:
+- routing changes
+- storage migrations
+- config/build changes
+- large UI architecture cleanup
+- hidden route / onboarding navigation work
+
+---
+
+## Outstanding items
+
+### Highest priority workflow item
+Decide what to do with local `.cursor/`:
+- keep local only
+- or intentionally commit project rules later
+
+Do **not** commit it casually.
+
+### Highest priority product continuation
+Run **task two** of Cursor trial on another contained but slightly more reasoning-heavy app task.
+
+Best next category:
+- one slightly more logic-aware UI task
+- or one contained bug fix with tight scope
+
+### Existing product lanes still open
+- Coach Share real join/manage logic
+- parent completion/adherence flow
+- media parity for Coach Share
+- Profile internal cleanup/refactor
+- broader Training polish from tester feedback
+
+---
+
+## Recommended next work session
+
+### Option 1 — Cursor trial task two
+**Action:** use Cursor on one more contained real product task.  
+**Why:** it passed task one; now it needs to prove repeatability.
+
+**Good fit:**
+- one localized Training/Profile bug fix
+- one UI/validation improvement
+- max 1–3 files
+- no build/release/storage/routing work
+
+**Goal:** determine whether Cursor is consistently cleaner/faster than VS Code lane.
+
+### Option 2 — Return to locked product priorities
+**Action:** continue product work outside the migration lane.  
+**Why:** do not let tooling exploration swallow product momentum.
+
+**Best candidates:**
+- Coach Share parent completion/adherence scaffold
+- Profile cleanup with no UX drift
+- Training feedback pass only after locking decisions first
+
+---
+
+## Best next-step recommendation
+
+Start next session with:
+1. `git status -sb`
+2. `git log -5 --oneline`
+3. keep `.cursor/` untracked
+4. run **one more supervised Cursor task**
+5. judge whether Cursor stays cleaner than your current lane for a second consecutive real app task
+
+## Assumptions I made
+- I assumed today’s meaningful app work was the Cursor setup/auth reset plus the Training week empty-state change.
+- I assumed you wanted the handoff notes updated from the last manual version you pasted, rather than a full doc-file diff from `docs/`.
+- I did **not** include session times because you did not provide them.
