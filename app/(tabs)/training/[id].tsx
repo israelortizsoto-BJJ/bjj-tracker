@@ -908,19 +908,25 @@ return; // prevents any router.replace below from firing immediately
             )}
           </TouchableOpacity>
 
-          {(!!displayLabel || !!custom) && (
+          {(index === 0 ? (!!displayLabel || !!custom) : true) && (
             <TouchableOpacity
               style={styles.clearBtn}
               onPress={() => {
-                updateTechniqueAt(index, {
-                  techniqueId: "",
-                  technique: "",
-                  customTechnique: "",
-                });
-                setTechQuery("");
+                if (index === 0) {
+                  updateTechniqueAt(index, {
+                    techniqueId: "",
+                    technique: "",
+                    customTechnique: "",
+                  });
+                  setTechQuery("");
+                } else {
+                  removeTechnique(index);
+                }
               }}
             >
-              <Text style={styles.clearBtnText}>Clear</Text>
+              <Text style={styles.clearBtnText}>
+                {index === 0 ? "Clear" : "Remove"}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -940,17 +946,6 @@ return; // prevents any router.replace below from firing immediately
               placeholderTextColor="#6f6f86"
               style={styles.input}
             />
-          </View>
-        )}
-
-        {index > 0 && (
-          <View style={{ marginTop: 8 }}>
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={() => removeTechnique(index)}
-            >
-              <Text style={styles.secondaryBtnText}>Remove Technique</Text>
-            </TouchableOpacity>
           </View>
         )}
       </View>
