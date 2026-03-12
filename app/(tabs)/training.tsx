@@ -201,7 +201,11 @@ function sessionTitle(s: Session) {
   // Auto-title: System + Technique (fallbacks)
   const tech = (s.technique || "").trim();
   const sys = resolveSystemLabel(s.system);
-  return tech ? `${sys} • ${tech}` : sys;
+  const base = tech ? `${sys} • ${tech}` : sys;
+
+  // Optional hint if this session contains multiple techniques.
+  const extraCount = (s.techniques?.length ?? 0) - 1;
+  return extraCount > 0 ? `${base} (+${extraCount} more)` : base;
 }
 
 function sessionSummary(s: Session) {
@@ -387,6 +391,15 @@ useEffect(() => {
     setSelectedDate(params.date);
   }
 }, [params.date]);
+
+useEffect(() => {
+  if (typeof params.date !== "string") return;
+  const p = params.date;
+  if (!p) return;
+  if (selectedDate !== p) return;
+
+  router.setParams({ date: "" });
+}, [params.date, selectedDate, router]);
 
 useFocusEffect(
   useCallback(() => {

@@ -1,5 +1,17 @@
 export type Gear = "gi" | "nogi" | "both";
 
+// v1 multi-technique support: per-technique entry.
+// Keep fields aligned with the existing top-level technique-related fields.
+export type TechniqueEntry = {
+  id: string;
+  position?: string;
+  grips?: string;
+  finish?: string;
+  techniqueId?: string;
+  technique?: string;
+  customTechnique?: string;
+};
+
 export type Session = {
   id: string;
   createdAt: string;
@@ -17,6 +29,9 @@ export type Session = {
 
   // Legacy (keep for backward compatibility while we transition)
   technique: string;
+
+  // v1 multi-technique container (optional + backward compatible)
+  techniques?: TechniqueEntry[];
 
   drill: string;
   notes: string;

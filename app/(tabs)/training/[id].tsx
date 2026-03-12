@@ -23,7 +23,7 @@ import { toDateKey } from "../../../src/_domain/dateKey";
 import { buildTechniqueIndex, getTechniqueById } from "../../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../../src/fundamentals/taxonomy";
 import { StorageKeys } from "../../../src/storage/storageKeys";
-import type { Session } from "../../../src/types";
+import type { Session, TechniqueEntry } from "../../../src/types";
 
 // Fundamentals: build static search index once (do NOT move inside component)
 const TECH_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
@@ -191,16 +191,53 @@ export default function TrainingSessionEditor() {
 
   const [loading, setLoading] = useState(true);
   const [system, setSystem] = useState<string>(effectivePrefillSystem);
-  const [position, setPosition] = useState("");
-  const [grips, setGrips] = useState("");
-  const [finish, setFinish] = useState("");
-  
-// MVP taxonomy picker (new)
+  // v1 multi-technique: technique entries for this session.
+  const [techniques, setTechniques] = useState<TechniqueEntry[]>([
+    {
+      id: makeId(),
+      position: "",
+      grips: "",
+      finish: "",
+      techniqueId: "",
+      technique: "",
+      customTechnique: "",
+    },
+  ]);
+
+  // MVP taxonomy picker (new)
   const [gear, setGear] = useState<"gi" | "nogi">("gi");
-  const [techniqueId, setTechniqueId] = useState("");
-  const [customTechnique, setCustomTechnique] = useState("");
   const [techPickerOpen, setTechPickerOpen] = useState(false);
   const [techQuery, setTechQuery] = useState("");
+  // Which technique entry is currently being edited by the picker modal.
+  const [pickerTargetIndex, setPickerTargetIndex] = useState<number | null>(0);
+
+  function updateTechniqueAt(index: number, patch: Partial<TechniqueEntry>) {
+    setTechniques((prev) =>
+      prev.map((t, i) => (i === index ? { ...t, ...patch } : t))
+    );
+  }
+
+  function addTechnique() {
+    setTechniques((prev) => [
+      ...prev,
+      {
+        id: makeId(),
+        position: "",
+        grips: "",
+        finish: "",
+        techniqueId: "",
+        technique: "",
+        customTechnique: "",
+      },
+    ]);
+  }
+
+  function removeTechnique(index: number) {
+    setTechniques((prev) => {
+      if (prev.length <= 1) return prev; // always keep at least one
+      return prev.filter((_, i) => i !== index);
+    });
+  }
 
 useEffect(() => {
   if (!techPickerOpen) return;
@@ -212,7 +249,7 @@ useEffect(() => {
   })();
 }, [techPickerOpen]);
 
-  // Technique picker enhancements
+// Technique picker enhancements
 type TechSortMode = "AZ" | "SYSTEM";
 const [techSortMode, setTechSortMode] = useState<TechSortMode>("AZ");
 const [recentTechIds, setRecentTechIds] = useState<string[]>([]);
@@ -253,7 +290,6 @@ const recentItems = useMemo(() => {
 
 
 // Legacy (keep for old sessions while we transition)
-  const [technique, setTechnique] = useState("");
   const [notes, setNotes] = useState("");
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [date, setDate] = useState(prefillDate || todayYMD());
@@ -262,20 +298,28 @@ const recentItems = useMemo(() => {
   const [imageAssetId, setImageAssetId] = useState<string | null>(null);
   const [videoAssetId, setVideoAssetId] = useState<string | null>(null);
   const videoRef = useRef<Video>(null);
+  const scrollRef = useRef<any>(null);
   const [videoKey, setVideoKey] = useState(0);
+
   const canSave = useMemo(() => {
-  return (
-  position.trim().length > 0 ||
-  grips.trim().length > 0 ||
-  finish.trim().length > 0 ||
-  techniqueId.trim().length > 0 || // new picker
-  technique.trim().length > 0 ||   // legacy
-    notes.trim().length > 0 ||
-    youtubeUrl.trim().length > 0 ||
-    !!imageUri ||
-    !!videoUri
-  );
-}, [position, grips, finish, techniqueId, technique, notes, youtubeUrl, imageUri, videoUri]);
+    const hasTechniqueDetails = techniques.some((t) => {
+      const pos = (t.position ?? "").trim();
+      const gr = (t.grips ?? "").trim();
+      const fin = (t.finish ?? "").trim();
+      const tid = (t.techniqueId ?? "").trim();
+      const legacyLabel = (t.technique ?? "").trim();
+      const custom = (t.customTechnique ?? "").trim();
+      return pos || gr || fin || tid || legacyLabel || custom;
+    });
+
+    return (
+      hasTechniqueDetails ||
+      notes.trim().length > 0 ||
+      youtubeUrl.trim().length > 0 ||
+      !!imageUri ||
+      !!videoUri
+    );
+  }, [techniques, notes, youtubeUrl, imageUri, videoUri]);
 
 async function replayVideo() {
   try {
@@ -284,6 +328,21 @@ async function replayVideo() {
     await videoRef.current.playAsync();
   } catch {}
 }
+
+useEffect(() => {
+  if (loading) return;
+
+  try {
+    const node = scrollRef.current;
+    if (!node) return;
+
+    if (typeof node.scrollToPosition === "function") {
+      node.scrollToPosition(0, 0, false);
+    } else if (typeof node.scrollTo === "function") {
+      node.scrollTo({ x: 0, y: 0, animated: false });
+    }
+  } catch {}
+}, [loading]);
 // UseState Block 2 //
   useFocusEffect(
   React.useCallback(() => {
@@ -294,18 +353,23 @@ async function replayVideo() {
 
    setSystem(effectivePrefillSystem);
 
-// New structured learning fields
-setPosition("");
-setGrips("");
-setFinish("");
+   // Reset technique entries to a single blank entry
+   setTechniques([
+     {
+       id: makeId(),
+       position: "",
+       grips: "",
+       finish: "",
+       techniqueId: "",
+       technique: "",
+       customTechnique: "",
+     },
+   ]);
 
-// Legacy fields (keep during transition)
-setTechnique("");
-
-setNotes("");
-setYoutubeUrl("");
-setImageUri(null);
-setVideoUri(null);
+   setNotes("");
+   setYoutubeUrl("");
+   setImageUri(null);
+   setVideoUri(null);
   }, [isNew, prefillDate, effectivePrefillSystem])
 );
 
@@ -315,13 +379,18 @@ useFocusEffect(
     if (!isNew) return;
 
     // Reset fields so "New Session" never inherits the last edited session
-    setSystem(effectivePrefillSystem); setCustomTechnique("");
-    setTechniqueId(""); setCustomTechnique("");    // new picker
-    setTechnique(""); setCustomTechnique("");      // legacy label
-    setCustomTechnique("");
-    setPosition("");
-    setGrips("");
-    setFinish("");
+    setSystem(effectivePrefillSystem);
+    setTechniques([
+      {
+        id: makeId(),
+        position: "",
+        grips: "",
+        finish: "",
+        techniqueId: "",
+        technique: "",
+        customTechnique: "",
+      },
+    ]);
     setNotes("");
     setYoutubeUrl("");
 
@@ -350,11 +419,17 @@ useFocusEffect(
       if (isNew) {
         // Reset fields so "New Session" never inherits the last edited session
         setSystem(effectivePrefillSystem);      // important: system was sticking too
-        setTechniqueId("");        // new picker
-        setTechnique("");          // legacy label
-        setPosition("");
-        setGrips("");
-        setFinish("");
+        setTechniques([
+          {
+            id: makeId(),
+            position: "",
+            grips: "",
+            finish: "",
+            techniqueId: "",
+            technique: "",
+            customTechnique: "",
+          },
+        ]);
         setNotes("");
         setYoutubeUrl("");
 
@@ -380,15 +455,58 @@ useFocusEffect(
       }
 
       setSystem(found.system || "ALL");
-
-      setTechniqueId(found.techniqueId || "");
-      setCustomTechnique(found.customTechnique || "");
       const loadedGear = found.gear === "both" ? "gi" : (found.gear ?? "gi");
       setGear(loadedGear);
-      setTechnique(found.technique || ""); // legacy label still supported
-      setPosition(found.position || "");
-      setGrips(found.grips || "");
-      setFinish(found.finish || "");
+
+      // v1 multi-technique: prefer stored techniques[], otherwise synthesize from legacy fields.
+      if (Array.isArray(found.techniques) && found.techniques.length > 0) {
+        setTechniques(
+          found.techniques.map((t) => ({
+            id: t.id || makeId(),
+            position: t.position ?? "",
+            grips: t.grips ?? "",
+            finish: t.finish ?? "",
+            techniqueId: t.techniqueId ?? "",
+            technique: t.technique ?? "",
+            customTechnique: t.customTechnique ?? "",
+          }))
+        );
+      } else {
+        const hasLegacy =
+          !!found.position ||
+          !!found.grips ||
+          !!found.finish ||
+          !!found.techniqueId ||
+          !!found.technique ||
+          !!found.customTechnique;
+
+        if (hasLegacy) {
+          setTechniques([
+            {
+              id: makeId(),
+              position: found.position ?? "",
+              grips: found.grips ?? "",
+              finish: found.finish ?? "",
+              techniqueId: found.techniqueId ?? "",
+              technique: found.technique ?? "",
+              customTechnique: found.customTechnique ?? "",
+            },
+          ]);
+        } else {
+          setTechniques([
+            {
+              id: makeId(),
+              position: "",
+              grips: "",
+              finish: "",
+              techniqueId: "",
+              technique: "",
+              customTechnique: "",
+            },
+          ]);
+        }
+      }
+
       setNotes(found.notes || "");
       setYoutubeUrl(found.youtubeUrl || "");
       setImageUri(found.imageUri ?? null);
@@ -402,19 +520,7 @@ useFocusEffect(
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
   }, [isNew, router, sessionId, prefillDate, effectivePrefillSystem]);
 
- // Block 5: Derived data (selected technique + MVP-safe display strings)
- const selected = techniqueId ? getTechniqueById(TECH_INDEX, techniqueId) : null;
-
-const techniqueLabel = selected?.label || "";
-const techniquePath = selected ? techniqueToLabel(selected) : "";
-// MVP-safe display strings (handles legacy + new)
-const displayTechniqueLabel =
-  techniqueLabel ||
-  (technique ? String(technique) : "") ||
-  (!techniqueId.trim() && customTechnique.trim() ? customTechnique.trim() : "") ||
-  "";
-
-// Block 6: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
+// Block 5: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
 const techResults = useMemo(() => {
     const q = techQuery.trim().toLowerCase();
     const a = TECH_INDEX;
@@ -524,17 +630,12 @@ async function pickVideo() {
   });
 
   if (!result.canceled && result.assets?.[0]?.uri) {
-  const asset = result.assets[0];
-  const persisted = await persistMedia(asset.uri, "video");
+    const asset = result.assets[0];
+    const persisted = await persistMedia(asset.uri, "video");
 
-  setVideoUri(persisted);
-  setVideoAssetId(asset.assetId ?? null);
-}
-}
-function onClearTechnique() {
-  setTechniqueId("");   // ✅ correct for your state type
-  setTechnique("");     // legacy fallback
-  setTechQuery("");     // optional
+    setVideoUri(persisted);
+    setVideoAssetId(asset.assetId ?? null);
+  }
 }
 
   async function onSave() {
@@ -553,19 +654,46 @@ function onClearTechnique() {
 const finalDate = toDateKey(finalDateRaw) || todayYMD();
 
   
-// --- Technique display (legacy fallback) ---
-const selected = techniqueId.trim()
-  ? getTechniqueById(TECH_INDEX, techniqueId)
-  : null;
+// --- Technique display + payload (multi-tech v1) ---
+// 1) Normalize techniques for persistence (filter out entries with no data)
+const normalizedTechniques: TechniqueEntry[] = techniques
+  .map((t) => ({
+    id: t.id || makeId(),
+    position: (t.position ?? "").trim() || undefined,
+    grips: (t.grips ?? "").trim() || undefined,
+    finish: (t.finish ?? "").trim() || undefined,
+    techniqueId: (t.techniqueId ?? "").trim() || undefined,
+    technique: (t.technique ?? "").trim() || undefined,
+    customTechnique: (t.customTechnique ?? "").trim() || undefined,
+  }))
+  .filter((t) =>
+    t.position ||
+    t.grips ||
+    t.finish ||
+    t.techniqueId ||
+    t.technique ||
+    t.customTechnique
+  );
 
-const techniqueLabel = selected?.label || "";
-const displayTechniqueLabel =
-  techniqueLabel ||
-  (technique ? String(technique) : "") ||
-  (customTechnique ? String(customTechnique) : "") ||
-  "";
-  
-// legacy fields kept until v1 migration (techniqueId is source of truth)
+const primaryPersisted = normalizedTechniques[0];
+
+// 2) Derive legacy display label for top-level `technique` field
+let legacyTechniqueLabel = "";
+if (primaryPersisted?.techniqueId) {
+  const selected = getTechniqueById(TECH_INDEX, primaryPersisted.techniqueId);
+  legacyTechniqueLabel =
+    selected?.label ||
+    primaryPersisted.technique ||
+    primaryPersisted.customTechnique ||
+    "";
+} else {
+  legacyTechniqueLabel =
+    primaryPersisted?.technique ||
+    primaryPersisted?.customTechnique ||
+    "";
+}
+
+// 3) Build payload with dual-write: techniques[] + mirrored top-level fields from first entry
 const payload: Session = {
   id: realId,
   createdAt: isNew ? now : existingSession?.createdAt || now,
@@ -577,20 +705,23 @@ const payload: Session = {
   // Optional
   gear: gear ?? existingSession?.gear,
 
-  // Optional (but must be string if present)
-  techniqueId: techniqueId.trim() ? techniqueId : undefined,
-  customTechnique: customTechnique.trim() ? customTechnique.trim() : undefined,
+  // v1 multi-technique container
+  techniques: normalizedTechniques.length ? normalizedTechniques : undefined,
+
+  // Optional (but must be string if present) – mirror from primary entry
+  techniqueId: primaryPersisted?.techniqueId,
+  customTechnique: primaryPersisted?.customTechnique,
 
   // REQUIRED legacy + required text fields
-  technique: displayTechniqueLabel,
+  technique: legacyTechniqueLabel,
   drill: "",
-notes: notes ?? "",
+  notes: notes ?? "",
   youtubeUrl: youtubeUrl ?? "",
 
-  // Optional specifics
-  position,
-  grips,
-  finish,
+  // Optional specifics mirrored from primary entry
+  position: primaryPersisted?.position,
+  grips: primaryPersisted?.grips,
+  finish: primaryPersisted?.finish,
 
   // Optional media
   imageUri: imageUri ?? null,
@@ -680,6 +811,9 @@ return; // prevents any router.replace below from firing immediately
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
         extraScrollHeight={24}
+        innerRef={(ref) => {
+          scrollRef.current = ref;
+        }}
       >
         <View style={styles.headerRow}>
   <View style={styles.headerTextBlock}>
@@ -728,49 +862,106 @@ return; // prevents any router.replace below from firing immediately
     ))}
   </View>
 
-        <Text style={styles.label}>Technique of the Day</Text>
+  <Text style={styles.sectionTitle}>Techniques</Text>
 
-{/* Technique picker field (shows selected label + path) */}
-<View style={styles.techRow}>
-  <TouchableOpacity
-    style={[styles.input, styles.techField]}
-    onPress={() => setTechPickerOpen(true)}
-  >
-    <Text
-      style={[
-        styles.inputValueText,
-        !displayTechniqueLabel ? styles.inputPlaceholderText : null,
-      ]}
-    >
-      {displayTechniqueLabel || "Pick a technique..."}
-    </Text>
+  {techniques.map((t, index) => {
+    const techId = (t.techniqueId ?? "").trim();
+    const selected = techId ? getTechniqueById(TECH_INDEX, techId) : null;
+    const labelFromTaxonomy = selected?.label || "";
+    const path = selected ? techniqueToLabel(selected) : "";
+    const legacyLabel = (t.technique ?? "").trim();
+    const custom = (t.customTechnique ?? "").trim();
+    const displayLabel =
+      labelFromTaxonomy ||
+      legacyLabel ||
+      (!techId && custom ? custom : "");
 
-    {!!techniquePath && (
-      <Text style={styles.inputSubValueText}>{techniquePath}</Text>
-    )}
-  </TouchableOpacity>
+    return (
+      <View key={t.id} style={{ marginTop: index === 0 ? 8 : 16 }}>
+        <Text style={styles.label}>
+          {index === 0
+            ? "Technique of the Day"
+            : `Additional Technique ${index + 1}`}
+        </Text>
 
- {(!!displayTechniqueLabel || !!customTechnique.trim()) && (
-    <TouchableOpacity style={styles.clearBtn} onPress={onClearTechnique}>
-      <Text style={styles.clearBtnText}>Clear</Text>
+        {/* Technique picker field (shows selected label + path) */}
+        <View style={styles.techRow}>
+          <TouchableOpacity
+            style={[styles.input, styles.techField]}
+            onPress={() => {
+              setPickerTargetIndex(index);
+              setTechQuery("");
+              setTechPickerOpen(true);
+            }}
+          >
+            <Text
+              style={[
+                styles.inputValueText,
+                !displayLabel ? styles.inputPlaceholderText : null,
+              ]}
+            >
+              {displayLabel || "Pick a technique..."}
+            </Text>
+
+            {!!path && (
+              <Text style={styles.inputSubValueText}>{path}</Text>
+            )}
+          </TouchableOpacity>
+
+          {(!!displayLabel || !!custom) && (
+            <TouchableOpacity
+              style={styles.clearBtn}
+              onPress={() => {
+                updateTechniqueAt(index, {
+                  techniqueId: "",
+                  technique: "",
+                  customTechnique: "",
+                });
+                setTechQuery("");
+              }}
+            >
+              <Text style={styles.clearBtnText}>Clear</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {!techId && (
+          <View style={{ marginTop: 10 }}>
+            <Text style={styles.label}>Custom Technique (optional)</Text>
+            <Text style={styles.helperText}>
+              Use this if you can’t find your technique in the list above.
+            </Text>
+            <TextInput
+              value={t.customTechnique ?? ""}
+              onChangeText={(text) =>
+                updateTechniqueAt(index, { customTechnique: text })
+              }
+              placeholder="Type your technique… (ex: Knee cut → far-side underhook)"
+              placeholderTextColor="#6f6f86"
+              style={styles.input}
+            />
+          </View>
+        )}
+
+        {index > 0 && (
+          <View style={{ marginTop: 8 }}>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => removeTechnique(index)}
+            >
+              <Text style={styles.secondaryBtnText}>Remove Technique</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
+    );
+  })}
+
+  <View style={{ marginTop: 12 }}>
+    <TouchableOpacity style={styles.primaryBtn} onPress={addTechnique}>
+      <Text style={styles.primaryBtnText}>+ Add Technique</Text>
     </TouchableOpacity>
-  )}
-</View>
-  {!techniqueId.trim() ? (
-    <View style={{ marginTop: 10 }}>
-      <Text style={styles.label}>Custom Technique (optional)</Text>
-      <Text style={styles.helperText}>
-      Use this if you can’t find your technique in the list above.
-      </Text>
-      <TextInput
-        value={customTechnique}
-        onChangeText={setCustomTechnique}
-        placeholder="Type your technique… (ex: Knee cut → far-side underhook)"
-        placeholderTextColor="#6f6f86"
-        style={styles.input}
-      />
-    </View>
-  ) : null}
+  </View>
 <Modal
   visible={techPickerOpen}
   animationType="slide"
@@ -828,8 +1019,15 @@ return; // prevents any router.replace below from firing immediately
           key={`fav-${t.id}`}
           style={styles.row}
           onPress={async () => {
-            setTechniqueId(t.id);
-            setTechnique(String(t.label ?? "")); // legacy sync
+            if (pickerTargetIndex == null) return;
+            const label = String(t.label ?? "");
+            setTechniques((prev) =>
+              prev.map((entry, idx) =>
+                idx === pickerTargetIndex
+                  ? { ...entry, techniqueId: t.id, technique: label }
+                  : entry
+              )
+            );
             await pushRecent(t.id);
             setTechPickerOpen(false);
           }}
@@ -865,8 +1063,15 @@ return; // prevents any router.replace below from firing immediately
           key={`rec-${t.id}`}
           style={styles.row}
           onPress={async () => {
-            setTechniqueId(t.id);
-            setTechnique(String(t.label ?? "")); // legacy sync
+            if (pickerTargetIndex == null) return;
+            const label = String(t.label ?? "");
+            setTechniques((prev) =>
+              prev.map((entry, idx) =>
+                idx === pickerTargetIndex
+                  ? { ...entry, techniqueId: t.id, technique: label }
+                  : entry
+              )
+            );
             await pushRecent(t.id);
             setTechPickerOpen(false);
           }}
@@ -909,8 +1114,15 @@ return; // prevents any router.replace below from firing immediately
           key={t.id}
           style={styles.row}
           onPress={async () => {
-            setTechniqueId(t.id);
-            setTechnique(String(t.label ?? "")); // legacy sync for now
+            if (pickerTargetIndex == null) return;
+            const label = String(t.label ?? "");
+            setTechniques((prev) =>
+              prev.map((entry, idx) =>
+                idx === pickerTargetIndex
+                  ? { ...entry, techniqueId: t.id, technique: label }
+                  : entry
+              )
+            );
             await pushRecent(t.id);
             setTechPickerOpen(false);
           }}
@@ -942,8 +1154,15 @@ return; // prevents any router.replace below from firing immediately
       key={t.id}
       style={styles.row}
       onPress={async () => {
-        setTechniqueId(t.id);
-        setTechnique(String(t.label ?? "")); // legacy sync for now
+        if (pickerTargetIndex == null) return;
+        const label = String(t.label ?? "");
+        setTechniques((prev) =>
+          prev.map((entry, idx) =>
+            idx === pickerTargetIndex
+              ? { ...entry, techniqueId: t.id, technique: label }
+              : entry
+          )
+        );
         await pushRecent(t.id);
         setTechPickerOpen(false);
       }}
