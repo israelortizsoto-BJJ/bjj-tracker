@@ -9,7 +9,6 @@ import { ResizeMode, Video } from "expo-av";
 import * as MediaLibrary from "expo-media-library";
 import {
   Alert,
-  Button,
   Dimensions,
   Image,
   Linking,
@@ -255,14 +254,18 @@ async function loadSessions(): Promise<Session[]> {
 }
 
 const UI = {
-  bgCard: "#0f172a",       // softer than pure black
+  screenBg: "#0b0d12",
+  bgCard: "#0f172a",
   bgCardActive: "#111827",
-  border: "#233047",       // subtle border
-  textPrimary: "#f8fafc",  // off-white (less harsh than white)
-  textSecondary: "#cbd5e1",// muted gray
-  textHeader: "#111827",   // slate dark for light surfaces
+  border: "#233047",
+  textPrimary: "#f8fafc",
+  textSecondary: "#cbd5e1",
+  textHeader: "#111827",
   badgeBg: "#111827",
+  accent: "#334155",
 };
+const CARD_RADIUS = 16;
+const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#94a3b8", fontWeight: "600" as const };
 const INSIGHT_STYLES = {
   hero: { color: UI.textPrimary, fontSize: 28, fontWeight: "900" as const },
   title: { color: UI.textPrimary, fontSize: 14, fontWeight: "800" as const, marginTop: 6 },
@@ -271,8 +274,8 @@ const INSIGHT_STYLES = {
 const INSIGHT_CARD_CONTAINER = {
   width: CARD_W,
   marginRight: GAP,
-  padding: 16,
-  borderRadius: 18,
+  padding: 18,
+  borderRadius: CARD_RADIUS,
   borderWidth: 1,
   borderColor: UI.border,
   backgroundColor: UI.bgCard,
@@ -713,7 +716,7 @@ const safeInsightIndex = Math.max(0, Math.min(insightIndex, insightsCount - 1));
     marks[selectedDate] = {
       ...(marks[selectedDate] || {}),
       selected: true,
-      selectedColor: "#2563eb",
+      selectedColor: UI.accent,
     };
     return marks;
   }, [sessionsByDate, selectedDate]);
@@ -802,8 +805,10 @@ const weekHasVisibleSessions = useMemo(() => {
 
 const renderTitleAndIntro = () => (
   <>
-    <Text style={{ fontSize: 22, fontWeight: "700" }}>Training Calendar</Text>
-    <Text style={{ opacity: 0.8 }}>
+    <Text style={{ fontSize: 24, fontWeight: "700", color: UI.textPrimary, letterSpacing: 0.3 }}>
+      Training Calendar
+    </Text>
+    <Text style={{ color: UI.textSecondary, fontSize: 15, marginTop: 4 }}>
       Tap a date to view sessions, or add a new one for that day.
     </Text>
   </>
@@ -813,11 +818,11 @@ const renderSearchBar = () => (
   <View
     style={{
       borderWidth: 1,
-      borderColor: "#2a2a3a",
-      backgroundColor: "#161621",
-      borderRadius: 12,
-      paddingHorizontal: 12,
-      paddingVertical: 10,
+      borderColor: UI.border,
+      backgroundColor: UI.bgCard,
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
@@ -827,9 +832,9 @@ const renderSearchBar = () => (
       value={searchQuery}
       onChangeText={setSearchQuery}
       placeholder="Search your logged techniques, drills, and notes"
-      placeholderTextColor="#b9b9c4"
+      placeholderTextColor={UI.textSecondary}
       autoCapitalize="none"
-      style={{ color: "white", fontSize: 14, flex: 1 }}
+      style={{ color: UI.textPrimary, fontSize: 15, flex: 1 }}
     />
 
     {searchQuery.trim().length > 0 && (
@@ -840,11 +845,11 @@ const renderSearchBar = () => (
           paddingVertical: 6,
           borderRadius: 999,
           borderWidth: 1,
-          borderColor: "#2a2a3a",
-          backgroundColor: "#1b1c2a",
+          borderColor: UI.border,
+          backgroundColor: UI.bgCardActive,
         }}
       >
-        <Text style={{ color: "#cfcfe6", fontWeight: "700", fontSize: 12 }}>×</Text>
+        <Text style={{ color: UI.textSecondary, fontWeight: "700", fontSize: 12 }}>×</Text>
       </TouchableOpacity>
     )}
   </View>
@@ -858,8 +863,8 @@ const DAY_WEEK_CHIP_BASE = {
 
 const getDayWeekChipStyle = (isActive: boolean) => ({
   ...DAY_WEEK_CHIP_BASE,
-  borderColor: isActive ? "#42567A" : "#2a2a3a",
-  backgroundColor: isActive ? "#2A3550" : "#161621",
+  borderColor: isActive ? UI.border : UI.border,
+  backgroundColor: isActive ? UI.bgCardActive : UI.bgCard,
 });
 
 const getDayWeekChipTitleStyle = (isActive: boolean) => ({
@@ -917,49 +922,54 @@ const renderDayWeekHeader = () => (
 );
 // 7D) New session CTA row
 const renderNewSessionCTA = () => (
-  <View style={{ gap: 8 }}>
-    <Button
-      title="Add Session for Selected Day"
-      onPress={() => {
-  router.push(`/training/new?date=${encodeURIComponent(selectedDate)}`);
-}}
-    />
-  </View>
+  <Pressable
+    onPress={() => router.push(`/training/new?date=${encodeURIComponent(selectedDate)}`)}
+    style={({ pressed }) => ({
+      paddingVertical: 14,
+      paddingHorizontal: 18,
+      borderRadius: CARD_RADIUS,
+      borderWidth: 1,
+      borderColor: UI.border,
+      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+    })}
+  >
+    <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700" }}>
+      Add Session for Selected Day
+    </Text>
+  </Pressable>
 );
   // Main Return.
   return (
-  <View style={{ flex: 1 }}>
+  <View style={{ flex: 1, backgroundColor: UI.screenBg }}>
     <ScrollView
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
-    contentContainerStyle={{ padding: 16, gap: 12 }}
+    contentContainerStyle={{ padding: 20, gap: 16 }}
     >
   <Pressable
   onPress={openBetaFeedbackEmail}
   style={({ pressed }) => ({
-    marginTop: 10,
-    marginBottom: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
+    marginTop: 4,
+    marginBottom: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    backgroundColor: pressed ? "#0E0F14" : "#12131A",
+    borderColor: UI.border,
+    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
   })}
 >
-  <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "700" }}>
+  <Text style={{ color: UI.textPrimary, fontSize: 15, fontWeight: "700" }}>
     Send Beta Feedback
   </Text>
-  <Text style={{ color: "rgba(255,255,255,0.70)", fontSize: 13, marginTop: 4 }}>
+  <Text style={{ color: UI.textSecondary, fontSize: 13, marginTop: 4 }}>
     Email support@ortizdigitalstudio.com
   </Text>
 </Pressable>    
       {renderTitleAndIntro()}
 
-      <Text
-        style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7, marginTop: 8 }}
-      >
+      <Text style={[SECTION_LABEL, { marginTop: 4 }]}>
         LOG TRAINING
       </Text>
 
@@ -971,9 +981,7 @@ const renderNewSessionCTA = () => (
       {renderNewSessionCTA()}
       {renderDayWeekHeader()}
 
-      <Text
-        style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7, marginTop: 10 }}
-      >
+      <Text style={[SECTION_LABEL, { marginTop: 8 }]}>
         REVIEW TRAINING
       </Text>
 
@@ -999,7 +1007,7 @@ const renderNewSessionCTA = () => (
         zIndex: 10,
       }}
     />
-  <Text style={{ fontSize: 18, fontWeight: "900", color: UI.textHeader }}>
+  <Text style={{ fontSize: 18, fontWeight: "800", color: UI.textPrimary }}>
     This Week
   </Text>
 
@@ -1011,16 +1019,16 @@ const renderNewSessionCTA = () => (
     {!weekHasVisibleSessions ? (
       <View
         style={{
-          marginTop: 10,
-          padding: 12,
-          borderRadius: 14,
+          marginTop: 14,
+          padding: 18,
+          borderRadius: CARD_RADIUS,
           borderWidth: 1,
           borderColor: UI.border,
           backgroundColor: UI.bgCard,
-          gap: 6,
+          gap: 8,
         }}
       >
-        <Text style={{ color: UI.textPrimary, fontWeight: "800", fontSize: 14 }}>
+        <Text style={{ color: UI.textPrimary, fontWeight: "700", fontSize: 15 }}>
           {weekSessionsRaw.length === 0 ? "No sessions this week yet" : "No sessions match your search"}
         </Text>
 
@@ -1037,7 +1045,7 @@ const renderNewSessionCTA = () => (
       if (dayList.length === 0) return null;
 
       return (
-  <View key={ymd} style={{ gap: 8, marginBottom: 8 }}>
+  <View key={ymd} style={{ gap: 8, marginBottom: 10 }}>
     <Pressable
   hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
   pressRetentionOffset={12}
@@ -1045,10 +1053,10 @@ const renderNewSessionCTA = () => (
     setExpandedDays((prev) => ({ ...prev, [ymd]: !prev[ymd] }))
   }
   style={{
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 12,
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: UI.border,
     backgroundColor: UI.bgCard,
@@ -1086,12 +1094,12 @@ const renderNewSessionCTA = () => (
   router.push(`/training/${s.id}`);
 }}
                     style={{
-                      paddingVertical: 12,
-                      paddingHorizontal: 12,
-                      borderRadius: 14,
+                      paddingVertical: 14,
+                      paddingHorizontal: 14,
+                      borderRadius: CARD_RADIUS,
                       borderWidth: 1,
-                      borderColor: "#2a2a3a",
-                      backgroundColor: "#161621",
+                      borderColor: UI.border,
+                      backgroundColor: UI.bgCard,
                       gap: 6,
                     }}
                   >
@@ -1104,7 +1112,7 @@ const renderNewSessionCTA = () => (
                       }}
                     >
                      <Text
-                      style={{ fontWeight: "800", color: "white", flex: 1, flexShrink: 1, minWidth: 0 }}
+                      style={{ fontWeight: "700", color: UI.textPrimary, flex: 1, flexShrink: 1, minWidth: 0 }}
                       numberOfLines={2}
                       ellipsizeMode="tail"
                     >
@@ -1151,12 +1159,12 @@ const renderNewSessionCTA = () => (
                                     paddingHorizontal: 8,
                                     paddingVertical: 4,
                                     borderRadius: 999,
-                                    backgroundColor: "#1b1c2a",
+                                    backgroundColor: UI.bgCardActive,
                                     borderWidth: 1,
-                                    borderColor: "#2a2a3a",
+                                    borderColor: UI.border,
                                   }}
                                 >
-                                  <Text style={{ color: "#cfcfe6", fontSize: 12, fontWeight: "700" }}>
+                                  <Text style={{ color: UI.textSecondary, fontSize: 12, fontWeight: "700" }}>
                                     {label}
                                   </Text>
                                 </View>
@@ -1170,7 +1178,7 @@ const renderNewSessionCTA = () => (
 
                     {!!sessionSummary(s) && (
                       <Text
-                        style={{ color: "#b9b9c4" }}
+                        style={{ color: UI.textSecondary, fontSize: 14 }}
                         numberOfLines={2}
                         ellipsizeMode="tail"
                       >
@@ -1189,20 +1197,20 @@ const renderNewSessionCTA = () => (
   ) : searchedSessions.length === 0 ? (
   <View
     style={{
-      marginTop: 10,
-      padding: 12,
-      borderRadius: 14,
+      marginTop: 14,
+      padding: 18,
+      borderRadius: CARD_RADIUS,
       borderWidth: 1,
       borderColor: UI.border,
       backgroundColor: UI.bgCard,
-      gap: 6,
+      gap: 8,
     }}
   >
-    <Text style={{ color: UI.textPrimary, fontWeight: "800", fontSize: 14 }}>
+    <Text style={{ color: UI.textPrimary, fontWeight: "700", fontSize: 15 }}>
       No sessions yet
     </Text>
 
-    <Text style={{ color: UI.textSecondary, fontSize: 13 }}>
+    <Text style={{ color: UI.textSecondary, fontSize: 14 }}>
       For this date.
     </Text>
 
@@ -1224,12 +1232,12 @@ const renderNewSessionCTA = () => (
           router.push(`/training/${s.id}`);
         }}
           style={{
-            paddingVertical: 12,
-            paddingHorizontal: 12,
-            borderRadius: 14,
+            paddingVertical: 14,
+            paddingHorizontal: 14,
+            borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            borderColor: "#2a2a3a",
-            backgroundColor: "#161621",
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
             gap: 6,
           }}
         >
@@ -1242,7 +1250,7 @@ const renderNewSessionCTA = () => (
             }}
           >
             <Text
-              style={{ fontWeight: "800", color: "white", flex: 1, flexShrink: 1, minWidth: 0 }}
+              style={{ fontWeight: "700", color: UI.textPrimary, flex: 1, flexShrink: 1, minWidth: 0 }}
               numberOfLines={2}
               ellipsizeMode="tail"
             >
@@ -1288,12 +1296,12 @@ const renderNewSessionCTA = () => (
           paddingHorizontal: 8,
           paddingVertical: 4,
           borderRadius: 999,
-          backgroundColor: "#1b1c2a",
+          backgroundColor: UI.bgCardActive,
           borderWidth: 1,
-          borderColor: "#2a2a3a",
+          borderColor: UI.border,
         }}
       >
-        <Text style={{ color: "#fcfce6", fontSize: 12, fontWeight: "700" }}>
+        <Text style={{ color: UI.textSecondary, fontSize: 12, fontWeight: "700" }}>
           {label}
         </Text>
       </View>
@@ -1307,7 +1315,7 @@ const renderNewSessionCTA = () => (
 
           {!!sessionSummary(s) && (
             <Text
-              style={{ color: "#b9b9c4" }}
+              style={{ color: UI.textSecondary, fontSize: 14 }}
               numberOfLines={2}
               ellipsizeMode="tail"
             >
@@ -1387,7 +1395,21 @@ const renderNewSessionCTA = () => (
   </View>
 )}
 
-<Button title="↻ Refresh" onPress={refresh} />
+<Pressable
+        onPress={refresh}
+        style={({ pressed }) => ({
+          marginTop: 8,
+          paddingVertical: 12,
+          paddingHorizontal: 18,
+          borderRadius: CARD_RADIUS,
+          borderWidth: 1,
+          borderColor: UI.border,
+          backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+          alignSelf: "flex-start",
+        })}
+      >
+        <Text style={{ color: UI.textSecondary, fontSize: 14, fontWeight: "600" }}>↻ Refresh</Text>
+      </Pressable>
 </ScrollView>
 <Modal
   visible={!!preview}

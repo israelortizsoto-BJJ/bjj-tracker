@@ -3,7 +3,6 @@ import React, { useEffect, useState } from "react";
 import { router } from "expo-router";
 import {
   Alert,
-  Button,
   StyleSheet,
   Text,
   TextInput,
@@ -99,6 +98,46 @@ async function saveProfile(p: Profile) {
   await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(p));
 }
 
+const UI = {
+  screenBg: "#0b0d12",
+  bgCard: "#0f172a",
+  border: "#233047",
+  textPrimary: "#f8fafc",
+  textSecondary: "#cbd5e1",
+  pillActiveBorder: "#475569",
+};
+const CARD_RADIUS = 16;
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: UI.screenBg },
+  scroll: { padding: 20, paddingBottom: 40 },
+  h1: { fontSize: 24, fontWeight: "700", color: UI.textPrimary },
+  subtle: { color: UI.textSecondary, marginTop: 6, lineHeight: 20 },
+  label: { color: UI.textPrimary, marginTop: 18, marginBottom: 8, fontWeight: "600", fontSize: 15 },
+  input: {
+    backgroundColor: UI.bgCard,
+    borderRadius: 14,
+    padding: 14,
+    color: UI.textPrimary,
+    borderWidth: 1,
+    borderColor: UI.border,
+    fontSize: 15,
+  },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 },
+  pill: {
+    color: UI.textSecondary,
+    backgroundColor: UI.bgCard,
+    borderWidth: 1,
+    borderColor: UI.border,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    overflow: "hidden",
+    fontSize: 15,
+  },
+  pillActive: { borderColor: UI.pillActiveBorder, backgroundColor: "#111827", color: UI.textPrimary },
+});
+
 export default function ProfileScreen() {
   const [devFlags, setDevFlags] = useState(DEFAULT_DEV_FLAGS);
 
@@ -167,260 +206,50 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={(StyleSheet.create({
-        container: { flex: 1, backgroundColor: "#0b0b0f" },
-        scroll: { padding: 16, paddingBottom: 40 },
-        h1: { fontSize: 24, fontWeight: "700", color: "white" },
-        subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-        label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-        input: {
-          backgroundColor: "#161621",
-          borderRadius: 10,
-          padding: 12,
-          color: "white",
-          borderWidth: 1,
-          borderColor: "#2a2a3a",
-        },
-        pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-        pill: {
-          color: "#cfcfe6",
-          backgroundColor: "#161621",
-          borderWidth: 2, // <-- was 1
-          borderColor: "#2a2a3a",
-          paddingVertical: 8,
-          paddingHorizontal: 12,
-          borderRadius: 999,
-          overflow: "hidden",
-        },
-        pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-      })).container}>
-        <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).subtle}>Loading…</Text>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.subtle}>Loading…</Text>
       </SafeAreaView>
     );
   }
 
   return (
-  <SafeAreaView style={(StyleSheet.create({  
-    container: { flex: 1, backgroundColor: "#0b0b0f" },
-      scroll: { padding: 16, paddingBottom: 40 },
-      h1: { fontSize: 24, fontWeight: "700", color: "white" },
-      subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-      label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-      input: {
-        backgroundColor: "#161621",
-        borderRadius: 10,
-        padding: 12,
-        color: "white",
-        borderWidth: 1,
-        borderColor: "#2a2a3a",
-      },
-      pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-      pill: {
-        color: "#cfcfe6",
-        backgroundColor: "#161621",
-        borderWidth: 2, // <-- was 1
-        borderColor: "#2a2a3a",
-        paddingVertical: 8,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        overflow: "hidden",
-      },
-      pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-    })).container}> 
+  <SafeAreaView style={styles.container}>
     <KeyboardAwareScrollView
-  contentContainerStyle={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).scroll}
+  contentContainerStyle={styles.scroll}
   keyboardShouldPersistTaps="handled"
   keyboardDismissMode="on-drag"
   enableOnAndroid
   extraScrollHeight={80}
 >
       {/* Onboarding */}
-      <View style={{ marginTop: 18, marginBottom: 20, alignItems: "center" }}>
-        <Text style={{ fontSize: 28, fontWeight: "800", letterSpacing: 1, color: "white" }}>
-          TRAIN.
+      <View style={{ marginTop: 8, marginBottom: 24, alignItems: "center" }}>
+        <Text style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}>
+          Train.
         </Text>
-        <Text style={{ fontSize: 28, fontWeight: "800", letterSpacing: 1, color: "white" }}>
-          REFLECT.
+        <Text style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}>
+          Reflect.
         </Text>
-        <Text style={{ fontSize: 28, fontWeight: "800", letterSpacing: 1, color: "white" }}>
-          IMPROVE.
+        <Text style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}>
+          Improve.
         </Text>
 
-        <View style={{ height: 12 }} />
+        <View style={{ height: 14 }} />
 
-        <Text style={{ fontSize: 14, opacity: 0.75, color: "white" }}>Log your sessions.</Text>
-        <Text style={{ fontSize: 14, opacity: 0.75, color: "white" }}>Notice your patterns.</Text>
-        <Text style={{ fontSize: 14, opacity: 0.75, color: "white" }}>Build your game over time.</Text>
+        <Text style={{ fontSize: 15, color: UI.textSecondary }}>Log your sessions.</Text>
+        <Text style={{ fontSize: 15, color: UI.textSecondary }}>Notice your patterns.</Text>
+        <Text style={{ fontSize: 15, color: UI.textSecondary }}>Build your game over time.</Text>
       </View>
 
-      <View style={{ height: 12 }} />
-
       {/* Belt Rank */}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).label}>Belt Rank</Text>
-      <View style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).pillRow}>
+      <Text style={styles.label}>Belt Rank</Text>
+      <View style={styles.pillRow}>
         {BELTS.map((b) => (
           <Text
             key={b}
             onPress={() => setBelt(b)}
             style={[
-              (StyleSheet.create({
-                container: { flex: 1, backgroundColor: "#0b0b0f" },
-                scroll: { padding: 16, paddingBottom: 40 },
-                h1: { fontSize: 24, fontWeight: "700", color: "white" },
-                subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-                label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-                input: {
-                  backgroundColor: "#161621",
-                  borderRadius: 10,
-                  padding: 12,
-                  color: "white",
-                  borderWidth: 1,
-                  borderColor: "#2a2a3a",
-                },
-                pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-                pill: {
-                  color: "#cfcfe6",
-                  backgroundColor: "#161621",
-                  borderWidth: 2, // <-- was 1
-                  borderColor: "#2a2a3a",
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  overflow: "hidden",
-                },
-                pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-              })).pill,
-              belt === b ? (StyleSheet.create({
-                container: { flex: 1, backgroundColor: "#0b0b0f" },
-                scroll: { padding: 16, paddingBottom: 40 },
-                h1: { fontSize: 24, fontWeight: "700", color: "white" },
-                subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-                label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-                input: {
-                  backgroundColor: "#161621",
-                  borderRadius: 10,
-                  padding: 12,
-                  color: "white",
-                  borderWidth: 1,
-                  borderColor: "#2a2a3a",
-                },
-                pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-                pill: {
-                  color: "#cfcfe6",
-                  backgroundColor: "#161621",
-                  borderWidth: 2, // <-- was 1
-                  borderColor: "#2a2a3a",
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  overflow: "hidden",
-                },
-                pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-              })).pillActive : null,
+              styles.pill,
+              belt === b ? styles.pillActive : null,
               belt === b ? { borderColor: beltAccent(b) } : null,
               belt === b
                 ? {
@@ -439,375 +268,101 @@ export default function ProfileScreen() {
       </View>
 
       {/* Last Promotion Date */}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).label}>Last Promotion Date</Text>
+      <Text style={styles.label}>Last Promotion Date</Text>
       <TextInput
         value={lastPromotionDate}
         onChangeText={setLastPromotionDate}
         placeholder="YYYY-MM-DD"
-        placeholderTextColor="#6f6f86"
-        style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).input}
+        placeholderTextColor={UI.textSecondary}
+        style={styles.input}
       />
-      <Text style={{ color: "#9aa0a6", fontSize: 12, marginTop: 6 }}>
+      <Text style={[styles.subtle, { fontSize: 13 }]}>
         Use YYYY-MM-DD for now, for example 2025-09-14.
       </Text>
       {isValidYMDDate(lastPromotionDate.trim()) ? (
-        <Text style={{ color: "#cfcfe6", fontSize: 12, marginTop: 4 }}>
+        <Text style={[styles.subtle, { fontSize: 13, marginTop: 4 }]}>
           Display: {formatYMDForDisplay(lastPromotionDate.trim())}
         </Text>
       ) : null}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).subtle}>Example: 2025-11-03</Text>
+      <Text style={styles.subtle}>Example: 2025-11-03</Text>
 
       {/* Stripes */}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).label}>Stripes (0–4)</Text>
+      <Text style={styles.label}>Stripes (0–4)</Text>
       <TextInput
         value={stripes}
         onChangeText={setStripes}
         keyboardType="number-pad"
         placeholder="0"
-        placeholderTextColor="#6f6f86"
-        style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).input}
+        placeholderTextColor={UI.textSecondary}
+        style={styles.input}
       />
 
       {/* Weight */}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).label}>Weight (lbs)</Text>
+      <Text style={styles.label}>Weight (lbs)</Text>
       <TextInput
         value={weight}
         onChangeText={(t) => setWeight(t.replace(/[^\d.]/g, ""))}
         keyboardType="decimal-pad"
         placeholder="e.g., 182.5"
-        placeholderTextColor="#6f6f86"
-        style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).input}
+        placeholderTextColor={UI.textSecondary}
+        style={styles.input}
       />
 
       {/* Academy */}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).label}>Academy</Text>
+      <Text style={styles.label}>Academy</Text>
       <TextInput
         value={academy}
         onChangeText={setAcademy}
         placeholder="Your gym / academy"
-        placeholderTextColor="#6f6f86"
-        style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).input}
+        placeholderTextColor={UI.textSecondary}
+        style={styles.input}
       />
 
       {/* Professor */}
-      <Text style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).label}>Professor / Coach</Text>
+      <Text style={styles.label}>Professor / Coach</Text>
       <TextInput
         value={professor}
         onChangeText={setProfessor}
         placeholder="Head coach / professor"
-        placeholderTextColor="#6f6f86"
-        style={(StyleSheet.create({
-          container: { flex: 1, backgroundColor: "#0b0b0f" },
-          scroll: { padding: 16, paddingBottom: 40 },
-          h1: { fontSize: 24, fontWeight: "700", color: "white" },
-          subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-          label: { color: "white", marginTop: 14, marginBottom: 6, fontWeight: "600" },
-          input: {
-            backgroundColor: "#161621",
-            borderRadius: 10,
-            padding: 12,
-            color: "white",
-            borderWidth: 1,
-            borderColor: "#2a2a3a",
-          },
-          pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-          pill: {
-            color: "#cfcfe6",
-            backgroundColor: "#161621",
-            borderWidth: 2, // <-- was 1
-            borderColor: "#2a2a3a",
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            overflow: "hidden",
-          },
-          pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a", color: "white" },
-        })).input}
+        placeholderTextColor={UI.textSecondary}
+        style={styles.input}
       />
 
       {/* Save */}
-      <Text style={{ color: "#9aa0a6", fontSize: 12, marginBottom: 6 }}>
+      <Text style={[styles.subtle, { marginBottom: 10, fontSize: 13 }]}>
         Changes aren’t saved until you tap Save.
       </Text>
 
-      <Button title="Save Profile" onPress={onSave} />
-      <View style={{ height: 16 }} />
-    
+      <Pressable
+        onPress={onSave}
+        style={({ pressed }) => ({
+          paddingVertical: 14,
+          paddingHorizontal: 18,
+          borderRadius: CARD_RADIUS,
+          borderWidth: 1,
+          borderColor: UI.border,
+          backgroundColor: pressed ? "#111827" : UI.bgCard,
+        })}
+      >
+        <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700" }}>Save Profile</Text>
+      </Pressable>
+      <View style={{ height: 20 }} />
+
       {isDev() ? (
         <Pressable
           onPress={() => router.push("/profile/dev-settings")}
-          style={{
-            marginTop: 16,
-            paddingVertical: 12,
-            paddingHorizontal: 14,
-            borderRadius: 10,
+          style={({ pressed }) => ({
+            marginTop: 8,
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            backgroundColor: "#111111",
-            borderColor: "#111111",
-            }}
+            borderColor: UI.border,
+            backgroundColor: pressed ? "#111827" : UI.bgCard,
+          })}
         >
-          <Text style={{ fontSize: 16, color: "#ffffff" }}>Developer Settings</Text>
-          <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.8, color: "#ffffff" }}>
+          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>Developer Settings</Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
             Dev-only feature flags
           </Text>
         </Pressable>
@@ -816,22 +371,20 @@ export default function ProfileScreen() {
       {isDev() && devFlags.enableCoachShareScaffold ? (
         <Pressable
           onPress={() => router.push("/profile/coaches")}
-          style={{
+          style={({ pressed }) => ({
             marginTop: 12,
-            paddingVertical: 12,
-            paddingHorizontal: 14,
-            borderRadius: 10,
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            backgroundColor: "#111111",
-            borderColor: "#111111",
-          }}
+            borderColor: UI.border,
+            backgroundColor: pressed ? "#111827" : UI.bgCard,
+          })}
         >
-          <Text style={{ fontSize: 16, color: "#ffffff" }}>
+          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
             Coaches & Programs
           </Text>
-          <Text
-            style={{ marginTop: 4, fontSize: 12, opacity: 0.8, color: "#ffffff" }}
-          >
+          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
             Coach Share scaffold (dev only)
           </Text>
         </Pressable>
