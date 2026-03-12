@@ -8,6 +8,7 @@ import {
   TextInput,
   View,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -99,10 +100,10 @@ async function saveProfile(p: Profile) {
 }
 
 const UI = {
-  screenBg: "#0b0d12",
-  bgCard: "#0f172a",
-  border: "#233047",
-  textPrimary: "#f8fafc",
+  screenBg: "#020617",
+  bgCard: "#111827",
+  border: "#1f2937",
+  textPrimary: "#f9fafb",
   textSecondary: "#cbd5e1",
   pillActiveBorder: "#475569",
 };
@@ -110,10 +111,10 @@ const CARD_RADIUS = 16;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: UI.screenBg },
-  scroll: { padding: 20, paddingBottom: 40 },
+  scroll: { padding: 22, paddingBottom: 44 },
   h1: { fontSize: 24, fontWeight: "700", color: UI.textPrimary },
   subtle: { color: UI.textSecondary, marginTop: 6, lineHeight: 20 },
-  label: { color: UI.textPrimary, marginTop: 18, marginBottom: 8, fontWeight: "600", fontSize: 15 },
+  label: { color: UI.textPrimary, marginTop: 20, marginBottom: 8, fontWeight: "600", fontSize: 15 },
   input: {
     backgroundColor: UI.bgCard,
     borderRadius: 14,
@@ -123,7 +124,12 @@ const styles = StyleSheet.create({
     borderColor: UI.border,
     fontSize: 15,
   },
-  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 8 },
+  pillRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 8,
+    paddingRight: 4,
+  },
   pill: {
     color: UI.textSecondary,
     backgroundColor: UI.bgCard,
@@ -242,7 +248,11 @@ export default function ProfileScreen() {
 
       {/* Belt Rank */}
       <Text style={styles.label}>Belt Rank</Text>
-      <View style={styles.pillRow}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pillRow}
+      >
         {BELTS.map((b) => (
           <Text
             key={b}
@@ -265,7 +275,7 @@ export default function ProfileScreen() {
             {b}
           </Text>
         ))}
-      </View>
+      </ScrollView>
 
       {/* Last Promotion Date */}
       <Text style={styles.label}>Last Promotion Date</Text>
@@ -329,13 +339,10 @@ export default function ProfileScreen() {
       />
 
       {/* Save */}
-      <Text style={[styles.subtle, { marginBottom: 10, fontSize: 13 }]}>
-        Changes aren’t saved until you tap Save.
-      </Text>
-
       <Pressable
         onPress={onSave}
         style={({ pressed }) => ({
+          marginTop: 20,
           paddingVertical: 14,
           paddingHorizontal: 18,
           borderRadius: CARD_RADIUS,
@@ -346,6 +353,9 @@ export default function ProfileScreen() {
       >
         <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700" }}>Save Profile</Text>
       </Pressable>
+      <Text style={[styles.subtle, { marginTop: 10, fontSize: 13 }]}>
+        Changes aren’t saved until you tap Save.
+      </Text>
       <View style={{ height: 20 }} />
 
       {isDev() ? (

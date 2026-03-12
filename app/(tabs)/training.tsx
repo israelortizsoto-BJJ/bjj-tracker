@@ -254,15 +254,15 @@ async function loadSessions(): Promise<Session[]> {
 }
 
 const UI = {
-  screenBg: "#0b0d12",
-  bgCard: "#0f172a",
-  bgCardActive: "#111827",
-  border: "#233047",
-  textPrimary: "#f8fafc",
+  screenBg: "#020617",
+  bgCard: "#111827",
+  bgCardActive: "#1f2937",
+  border: "#1f2937",
+  textPrimary: "#f9fafb",
   textSecondary: "#cbd5e1",
   textHeader: "#111827",
   badgeBg: "#111827",
-  accent: "#334155",
+  accent: "#475569",
 };
 const CARD_RADIUS = 16;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#94a3b8", fontWeight: "600" as const };
@@ -945,7 +945,7 @@ const renderNewSessionCTA = () => (
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
-    contentContainerStyle={{ padding: 20, gap: 16 }}
+    contentContainerStyle={{ padding: 22, gap: 18 }}
     >
   <Pressable
   onPress={openBetaFeedbackEmail}

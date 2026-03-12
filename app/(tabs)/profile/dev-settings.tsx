@@ -195,7 +195,7 @@ export default function DevSettingsScreen() {
     <DevNavButton
       title="Open Welcome (dev)"
       subtitle="Useful for testing onboarding flow"
-      path="/welcome"
+      path="/welcome?force=1"
     />
   </View>
 ) : null}
