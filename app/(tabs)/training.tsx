@@ -769,7 +769,14 @@ const filterAndSort = useCallback(
         // Search filter
         if (!q) return true;
 
-        const haystack = [s.system, s.technique, s.drill, s.notes, s.youtubeUrl]
+        const haystack = [
+          s.system,
+          resolveSystemLabel(s.system),
+          s.technique,
+          s.drill,
+          s.notes,
+          s.youtubeUrl,
+        ]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
@@ -791,6 +798,7 @@ const searchedSessions = useMemo(() => {
   return filteredSessions.filter((s) => {
     const haystack = [
       s.system,
+      resolveSystemLabel(s.system),
       s.technique,
       s.drill,
       s.notes,
