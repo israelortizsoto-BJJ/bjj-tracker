@@ -24,16 +24,22 @@ Do not rely on EAS/Expo prebuild CLI flags for product behavior.
 Avoid putting dev-only navigation inside Welcome/onboarding screens (redirect logic causes loops).
 Use Dev Settings “Dev Shortcuts” to reach hidden routes.
 
-## Hidden routes stay hidden from the tab bar by default.
-Use `href: null` for dormant routes and Coach Share subroutes.
-Access via Dev Shortcuts/flagged entry points, not visible tabs.
+## Hidden routes stay hidden from the tab bar by default unless intentionally exposed in dev.
+Use `href: null` for internal routes and Coach Share subroutes.
+Coach Share should still remain reachable from Profile, not as a main tab.
+Build 7 dev tab exposure is intentional for QA:
+- Welcome
+- Profile
+- Training
+- Fundamentals
+- Gear
 
 ## No ad-hoc patching as a default workflow.
 Avoid brittle regex/sed/perl “injection” edits for features.
 Prefer clean, intentional file edits + TS/ESLint gates + clear commits.
 Only use patching as emergency repair, not normal iteration.
 
-## Gates are the source of truth (not VS Code/Cursor squiggles).
+## Gates are the source of truth (not Cursor summaries).
 Always run:
 - `npx tsc --noEmit`
 - `npx eslint .`
@@ -42,18 +48,14 @@ before pushing meaningful app changes.
 
 ## Avoid reintroducing router landmines.
 Screen names must be unique in `app/(tabs)/_layout.tsx`.
-Don’t resurrect `jj101` (explicitly removed).
-
-## Deprecation posture (planned + controlled).
-Replace deprecated `SafeAreaView` with `react-native-safe-area-context` (done).
-`expo-av` migration is planned (`expo-audio` / `expo-video`) — don’t rush into half-migrations.
+Do not let hidden/internal routes leak into the visible tab bar.
 
 ## Operational note to keep running:
 When connecting Dev Client:
 - Mac + iPhone on same hotspot/Wi-Fi
 - macOS Firewall off or allow Metro/Node
 
-Keep a dedicated “build terminal” tab untouched while EAS runs; use a separate tab for edits.
+Keep a dedicated build terminal untouched while EAS runs; use a separate tab for edits.
 
 ---
 
@@ -62,138 +64,111 @@ Keep a dedicated “build terminal” tab untouched while EAS runs; use a separa
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-11  
-**Status:** Coach Share moved from scaffold-only into a real parent flow plus a believable coach template-selection demo path; all changes committed and pushed
+**Date:** 2026-03-12  
+**Status:** Build 7 now feels like a real multi-surface dev app. Tab flow, light theme surfaces, Training QA fixes, and Coach Share polish were completed and pushed.
 
 ## Git checkpoint
 
 **Working tree:**
 - synced to `origin/dev`
-- only local untracked folder: `.cursor/`
 
 **Latest commit:**
-- `d9fa4d9` — Feat: add Coach Share template selection handoff
+- `8936408` — Feat: polish Build 7 tab flow and light theme surfaces
 
-## What we completed this block
+## What we completed today
 
-### 1) Parent-facing Coach Share became real
+### 1) Rebuilt and completed the Build 7 QA pass
+We ran a real app-wide QA pass across:
+- Welcome
+- Profile
+- Training
+- Fundamentals
+- Gear
+- Coach Share
+- Add New Session
+- hidden Coach Share subflows
 
-We turned the existing Coach Share scaffold into a parent-readable dashboard with:
-- linked coach
-- current assignment
-- module focus
-- program pack context
-- clean empty state
-- working scroll behavior
+Key judgment:
+Build 7 now feels meaningfully more complete without losing focus.
 
-Then we extended the parent loop so the parent can:
-- mark an assignment complete
-- persist that completion locally
-- see a Recent Completion acknowledgment after reload
+### 2) Fixed real Training UX issues
+We fixed:
+- Training search so broader system/category terms like system labels match correctly
+- technique-row destructive action clutter in the session editor
+- additional row action clarity and visual consistency
 
-### 2) Coach-side authoring direction got a believable front door
+Training now supports:
+- multi-technique sessions
+- system-label search
+- cleaner technique editing
 
-We added:
-- Create Program Pack entry
-- Use Template / Customize Existing Template / Start From Scratch choices
-- a hidden Program Pack Templates screen
-- realistic BJJ demo template packs:
-  - Guard Pull Defense — Knee in the Middle
-  - Triangle Defense — Posture and Escape
-  - Half Guard Passing — Heavy Chest and Table Hands
+### 3) Fixed Coach Share usability gaps
+We fixed:
+- missing back navigation from Create Program Pack
+- visual mismatch between Coach Share and the newer Build 7 light surfaces
 
-### 3) Template path now feels like a real workflow
+Coach Share now:
+- visually belongs to the same app
+- has cleaner navigation
+- remains a pilot lane accessible from Profile
 
-We upgraded the coach-side template path so it no longer ends on an alert:
-- browse templates
-- preview selected template
-- continue into a selected-template handoff screen
-- understand that customization/assignment flows come next
+### 4) Exposed Build 7 tabs intentionally in dev
+In the dev app only, the visible tab order is now:
+1. Welcome
+2. Profile
+3. Training
+4. Fundamentals
+5. Gear
+
+Production/TestFlight behavior remains unchanged.
+
+### 5) Unified the light Build 7 visual system
+Profile, Training, Add New Session, and Coach Share surfaces were brought into the same lighter visual language already seen in Welcome, Fundamentals, and Gear.
+
+This included:
+- lighter backgrounds
+- white cards
+- consistent borders
+- stronger blue accent usage
+- centered button text where needed
+- better cross-screen visual cohesion
 
 ## What passed
 
 ### Gates
-- `npx tsc --noEmit` — passed repeatedly across slices
-- `npx eslint .` — passed repeatedly across slices
+- `npx tsc --noEmit` passed throughout final fixes
+- `npx eslint .` passed throughout final fixes
 
 ### App validation
-Validated in app at each slice:
-- parent dashboard
-- completion flow
-- completion summary
-- pack creation entry
-- template selection
-- template preview
-- template-selected handoff
-- back navigation between key coach-side screens
+Validated:
+- visible dev tab order
+- no extra/truncated tab leakage
+- Profile save still routes to Training intentionally
+- Training search works for system labels
+- Add Session button text centering
+- Save Profile button text centering
+- Add New Session visual/readability pass
+- Coach Share home, Join, Manage, Create Program Pack, Templates, Preview, and Selected screens all visually/readability pass
+
+## Commits landed today
+- `552018e` — Fix: include system labels in Training search
+- `20d8145` — Fix: unify technique row actions in Training editor
+- `61093d4` — Fix: add Coach Share back navigation from pack creation
+- `8936408` — Feat: polish Build 7 tab flow and light theme surfaces
 
 ## Locked product decisions
-
-### Coach Share Phase 1 remains narrow
-- no messaging
-- no kid login
-- parent-controlled flow
-- local-first state
-- no full coach editor yet
-
-### Coach authoring direction
-Coach will eventually have 3 paths:
-1. use template
-2. duplicate/customize template
-3. start from scratch
-
-### Template rule
-Templates should remain canonical/read-only.
-Coach customization should happen on copies later.
-
-## Locked workflow decisions
-
-### Cursor operating rule
-Use a new Cursor chat for every new feature/task.
-
-### Validation rule
-Do not trust Cursor output on sight.
-Truth requires:
-1. scoped diff
-2. terminal gates
-3. app validation
-4. intentional commit
-
-### Cursor migration judgment
-Cursor performed well today on tightly scoped, supervised feature slices.
-It is approved for continued controlled use on:
-- local UI improvements
-- contained product slices
-- hidden-route scaffolds
-- 1–3 file tasks
-
-Cursor is still not approved for:
-- broad refactors
-- storage/model migrations
-- release-critical config work
-- unsupervised cross-file cleanup
-
-## Commits completed in this block
-- `be3d3cb` — Feat: make Coach Share dashboard parent-readable
-- `b55f27f` — Feat: add Coach Share completion flow
-- `4d98d8f` — Feat: add Coach Share completion summary
-- `18c2076` — Feat: add Coach Share pack creation entry scaffold
-- `d21d457` — Feat: add Coach Share template selection scaffold
-- `825468c` — Feat: add Coach Share template preview flow
-- `d9fa4d9` — Feat: add Coach Share template selection handoff
+- Build 7 should feel meaningfully more complete, not broadly overbuilt
+- Welcome, Profile, Training, Fundamentals, and Gear are the right visible dev QA tabs
+- Coach Share remains reachable from Profile, not as a main tab
+- Dev Shortcuts stay for now
+- The global launch behavior that routes returning users toward Training is intentional
 
 ## Best next-session recommendation
-
-Best next move:
-Build the smallest **customize-from-template scaffold** after template selection handoff.
-
-Likely shape:
-- selected template shown
-- editable pack title only
-- read-only module list
-- note that module editing/assignment comes later
-
-Do not jump into full builder logic yet.
+Next likely moves:
+- decide whether Build 7 is ready for an internal release-readiness pass
+- update release/tester focus if Build 7 is the next candidate
+- continue Coach Share pilot readiness for Kyle without broadening scope
+- consider a short release checklist pass instead of more feature work
 
 ## Suggested restart commands for next session
 - `git status -sb`
@@ -201,5 +176,5 @@ Do not jump into full builder logic yet.
 - `sed -n '1,260p' "docs/dev-handoff.md"`
 
 ## Assumptions
-- I assumed today’s meaningful work should replace the previous Coach Share section in the living handoff rather than append duplicate notes.
-- I assumed `.cursor/` should remain local and untracked for now.
+- I treated today’s work as the new current truth for Build 7 and replaced older partial guidance.
+- I assumed the dev tab exposure remains dev-only and should not be generalized to production yet.
