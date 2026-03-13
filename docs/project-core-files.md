@@ -1,0 +1,65 @@
+# MatMind / BJJ Tracker — Core Files
+
+## Purpose
+These are the primary files and docs to use when reacquiring project truth.
+Use this list before relying on memory, stale summaries, or scattered notes.
+
+## Core runtime / release config
+- package.json
+- app.json
+- app.config.ts
+- eas.json
+- tsconfig.json
+- eslint.config.js
+
+## Core app shell
+- app/index.tsx
+- app/_layout.tsx
+- app/(tabs)/_layout.tsx
+
+## Core Build 7 product surfaces
+- app/(tabs)/welcome.tsx
+- app/(tabs)/profile.tsx
+- app/(tabs)/training.tsx
+- app/(tabs)/training/[id].tsx
+- app/(tabs)/Fundamentals.tsx
+- app/(tabs)/gear.tsx
+
+## Coach Share current lane
+- app/(tabs)/profile/coaches/index.tsx
+- app/(tabs)/profile/coaches/join.tsx
+- app/(tabs)/profile/coaches/manage.tsx
+- app/(tabs)/profile/coaches/create-pack.tsx
+- app/(tabs)/profile/coaches/templates.tsx
+- app/(tabs)/profile/coaches/template-preview.tsx
+- app/(tabs)/profile/coaches/template-selected.tsx
+
+## Runtime / flags / storage
+- src/config/runtime.ts
+- src/config/flags.ts
+- src/config/devFlagsStore.ts
+- src/config/useDevFlags.ts
+- src/storage/storageKeys.ts
+- src/storage/migrations/index.ts
+- src/storage/coachShareStore.ts
+
+## Product/domain files
+- src/fundamentals/index.ts
+- src/fundamentals/taxonomy.ts
+- src/domain/metrics.ts
+- src/types.ts
+- src/types/coachShare.ts
+
+## Core docs
+- docs/dev-handoff.md
+- docs/decisions.md
+- docs/definition-of-done.md
+- docs/release-checklist-ios.md
+- docs/builds/build-7-scope.md
+- docs/qa/build-7-release-readiness-pass-2026-03-13.md
+
+## Rule
+When project context feels stale:
+1. check git status -sb
+2. check git log -5 --oneline
+3. read these files before making workflow or release assumptions
