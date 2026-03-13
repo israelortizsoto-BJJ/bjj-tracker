@@ -21,15 +21,17 @@ import type {
   ProgramPackMap,
 } from "../../../../src/types/coachShare";
 
+// Build 7 light visual system (matches training + profile)
 const UI = {
-  screenBg: "#0b0d12",
-  bgCard: "#0f172a",
-  border: "#233047",
-  textPrimary: "#f8fafc",
-  textSecondary: "#cbd5e1",
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  bgCardActive: "#edf2ff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
 };
 const CARD_RADIUS = 16;
-const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#94a3b8", fontWeight: "600" as const };
+const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
 
 function Section({
   title,
@@ -234,7 +236,7 @@ export default function CoachesScreen() {
     borderRadius: CARD_RADIUS,
     borderWidth: 1,
     borderColor: UI.border,
-    backgroundColor: pressed ? "#111827" : UI.bgCard,
+    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
     alignSelf: "flex-start",
   });
 
@@ -349,7 +351,7 @@ export default function CoachesScreen() {
                     borderRadius: CARD_RADIUS,
                     borderWidth: 1,
                     borderColor: UI.border,
-                    backgroundColor: pressed ? "#111827" : UI.bgCard,
+                    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
                     alignSelf: "flex-start",
                   })}
                 >

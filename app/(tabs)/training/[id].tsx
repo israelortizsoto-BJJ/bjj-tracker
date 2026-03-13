@@ -999,7 +999,7 @@ return; // prevents any router.replace below from firing immediately
   </TouchableOpacity>
 </View>
     <View style={{ flex: 1, marginTop: 12 }}>
-  <Text style={{ color: "#fff", marginBottom: 8 }}>
+  <Text style={{ color: UI.textPrimary, marginBottom: 8 }}>
     Results: {techResults.length}
   </Text>
 
@@ -1007,7 +1007,7 @@ return; // prevents any router.replace below from firing immediately
   {/* Favorites + Recent only show when NOT searching */}
   {techQuery.trim().length === 0 && favoriteItems.length > 0 ? (
     <View style={{ marginBottom: 14 }}>
-      <Text style={[styles.sectionTitle, { color: "#fff" }]}>★ Favorites</Text>
+      <Text style={styles.sectionTitle}>★ Favorites</Text>
 
       {favoriteItems.map((t: any) => (
         <TouchableOpacity
@@ -1029,8 +1029,8 @@ return; // prevents any router.replace below from firing immediately
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
-              <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+              <Text style={styles.rowTitle}>{String(t.label ?? "Technique")}</Text>
+              <Text style={styles.helperText}>
                 {techSortMode === "AZ"
   ? techniqueToLabel(t)
   : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
@@ -1041,7 +1041,7 @@ return; // prevents any router.replace below from firing immediately
               onPress={async () => toggleFavorite(t.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={{ color: "#fff", fontSize: 18 }}>★</Text>
+              <Text style={{ color: UI.textPrimary, fontSize: 18 }}>★</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1051,7 +1051,7 @@ return; // prevents any router.replace below from firing immediately
 
   {techQuery.trim().length === 0 && recentItems.length > 0 ? (
     <View style={{ marginBottom: 14 }}>
-      <Text style={[styles.sectionTitle, { color: "#fff" }]}>Recent</Text>
+      <Text style={styles.sectionTitle}>Recent</Text>
 
       {recentItems.map((t: any) => (
         <TouchableOpacity
@@ -1073,8 +1073,8 @@ return; // prevents any router.replace below from firing immediately
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
-              <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+              <Text style={styles.rowTitle}>{String(t.label ?? "Technique")}</Text>
+              <Text style={styles.helperText}>
                {techSortMode === "AZ"
   ? techniqueToLabel(t)
   : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
@@ -1085,7 +1085,7 @@ return; // prevents any router.replace below from firing immediately
               onPress={async () => toggleFavorite(t.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={{ color: favoriteTechIds.includes(t.id) ? "#fff" : "rgba(255,255,255,0.35)", fontSize: 18 }}>
+              <Text style={{ color: favoriteTechIds.includes(t.id) ? UI.textPrimary : UI.textSecondary, fontSize: 18 }}>
                 ★
               </Text>
             </TouchableOpacity>
@@ -1100,7 +1100,7 @@ return; // prevents any router.replace below from firing immediately
 {techSortMode === "SYSTEM" && groupedTechResults ? (
   groupedTechResults.map((g) => (
     <View key={g.title} style={{ marginBottom: 14 }}>
-      <Text style={{ color: "rgba(255,255,255,0.85)", marginBottom: 6 }}>
+      <Text style={{ color: UI.textPrimary, marginBottom: 6 }}>
         {g.title}
       </Text>
 
@@ -1124,8 +1124,8 @@ return; // prevents any router.replace below from firing immediately
         >
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <View style={{ flex: 1, paddingRight: 12 }}>
-              <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
-              <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+              <Text style={styles.rowTitle}>{String(t.label ?? "Technique")}</Text>
+              <Text style={styles.helperText}>
                 {`${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
               </Text>
             </View>
@@ -1134,7 +1134,7 @@ return; // prevents any router.replace below from firing immediately
               onPress={async () => toggleFavorite(t.id)}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Text style={{ color: favoriteTechIds.includes(t.id) ? "#fff" : "rgba(255,255,255,0.35)", fontSize: 18 }}>
+              <Text style={{ color: favoriteTechIds.includes(t.id) ? UI.textPrimary : UI.textSecondary, fontSize: 18 }}>
                 ★
               </Text>
             </TouchableOpacity>
@@ -1164,8 +1164,8 @@ return; // prevents any router.replace below from firing immediately
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <View style={{ flex: 1, paddingRight: 12 }}>
-          <Text style={[styles.rowTitle, { color: "#fff" }]}>{String(t.label ?? "Technique")}</Text>
-          <Text style={[styles.helperText, { color: "rgba(255,255,255,0.65)" }]}>
+          <Text style={styles.rowTitle}>{String(t.label ?? "Technique")}</Text>
+          <Text style={styles.helperText}>
             {techSortMode === "AZ"
               ? techniqueToLabel(t)
               : `${t.path?.level1Label} > ${t.path?.level2Label}${t.path?.level3Label ? ` > ${t.path.level3Label}` : ""}`}
@@ -1176,7 +1176,7 @@ return; // prevents any router.replace below from firing immediately
           onPress={async () => toggleFavorite(t.id)}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Text style={{ color: favoriteTechIds.includes(t.id) ? "#fff" : "rgba(255,255,255,0.35)", fontSize: 18 }}>
+          <Text style={{ color: favoriteTechIds.includes(t.id) ? UI.textPrimary : UI.textSecondary, fontSize: 18 }}>
             ★
           </Text>
         </TouchableOpacity>
@@ -1325,6 +1325,18 @@ Format: start position (grips) → transition → outcome (pass, sweep, submit)
   );
 }
 
+// Build 7 light visual system (matches training tab + profile)
+const UI = {
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  bgCardActive: "#edf2ff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
+  accent: "#1d4ed8",
+  danger: "#dc2626",
+};
+
 const styles = StyleSheet.create({
   // --------------------------------------------------
 // Layout & structural styles
@@ -1332,14 +1344,14 @@ const styles = StyleSheet.create({
 // - scroll spacing
 // - section wrappers & dividers
 // --------------------------------------------------
-  container: { flex: 1, backgroundColor: "#0b0b0f" },
+  container: { flex: 1, backgroundColor: UI.screenBg },
   modalContainer: {
   flex: 1,
-  backgroundColor: "#0b0b0f",
+  backgroundColor: UI.screenBg,
   paddingTop: 12, // <-- key: forces space even if inset fails
 },
   scroll: { padding: 16, paddingBottom: 40 },
-  h1: { fontSize: 24, fontWeight: "700", color: "white" },
+  h1: { fontSize: 24, fontWeight: "700", color: UI.textPrimary },
   headerTextBlock: {
   flexDirection: "column",
 },
@@ -1347,28 +1359,28 @@ const styles = StyleSheet.create({
   marginTop: 12,
 },
 motto: {
-  color: "#b9b9c4",
+  color: UI.textSecondary,
   marginTop: 6,
   fontSize: 13,
   fontWeight: "600",
 },
 helperText: {
-  color: "#b9b9c4",
+  color: UI.textSecondary,
   marginTop: 6,
   marginBottom: 10,
   fontSize: 12,
 },
 inputValueText: {
-  color: "#9bb1ff", // soft blue accent
+  color: UI.accent,
   fontSize: 16,
 },
 
 inputPlaceholderText: {
-  color: "#6f6f86",
+  color: "#6b7280",
 },
 inputSubValueText: {
   marginTop: 4,
-  color: "rgba(255,255,255,0.65)",
+  color: UI.textSecondary,
   fontSize: 12,
 },
 techRow: {
@@ -1385,27 +1397,27 @@ clearBtn: {
   justifyContent: "center",
   borderRadius: 12,
   borderWidth: 1,
-  borderColor: "rgba(255,255,255,0.18)",
+  borderColor: UI.border,
   backgroundColor: "transparent",
 },
 
 clearBtnText: {
   fontSize: 13,
   fontWeight: "500",
-  color: "rgba(255,255,255,0.65)",
+  color: UI.textSecondary,
 },
 specificTrainingInput: {
-  borderColor: "#3b3f55",
-  backgroundColor: "#0f0f16",
+  borderColor: UI.border,
+  backgroundColor: UI.bgCard,
   paddingVertical: 10, // slightly tighter than input padding: 12
 },
 divider: {
   height: 1,
-  backgroundColor: "#2a2a3a",
+  backgroundColor: UI.border,
   marginBottom: 12,
 },
 sectionTitle: {
-  color: "white",
+  color: UI.textPrimary,
   marginTop: 12,
   marginBottom: 6,
   fontWeight: "600",
@@ -1423,8 +1435,8 @@ sectionTitle: {
     padding: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#2a2a3a",
-    backgroundColor: "#161621",
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
     gap: 8,
   },
 
@@ -1435,12 +1447,12 @@ sectionTitle: {
   },
 
   attachmentTitle: {
-    color: "white",
+    color: UI.textPrimary,
     fontWeight: "700",
   },
 
   attachmentMeta: {
-    color: "#b9b9c4",
+    color: UI.textSecondary,
     fontSize: 12,
   },
 
@@ -1449,13 +1461,13 @@ sectionTitle: {
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: "#2a2a3a",
-    backgroundColor: "#161621",
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
     alignSelf: "flex-start",
   },
 
   attachmentRemoveText: {
-    color: "#ff6b6b",
+    color: UI.danger,
     fontWeight: "800",
   },
   headerRow: {
@@ -1483,14 +1495,14 @@ secondaryBtn: {
   paddingVertical: 12,
   borderRadius: 12,
   borderWidth: 1,
-  borderColor: "#2a2a3a",
-  backgroundColor: "#161621",
+  borderColor: UI.border,
+  backgroundColor: UI.bgCard,
   alignItems: "center",
   justifyContent: "center",
 },
 
 secondaryBtnText: {
-  color: "#cfcfe6",
+  color: UI.textPrimary,
   fontWeight: "800",
   fontSize: 16,
 },
@@ -1502,19 +1514,19 @@ attachmentButton: {
   paddingHorizontal: 14,
   borderRadius: 999,
   borderWidth: 1,
-  borderColor: "#2a2a3a",
-  backgroundColor: "#161621",
+  borderColor: UI.border,
+  backgroundColor: UI.bgCard,
   alignItems: "center",
   justifyContent: "center",
 },
 
 attachmentButtonText: {
-  color: "#cfcfe6",
+  color: UI.textPrimary,
   fontWeight: "800",
   fontSize: 13,
 },
 attachmentDangerText: {
-  color: "#ff6b6b",
+  color: UI.danger,
   fontWeight: "800",
   fontSize: 13,
 },
@@ -1526,9 +1538,9 @@ primaryBtn: {
   flex: 1,
   paddingVertical: 12,
   borderRadius: 12,
-  backgroundColor: "#1b1c2a",
+  backgroundColor: UI.accent,
   borderWidth: 1,
-  borderColor: "#2a2a3a",
+  borderColor: UI.accent,
   alignItems: "center",
   justifyContent: "center",
 },
@@ -1538,7 +1550,7 @@ primaryBtnDisabled: {
 },
 
 primaryBtnText: {
-  color: "white",
+  color: "#ffffff",
   fontWeight: "800",
   fontSize: 16,
 },
@@ -1551,15 +1563,15 @@ dangerBtn: {
   paddingVertical: 12,
   paddingHorizontal: 14,
   borderRadius: 12,
-  backgroundColor: "#161621",
+  backgroundColor: UI.bgCard,
   borderWidth: 1,
-  borderColor: "#2a2a3a",
+  borderColor: UI.border,
   alignItems: "center",
   justifyContent: "center",
 },
 
 dangerBtnText: {
-  color: "#ff6b6b",
+  color: UI.danger,
   fontWeight: "800",
   fontSize: 16,
 },
@@ -1569,13 +1581,13 @@ headerDeleteBtn: {
   paddingHorizontal: 12,
   borderRadius: 10,
   borderWidth: 1,
-  borderColor: "#2a2a3a",
-  backgroundColor: "#161621",
+  borderColor: UI.border,
+  backgroundColor: UI.bgCard,
   justifyContent: "center",
 },
 
 headerDeleteText: {
-  color: "#ff6b6b",
+  color: UI.danger,
   fontWeight: "800",
 },
 
@@ -1584,9 +1596,9 @@ headerSaveBtn: {
   paddingVertical: 8,
   paddingHorizontal: 12,
   borderRadius: 10,
-  backgroundColor: "#1b1c2a",
+  backgroundColor: UI.accent,
   borderWidth: 1,
-  borderColor: "#2a2a3a",
+  borderColor: UI.accent,
   justifyContent: "center",
 },
 headerSaveBtnDisabled: {
@@ -1596,18 +1608,18 @@ headerSaveTextDisabled: {
   opacity: 0.7,
 },
 headerSaveText: {
-  color: "white",
+  color: "#ffffff",
   fontWeight: "800",
 },
-  subtle: { color: "#b9b9c4", marginTop: 6, lineHeight: 18 },
-  label: { color: "white", marginTop: 12, marginBottom: 6, fontWeight: "600" },
+  subtle: { color: UI.textSecondary, marginTop: 6, lineHeight: 18 },
+  label: { color: UI.textPrimary, marginTop: 12, marginBottom: 6, fontWeight: "600" },
   input: {
-    backgroundColor: "#161621",
+    backgroundColor: UI.bgCard,
     borderRadius: 10,
     padding: 12,
-    color: "white",
+    color: UI.textPrimary,
     borderWidth: 1,
-    borderColor: "#2a2a3a",
+    borderColor: UI.border,
   },
   textarea: { minHeight: 140 },
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
@@ -1616,14 +1628,14 @@ headerSaveText: {
     paddingHorizontal: 10,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#2a2a3a",
-    backgroundColor: "#161621",
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
   },
-  pillActive: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a" },
-  pillText: { color: "#cfcfe6", fontSize: 12 },
-  pillTextActive: { color: "white", fontWeight: "700" },
-  pillSelected: { borderColor: "#6c7cff", backgroundColor: "#1b1c2a" },
-  pillTextSelected: { color: "white", fontWeight: "700" },
+  pillActive: { borderColor: UI.accent, backgroundColor: UI.bgCardActive },
+  pillText: { color: UI.textPrimary, fontSize: 12 },
+  pillTextActive: { color: UI.textPrimary, fontWeight: "700" },
+  pillSelected: { borderColor: UI.accent, backgroundColor: UI.bgCardActive },
+  pillTextSelected: { color: UI.textPrimary, fontWeight: "700" },
   rowTitle: { flex: 1 },
   row: {
   flexDirection: "row",
@@ -1633,16 +1645,19 @@ headerSaveText: {
   paddingHorizontal: 12,
   borderRadius: 12,
   marginTop: 12,
+  backgroundColor: UI.bgCard,
+  borderWidth: 1,
+  borderColor: UI.border,
 },
   rowItem: { flex: 1 },
   card: {
     marginTop: 12,
-    backgroundColor: "#12121b",
+    backgroundColor: UI.bgCard,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#2a2a3a",
+    borderColor: UI.border,
   } ,
-  cardTitle: { color: "white", fontWeight: "700", marginBottom: 8 },
+  cardTitle: { color: UI.textPrimary, fontWeight: "700", marginBottom: 8 },
   previewImg: { width: "100%", height: 220, borderRadius: 12 },
 });

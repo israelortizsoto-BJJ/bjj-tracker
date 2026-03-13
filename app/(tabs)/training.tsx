@@ -258,18 +258,18 @@ async function loadSessions(): Promise<Session[]> {
 }
 
 const UI = {
-  screenBg: "#020617",
-  bgCard: "#111827",
-  bgCardActive: "#1f2937",
-  border: "#1f2937",
-  textPrimary: "#f9fafb",
-  textSecondary: "#cbd5e1",
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  bgCardActive: "#edf2ff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
   textHeader: "#111827",
-  badgeBg: "#111827",
-  accent: "#475569",
+  badgeBg: "#f3f4f6",
+  accent: "#1d4ed8",
 };
-const CARD_RADIUS = 16;
-const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#94a3b8", fontWeight: "600" as const };
+const CARD_RADIUS = 18;
+const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.1, color: "#6b7280", fontWeight: "600" as const };
 const INSIGHT_STYLES = {
   hero: { color: UI.textPrimary, fontSize: 28, fontWeight: "900" as const },
   title: { color: UI.textPrimary, fontSize: 14, fontWeight: "800" as const, marginTop: 6 },
@@ -889,12 +889,12 @@ const getDayWeekChipStyle = (isActive: boolean) => ({
 });
 
 const getDayWeekChipTitleStyle = (isActive: boolean) => ({
-  color: isActive ? "#ffffff" : UI.textPrimary,
+  color: UI.textPrimary,
   fontWeight: "800" as const,
 });
 
 const getDayWeekChipSubtitleStyle = (isActive: boolean) => ({
-  color: isActive ? "#C9D4E8" : UI.textSecondary,
+  color: UI.textSecondary,
 });
 
 // 7C) Day / Week header row
@@ -952,9 +952,11 @@ const renderNewSessionCTA = () => (
       borderWidth: 1,
       borderColor: UI.border,
       backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+      alignItems: "center",
+      justifyContent: "center",
     })}
   >
-    <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700" }}>
+    <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }}>
       Add Session for Selected Day
     </Text>
   </Pressable>
@@ -966,7 +968,7 @@ const renderNewSessionCTA = () => (
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
-    contentContainerStyle={{ padding: 22, gap: 18 }}
+    contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, gap: 18 }}
     >
   <Pressable
   onPress={openBetaFeedbackEmail}
@@ -1405,8 +1407,8 @@ const renderNewSessionCTA = () => (
                 borderRadius: 3,
                 backgroundColor:
                   i === safeInsightIndex
-                    ? "rgba(255,255,255,0.9)"
-                    : "rgba(255,255,255,0.3)",
+                    ? "#111827"
+                    : "#d1d5db",
               }}
             />
           ))}

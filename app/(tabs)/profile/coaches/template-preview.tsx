@@ -1,6 +1,14 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+const UI = {
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
+};
+
 export const TEMPLATE_CONTENT: Record<
   string,
   { title: string; description: string; metadata: string }
@@ -50,7 +58,7 @@ export default function TemplatePreviewScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Preview Template" }} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+      <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 16 }}>
         <Pressable
           onPress={handleBackToTemplates}
           style={{
@@ -59,19 +67,21 @@ export default function TemplatePreviewScreen() {
             paddingHorizontal: 10,
             borderRadius: 8,
             borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
             alignSelf: "flex-start",
           }}
         >
-          <Text style={{ fontSize: 14 }}>Back to Templates</Text>
+          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Templates</Text>
         </Pressable>
 
-        <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6 }}>
+        <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
           {template.title}
         </Text>
-        <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
+        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
           {template.description}
         </Text>
-        <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.8 }}>
+        <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
           {template.metadata}
         </Text>
 
@@ -81,9 +91,11 @@ export default function TemplatePreviewScreen() {
             padding: 12,
             borderRadius: 10,
             borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
           }}
         >
-          <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
+          <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
             This is a quick preview step before you customize and publish the
             program pack. You will be able to adjust details and wiring to Coach
             Share authoring flows in a later iteration.
@@ -98,10 +110,12 @@ export default function TemplatePreviewScreen() {
             paddingHorizontal: 14,
             borderRadius: 10,
             borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
             alignSelf: "flex-start",
           }}
         >
-          <Text style={{ fontSize: 15, fontWeight: "500" }}>
+          <Text style={{ fontSize: 15, fontWeight: "500", color: UI.textPrimary }}>
             Continue with This Template
           </Text>
         </Pressable>

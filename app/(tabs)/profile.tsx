@@ -100,18 +100,18 @@ async function saveProfile(p: Profile) {
 }
 
 const UI = {
-  screenBg: "#020617",
-  bgCard: "#111827",
-  border: "#1f2937",
-  textPrimary: "#f9fafb",
-  textSecondary: "#cbd5e1",
-  pillActiveBorder: "#475569",
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
+  pillActiveBorder: "#1d4ed8",
 };
-const CARD_RADIUS = 16;
+const CARD_RADIUS = 18;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: UI.screenBg },
-  scroll: { padding: 22, paddingBottom: 44 },
+  scroll: { paddingHorizontal: 24, paddingVertical: 32, paddingBottom: 44 },
   h1: { fontSize: 24, fontWeight: "700", color: UI.textPrimary },
   subtle: { color: UI.textSecondary, marginTop: 6, lineHeight: 20 },
   label: { color: UI.textPrimary, marginTop: 20, marginBottom: 8, fontWeight: "600", fontSize: 15 },
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     fontSize: 15,
   },
-  pillActive: { borderColor: UI.pillActiveBorder, backgroundColor: "#111827", color: UI.textPrimary },
+  pillActive: { borderColor: UI.pillActiveBorder, backgroundColor: "#edf2ff", color: UI.textPrimary },
 });
 
 export default function ProfileScreen() {
@@ -348,10 +348,12 @@ export default function ProfileScreen() {
           borderRadius: CARD_RADIUS,
           borderWidth: 1,
           borderColor: UI.border,
-          backgroundColor: pressed ? "#111827" : UI.bgCard,
+          backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+          alignItems: "center",
+          justifyContent: "center",
         })}
       >
-        <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700" }}>Save Profile</Text>
+        <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }}>Save Profile</Text>
       </Pressable>
       <Text style={[styles.subtle, { marginTop: 10, fontSize: 13 }]}>
         Changes aren’t saved until you tap Save.
@@ -368,7 +370,7 @@ export default function ProfileScreen() {
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: UI.border,
-            backgroundColor: pressed ? "#111827" : UI.bgCard,
+            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
           })}
         >
           <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>Developer Settings</Text>
@@ -388,7 +390,7 @@ export default function ProfileScreen() {
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: UI.border,
-            backgroundColor: pressed ? "#111827" : UI.bgCard,
+            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
           })}
         >
           <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>

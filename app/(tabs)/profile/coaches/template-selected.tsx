@@ -3,6 +3,14 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 
 import { TEMPLATE_CONTENT } from "./template-preview";
 
+const UI = {
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
+};
+
 export default function TemplateSelectedScreen() {
   const { templateId } = useLocalSearchParams<{ templateId?: string }>();
 
@@ -24,11 +32,11 @@ export default function TemplateSelectedScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Template Selected" }} />
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6 }}>
+      <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 16 }}>
+        <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
           Selected Template
         </Text>
-        <Text style={{ fontSize: 14, opacity: 0.75, lineHeight: 20 }}>
+        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
           This is a quick confirmation step before you customize and assign this
           program pack in future flows.
         </Text>
@@ -39,15 +47,17 @@ export default function TemplateSelectedScreen() {
             padding: 14,
             borderRadius: 12,
             borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
           }}
         >
-          <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4 }}>
+          <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4, color: UI.textPrimary }}>
             {template.title}
           </Text>
-          <Text style={{ fontSize: 14, opacity: 0.85, lineHeight: 20 }}>
+          <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
             {template.description}
           </Text>
-          <Text style={{ marginTop: 8, fontSize: 13, opacity: 0.8 }}>
+          <Text style={{ marginTop: 8, fontSize: 13, color: UI.textSecondary }}>
             {template.metadata}
           </Text>
         </View>
@@ -58,9 +68,11 @@ export default function TemplateSelectedScreen() {
             padding: 12,
             borderRadius: 10,
             borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
           }}
         >
-          <Text style={{ fontSize: 14, opacity: 0.8, lineHeight: 20 }}>
+          <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
             You&apos;ve chosen this template as the starting point for a future
             customization and assignment flow. In a later iteration, this screen
             will hand off into authoring tools where you can tune modules,
@@ -76,10 +88,12 @@ export default function TemplateSelectedScreen() {
               paddingHorizontal: 14,
               borderRadius: 10,
               borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ fontSize: 15 }}>Back to Templates</Text>
+            <Text style={{ fontSize: 15, color: UI.textPrimary }}>Back to Templates</Text>
           </Pressable>
 
           <Pressable
@@ -89,10 +103,12 @@ export default function TemplateSelectedScreen() {
               paddingHorizontal: 14,
               borderRadius: 10,
               borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
               alignSelf: "flex-start",
             }}
           >
-            <Text style={{ fontSize: 15 }}>Back to Create Program Pack</Text>
+            <Text style={{ fontSize: 15, color: UI.textPrimary }}>Back to Create Program Pack</Text>
           </Pressable>
         </View>
       </ScrollView>
