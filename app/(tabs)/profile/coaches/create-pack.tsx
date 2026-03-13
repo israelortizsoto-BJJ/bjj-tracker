@@ -24,6 +24,19 @@ export default function CreateProgramPackScreen() {
     <>
       <Stack.Screen options={{ title: "Create Program Pack" }} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+        <Pressable
+          onPress={() => router.push("/profile/coaches")}
+          style={{
+            marginBottom: 10,
+            paddingVertical: 10,
+            paddingHorizontal: 12,
+            borderRadius: 10,
+            borderWidth: 1,
+            alignSelf: "flex-start",
+          }}
+        >
+          <Text style={{ fontSize: 14 }}>Back to Coach Share</Text>
+        </Pressable>
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6 }}>
           Coach Share · Authoring
         </Text>
