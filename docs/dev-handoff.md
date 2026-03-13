@@ -34,6 +34,12 @@ Build 7 dev tab exposure is intentional for QA:
 - Fundamentals
 - Gear
 
+## Terminal-first workflow is the default.
+Prefer terminal-driven, repeatable edits and commands wherever practical.
+Minimize manual editor changes.
+If a task is not easy to do from terminal, treat that as a workflow gap to fix rather than a reason to default to hand-editing.
+Use Cursor in a supervised workflow with terminal-visible commands, scoped diffs, gates, and intentional commits.
+
 ## No ad-hoc patching as a default workflow.
 Avoid brittle regex/sed/perl “injection” edits for features.
 Prefer clean, intentional file edits + TS/ESLint gates + clear commits.
