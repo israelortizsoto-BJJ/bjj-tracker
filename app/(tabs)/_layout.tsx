@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router";
 import { isDev } from "../../src/config/runtime";
 
-const HIDDEN = { href: null as const };
+const HIDDEN = { href: null } as const;
 
 export default function TabLayout() {
   return (
