@@ -53,9 +53,9 @@ Examples:
 	•	npm run lint is clean
 	•	No unused vars / dead types
 	•	No duplicate type definitions (single source of truth)
-	•	Storage keys imported only from app/storage/storageKeys.ts
+	•	Storage keys imported only from src/storage/storageKeys.ts
 	•	No hardcoded storage strings in screens
-	•	Fundamentals types imported via app/fundamentals barrel (no deep imports)
+	•	Fundamentals types imported from src/fundamentals entry points (avoid unnecessary deep imports)
 	•	If VS Code shows squiggles but tsc is clean → restart TS server before continuing
 
 ⸻
@@ -111,7 +111,7 @@ Before Commit (Final Gate)
 UX
 	•	Empty state considered
 	•	Input validation handled
-	•	Dark mode consistency maintained
+	•	Visual theme consistency maintained
 	•	No hidden keyboard overlap
 
 ⸻

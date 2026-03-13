@@ -71,7 +71,7 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
 **Date:** 2026-03-12  
-**Status:** Build 7 now feels like a real multi-surface dev app. Tab flow, light theme surfaces, Training QA fixes, and Coach Share polish were completed and pushed.
+**Status:** Build 7 passed a documented release-readiness QA pass, terminal-first workflow is now a hard rule, and the next move is internal release-readiness rather than a pre-release polish sprint.
 
 ## Git checkpoint
 
@@ -79,7 +79,7 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `8936408` — Feat: polish Build 7 tab flow and light theme surfaces
+- `1d126a1` — Fix: correct hidden tab const assertion
 
 ## What we completed today
 
@@ -171,10 +171,10 @@ Validated:
 
 ## Best next-session recommendation
 Next likely moves:
-- decide whether Build 7 is ready for an internal release-readiness pass
-- update release/tester focus if Build 7 is the next candidate
-- continue Coach Share pilot readiness for Kyle without broadening scope
-- consider a short release checklist pass instead of more feature work
+- proceed with internal release-readiness for Build 7
+- keep follow-up polish notes logged without opening a broad polish sprint
+- fix only real issues found during internal validation
+- preserve Coach Share as a narrow pilot lane without broadening scope
 
 ## Suggested restart commands for next session
 - `git status -sb`
