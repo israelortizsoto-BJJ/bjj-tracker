@@ -70,8 +70,8 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-12  
-**Status:** Build 7 passed a documented release-readiness QA pass, terminal-first workflow is now a hard rule, and the next move is internal release-readiness rather than a pre-release polish sprint.
+**Date:** 2026-03-13  
+**Status:** Build 7 has passed release-readiness, project continuity docs have been refreshed against repo truth, and a production iOS build is now live on-device for real validation.
 
 ## Git checkpoint
 
@@ -79,108 +79,110 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `1d126a1` — Fix: correct hidden tab const assertion
+- `e0e1521` — Docs: add project core files map
 
 ## What we completed today
 
-### 1) Rebuilt and completed the Build 7 QA pass
-We ran a real app-wide QA pass across:
-- Welcome
-- Profile
-- Training
-- Fundamentals
-- Gear
-- Coach Share
-- Add New Session
-- hidden Coach Share subflows
+### 1) Re-grounded the project from repo truth
+We stopped relying on stale assumptions and re-read the actual repo structure, config files, routing shell, and operating docs.
 
-Key judgment:
-Build 7 now feels meaningfully more complete without losing focus.
+This confirmed:
+- the app is still Expo + Expo Router based
+- EAS config is still active in the repo
+- dev/prod variant separation is implemented in app.config.ts
+- the current release lane should be driven by repo/config truth, not stale summaries
 
-### 2) Fixed real Training UX issues
-We fixed:
-- Training search so broader system/category terms like system labels match correctly
-- technique-row destructive action clutter in the session editor
-- additional row action clarity and visual consistency
+### 2) Documented Build 7 release-readiness clearly
+We completed and saved a dedicated Build 7 release-readiness pass.
 
-Training now supports:
-- multi-technique sessions
-- system-label search
-- cleaner technique editing
+That pass concluded:
+- Build 7 is ready for internal release-readiness
+- no ship blockers were found
+- remaining issues are polish / coherence follow-ups, not blocker-level defects
 
-### 3) Fixed Coach Share usability gaps
-We fixed:
-- missing back navigation from Create Program Pack
-- visual mismatch between Coach Share and the newer Build 7 light surfaces
+Saved doc:
+- `docs/qa/build-7-release-readiness-pass-2026-03-13.md`
 
-Coach Share now:
-- visually belongs to the same app
-- has cleaner navigation
-- remains a pilot lane accessible from Profile
-
-### 4) Exposed Build 7 tabs intentionally in dev
-In the dev app only, the visible tab order is now:
-1. Welcome
-2. Profile
-3. Training
-4. Fundamentals
-5. Gear
-
-Production/TestFlight behavior remains unchanged.
-
-### 5) Unified the light Build 7 visual system
-Profile, Training, Add New Session, and Coach Share surfaces were brought into the same lighter visual language already seen in Welcome, Fundamentals, and Gear.
+### 3) Repaired continuity-doc drift
+We updated the docs that had drifted away from the actual repo state.
 
 This included:
-- lighter backgrounds
-- white cards
-- consistent borders
-- stronger blue accent usage
-- centered button text where needed
-- better cross-screen visual cohesion
+- `docs/definition-of-done.md`
+- `docs/dev-handoff.md`
+- `docs/project-core-files.md`
+
+Result:
+future restart flow should now be cleaner and less dependent on memory.
+
+### 4) Advanced the production release lane
+We validated local production config and gates, authenticated to the correct Expo/EAS account, verified remote build numbering, and produced a successful production iOS build.
+
+Confirmed:
+- Expo/EAS account: `iortizsoto`
+- remote iOS production build number before build: `6`
+- Build 7 production build completed successfully
+- Build 7 is now live on-device for real testing
 
 ## What passed
 
 ### Gates
-- `npx tsc --noEmit` passed throughout final fixes
-- `npx eslint .` passed throughout final fixes
+- `npm run typecheck` passed
+- `npm run lint` passed
 
-### App validation
+### Production config validation
 Validated:
-- visible dev tab order
-- no extra/truncated tab leakage
-- Profile save still routes to Training intentionally
-- Training search works for system labels
-- Add Session button text centering
-- Save Profile button text centering
-- Add New Session visual/readability pass
-- Coach Share home, Join, Manage, Create Program Pack, Templates, Preview, and Selected screens all visually/readability pass
+- `name = MatMind Jiu Jitsu`
+- `ios.bundleIdentifier = com.ortizdigitalstudio.matmind`
+- `extra.appVariant = prod`
+
+### Product / release validation
+Validated:
+- Build 7 release-readiness pass completed
+- project continuity docs now align more closely with repo truth
+- production iOS build completed successfully
+- Build 7 is live on-device for real validation
 
 ## Commits landed today
-- `552018e` — Fix: include system labels in Training search
-- `20d8145` — Fix: unify technique row actions in Training editor
-- `61093d4` — Fix: add Coach Share back navigation from pack creation
-- `8936408` — Feat: polish Build 7 tab flow and light theme surfaces
+- `60ee2e7` — Docs: refresh handoff and definition of done
+- `e0e1521` — Docs: add project core files map
 
-## Locked product decisions
-- Build 7 should feel meaningfully more complete, not broadly overbuilt
-- Welcome, Profile, Training, Fundamentals, and Gear are the right visible dev QA tabs
-- Coach Share remains reachable from Profile, not as a main tab
-- Dev Shortcuts stay for now
-- The global launch behavior that routes returning users toward Training is intentional
+Recent supporting commits still relevant to current state:
+- `1d126a1` — Fix: correct hidden tab const assertion
+- `0772623` — Docs: add Build 7 release readiness pass
+- `6fd0261` — Docs: add terminal-first workflow rule
+
+## Locked product / workflow decisions
+- Terminal-first execution is now a hard project rule
+- Repo/config truth should be checked before relying on stale handoff assumptions
+- Build 7 is ready for internal release-readiness
+- Pre-release polish should remain constrained; do not broaden scope before validation
+- Coach Share remains a narrow pilot lane, not a broader expansion target right now
+
+## Open loops
+- Complete real-device feedback pass on Build 7
+- Decide whether any on-device issues are blockers, minor issues, or follow-ups
+- Later polish candidates:
+  - Welcome branding hierarchy / logo prominence
+  - shared top spacing on Profile / Fundamentals / Gear
+  - cleaner title for `training/[id]`
+  - Coach Share information hierarchy
+- Decide whether `docs/ods-website-rebuild-proposal.md` belongs in this repo/workstream or should stay separate
+- Later cleanup option:
+  - remove stale/ignored local `ios.buildNumber` from app config since remote versioning is the source of truth
 
 ## Best next-session recommendation
 Next likely moves:
-- proceed with internal release-readiness for Build 7
-- keep follow-up polish notes logged without opening a broad polish sprint
-- fix only real issues found during internal validation
+- gather real on-device Build 7 feedback and classify each issue as blocker / minor / follow-up
+- fix only real release-confidence issues found during internal validation
+- keep logged polish items constrained and avoid opening a broad cleanup sprint
 - preserve Coach Share as a narrow pilot lane without broadening scope
 
 ## Suggested restart commands for next session
 - `git status -sb`
 - `git log -5 --oneline`
 - `sed -n '1,260p' "docs/dev-handoff.md"`
+- `sed -n '1,260p' "docs/recaps/2026-03-13_dev-recap.md"`
 
 ## Assumptions
-- I treated today’s work as the new current truth for Build 7 and replaced older partial guidance.
-- I assumed the dev tab exposure remains dev-only and should not be generalized to production yet.
+- I treated repo/config truth as higher priority than stale handoff summaries.
+- I assumed Build 7 real-device testing should drive the next fix list rather than opening a broad polish sprint first.
