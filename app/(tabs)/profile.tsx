@@ -287,14 +287,8 @@ export default function ProfileScreen() {
         style={styles.input}
       />
       <Text style={[styles.subtle, { fontSize: 13 }]}>
-        Use YYYY-MM-DD for now, for example 2025-09-14.
+        Use YYYY-MM-DD, for example 2025-09-14.
       </Text>
-      {isValidYMDDate(lastPromotionDate.trim()) ? (
-        <Text style={[styles.subtle, { fontSize: 13, marginTop: 4 }]}>
-          Display: {formatYMDForDisplay(lastPromotionDate.trim())}
-        </Text>
-      ) : null}
-      <Text style={styles.subtle}>Example: 2025-11-03</Text>
 
       {/* Stripes */}
       <Text style={styles.label}>Stripes (0–4)</Text>
