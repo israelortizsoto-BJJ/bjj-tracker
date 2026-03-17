@@ -6,12 +6,14 @@ import {
   getAssignmentsById,
   getCoachLinks,
   getCoachesById,
+  getCoachPilotPreviewTemplate,
   getCompletionReceiptsQueue,
   getPackEnrollments,
   getPacksById,
   setAssignmentsById as persistAssignmentsById,
   setCompletionReceiptsQueue as persistCompletionReceiptsQueue,
 } from "../../../../src/storage/coachShareStore";
+import type { CoachPilotPreviewTemplate } from "../../../../src/storage/coachShareStore";
 import type {
   AssignmentMap,
   CoachIdentityMap,
@@ -61,6 +63,7 @@ function Section({
 
 export default function CoachesScreen() {
   const [ready, setReady] = useState(false);
+  const [showDebugData, setShowDebugData] = useState(false);
   const [coachLinks, setCoachLinks] = useState<CoachLink[]>([]);
   const [coachesById, setCoachesById] = useState<CoachIdentityMap>({});
   const [packsById, setPacksById] = useState<ProgramPackMap>({});
@@ -69,6 +72,8 @@ export default function CoachesScreen() {
   const [completionReceiptsQueue, setCompletionReceiptsQueue] = useState<
     CompletionReceipt[]
   >([]);
+  const [pilotPreviewTemplate, setPilotPreviewTemplate] =
+    useState<CoachPilotPreviewTemplate | null>(null);
 
   const loadCoachShareData = useCallback(async () => {
     setReady(false);
@@ -80,6 +85,7 @@ export default function CoachesScreen() {
       loadedPackEnrollments,
       loadedAssignmentsById,
       loadedCompletionReceiptsQueue,
+      loadedPilotPreviewTemplate,
     ] = await Promise.all([
       getCoachLinks(),
       getCoachesById(),
@@ -87,6 +93,7 @@ export default function CoachesScreen() {
       getPackEnrollments(),
       getAssignmentsById(),
       getCompletionReceiptsQueue(),
+      getCoachPilotPreviewTemplate(),
     ]);
 
     setCoachLinks(loadedCoachLinks);
@@ -95,6 +102,7 @@ export default function CoachesScreen() {
     setPackEnrollments(loadedPackEnrollments);
     setAssignmentsById(loadedAssignmentsById);
     setCompletionReceiptsQueue(loadedCompletionReceiptsQueue);
+    setPilotPreviewTemplate(loadedPilotPreviewTemplate);
     setReady(true);
   }, []);
 
@@ -244,7 +252,12 @@ export default function CoachesScreen() {
     <>
       <Stack.Screen options={{ title: "Coaches & Programs" }} />
       <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-        <Text style={{ fontSize: 24, fontWeight: "700", color: UI.textPrimary, marginBottom: 8 }}>
+        <Text
+          onLongPress={
+            __DEV__ ? () => setShowDebugData((prev) => !prev) : undefined
+          }
+          style={{ fontSize: 24, fontWeight: "700", color: UI.textPrimary, marginBottom: 8 }}
+        >
           Coach Share
         </Text>
         <Section title="What Coach Share is">
@@ -265,15 +278,28 @@ export default function CoachesScreen() {
             <Section title="Current Focus This Week">
               {coachLinks.length === 0 ? (
                 <>
-                  <Text style={{ fontSize: 15, marginBottom: 6, color: UI.textPrimary, fontWeight: "600" }}>
-                    No coach/program connected yet.
-                  </Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                    Once you join, you&apos;ll see the coach&apos;s current weekly focus, what to watch for in regular class, and recent completions.
-                  </Text>
-                  <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
-                    For local preview, you can seed demo data from Developer Settings.
-                  </Text>
+                  {pilotPreviewTemplate ? (
+                    <>
+                      <Text style={{ fontSize: 15, marginBottom: 6, color: UI.textPrimary, fontWeight: "600" }}>
+                        No family-facing coach/program connected yet.
+                      </Text>
+                      <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                        A coach-side pilot template has been selected below, but it is not yet assigned or published to families.
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ fontSize: 15, marginBottom: 6, color: UI.textPrimary, fontWeight: "600" }}>
+                        No coach/program connected yet.
+                      </Text>
+                      <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                        Once you join, you&apos;ll see the coach&apos;s current weekly focus, what to watch for in regular class, and recent completions.
+                      </Text>
+                      <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
+                        For local preview, you can seed demo data from Developer Settings.
+                      </Text>
+                    </>
+                  )}
                 </>
               ) : (
                 <View style={{ gap: 14 }}>
@@ -465,7 +491,40 @@ export default function CoachesScreen() {
               </Pressable>
             </Section>
 
-            {__DEV__ ? (
+            {pilotPreviewTemplate ? (
+              <Section title="Coach Pilot Preview">
+                <View style={{ gap: 10 }}>
+                  <View>
+                    <Text style={{ fontSize: 12, color: UI.textSecondary, letterSpacing: 0.6, fontWeight: "600" }}>
+                      SELECTED TEMPLATE
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 6, color: UI.textPrimary }}>
+                      {pilotPreviewTemplate.templateTitle}
+                    </Text>
+                    <Text style={{ fontSize: 14, color: UI.textSecondary, marginTop: 6, lineHeight: 20 }}>
+                      {pilotPreviewTemplate.templateMetadata}
+                    </Text>
+                    <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 10 }}>
+                      Status:{" "}
+                      <Text style={{ fontWeight: "600", color: UI.textPrimary }}>
+                        Selected for internal pilot preview
+                      </Text>
+                    </Text>
+                    <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 4, lineHeight: 18 }}>
+                      Note: This is stored locally and is not yet assigned or published to families.
+                    </Text>
+                    <Text style={{ fontSize: 12, color: UI.textSecondary, marginTop: 10 }}>
+                      Selected:{" "}
+                      <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
+                        {new Date(pilotPreviewTemplate.selectedAt).toLocaleDateString()}
+                      </Text>
+                    </Text>
+                  </View>
+                </View>
+              </Section>
+            ) : null}
+
+            {__DEV__ && showDebugData ? (
               <Section title="Debug Data">
                 <Text style={{ fontSize: 14, color: UI.textSecondary }}>Links: {coachLinks.length}</Text>
                 <Text style={{ fontSize: 14, color: UI.textSecondary }}>
@@ -482,6 +541,9 @@ export default function CoachesScreen() {
                 </Text>
                 <Text style={{ fontSize: 14, color: UI.textSecondary }}>
                   Receipt queue: {completionReceiptsQueue.length}
+                </Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Pilot preview: {pilotPreviewTemplate ? "Yes" : "No"}
                 </Text>
               </Section>
             ) : null}
