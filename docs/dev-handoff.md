@@ -27,7 +27,7 @@ Use Dev Settings “Dev Shortcuts” to reach hidden routes.
 ## Hidden routes stay hidden from the tab bar by default unless intentionally exposed in dev.
 Use `href: null` for internal routes and Coach Share subroutes.
 Coach Share should still remain reachable from Profile, not as a main tab.
-Build 7 dev tab exposure is intentional for QA:
+Build 7/8 tab exposure is now intentional for tester-facing product clarity:
 - Welcome
 - Profile
 - Training
@@ -70,8 +70,8 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-13  
-**Status:** Build 7 has passed release-readiness, project continuity docs have been refreshed against repo truth, and a production iOS build is now live on-device for real validation.
+**Date:** 2026-03-17  
+**Status:** Build 8 is now live in TestFlight, includes the fuller Build 7 tab exposure in production, and the highest-ROI next move is tester feedback triage rather than new feature expansion.
 
 ## Git checkpoint
 
@@ -79,49 +79,52 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `e0e1521` — Docs: add project core files map
+- `34aa1d9` — Chore: remove unused profile date formatter
 
-## What we completed today
+## What we completed most recently
 
-### 1) Re-grounded the project from repo truth
-We stopped relying on stale assumptions and re-read the actual repo structure, config files, routing shell, and operating docs.
+### 1) Used real-device feedback to choose the next slice
+We validated that session logging felt stronger and more robust, especially for:
+- multiple techniques in one session
+- custom technique entry
+- YouTube link attachment
+- image attachment
 
-This confirmed:
-- the app is still Expo + Expo Router based
-- EAS config is still active in the repo
-- dev/prod variant separation is implemented in app.config.ts
-- the current release lane should be driven by repo/config truth, not stale summaries
+That feedback also exposed an important product mismatch:
+- production/TestFlight did not yet show the fuller Build 7 surface area
+- Welcome / Fundamentals / Gear were visible in dev but not in production
 
-### 2) Documented Build 7 release-readiness clearly
-We completed and saved a dedicated Build 7 release-readiness pass.
+### 2) Corrected production tab exposure
+We updated production/non-dev tab visibility so the external/TestFlight build now reflects the intended fuller product surface:
+- Welcome
+- Profile
+- Training
+- Fundamentals
+- Gear
 
-That pass concluded:
-- Build 7 is ready for internal release-readiness
-- no ship blockers were found
-- remaining issues are polish / coherence follow-ups, not blocker-level defects
+We intentionally kept these hidden:
+- Dev Settings
+- Coach Share routes
+- training/[id]
+- health
 
-Saved doc:
-- `docs/qa/build-7-release-readiness-pass-2026-03-13.md`
+### 3) Tightened Profile helper text
+We simplified the Last Promotion Date helper area so it is less noisy and more readable:
+- kept one concise format hint
+- removed the extra Display line
+- removed the extra Example line
 
-### 3) Repaired continuity-doc drift
-We updated the docs that had drifted away from the actual repo state.
+### 4) Kept Coach Share contained
+We explicitly did not broaden Coach Share exposure in production.
+Coach Share remains a narrow pilot lane until product coherence improves.
 
-This included:
-- `docs/definition-of-done.md`
-- `docs/dev-handoff.md`
-- `docs/project-core-files.md`
-
-Result:
-future restart flow should now be cleaner and less dependent on memory.
-
-### 4) Advanced the production release lane
-We validated local production config and gates, authenticated to the correct Expo/EAS account, verified remote build numbering, and produced a successful production iOS build.
+### 5) Shipped Build 8
+We validated the slice in MatMind Dev, cleaned the repo lane, removed unrelated website artifacts, fixed the final dead-code warning, and shipped the next production/TestFlight build.
 
 Confirmed:
-- Expo/EAS account: `iortizsoto`
-- remote iOS production build number before build: `6`
-- Build 7 production build completed successfully
-- Build 7 is now live on-device for real testing
+- Build 8 is live
+- Build 8 has early downloads
+- the next meaningful signal source is tester behavior and feedback
 
 ## What passed
 
@@ -137,44 +140,42 @@ Validated:
 
 ### Product / release validation
 Validated:
-- Build 7 release-readiness pass completed
-- project continuity docs now align more closely with repo truth
-- production iOS build completed successfully
-- Build 7 is live on-device for real validation
+- production tab exposure now matches the intended fuller Build 7 story
+- Profile helper text is cleaner
+- Coach Share remains intentionally contained
+- Build 8 is live in TestFlight
 
-## Commits landed today
-- `60ee2e7` — Docs: refresh handoff and definition of done
+## Commits landed most recently
+- `34aa1d9` — Chore: remove unused profile date formatter
+- `9ab2d08` — Feat: expose Build 7 tabs in production and tighten profile helper text
+- `40ca82a` — Docs: update Build 7 EOD recap and handoff
 - `e0e1521` — Docs: add project core files map
-
-Recent supporting commits still relevant to current state:
-- `1d126a1` — Fix: correct hidden tab const assertion
-- `0772623` — Docs: add Build 7 release readiness pass
-- `6fd0261` — Docs: add terminal-first workflow rule
+- `60ee2e7` — Docs: refresh handoff and definition of done
 
 ## Locked product / workflow decisions
-- Terminal-first execution is now a hard project rule
+- Terminal-first execution remains a hard project rule
 - Repo/config truth should be checked before relying on stale handoff assumptions
-- Build 7 is ready for internal release-readiness
-- Pre-release polish should remain constrained; do not broaden scope before validation
-- Coach Share remains a narrow pilot lane, not a broader expansion target right now
+- External/TestFlight should now reflect the fuller Build 7 tab story
+- Coach Share remains a narrow pilot lane, not a broad external-facing feature yet
+- Tester feedback should now drive the next fix list
+- Do not open a broad cleanup or polish sprint without evidence
 
 ## Open loops
-- Complete real-device feedback pass on Build 7
-- Decide whether any on-device issues are blockers, minor issues, or follow-ups
+- Gather real tester feedback from Build 8
+- Classify each issue as blocker / minor / follow-up
+- Validate whether Welcome / Fundamentals / Gear improve tester comprehension externally
+- Decide whether any Build 8 issues materially affect release confidence
 - Later polish candidates:
   - Welcome branding hierarchy / logo prominence
   - shared top spacing on Profile / Fundamentals / Gear
   - cleaner title for `training/[id]`
   - Coach Share information hierarchy
-- Decide whether `docs/ods-website-rebuild-proposal.md` belongs in this repo/workstream or should stay separate
-- Later cleanup option:
-  - remove stale/ignored local `ios.buildNumber` from app config since remote versioning is the source of truth
 
 ## Best next-session recommendation
 Next likely moves:
-- gather real on-device Build 7 feedback and classify each issue as blocker / minor / follow-up
-- fix only real release-confidence issues found during internal validation
-- keep logged polish items constrained and avoid opening a broad cleanup sprint
+- gather Build 8 tester feedback and classify each issue as blocker / minor / follow-up
+- fix only issues that materially affect release confidence or app comprehension
+- avoid broad new feature work until feedback shows where the real friction is
 - preserve Coach Share as a narrow pilot lane without broadening scope
 
 ## Suggested restart commands for next session
@@ -184,5 +185,5 @@ Next likely moves:
 - `sed -n '1,260p' "docs/recaps/2026-03-13_dev-recap.md"`
 
 ## Assumptions
-- I treated repo/config truth as higher priority than stale handoff summaries.
-- I assumed Build 7 real-device testing should drive the next fix list rather than opening a broad polish sprint first.
+- I treated Build 8 early downloads as enough evidence to shift the next priority toward tester-feedback triage.
+- I assumed broad new feature work would be lower ROI than responding to real external/tester signals.
