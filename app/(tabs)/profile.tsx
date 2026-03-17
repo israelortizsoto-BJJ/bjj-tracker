@@ -47,16 +47,6 @@ function isValidYMDDate(value: string) {
   );
 }
 
-function formatYMDForDisplay(value: string) {
-  if (!isValidYMDDate(value)) return "";
-  const [year, month, day] = value.split("-").map(Number);
-  const dt = new Date(year, month - 1, day);
-  return dt.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 const BELTS = ["White", "Blue", "Purple", "Brown", "Black"];
 const beltAccent = (b: string) => {
