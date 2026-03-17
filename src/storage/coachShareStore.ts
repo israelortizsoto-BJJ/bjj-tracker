@@ -10,6 +10,13 @@ import type {
 } from "../types/coachShare";
 import { StorageKeys } from "./storageKeys";
 
+export type CoachPilotPreviewTemplate = {
+  templateId: string;
+  templateTitle: string;
+  templateMetadata: string;
+  selectedAt: string;
+};
+
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
   if (!raw) {
     return fallback;
@@ -93,5 +100,24 @@ export async function setCompletionReceiptsQueue(
   await AsyncStorage.setItem(
     StorageKeys.completionReceiptsQueue,
     JSON.stringify(receipts),
+  );
+}
+
+export async function getCoachPilotPreviewTemplate(): Promise<CoachPilotPreviewTemplate | null> {
+  const raw = await AsyncStorage.getItem(StorageKeys.coachPilotPreviewTemplate);
+  return safeParseOrDefault<CoachPilotPreviewTemplate | null>(raw, null);
+}
+
+export async function setCoachPilotPreviewTemplate(
+  preview: CoachPilotPreviewTemplate | null,
+): Promise<void> {
+  if (!preview) {
+    await AsyncStorage.removeItem(StorageKeys.coachPilotPreviewTemplate);
+    return;
+  }
+
+  await AsyncStorage.setItem(
+    StorageKeys.coachPilotPreviewTemplate,
+    JSON.stringify(preview),
   );
 }

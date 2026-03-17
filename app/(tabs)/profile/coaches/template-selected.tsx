@@ -1,6 +1,7 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { setCoachPilotPreviewTemplate } from "../../../../src/storage/coachShareStore";
 import { TEMPLATE_CONTENT } from "./template-preview";
 
 const UI = {
@@ -20,6 +21,18 @@ export default function TemplateSelectedScreen() {
       : "guard-pull-defense-knee-middle";
 
   const template = TEMPLATE_CONTENT[effectiveTemplateId];
+
+  const handleConfirmPilotPreview = async () => {
+    const nowIso = new Date().toISOString();
+    await setCoachPilotPreviewTemplate({
+      templateId: effectiveTemplateId,
+      templateTitle: template.title,
+      templateMetadata: template.metadata,
+      selectedAt: nowIso,
+    });
+
+    router.replace("/profile/coaches");
+  };
 
   const handleBackToTemplates = () => {
     router.push("/profile/coaches/templates");
@@ -81,6 +94,26 @@ export default function TemplateSelectedScreen() {
         </View>
 
         <View style={{ marginTop: 20, gap: 10 }}>
+          <Pressable
+            onPress={() => void handleConfirmPilotPreview()}
+            style={{
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              alignSelf: "flex-start",
+            }}
+          >
+            <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "700" }}>
+              Confirm Pilot Preview
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
+              Saves locally. Not assigned/published to families yet.
+            </Text>
+          </Pressable>
+
           <Pressable
             onPress={handleBackToTemplates}
             style={{

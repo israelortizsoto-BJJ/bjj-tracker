@@ -12,4 +12,5 @@ export const StorageKeys = {
   packEnrollments: "mm:v1:packEnrollments",
   assignmentsById: "mm:v1:assignmentsById",
   completionReceiptsQueue: "mm:v1:completionReceiptsQueue",
+  coachPilotPreviewTemplate: "mm:v1:coachPilotPreviewTemplate",
 } as const;
