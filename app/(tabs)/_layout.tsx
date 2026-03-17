@@ -21,6 +21,7 @@ export default function TabLayout() {
             <Tabs.Screen key="profile/coaches/templates" name="profile/coaches/templates" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/template-preview" name="profile/coaches/template-preview" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/template-selected" name="profile/coaches/template-selected" options={HIDDEN} />,
+            <Tabs.Screen key="profile/coaches/custom-focus" name="profile/coaches/custom-focus" options={HIDDEN} />,
             <Tabs.Screen key="training/[id]" name="training/[id]" options={HIDDEN} />,
             <Tabs.Screen key="health" name="health" options={HIDDEN} />,
           ]
@@ -38,6 +39,7 @@ export default function TabLayout() {
             <Tabs.Screen key="profile/coaches/templates" name="profile/coaches/templates" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/template-preview" name="profile/coaches/template-preview" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/template-selected" name="profile/coaches/template-selected" options={HIDDEN} />,
+            <Tabs.Screen key="profile/coaches/custom-focus" name="profile/coaches/custom-focus" options={HIDDEN} />,
             <Tabs.Screen key="training/[id]" name="training/[id]" options={HIDDEN} />,
             <Tabs.Screen key="health" name="health" options={HIDDEN} />,
           ]}

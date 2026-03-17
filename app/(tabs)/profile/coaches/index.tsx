@@ -1,19 +1,27 @@
 import { Stack, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import {
+  Alert,
+  Linking,
+  Pressable,
+  Text,
+  View,
+} from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import {
   getAssignmentsById,
   getCoachLinks,
   getCoachesById,
-  getCoachPilotPreviewTemplate,
   getCompletionReceiptsQueue,
+  getCoachPilotPreviewItems,
   getPackEnrollments,
   getPacksById,
   setAssignmentsById as persistAssignmentsById,
   setCompletionReceiptsQueue as persistCompletionReceiptsQueue,
+  setCoachPilotPreviewItems,
 } from "../../../../src/storage/coachShareStore";
-import type { CoachPilotPreviewTemplate } from "../../../../src/storage/coachShareStore";
+import type { CoachPilotPreviewItem } from "../../../../src/storage/coachShareStore";
 import type {
   AssignmentMap,
   CoachIdentityMap,
@@ -72,8 +80,7 @@ export default function CoachesScreen() {
   const [completionReceiptsQueue, setCompletionReceiptsQueue] = useState<
     CompletionReceipt[]
   >([]);
-  const [pilotPreviewTemplate, setPilotPreviewTemplate] =
-    useState<CoachPilotPreviewTemplate | null>(null);
+  const [pilotPreviewItems, setPilotPreviewItemsState] = useState<CoachPilotPreviewItem[]>([]);
 
   const loadCoachShareData = useCallback(async () => {
     setReady(false);
@@ -85,7 +92,7 @@ export default function CoachesScreen() {
       loadedPackEnrollments,
       loadedAssignmentsById,
       loadedCompletionReceiptsQueue,
-      loadedPilotPreviewTemplate,
+      loadedPilotPreviewItems,
     ] = await Promise.all([
       getCoachLinks(),
       getCoachesById(),
@@ -93,7 +100,7 @@ export default function CoachesScreen() {
       getPackEnrollments(),
       getAssignmentsById(),
       getCompletionReceiptsQueue(),
-      getCoachPilotPreviewTemplate(),
+      getCoachPilotPreviewItems(),
     ]);
 
     setCoachLinks(loadedCoachLinks);
@@ -102,7 +109,7 @@ export default function CoachesScreen() {
     setPackEnrollments(loadedPackEnrollments);
     setAssignmentsById(loadedAssignmentsById);
     setCompletionReceiptsQueue(loadedCompletionReceiptsQueue);
-    setPilotPreviewTemplate(loadedPilotPreviewTemplate);
+    setPilotPreviewItemsState(loadedPilotPreviewItems);
     setReady(true);
   }, []);
 
@@ -248,10 +255,73 @@ export default function CoachesScreen() {
     alignSelf: "flex-start",
   });
 
+  const handleRemovePilotPreviewItem = useCallback(
+    async (id: string) => {
+      const updated = pilotPreviewItems.filter((item) => item.id !== id);
+      await setCoachPilotPreviewItems(updated);
+      setPilotPreviewItemsState(updated);
+    },
+    [pilotPreviewItems],
+  );
+
+  const isUsableYoutubeUrl = (raw?: string) => {
+    if (!raw) return false;
+    const trimmed = raw.trim();
+    if (!trimmed) return false;
+    const hasProtocol =
+      trimmed.startsWith("http://") || trimmed.startsWith("https://");
+    const candidate = hasProtocol ? trimmed : `https://${trimmed}`;
+    const lower = candidate.toLowerCase();
+
+    const looksLikeYoutube =
+      lower.includes("youtube.com") || lower.includes("youtu.be");
+    const looksLikeInstagram =
+      lower.includes("instagram.com") || lower.includes("instagr.am");
+
+    return looksLikeYoutube || looksLikeInstagram;
+  };
+
+  const openYoutubeUrl = useCallback(async (rawUrl: string | undefined) => {
+    if (!isUsableYoutubeUrl(rawUrl)) {
+      return;
+    }
+
+    const trimmed = rawUrl!.trim();
+
+    const normalized =
+      trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        ? trimmed
+        : `https://${trimmed}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(normalized);
+      if (!canOpen) {
+        Alert.alert(
+          "Unable to open link",
+          "This reference link cannot be opened on this device.",
+        );
+        return;
+      }
+
+      await Linking.openURL(normalized);
+    } catch {
+      Alert.alert(
+        "Unable to open link",
+        "Something went wrong opening this reference link.",
+      );
+    }
+  }, []);
+
   return (
     <>
       <Stack.Screen options={{ title: "Coaches & Programs" }} />
-      <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+      <KeyboardAwareScrollView
+        enableOnAndroid
+        extraScrollHeight={80}
+        keyboardShouldPersistTaps="handled"
+        style={{ flex: 1, backgroundColor: UI.screenBg }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+      >
         <Text
           onLongPress={
             __DEV__ ? () => setShowDebugData((prev) => !prev) : undefined
@@ -278,13 +348,13 @@ export default function CoachesScreen() {
             <Section title="Current Focus This Week">
               {coachLinks.length === 0 ? (
                 <>
-                  {pilotPreviewTemplate ? (
+                  {pilotPreviewItems.length > 0 ? (
                     <>
                       <Text style={{ fontSize: 15, marginBottom: 6, color: UI.textPrimary, fontWeight: "600" }}>
                         No family-facing coach/program connected yet.
                       </Text>
                       <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                        A coach-side pilot template has been selected below, but it is not yet assigned or published to families.
+                        Coach-side pilot preview items are saved below, but they are not assigned or published to families.
                       </Text>
                     </>
                   ) : (
@@ -491,38 +561,166 @@ export default function CoachesScreen() {
               </Pressable>
             </Section>
 
-            {pilotPreviewTemplate ? (
+            {pilotPreviewItems.length > 0 ? (
               <Section title="Coach Pilot Preview">
-                <View style={{ gap: 10 }}>
-                  <View>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, letterSpacing: 0.6, fontWeight: "600" }}>
-                      SELECTED TEMPLATE
+                <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                  Internal pilot preview (coach-side). This does not assign or publish anything to families.
+                </Text>
+
+                <View style={{ marginTop: 12, gap: 10 }}>
+                  {pilotPreviewItems.slice(0, 3).map((item) => {
+                    const label = item.type === "template" ? "TEMPLATE" : "CUSTOM";
+                    const meta = item.type === "template" ? item.metadata : item.note;
+                    return (
+                      <View
+                        key={item.id}
+                        style={{
+                          padding: 12,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          backgroundColor: UI.bgCard,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            color: UI.textSecondary,
+                            letterSpacing: 0.6,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {label}
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 16,
+                            fontWeight: "700",
+                            marginTop: 6,
+                            color: UI.textPrimary,
+                          }}
+                        >
+                          {item.title}
+                        </Text>
+                        {meta ? (
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              color: UI.textSecondary,
+                              marginTop: 6,
+                              lineHeight: 20,
+                            }}
+                          >
+                            {meta}
+                          </Text>
+                        ) : null}
+                        <View
+                          style={{
+                            marginTop: 10,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                            Added:{" "}
+                            <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
+                              {new Date(item.createdAt).toLocaleDateString()}
+                            </Text>
+                          </Text>
+                          <View
+                            style={{
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 8,
+                            }}
+                          >
+                            {isUsableYoutubeUrl(item.youtubeUrl) ? (
+                              <Pressable
+                                onPress={() => void openYoutubeUrl(item.youtubeUrl)}
+                                style={({ pressed }) => ({
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 10,
+                                  borderRadius: 999,
+                                  borderWidth: 1,
+                                  borderColor: UI.border,
+                                  backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                                })}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: "700",
+                                    color: UI.textPrimary,
+                                  }}
+                                >
+                                  YT
+                                </Text>
+                              </Pressable>
+                            ) : null}
+                            <Pressable
+                              onPress={() => void handleRemovePilotPreviewItem(item.id)}
+                              style={({ pressed }) => ({
+                                paddingVertical: 6,
+                                paddingHorizontal: 10,
+                                borderRadius: 999,
+                                borderWidth: 1,
+                                borderColor: UI.border,
+                                backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                              })}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 13,
+                                  color: UI.textPrimary,
+                                  fontWeight: "600",
+                                }}
+                              >
+                                Remove
+                              </Text>
+                            </Pressable>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                    {pilotPreviewItems.length}/3 items saved
+                  </Text>
+                </View>
+
+                <View style={{ marginTop: 14, gap: 10 }}>
+                  <Pressable
+                    onPress={() => router.push("/profile/coaches/custom-focus")}
+                    style={({ pressed }) => ({
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: CARD_RADIUS,
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                      alignSelf: "flex-start",
+                    })}
+                  >
+                    <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "700" }}>
+                      Add Custom Focus
                     </Text>
-                    <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 6, color: UI.textPrimary }}>
-                      {pilotPreviewTemplate.templateTitle}
+                    <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
+                      Title required. Optional short note. Internal pilot preview only.
                     </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, marginTop: 6, lineHeight: 20 }}>
-                      {pilotPreviewTemplate.templateMetadata}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 10 }}>
-                      Status:{" "}
-                      <Text style={{ fontWeight: "600", color: UI.textPrimary }}>
-                        Selected for internal pilot preview
-                      </Text>
-                    </Text>
-                    <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 4, lineHeight: 18 }}>
-                      Note: This is stored locally and is not yet assigned or published to families.
-                    </Text>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, marginTop: 10 }}>
-                      Selected:{" "}
-                      <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
-                        {new Date(pilotPreviewTemplate.selectedAt).toLocaleDateString()}
-                      </Text>
-                    </Text>
-                  </View>
+                  </Pressable>
                 </View>
               </Section>
-            ) : null}
+            ) : (
+              <Section title="Coach Pilot Preview">
+                <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                  Internal pilot preview (coach-side). This does not assign or publish anything to families.
+                </Text>
+                <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary }}>
+                  No preview items yet. Add a template from Coach Tools or add a custom focus from the coach tools below.
+                </Text>
+              </Section>
+            )}
 
             {__DEV__ && showDebugData ? (
               <Section title="Debug Data">
@@ -543,13 +741,14 @@ export default function CoachesScreen() {
                   Receipt queue: {completionReceiptsQueue.length}
                 </Text>
                 <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Pilot preview: {pilotPreviewTemplate ? "Yes" : "No"}
+                  Pilot preview items: {pilotPreviewItems.length}
                 </Text>
+                
               </Section>
             ) : null}
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </>
   );
 }

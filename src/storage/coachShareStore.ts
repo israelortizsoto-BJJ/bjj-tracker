@@ -1,12 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type {
-    AssignmentMap,
-    CoachIdentityMap,
-    CoachLink,
-    CompletionReceipt,
-    PackEnrollment,
-    ProgramPackMap,
+  AssignmentMap,
+  CoachIdentityMap,
+  CoachLink,
+  CompletionReceipt,
+  PackEnrollment,
+  ProgramPackMap,
 } from "../types/coachShare";
 import { StorageKeys } from "./storageKeys";
 
@@ -15,7 +15,30 @@ export type CoachPilotPreviewTemplate = {
   templateTitle: string;
   templateMetadata: string;
   selectedAt: string;
+  // In the legacy template preview, we didn't support reference links.
+  // Newer flows attach youtubeUrl on the normalized preview items instead.
 };
+
+export type CoachPilotPreviewItem =
+  | {
+      id: string;
+      type: "template";
+      templateId: string;
+      title: string;
+      metadata?: string;
+      createdAt: string;
+      youtubeUrl?: string;
+    }
+  | {
+      id: string;
+      type: "custom";
+      title: string;
+      note?: string;
+      createdAt: string;
+      youtubeUrl?: string;
+    };
+
+export const COACH_PILOT_PREVIEW_MAX_ITEMS = 3 as const;
 
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
   if (!raw) {
@@ -119,5 +142,57 @@ export async function setCoachPilotPreviewTemplate(
   await AsyncStorage.setItem(
     StorageKeys.coachPilotPreviewTemplate,
     JSON.stringify(preview),
+  );
+}
+
+function normalizeCoachPilotPreviewItems(
+  items: CoachPilotPreviewItem[],
+): CoachPilotPreviewItem[] {
+  // Keep it simple: cap list length, preserve insertion order.
+  return items.slice(0, COACH_PILOT_PREVIEW_MAX_ITEMS);
+}
+
+async function maybeMigrateLegacyPilotPreviewTemplate(): Promise<CoachPilotPreviewItem[] | null> {
+  const legacy = await getCoachPilotPreviewTemplate();
+  if (!legacy) {
+    return null;
+  }
+
+  const migrated: CoachPilotPreviewItem[] = [
+    {
+      id: `legacy-template-${legacy.templateId}`,
+      type: "template",
+      templateId: legacy.templateId,
+      title: legacy.templateTitle,
+      metadata: legacy.templateMetadata,
+      createdAt: legacy.selectedAt,
+    },
+  ];
+
+  await AsyncStorage.setItem(
+    StorageKeys.coachPilotPreviewItems,
+    JSON.stringify(migrated),
+  );
+  // Keep legacy key around for now; the new UI will read the list.
+  return migrated;
+}
+
+export async function getCoachPilotPreviewItems(): Promise<CoachPilotPreviewItem[]> {
+  const raw = await AsyncStorage.getItem(StorageKeys.coachPilotPreviewItems);
+  const parsed = safeParseOrDefault<CoachPilotPreviewItem[] | null>(raw, null);
+  if (parsed && Array.isArray(parsed)) {
+    return normalizeCoachPilotPreviewItems(parsed);
+  }
+
+  const migrated = await maybeMigrateLegacyPilotPreviewTemplate();
+  return migrated ?? [];
+}
+
+export async function setCoachPilotPreviewItems(
+  items: CoachPilotPreviewItem[],
+): Promise<void> {
+  await AsyncStorage.setItem(
+    StorageKeys.coachPilotPreviewItems,
+    JSON.stringify(normalizeCoachPilotPreviewItems(items)),
   );
 }

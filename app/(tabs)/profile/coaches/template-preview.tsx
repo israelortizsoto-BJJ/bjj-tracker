@@ -11,7 +11,7 @@ const UI = {
 
 export const TEMPLATE_CONTENT: Record<
   string,
-  { title: string; description: string; metadata: string }
+  { title: string; description: string; metadata: string; youtubeUrl?: string }
 > = {
   "guard-pull-defense-knee-middle": {
     title: "Guard Pull Defense — Knee in the Middle",
