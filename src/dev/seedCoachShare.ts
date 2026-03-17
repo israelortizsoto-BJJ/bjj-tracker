@@ -48,7 +48,7 @@ export async function seedCoachShareDemo(): Promise<void> {
     id: DEMO_PACK_ID,
     coachId: DEMO_COACH_ID,
     title: "Week 1 Foundations",
-    description: "Simple first-week home practice plan for parent-led review.",
+    description: "Simple first-week training plan to help reinforce key focus areas during regular class.",
     version: 1,
     modules: [
       {

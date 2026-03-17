@@ -48,11 +48,12 @@ export default function CreateProgramPackScreen() {
           <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Coach Share</Text>
         </Pressable>
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
-          Coach Share · Authoring
+          Coach Share · Coach Pilot
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          Choose how you want to start a new program pack. These options are
-          dev-only scaffolds for future authoring tools.
+          This is the coach-side pilot area for internal testing. For now, the only active path is{" "}
+          <Text style={{ fontWeight: "700", color: UI.textPrimary }}>Use Template</Text>.
+          The other options are future authoring paths and aren&apos;t wired yet.
         </Text>
 
         <View style={{ marginTop: 16, gap: 12 }}>
@@ -67,9 +68,9 @@ export default function CreateProgramPackScreen() {
               backgroundColor: UI.bgCard,
             }}
           >
-            <Text style={{ fontSize: 16, color: UI.textPrimary }}>Use Template</Text>
+            <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>Use Template (Pilot)</Text>
             <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-              Start quickly from a pre-built program pack template.
+              Active internal test path. Pick a template and proceed through preview/selection.
             </Text>
           </Pressable>
 
@@ -85,9 +86,9 @@ export default function CreateProgramPackScreen() {
               marginTop: 4,
             }}
           >
-            <Text style={{ fontSize: 16, color: UI.textPrimary }}>Customize Existing Template</Text>
+            <Text style={{ fontSize: 16, color: UI.textPrimary }}>Customize Existing Template (Coming soon)</Text>
             <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-              Pick an existing template and adjust modules, notes, and details.
+              Future path. Not yet wired for the pilot.
             </Text>
           </Pressable>
 
@@ -103,9 +104,9 @@ export default function CreateProgramPackScreen() {
               marginTop: 4,
             }}
           >
-            <Text style={{ fontSize: 16, color: UI.textPrimary }}>Start From Scratch</Text>
+            <Text style={{ fontSize: 16, color: UI.textPrimary }}>Start From Scratch (Coming soon)</Text>
             <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-              Begin with an empty pack and build everything yourself.
+              Future path. Not yet wired for the pilot.
             </Text>
           </Pressable>
         </View>
