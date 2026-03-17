@@ -98,6 +98,44 @@ export default function CoachTemplatesScreen() {
             }}
           >
             <Text style={{ fontSize: 16, fontWeight: "600", color: UI.textPrimary }}>
+              Custom Focus
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
+              Create a coach-written focus item for this week's Coach Share
+              program pack. Use this when you want to write your own focus
+              instead of starting from a template.
+            </Text>
+            <Text style={{ marginTop: 8, fontSize: 12, color: UI.textSecondary }}>
+              Focus Type: Custom · Owner: Coach-written · Scope: This Week
+            </Text>
+            <Pressable
+              onPress={() => router.push("/profile/coaches/custom-focus")}
+              style={{
+                marginTop: 10,
+                paddingVertical: 8,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                alignSelf: "flex-start",
+              }}
+            >
+              <Text style={{ fontSize: 14, color: UI.textPrimary }}>Create Custom Focus</Text>
+            </Pressable>
+          </View>
+
+          <View
+            style={{
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+            }}
+          >
+            <Text style={{ fontSize: 16, fontWeight: "600", color: UI.textPrimary }}>
               Triangle Defense — Posture and Escape
             </Text>
             <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
