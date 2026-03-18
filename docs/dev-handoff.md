@@ -71,7 +71,7 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
 **Date:** 2026-03-17  
-**Status:** Build 8 is now live in TestFlight, includes the fuller Build 7 tab exposure in production, and the highest-ROI next move is tester feedback triage rather than new feature expansion.
+**Status:** Build 8 remains live in TestFlight. Feedback triage is intentionally tabled for now; today’s highest-ROI work was refining the **Coach Share pilot lane** for Kyle’s internal testing this week (still hidden/pilot-scoped).
 
 ## Git checkpoint
 
@@ -79,58 +79,34 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `34aa1d9` — Chore: remove unused profile date formatter
+- `469ea58` — Feat: add custom focus option to Coach Share templates
 
 ## What we completed most recently
 
-### 1) Used real-device feedback to choose the next slice
-We validated that session logging felt stronger and more robust, especially for:
-- multiple techniques in one session
-- custom technique entry
-- YouTube link attachment
-- image attachment
+### 1) Shifted near-term focus to Coach Share pilot refinement
+Build 8 is live in TestFlight, but we intentionally tabled broad feedback triage for now. Highest-ROI work today was tightening the Coach Share pilot lane for Kyle’s internal testing this week.
 
-That feedback also exposed an important product mismatch:
-- production/TestFlight did not yet show the fuller Build 7 surface area
-- Welcome / Fundamentals / Gear were visible in dev but not in production
+### 2) Clarified the parent-first Coach Share hierarchy
+We clarified the Coach Share flow so the parent route and copy read as the primary lane, with the coach pilot path clearly subordinate. Coach Share remains **hidden/pilot-scoped** (not broadened into a main surface).
 
-### 2) Corrected production tab exposure
-We updated production/non-dev tab visibility so the external/TestFlight build now reflects the intended fuller product surface:
-- Welcome
-- Profile
-- Training
-- Fundamentals
-- Gear
+### 3) Expanded the coach pilot preview into a multi-item preview
+The coach pilot preview now supports a clearer **multi-item** preview (rather than a single isolated card), with state clarity improvements and debug data removed/hidden to keep the pilot surface clean.
 
-We intentionally kept these hidden:
-- Dev Settings
-- Coach Share routes
-- training/[id]
-- health
+### 4) Added and threaded the custom focus flow end-to-end
+We added a **custom focus** option and ensured it threads through the Coach Share template experience:
+- custom focus added into the template chooser
+- template → preview now reflects the selected/custom focus reliably
 
-### 3) Tightened Profile helper text
-We simplified the Last Promotion Date helper area so it is less noisy and more readable:
-- kept one concise format hint
-- removed the extra Display line
-- removed the extra Example line
-
-### 4) Kept Coach Share contained
-We explicitly did not broaden Coach Share exposure in production.
-Coach Share remains a narrow pilot lane until product coherence improves.
-
-### 5) Shipped Build 8
-We validated the slice in MatMind Dev, cleaned the repo lane, removed unrelated website artifacts, fixed the final dead-code warning, and shipped the next production/TestFlight build.
-
-Confirmed:
-- Build 8 is live
-- Build 8 has early downloads
-- the next meaningful signal source is tester behavior and feedback
+### 5) Added template-selected reference link support (YT pill now supports IG too)
+Coach Share templates now support a template-selected **reference link**. The current beta “YT pill” supports both:
+- YouTube links
+- Instagram links
 
 ## What passed
 
 ### Gates
 - `npm run typecheck` passed
-- `npm run lint` passed
+- `npm run lint` currently fails due to `react/no-unescaped-entities` in `app/(tabs)/profile/coaches/templates.tsx` (needs a small text escaping fix)
 
 ### Production config validation
 Validated:
@@ -140,43 +116,41 @@ Validated:
 
 ### Product / release validation
 Validated:
-- production tab exposure now matches the intended fuller Build 7 story
-- Profile helper text is cleaner
-- Coach Share remains intentionally contained
-- Build 8 is live in TestFlight
+- Coach Share pilot remains intentionally contained/hidden
+- Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
+- Custom focus is supported in Coach Share templates and preview
+- Reference link pill supports YouTube + Instagram links
+- Build 8 remains live in TestFlight
 
 ## Commits landed most recently
-- `34aa1d9` — Chore: remove unused profile date formatter
-- `9ab2d08` — Feat: expose Build 7 tabs in production and tighten profile helper text
-- `40ca82a` — Docs: update Build 7 EOD recap and handoff
-- `e0e1521` — Docs: add project core files map
-- `60ee2e7` — Docs: refresh handoff and definition of done
+- `469ea58` — Feat: add custom focus option to Coach Share templates  
+- `745059e` — Feat: expand Coach Share pilot preview with custom focus and IG links  
+- `e9dec08` — Fix: clarify Coach Share preview state and hide debug data  
+- `d195db7` — Feat: clarify Coach Share parent flow and coach pilot copy  
+- `7b58c22` — Docs: update handoff for Build 8 live state  
 
 ## Locked product / workflow decisions
 - Terminal-first execution remains a hard project rule
-- Repo/config truth should be checked before relying on stale handoff assumptions
-- External/TestFlight should now reflect the fuller Build 7 tab story
-- Coach Share remains a narrow pilot lane, not a broad external-facing feature yet
-- Tester feedback should now drive the next fix list
-- Do not open a broad cleanup or polish sprint without evidence
+- Build 8 remains live in TestFlight (beta reality)
+- Feedback triage is intentionally tabled short-term
+- Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
+- Coach Share pilot refinement (clarity + template/preview correctness) is currently the highest-ROI lane for Kyle internal testing
 
 ## Open loops
-- Gather real tester feedback from Build 8
-- Classify each issue as blocker / minor / follow-up
-- Validate whether Welcome / Fundamentals / Gear improve tester comprehension externally
-- Decide whether any Build 8 issues materially affect release confidence
-- Later polish candidates:
-  - Welcome branding hierarchy / logo prominence
-  - shared top spacing on Profile / Fundamentals / Gear
-  - cleaner title for `training/[id]`
-  - Coach Share information hierarchy
+- Fix `expo lint` failure (`react/no-unescaped-entities`) in `app/(tabs)/profile/coaches/templates.tsx`
+- Kyle internal testing: validate Coach Share parent-first hierarchy is intuitive
+- Validate multi-item coach pilot preview readability and ordering
+- Validate custom focus flow: template chooser → preview consistency
+- Validate reference link handling across YouTube + Instagram links (formatting + tap behavior)
+- Decide when to resume external Build 8 feedback triage (after Kyle pilot signal / once Coach Share pilot stabilizes)
 
 ## Best next-session recommendation
 Next likely moves:
-- gather Build 8 tester feedback and classify each issue as blocker / minor / follow-up
-- fix only issues that materially affect release confidence or app comprehension
-- avoid broad new feature work until feedback shows where the real friction is
-- preserve Coach Share as a narrow pilot lane without broadening scope
+- fix the current lint failure, re-run gates (`npm run typecheck`, `npm run lint`)
+- do a tight Coach Share pilot QA pass in Dev (parent route → coach pilot preview → custom focus → reference link pill)
+- support Kyle internal testing by addressing only issues that block pilot usability/clarity
+- keep Coach Share pilot hidden; avoid broad exposure work until pilot outcomes justify it
+- resume Build 8 external feedback triage only when we’re ready to act on it
 
 ## Suggested restart commands for next session
 - `git status -sb`
