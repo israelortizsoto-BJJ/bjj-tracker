@@ -79,7 +79,7 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `469ea58` — Feat: add custom focus option to Coach Share templates
+- `c2daab1` — Docs: update handoff for Coach Share pilot progress
 
 ## What we completed most recently
 
@@ -106,7 +106,7 @@ Coach Share templates now support a template-selected **reference link**. The cu
 
 ### Gates
 - `npm run typecheck` passed
-- `npm run lint` currently fails due to `react/no-unescaped-entities` in `app/(tabs)/profile/coaches/templates.tsx` (needs a small text escaping fix)
+- `npm run lint` passed
 
 ### Production config validation
 Validated:
@@ -123,11 +123,11 @@ Validated:
 - Build 8 remains live in TestFlight
 
 ## Commits landed most recently
+- `c2daab1` — Docs: update handoff for Coach Share pilot progress  
 - `469ea58` — Feat: add custom focus option to Coach Share templates  
 - `745059e` — Feat: expand Coach Share pilot preview with custom focus and IG links  
 - `e9dec08` — Fix: clarify Coach Share preview state and hide debug data  
 - `d195db7` — Feat: clarify Coach Share parent flow and coach pilot copy  
-- `7b58c22` — Docs: update handoff for Build 8 live state  
 
 ## Locked product / workflow decisions
 - Terminal-first execution remains a hard project rule
@@ -159,5 +159,5 @@ Next likely moves:
 - `sed -n '1,260p' "docs/recaps/2026-03-13_dev-recap.md"`
 
 ## Assumptions
-- I treated Build 8 early downloads as enough evidence to shift the next priority toward tester-feedback triage.
-- I assumed broad new feature work would be lower ROI than responding to real external/tester signals.
+- I treated Kyle internal Coach Share pilot usability as the highest-ROI signal for this lane.
+- I assumed broader external Build 8 feedback triage could stay tabled until the Coach Share pilot flow was stable enough for internal use.
