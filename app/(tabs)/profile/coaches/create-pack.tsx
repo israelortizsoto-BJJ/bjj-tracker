@@ -30,7 +30,7 @@ export default function CreateProgramPackScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Create Program Pack" }} />
+      <Stack.Screen options={{ title: "Choose Weekly Focus" }} />
       <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 16 }}>
         <Pressable
           onPress={() => router.push("/profile/coaches")}

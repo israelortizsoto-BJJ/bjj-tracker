@@ -13,6 +13,10 @@ import {
   clearCoachShareDemo,
   seedCoachShareDemo,
 } from "../../../src/dev/seedCoachShare";
+import {
+  clearCoachKidsDemo,
+  seedCoachKidsDemo,
+} from "../../../src/dev/seedCoachKids";
 
 function FlagRow({
   label,
@@ -142,6 +146,27 @@ export default function DevSettingsScreen() {
       );
     }
   }
+
+  async function seedCoachKids() {
+    try {
+      await seedCoachKidsDemo();
+      Alert.alert("Kids seeded", "Demo kid roster and weekly focus were added.");
+    } catch (error) {
+      Alert.alert("Seed failed", error instanceof Error ? error.message : "Unknown error");
+    }
+  }
+
+  async function clearCoachKids() {
+    try {
+      await clearCoachKidsDemo();
+      Alert.alert("Kids cleared", "Demo kid data was removed successfully.");
+    } catch (error) {
+      Alert.alert(
+        "Clear failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    }
+  }
   return (
     <>
       <Stack.Screen options={{ title: "Developer Settings" }} />
@@ -214,6 +239,18 @@ export default function DevSettingsScreen() {
     title="Clear Coach Share demo"
     subtitle="Removes seeded coach, pack, enrollment, and assignment data"
     onPress={clearCoachShare}
+  />
+
+  <DevActionButton
+    title="Seed Kids demo"
+    subtitle="Adds kid roster + weekly focus history (pilot-only)"
+    onPress={seedCoachKids}
+  />
+
+  <DevActionButton
+    title="Clear Kids demo"
+    subtitle="Removes seeded kids + weekly focus history"
+    onPress={clearCoachKids}
   />
 </View>
 

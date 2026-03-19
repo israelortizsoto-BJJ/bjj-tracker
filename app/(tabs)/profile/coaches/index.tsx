@@ -551,12 +551,23 @@ export default function CoachesScreen() {
                 Internal pilot (coach-side). Parents can ignore this section.
               </Text>
               <Pressable
+                onPress={() => router.push("/profile/coaches/kids")}
+                style={({ pressed }) => cardButtonStyle(pressed)}
+              >
+                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
+                  Kids (Pilot)
+                </Text>
+                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
+                  Roster + kid-specific weekly focus
+                </Text>
+              </Pressable>
+              <Pressable
                 onPress={() => router.push("/profile/coaches/create-pack")}
                 style={({ pressed }) => cardButtonStyle(pressed)}
               >
-                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>Create Program Pack</Text>
-                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-                  Pilot path: start from a template (other paths coming)
+                <Text style={{ fontSize: 15, color: UI.textSecondary, fontWeight: "600" }}>Template Preview (Coach Pilot)</Text>
+                <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
+                  Coach-side preview only; use Kids (Pilot) for kid weekly focus.
                 </Text>
               </Pressable>
             </Section>

@@ -110,7 +110,7 @@ export default function TemplateSelectedScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Template Selected" }} />
+      <Stack.Screen options={{ title: "Weekly Focus Selected" }} />
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -119,11 +119,11 @@ export default function TemplateSelectedScreen() {
         contentContainerStyle={{ padding: 16 }}
       >
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
-          Selected Template
+          Selected Weekly Focus
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          This is a quick confirmation step before you customize and assign this
-          program pack in future flows.
+          Confirm this selected weekly focus for your internal coach pilot preview.
+          Optionally, add a reference video URL.
         </Text>
 
         <View
@@ -144,24 +144,6 @@ export default function TemplateSelectedScreen() {
           </Text>
           <Text style={{ marginTop: 8, fontSize: 13, color: UI.textSecondary }}>
             {template.metadata}
-          </Text>
-        </View>
-
-        <View
-          style={{
-            marginTop: 18,
-            padding: 12,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: UI.bgCard,
-          }}
-        >
-          <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-            You&apos;ve chosen this template as the starting point for a future
-            customization and assignment flow. In a later iteration, this screen
-            will hand off into authoring tools where you can tune modules,
-            scheduling, and coach-facing copy before publishing.
           </Text>
         </View>
 
@@ -229,7 +211,7 @@ export default function TemplateSelectedScreen() {
             }}
           >
             <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "700" }}>
-              Confirm Pilot Preview
+              Save Pilot Preview
             </Text>
             <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
               Saves locally. Not assigned/published to families yet.

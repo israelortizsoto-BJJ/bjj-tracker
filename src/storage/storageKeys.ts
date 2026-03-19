@@ -14,4 +14,8 @@ export const StorageKeys = {
   completionReceiptsQueue: "mm:v1:completionReceiptsQueue",
   coachPilotPreviewTemplate: "mm:v1:coachPilotPreviewTemplate",
   coachPilotPreviewItems: "mm:v1:coachPilotPreviewItems",
+
+  // Coach-side kid tracking pilot (local-only)
+  coachKidsById: "mm:v1:coachKidsById",
+  kidWeeklyFocusEntries: "mm:v1:kidWeeklyFocusEntries",
 } as const;
