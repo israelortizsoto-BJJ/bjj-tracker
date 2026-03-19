@@ -1,10 +1,12 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ResizeMode, Video } from "expo-av";
 import * as MediaLibrary from "expo-media-library";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Dimensions,
+  Image,
   Linking,
   Modal,
   Pressable,
@@ -18,17 +20,22 @@ import { useFocusEffect } from "@react-navigation/native";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
-  patchKidWeeklyFocusCoachFields,
+  appendKidWeeklyFocus,
+  getKidWeeklyFocusEntriesForKid,
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../../../../src/storage/coachKidStore";
+import { StorageKeys } from "../../../../../src/storage/storageKeys";
 import { getKidCompetitionEntriesForKid } from "../../../../../src/storage/kidCompetitionStore";
+import type { Session } from "../../../../../src/types";
 import type {
   CoachOutcome,
   KidCompetitionEntry,
   KidCompetitionResult,
   KidWeeklyFocusEntry,
 } from "../../../../../src/types/coachKid";
+import { toDateKey } from "../../../../../src/_domain/dateKey";
+import { FUNDAMENTALS_TAXONOMY } from "../../../../../src/fundamentals/taxonomy";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -42,7 +49,30 @@ const UI = {
 const CARD_RADIUS = 16;
 const SCREEN_W = Dimensions.get("window").width;
 
-type VideoPreviewState = { type: "video"; uri: string; assetId?: string | null };
+// System id -> label (for lightweight display)
+const SYSTEM_LABEL_BY_ID = new Map<string, string>([
+  ["ALL", "All"],
+  ...FUNDAMENTALS_TAXONOMY.map((l1: { id: string; label: string }) => [l1.id, l1.label]),
+]);
+
+function resolveSystemLabel(systemId?: string) {
+  const key = (systemId ?? "").trim();
+  if (!key) return "—";
+  return SYSTEM_LABEL_BY_ID.get(key) ?? key;
+}
+
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+
+function addDaysYMDLocal(ymd: string, delta: number) {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + delta);
+  return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+}
+
+type MediaPreviewState = { type: "video" | "image"; uri: string; assetId?: string | null };
 
 async function resolveMediaUri(
   uri?: string | null,
@@ -68,12 +98,38 @@ async function resolveMediaUri(
 function outcomeLabel(o: CoachOutcome) {
   switch (o) {
     case "not_yet":
-      return "Not yet";
+      return "Learning";
     case "developing":
       return "Developing";
     case "on_track":
-      return "On track";
+      return "Applying";
   }
+}
+
+function techniqueWithMore(s: Session) {
+  const tech = (s.technique || "").trim();
+  const extraCount = (s.techniques?.length ?? 0) - 1;
+  const base = tech || "—";
+  return extraCount > 0 ? `${base} (+${extraCount} more)` : base;
+}
+
+function sessionDrillNotesSummary(s: Session) {
+  const drill = (s.drill || "").trim();
+  const notes = (s.notes || "").trim();
+  const parts: string[] = [];
+
+  if (drill) parts.push(`Drill: ${drill}`);
+  if (notes) parts.push(`Notes: ${notes}`);
+
+  return parts.join(" • ");
+}
+
+function sessionBadges(s: Session) {
+  const badges: Array<"YT" | "IMG" | "VID"> = [];
+  if (s.youtubeUrl?.trim()) badges.push("YT");
+  if ((s.imageUri ?? "").trim()) badges.push("IMG");
+  if ((s.videoUri ?? "").trim()) badges.push("VID");
+  return badges;
 }
 
 function isUsableYoutubeUrl(raw?: string) {
@@ -176,17 +232,20 @@ export default function KidDetailScreen() {
   const [ready, setReady] = useState(false);
   const [kidName, setKidName] = useState<string>("—");
   const [currentWeekEntry, setCurrentWeekEntry] = useState<KidWeeklyFocusEntry | null>(null);
+  const [thisWeekReflections, setThisWeekReflections] = useState<KidWeeklyFocusEntry[]>([]);
 
   const [outcomeDraft, setOutcomeDraft] = useState<CoachOutcome>("not_yet");
   const [notesDraft, setNotesDraft] = useState<string>("");
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [competitions, setCompetitions] = useState<KidCompetitionEntry[]>([]);
+  const [kidWeekSessions, setKidWeekSessions] = useState<Session[]>([]);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
-  const [videoPreview, setVideoPreview] = useState<VideoPreviewState | null>(null);
-  const [playableVideoUri, setPlayableVideoUri] = useState<string | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<MediaPreviewState | null>(null);
+  const [playableMediaUri, setPlayableMediaUri] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { prefillProgressInputs?: boolean }) => {
     if (!kidId || !weekStartYMD) return;
+    const prefillProgressInputs = opts?.prefillProgressInputs ?? true;
     setReady(false);
     try {
       const kids = await getKidsById();
@@ -196,12 +255,53 @@ export default function KidDetailScreen() {
       const entry = await getLatestKidWeeklyFocusForWeek(kidId, weekStartYMD);
       setCurrentWeekEntry(entry);
 
-      const initialOutcome: CoachOutcome = entry?.coachOutcome ?? "not_yet";
-      setOutcomeDraft(initialOutcome);
-      setNotesDraft(entry?.coachNotes ?? "");
+      if (prefillProgressInputs) {
+        const initialOutcome: CoachOutcome = entry?.coachOutcome ?? "not_yet";
+        setOutcomeDraft(initialOutcome);
+        setNotesDraft(entry?.coachNotes ?? "");
+      } else {
+        // After a successful save, we want a fresh blank input.
+        setOutcomeDraft("not_yet");
+        setNotesDraft("");
+      }
+
+      const allEntries = await getKidWeeklyFocusEntriesForKid(kidId);
+      const weekReflections = allEntries.filter(
+        (e) =>
+          e.weekStartYMD === weekStartYMD &&
+          (typeof e.coachOutcome !== "undefined" || Boolean((e.coachNotes ?? "").trim())),
+      );
+      weekReflections.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      setThisWeekReflections(weekReflections);
 
       const compRows = await getKidCompetitionEntriesForKid(kidId);
       setCompetitions(compRows);
+
+      // Lightweight "this week's training" display (pilot-only).
+      const weekEndYMD = addDaysYMDLocal(weekStartYMD, 6);
+      const rawSessions = await AsyncStorage.getItem(StorageKeys.sessions);
+      let parsed: unknown = [];
+      try {
+        parsed = rawSessions ? JSON.parse(rawSessions) : [];
+      } catch {
+        parsed = [];
+      }
+
+      const sessionsArray = Array.isArray(parsed) ? (parsed as unknown[]) : [];
+      const kidWeek = sessionsArray
+        .filter((s: any) => String(s?.kidId ?? "").trim() === kidId)
+        .filter((s: any) => {
+          const d = toDateKey(s?.date ?? "");
+          return (
+            /^\d{4}-\d{2}-\d{2}$/.test(d) && d >= weekStartYMD && d <= weekEndYMD
+          );
+        })
+        .map((s: any) => s as Session)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      setKidWeekSessions(kidWeek);
     } finally {
       setReady(true);
     }
@@ -241,14 +341,14 @@ export default function KidDetailScreen() {
     let cancelled = false;
 
     async function run() {
-      setPlayableVideoUri(null);
+      setPlayableMediaUri(null);
 
-      if (!videoPreview || videoPreview.type !== "video") return;
+      if (!mediaPreview) return;
 
-      const resolved = await resolveMediaUri(videoPreview.uri, videoPreview.assetId ?? null);
+      const resolved = await resolveMediaUri(mediaPreview.uri, mediaPreview.assetId ?? null);
       if (cancelled) return;
 
-      setPlayableVideoUri(resolved);
+      setPlayableMediaUri(resolved);
     }
 
     void run();
@@ -256,7 +356,7 @@ export default function KidDetailScreen() {
     return () => {
       cancelled = true;
     };
-  }, [videoPreview]);
+  }, [mediaPreview]);
 
   useEffect(() => {
     if (!kidId) {
@@ -273,15 +373,38 @@ export default function KidDetailScreen() {
     if (!currentWeekEntry) return;
     setSavingOutcome(true);
     try {
-      await patchKidWeeklyFocusCoachFields(currentWeekEntry.id, {
-        coachOutcome: outcomeDraft,
-        coachNotes: notesDraft.trim() ? notesDraft : undefined,
-      });
-      await load();
+      const trimmedNotes = notesDraft.trim();
+
+      if (currentWeekEntry.focusType === "template") {
+        await appendKidWeeklyFocus({
+          kidId,
+          weekStartYMD,
+          focusType: "template",
+          templateId: currentWeekEntry.templateId,
+          title: currentWeekEntry.title,
+          metadata: currentWeekEntry.metadata,
+          youtubeUrl: currentWeekEntry.youtubeUrl,
+          coachOutcome: outcomeDraft,
+          coachNotes: trimmedNotes ? trimmedNotes : undefined,
+        });
+      } else {
+        await appendKidWeeklyFocus({
+          kidId,
+          weekStartYMD,
+          focusType: "custom",
+          title: currentWeekEntry.title,
+          note: currentWeekEntry.note,
+          youtubeUrl: currentWeekEntry.youtubeUrl,
+          coachOutcome: outcomeDraft,
+          coachNotes: trimmedNotes ? trimmedNotes : undefined,
+        });
+      }
+
+      await load({ prefillProgressInputs: false });
     } finally {
       setSavingOutcome(false);
     }
-  }, [currentWeekEntry, notesDraft, outcomeDraft, load]);
+  }, [currentWeekEntry, notesDraft, outcomeDraft, load, kidId, weekStartYMD]);
 
   return (
     <>
@@ -329,7 +452,7 @@ export default function KidDetailScreen() {
           }}
         >
           <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            THIS WEEK
+            This Week’s Private Session Focus
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
@@ -411,91 +534,146 @@ export default function KidDetailScreen() {
             borderColor: UI.border,
             backgroundColor: UI.bgCard,
             gap: 10,
-            opacity: canEditOutcome ? 1 : 0.65,
           }}
         >
           <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            OPTIONAL COACH OUTCOME + NOTES
+            This Week’s Training Sessions
+          </Text>
+          <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+            {kidWeekSessions.length}{" "}
+            {kidWeekSessions.length === 1 ? "session" : "sessions"} logged
           </Text>
 
-          {!canEditOutcome ? (
+          <Pressable
+            onPress={() =>
+              router.push(
+                `/training/new?date=${encodeURIComponent(
+                  todayYMD(),
+                )}&kidId=${encodeURIComponent(kidId)}`,
+              )
+            }
+            style={({ pressed }) => ({
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+              alignSelf: "flex-start",
+            })}
+          >
+            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
+              Log Training for This Kid
+            </Text>
+          </Pressable>
+
+          {kidWeekSessions.length === 0 ? (
             <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              Set weekly focus first to enable outcome tracking.
+              No training sessions logged yet for this week.
             </Text>
           ) : (
-            <>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {(["not_yet", "developing", "on_track"] as CoachOutcome[]).map((o) => {
-                  const active = outcomeDraft === o;
-                  return (
-                    <Pressable
-                      key={o}
-                      disabled={!canEditOutcome}
-                      onPress={() => setOutcomeDraft(o)}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        paddingVertical: 10,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: active ? "#1d4ed8" : UI.border,
-                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
-                        opacity: pressed ? 0.9 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: UI.textPrimary,
-                          fontWeight: active ? "800" : "700",
-                        }}
-                      >
-                        {outcomeLabel(o)}
+            <View style={{ gap: 8 }}>
+              {kidWeekSessions.slice(0, 3).map((s) => {
+                const badges = sessionBadges(s);
+                const summary = sessionDrillNotesSummary(s);
+
+                return (
+                  <Pressable
+                    key={s.id}
+                    onPress={(e) => {
+                      if ((e as any)?.defaultPrevented) return;
+                      router.push(`/training/${s.id}?kidId=${encodeURIComponent(kidId)}`);
+                    }}
+                    style={({ pressed }) => ({
+                      paddingVertical: 14,
+                      paddingHorizontal: 14,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                      backgroundColor: pressed ? "#edf2ff" : "#f9fafb",
+                      gap: 6,
+                    })}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary }}>
+                      {s.date} · {resolveSystemLabel(s.system)}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={2}>
+                      {techniqueWithMore(s)}
+                    </Text>
+
+                    {badges.length > 0 ? (
+                      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
+                        {badges.map((label) => (
+                          <Pressable
+                            key={label}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                            onPress={(e) => {
+                              e.stopPropagation?.();
+                              (e as any).preventDefault?.();
+
+                              if (label === "YT") {
+                                void openYoutubeUrl(s.youtubeUrl);
+                                return;
+                              }
+
+                              if (label === "IMG") {
+                                const raw = (s.imageUri ?? "").trim();
+                                if (!raw) return;
+                                setMediaPreview({
+                                  type: "image",
+                                  uri: raw,
+                                  assetId: s.imageAssetId ?? null,
+                                });
+                                return;
+                              }
+
+                              if (label === "VID") {
+                                const raw = (s.videoUri ?? "").trim();
+                                if (!raw) return;
+                                setMediaPreview({
+                                  type: "video",
+                                  uri: raw,
+                                  assetId: s.videoAssetId ?? null,
+                                });
+                              }
+                            }}
+                            style={({ pressed }) => ({
+                              opacity: pressed ? 0.95 : 1,
+                            })}
+                          >
+                            <View
+                              style={{
+                                paddingHorizontal: 8,
+                                paddingVertical: 4,
+                                borderRadius: 999,
+                                backgroundColor: UI.bgCardActive,
+                                borderWidth: 1,
+                                borderColor: UI.border,
+                              }}
+                            >
+                              <Text style={{ color: UI.textSecondary, fontSize: 12, fontWeight: "700" }}>
+                                {label}
+                              </Text>
+                            </View>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ) : null}
+
+                    {summary ? (
+                      <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={2}>
+                        {summary}
                       </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <TextInput
-                value={notesDraft}
-                onChangeText={setNotesDraft}
-                placeholder="Coach notes (optional)"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                style={{
-                  marginTop: 6,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  padding: 12,
-                  minHeight: 92,
-                  color: UI.textPrimary,
-                  textAlignVertical: "top",
-                }}
-              />
-
-              <Pressable
-                disabled={savingOutcome}
-                onPress={() => void onSaveOutcome()}
-                style={({ pressed }) => ({
-                  marginTop: 10,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#1d4ed8",
-                  backgroundColor: pressed ? "#1d4ed8" : "#1d4ed8",
-                  opacity: savingOutcome ? 0.6 : 1,
-                  alignSelf: "flex-start",
-                })}
-              >
-                <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
-                  Save Outcome / Notes
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+              {kidWeekSessions.length > 3 ? (
+                <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                  +{kidWeekSessions.length - 3} more
                 </Text>
-              </Pressable>
-            </>
+              ) : null}
+            </View>
           )}
         </View>
 
@@ -644,7 +822,7 @@ export default function KidDetailScreen() {
                                   onPress={(e) => {
                                     e.stopPropagation?.();
                                     (e as { preventDefault?: () => void }).preventDefault?.();
-                                    setVideoPreview({
+                                        setMediaPreview({
                                       type: "video",
                                       uri: row.videoUri!.trim(),
                                       assetId: row.videoAssetId ?? null,
@@ -697,6 +875,153 @@ export default function KidDetailScreen() {
           ) : null}
         </View>
 
+        <View style={{ height: 14 }} />
+
+        <View
+          style={{
+            padding: 16,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
+            gap: 10,
+            opacity: canEditOutcome ? 1 : 0.65,
+          }}
+        >
+          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+            PROGRESS ON THIS WEEK’S FOCUS
+          </Text>
+
+          {!canEditOutcome ? (
+            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+              Set weekly focus first to enable outcome tracking.
+            </Text>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {(["not_yet", "developing", "on_track"] as CoachOutcome[]).map((o) => {
+                  const active = outcomeDraft === o;
+                  return (
+                    <Pressable
+                      key={o}
+                      disabled={!canEditOutcome}
+                      onPress={() => setOutcomeDraft(o)}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? "#1d4ed8" : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: UI.textPrimary,
+                          fontWeight: active ? "800" : "700",
+                        }}
+                      >
+                        {outcomeLabel(o)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <TextInput
+                value={notesDraft}
+                onChangeText={setNotesDraft}
+                placeholder="Weekly progress notes"
+                placeholderTextColor={UI.textSecondary}
+                multiline
+                style={{
+                  marginTop: 6,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  padding: 12,
+                  minHeight: 92,
+                  color: UI.textPrimary,
+                  textAlignVertical: "top",
+                }}
+              />
+
+              <Pressable
+                disabled={savingOutcome}
+                onPress={() => void onSaveOutcome()}
+                style={({ pressed }) => ({
+                  marginTop: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#1d4ed8",
+                  backgroundColor: pressed ? "#1d4ed8" : "#1d4ed8",
+                  opacity: savingOutcome ? 0.6 : 1,
+                  alignSelf: "flex-start",
+                })}
+              >
+                <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
+                  Save Outcome / Notes
+                </Text>
+              </Pressable>
+            </>
+          )}
+
+          <View style={{ marginTop: 10, gap: 8 }}>
+            <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
+              Saved weekly progress reflections (this week)
+            </Text>
+
+            {thisWeekReflections.length === 0 ? (
+              <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+                No saved reflections yet.
+              </Text>
+            ) : (
+              <>
+                {thisWeekReflections.slice(0, 3).map((r) => {
+                  const outcomeText =
+                    typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
+                  const notesText = (r.coachNotes ?? "").trim();
+                  return (
+                    <View
+                      key={r.id}
+                      style={{
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        backgroundColor: "#f9fafb",
+                        gap: 6,
+                      }}
+                    >
+                      {outcomeText ? (
+                        <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                          Outcome: {outcomeText}
+                        </Text>
+                      ) : null}
+                      {notesText ? (
+                        <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={3}>
+                          Notes: {notesText}
+                        </Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
+                {thisWeekReflections.length > 3 ? (
+                  <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                    +{thisWeekReflections.length - 3} more
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </View>
+        </View>
+
         {!ready ? (
           <Text style={{ marginTop: 14, fontSize: 13, color: UI.textSecondary }}>
             Loading…
@@ -709,14 +1034,14 @@ export default function KidDetailScreen() {
       </KeyboardAwareScrollView>
 
       <Modal
-        visible={!!videoPreview}
+        visible={!!mediaPreview}
         transparent
         animationType="fade"
-        onRequestClose={() => setVideoPreview(null)}
+        onRequestClose={() => setMediaPreview(null)}
       >
         <Pressable
           style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)" }}
-          onPress={() => setVideoPreview(null)}
+          onPress={() => setMediaPreview(null)}
         >
           <Pressable
             onPress={(e) => e.stopPropagation()}
@@ -728,17 +1053,17 @@ export default function KidDetailScreen() {
             }}
           >
             <Pressable
-              onPress={() => setVideoPreview(null)}
+              onPress={() => setMediaPreview(null)}
               style={{ alignSelf: "flex-end", paddingVertical: 10, paddingHorizontal: 12 }}
             >
               <Text style={{ color: "white", fontSize: 16 }}>Close</Text>
             </Pressable>
 
-            {videoPreview && videoPreview.type === "video" ? (
+            {mediaPreview?.type === "video" ? (
               <View style={{ width: "100%", gap: 12 }}>
-                {playableVideoUri ? (
+                {playableMediaUri ? (
                   <Video
-                    source={{ uri: playableVideoUri }}
+                    source={{ uri: playableMediaUri }}
                     style={{
                       width: "100%",
                       height: Math.round(SCREEN_W * 0.9),
@@ -749,6 +1074,22 @@ export default function KidDetailScreen() {
                   />
                 ) : (
                   <Text style={{ color: "white" }}>Resolving video from camera roll...</Text>
+                )}
+              </View>
+            ) : mediaPreview?.type === "image" ? (
+              <View style={{ width: "100%", gap: 12 }}>
+                {playableMediaUri ? (
+                  <Image
+                    source={{ uri: playableMediaUri }}
+                    style={{
+                      width: "100%",
+                      height: Math.round(SCREEN_W * 0.9),
+                      borderRadius: 12,
+                    }}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Text style={{ color: "white" }}>Resolving image from camera roll...</Text>
                 )}
               </View>
             ) : null}

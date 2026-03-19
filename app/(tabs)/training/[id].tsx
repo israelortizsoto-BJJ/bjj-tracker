@@ -160,6 +160,10 @@ export default function TrainingSessionEditor() {
   const effectivePrefillSystem =
   prefillSystem && prefillSystem !== "ALL" ? prefillSystem : "ALL";
   const sessionId = String(params.id || "");
+  const kidIdParam =
+    typeof params.kidId === "string" && params.kidId.trim()
+      ? params.kidId.trim()
+      : undefined;
   const isNew = useMemo(() => sessionId === "new", [sessionId]);
   const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const [draftId, setDraftId] = useState(makeId());
@@ -425,7 +429,7 @@ useFocusEffect(
       const found = sessions.find((s) => s.id === sessionId);
       if (!found) {
         Alert.alert("Not found", "That session no longer exists.");
-        router.replace("/training");
+        router.replace(kidIdParam ? `/training?kidId=${encodeURIComponent(kidIdParam)}` : "/training");
         return;
       }
 
@@ -674,6 +678,8 @@ const payload: Session = {
   createdAt: isNew ? now : existingSession?.createdAt || now,
   date: finalDate,
 
+  kidId: kidIdParam ?? existingSession?.kidId,
+
   // REQUIRED in Session type
   system: system ?? existingSession?.system ?? "",
 
@@ -722,7 +728,9 @@ Alert.alert(
     {
       text: "OK",
       onPress: () =>
-        router.replace(`/training?date=${encodeURIComponent(finalDate)}`),
+        kidIdParam
+          ? router.replace(`/profile/coaches/kid/${encodeURIComponent(kidIdParam)}`)
+          : router.replace(`/training?date=${encodeURIComponent(finalDate)}`),
     },
   ]
 );
@@ -730,7 +738,16 @@ return; // prevents any router.replace below from firing immediately
   }
 
   async function onDelete() {
-    if (isNew) return router.replace("/training");
+    const backDate = toDateKey(prefillDate || date || todayYMD()) || todayYMD();
+    if (isNew) {
+      return router.replace(
+        kidIdParam
+          ? `/training?date=${encodeURIComponent(backDate)}&kidId=${encodeURIComponent(
+              kidIdParam,
+            )}`
+          : `/training?date=${encodeURIComponent(backDate)}`
+      );
+    }
 
     Alert.alert("Delete session?", "This cannot be undone.", [
       { text: "Cancel", style: "cancel" },
@@ -740,7 +757,13 @@ return; // prevents any router.replace below from firing immediately
         onPress: async () => {
           const sessions = await loadSessions();
           await saveSessions(sessions.filter((s) => s.id !== sessionId));
-          router.replace(`/training?date=${encodeURIComponent(prefillDate || date || todayYMD())}`);
+          router.replace(
+            `/training?date=${encodeURIComponent(
+              toDateKey(prefillDate || date || todayYMD()) || todayYMD(),
+            )}${
+              kidIdParam ? `&kidId=${encodeURIComponent(kidIdParam)}` : ""
+            }`
+          );
         },
       },
     ]);
@@ -761,7 +784,11 @@ return; // prevents any router.replace below from firing immediately
           style: "destructive",
           onPress: () => {
             router.replace(
-              `/training?date=${encodeURIComponent(prefillDate || date || todayYMD())}`,
+              `/training?date=${encodeURIComponent(
+                toDateKey(prefillDate || date || todayYMD()) || todayYMD(),
+              )}${
+                kidIdParam ? `&kidId=${encodeURIComponent(kidIdParam)}` : ""
+              }`
             );
           },
         },

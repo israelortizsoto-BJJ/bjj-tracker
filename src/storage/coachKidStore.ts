@@ -10,6 +10,7 @@ import type {
   KidWeeklyFocusEntryTemplate,
   KidsById,
 } from "../types/coachKid";
+import type { Session } from "../types";
 
 type KidWeeklyFocusAppendInput =
   | (KidWeeklyFocusEntryTemplate & {
@@ -125,6 +126,28 @@ export async function deleteKidWeeklyFocusEntriesForKid(kidId: KidId): Promise<v
 }
 
 /**
+ * Pilot hard-delete guardrail:
+ * remove training sessions linked to a deleted kid so `bjj.sessions.v2` has no orphan kid-linked sessions.
+ */
+async function deleteKidTrainingSessionsForKid(kidId: KidId): Promise<void> {
+  const raw = await AsyncStorage.getItem(StorageKeys.sessions);
+  if (!raw) return;
+
+  let parsed: unknown = null;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return;
+  }
+
+  if (!Array.isArray(parsed)) return;
+
+  const sessions = parsed as Session[];
+  const next = sessions.filter((s) => String(s.kidId ?? "").trim() !== kidId);
+  await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(next));
+}
+
+/**
  * Hard-delete a kid from the pilot roster and all local weekly focus + competition data.
  * Order: competitions (with media) → weekly focus → roster (avoids orphan kidIds in history).
  */
@@ -133,6 +156,7 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   if (!kids[kidId]) return false;
 
   await deleteAllKidCompetitionEntriesForKid(kidId);
+  await deleteKidTrainingSessionsForKid(kidId);
   await deleteKidWeeklyFocusEntriesForKid(kidId);
 
   const { [kidId]: _removed, ...rest } = kids;

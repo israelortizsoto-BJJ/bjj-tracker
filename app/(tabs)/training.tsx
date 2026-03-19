@@ -291,10 +291,13 @@ const INSIGHT_CARD_CONTAINER = {
 export default function Training() {
 // 3A) Navigation / params
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams<{ date?: string; kidId?: string }>();
 
   const initialDate =
     typeof params.date === "string" && params.date ? params.date : todayYMD();
+
+  const kidIdParam =
+    typeof params.kidId === "string" && params.kidId.trim() ? params.kidId.trim() : undefined;
 // 3B) State
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
@@ -376,15 +379,23 @@ const refresh = useCallback(async () => {
   setIsLoadingSessions(true);
   try {
     const next = await loadSessions();
-const normalized = next.map((s) => ({
-  ...s,
-  date: toDateKey(s.date) || todayYMD(),
-}));
-setSessions(normalized);
+    const normalized = next.map((s) => ({
+      ...s,
+      date: toDateKey(s.date) || todayYMD(),
+    }));
+
+    // Kid-scoped view:
+    // - when kidId is provided: show only sessions for that kid
+    // - when kidId is absent: show only account-level sessions (no kidId)
+    const scoped = kidIdParam
+      ? normalized.filter((s) => (s.kidId ?? "").trim() === kidIdParam)
+      : normalized.filter((s) => !(s.kidId ?? "").trim());
+
+    setSessions(scoped);
   } finally {
     setIsLoadingSessions(false);
   }
-}, []);
+}, [kidIdParam]);
 
 useEffect(() => {
   if (typeof params.date === "string" && params.date) {
@@ -398,7 +409,10 @@ useEffect(() => {
   if (!p) return;
   if (selectedDate !== p) return;
 
-  router.setParams({ date: "" });
+  router.setParams({
+    date: "",
+    ...(kidIdParam ? { kidId: kidIdParam } : {}),
+  });
 }, [params.date, selectedDate, router]);
 
 useFocusEffect(
@@ -406,6 +420,10 @@ useFocusEffect(
     refresh();
   }, [refresh])
 );
+
+useEffect(() => {
+  void refresh();
+}, [kidIdParam, refresh]);
 useEffect(() => {
   let cancelled = false;
 
@@ -944,7 +962,15 @@ const renderDayWeekHeader = () => (
 // 7D) New session CTA row
 const renderNewSessionCTA = () => (
   <Pressable
-    onPress={() => router.push(`/training/new?date=${encodeURIComponent(selectedDate)}`)}
+    onPress={() =>
+      router.push(
+        kidIdParam
+          ? `/training/new?date=${encodeURIComponent(selectedDate)}&kidId=${encodeURIComponent(
+              kidIdParam,
+            )}`
+          : `/training/new?date=${encodeURIComponent(selectedDate)}`
+      )
+    }
     style={({ pressed }) => ({
       paddingVertical: 14,
       paddingHorizontal: 18,
@@ -1114,7 +1140,11 @@ const renderNewSessionCTA = () => (
                     onPress={(e) => {
   // If a child handled the tap (YT pill), don’t navigate.
   if ((e as any)?.defaultPrevented) return;
-  router.push(`/training/${s.id}`);
+  router.push(
+    kidIdParam
+      ? `/training/${s.id}?kidId=${encodeURIComponent(kidIdParam)}`
+      : `/training/${s.id}`
+  );
 }}
                     style={{
                       paddingVertical: 14,
@@ -1252,7 +1282,11 @@ const renderNewSessionCTA = () => (
           onPress={(e) => {
           // If a child already handled the tap (YT pill), don't navigate.
           if ((e as any)?.defaultPrevented) return;
-          router.push(`/training/${s.id}`);
+          router.push(
+            kidIdParam
+              ? `/training/${s.id}?kidId=${encodeURIComponent(kidIdParam)}`
+              : `/training/${s.id}`
+          );
         }}
           style={{
             paddingVertical: 14,

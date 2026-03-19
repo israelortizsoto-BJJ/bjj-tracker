@@ -17,6 +17,12 @@ export type Session = {
   createdAt: string;
   date: string; // YYYY-MM-DD
   system: string;
+  /**
+   * Optional kid linkage (local pilot-only).
+   * - When present, the Training tab can filter sessions by this kidId.
+   * - When missing, the Training tab treats the session as account-level.
+   */
+  kidId?: string;
 
   // New (more specific technique breakdown)
   position?: string;
