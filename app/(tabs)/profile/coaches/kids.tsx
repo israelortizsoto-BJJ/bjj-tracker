@@ -1,9 +1,11 @@
 import { Stack, router } from "expo-router";
 import { useCallback, useState } from "react";
 import { useFocusEffect } from "@react-navigation/native";
-import { Alert, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { ScrollView, Swipeable } from "react-native-gesture-handler";
 
 import {
+  deleteKidPilot,
   getKidsById,
   setKidsById,
 } from "../../../../src/storage/coachKidStore";
@@ -15,6 +17,8 @@ const UI = {
   border: "#e5e7eb",
   textPrimary: "#111827",
   textSecondary: "#4b5563",
+  deleteBg: "#dc2626",
+  deleteText: "#ffffff",
 };
 
 const CARD_RADIUS = 16;
@@ -42,6 +46,37 @@ export default function KidsRosterScreen() {
   );
 
   const kids = Object.values(kidsById).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const onConfirmDeleteKid = useCallback(
+    async (kid: Kid) => {
+      const ok = await deleteKidPilot(kid.id);
+      if (ok) {
+        setKidsByIdState((prev) => {
+          const { [kid.id]: _r, ...rest } = prev;
+          return rest;
+        });
+      }
+    },
+    [],
+  );
+
+  const requestDeleteKid = useCallback(
+    (kid: Kid) => {
+      Alert.alert(
+        "Delete kid?",
+        `Remove ${kid.name} from the pilot roster? This cannot be undone.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => void onConfirmDeleteKid(kid),
+          },
+        ],
+      );
+    },
+    [onConfirmDeleteKid],
+  );
 
   const onAddKid = useCallback(async () => {
     const trimmed = kidName.trim();
@@ -127,25 +162,51 @@ export default function KidsRosterScreen() {
         ) : (
           <View style={{ gap: 10, marginTop: 10 }}>
             {kids.map((kid) => (
-              <Pressable
+              <Swipeable
                 key={kid.id}
-                onPress={() => router.push(`/profile/coaches/kid/${kid.id}`)}
-                style={({ pressed }) => ({
-                  padding: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                })}
+                overshootRight={false}
+                renderRightActions={() => (
+                  <Pressable
+                    onPress={() => requestDeleteKid(kid)}
+                    style={({ pressed }) => ({
+                      justifyContent: "center",
+                      backgroundColor: pressed ? "#b91c1c" : UI.deleteBg,
+                      borderRadius: 12,
+                      marginLeft: 8,
+                      paddingHorizontal: 20,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        color: UI.deleteText,
+                        fontWeight: "800",
+                        fontSize: 15,
+                      }}
+                    >
+                      Delete
+                    </Text>
+                  </Pressable>
+                )}
               >
-                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
-                  {kid.name}
-                </Text>
-                <Text style={{ color: UI.textSecondary, fontSize: 18 }}>›</Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => router.push(`/profile/coaches/kid/${kid.id}`)}
+                  style={({ pressed }) => ({
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                  })}
+                >
+                  <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
+                    {kid.name}
+                  </Text>
+                  <Text style={{ color: UI.textSecondary, fontSize: 18 }}>›</Text>
+                </Pressable>
+              </Swipeable>
             ))}
           </View>
         )}
@@ -207,4 +268,3 @@ export default function KidsRosterScreen() {
     </>
   );
 }
-

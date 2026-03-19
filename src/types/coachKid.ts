@@ -42,3 +42,26 @@ export type Kid = {
 export type KidsById = Record<KidId, Kid>;
 export type KidWeeklyFocusEntries = KidWeeklyFocusEntry[];
 
+/** Simple pilot-only tournament outcome (no bracket / match modeling). */
+export type KidCompetitionResult =
+  | "gold"
+  | "silver"
+  | "bronze"
+  | "participated"
+  | "dnf"
+  | "other";
+
+export type KidCompetitionEntry = {
+  id: string;
+  kidId: KidId;
+  tournamentName: string;
+  /** YYYY-MM-DD */
+  eventDate: string;
+  result: KidCompetitionResult;
+  coachNotes?: string;
+  videoUri?: string;
+  videoAssetId?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+

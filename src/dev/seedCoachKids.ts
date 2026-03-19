@@ -6,6 +6,10 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
 } from "../storage/coachKidStore";
+import {
+  clearAllKidCompetitionEntries,
+  createKidCompetitionEntry,
+} from "../storage/kidCompetitionStore";
 import { StorageKeys } from "../storage/storageKeys";
 import type { Kid, KidId } from "../types/coachKid";
 
@@ -88,10 +92,27 @@ export async function seedCoachKidsDemo(): Promise<void> {
     coachOutcome: "on_track",
     coachNotes: "Good improvement when he resets quickly after frames.",
   });
+
+  await createKidCompetitionEntry({
+    kidId: DEMO_KID_1_ID,
+    tournamentName: "Regional Youth Open",
+    eventDate: addDaysYMD(today, -12),
+    result: "silver",
+    coachNotes: "Solid guard retention; next: takedown entries.",
+  });
+
+  await createKidCompetitionEntry({
+    kidId: DEMO_KID_1_ID,
+    tournamentName: "Winter In-House",
+    eventDate: addDaysYMD(today, -45),
+    result: "gold",
+    coachNotes: "Kept composure in standup.",
+  });
 }
 
 export async function clearCoachKidsDemo(): Promise<void> {
   await setKidsById({});
   await AsyncStorage.setItem(StorageKeys.kidWeeklyFocusEntries, JSON.stringify([]));
+  await clearAllKidCompetitionEntries();
 }
 

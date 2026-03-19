@@ -18,4 +18,5 @@ export const StorageKeys = {
   // Coach-side kid tracking pilot (local-only)
   coachKidsById: "mm:v1:coachKidsById",
   kidWeeklyFocusEntries: "mm:v1:kidWeeklyFocusEntries",
+  kidCompetitionEntries: "mm:v1:kidCompetitionEntries",
 } as const;

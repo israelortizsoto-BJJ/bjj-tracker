@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { ResizeMode, Video } from "expo-av";
-import * as FileSystem from "expo-file-system/legacy";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -22,6 +21,10 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { toDateKey } from "../../../src/_domain/dateKey";
 import { buildTechniqueIndex, getTechniqueById } from "../../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../../src/fundamentals/taxonomy";
+import {
+  persistMediaFromCameraRoll,
+  requestMediaLibraryPermission,
+} from "../../../src/media/persistCameraRollMedia";
 import { StorageKeys } from "../../../src/storage/storageKeys";
 import type { Session, TechniqueEntry } from "../../../src/types";
 
@@ -60,34 +63,6 @@ const SYSTEMS_L1 = [
   ...TAX_L1.map((l1: { id: string; label: string }) => ({ id: l1.id, label: l1.label })),
 ];
 
-
-const MEDIA_DIR =
-  FileSystem.documentDirectory ? `${FileSystem.documentDirectory}media/` : null;
-
-async function ensureMediaDir() {
-  if (!MEDIA_DIR) return null;
-
-  const info = await FileSystem.getInfoAsync(MEDIA_DIR);
-  if (!info.exists) {
-    await FileSystem.makeDirectoryAsync(MEDIA_DIR, { intermediates: true });
-  }
-  return MEDIA_DIR;
-}
-
-async function persistMedia(uri: string, kind: "image" | "video") {
-  const dir = await ensureMediaDir();
-  if (!dir) return uri; // fallback: use original if no doc dir
-
-  const ext =
-    uri.split(".").pop()?.split("?")[0] ||
-    (kind === "image" ? "jpg" : "mp4");
-
-  const filename = `${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`;
-  const dest = `${dir}${filename}`;
-
-  await FileSystem.copyAsync({ from: uri, to: dest });
-  return dest;
-}
 
 function todayYMD() {
   const d = new Date();
@@ -560,8 +535,8 @@ const techResults = useMemo(() => {
   });
   }, [techResults, techSortMode]);
     async function ensureMediaPermissions() {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
+    const ok = await requestMediaLibraryPermission();
+    if (!ok) {
       Alert.alert("Permission needed", "Allow Photos access to attach media.");
       return false;
     }
@@ -600,7 +575,7 @@ async function pickImage() {
 
   if (!result.canceled && result.assets?.[0]?.uri) {
   const asset = result.assets[0];
-  const persisted = await persistMedia(asset.uri, "image");
+  const persisted = await persistMediaFromCameraRoll(asset.uri, "image");
 
   setImageUri(persisted);
   setImageAssetId(asset.assetId ?? null);
@@ -631,7 +606,7 @@ async function pickVideo() {
 
   if (!result.canceled && result.assets?.[0]?.uri) {
     const asset = result.assets[0];
-    const persisted = await persistMedia(asset.uri, "video");
+    const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
 
     setVideoUri(persisted);
     setVideoAssetId(asset.assetId ?? null);

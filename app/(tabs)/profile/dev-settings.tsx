@@ -243,13 +243,13 @@ export default function DevSettingsScreen() {
 
   <DevActionButton
     title="Seed Kids demo"
-    subtitle="Adds kid roster + weekly focus history (pilot-only)"
+    subtitle="Adds kid roster, weekly focus, and sample competitions (pilot-only)"
     onPress={seedCoachKids}
   />
 
   <DevActionButton
     title="Clear Kids demo"
-    subtitle="Removes seeded kids + weekly focus history"
+    subtitle="Removes seeded kids, weekly focus, and competition entries"
     onPress={clearCoachKids}
   />
 </View>

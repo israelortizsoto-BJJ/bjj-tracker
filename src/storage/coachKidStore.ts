@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { deleteAllKidCompetitionEntriesForKid } from "./kidCompetitionStore";
 import { StorageKeys } from "./storageKeys";
 import type {
   CoachOutcome,
@@ -113,6 +114,30 @@ export async function getKidsById(): Promise<KidsById> {
 
 export async function setKidsById(kidsById: KidsById): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.coachKidsById, JSON.stringify(kidsById));
+}
+
+/** Remove all weekly focus log rows for one kid (pilot roster hard-delete). */
+export async function deleteKidWeeklyFocusEntriesForKid(kidId: KidId): Promise<void> {
+  const all = await getKidWeeklyFocusEntriesRaw();
+  const next = all.filter((e) => e.kidId !== kidId);
+  const capped = capEntriesByKid(next);
+  await setKidWeeklyFocusEntriesRaw(capped);
+}
+
+/**
+ * Hard-delete a kid from the pilot roster and all local weekly focus + competition data.
+ * Order: competitions (with media) → weekly focus → roster (avoids orphan kidIds in history).
+ */
+export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
+  const kids = await getKidsById();
+  if (!kids[kidId]) return false;
+
+  await deleteAllKidCompetitionEntriesForKid(kidId);
+  await deleteKidWeeklyFocusEntriesForKid(kidId);
+
+  const { [kidId]: _removed, ...rest } = kids;
+  await setKidsById(rest);
+  return true;
 }
 
 export async function getKidWeeklyFocusEntriesForKid(
