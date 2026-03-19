@@ -70,8 +70,8 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-18  
-**Status:** Build 8 remains live in TestFlight. Feedback triage is intentionally tabled short-term. The **Coach Share pilot lane** now includes **per-kid tracking** on `dev` (roster, weekly focus logging/history, optional coach outcome/notes, competition log with optional on-device video, roster delete with cascade cleanup)—**validated in Dev / local pilot flows**; **not** implied shipped to testers until we cut a new TestFlight build. Surfaces remain **pilot/hidden** (Profile → Coach Share).
+**Date:** 2026-03-19  
+**Status:** Build 8 remains live in TestFlight. Feedback triage is intentionally tabled short-term. The **Coach Share pilot lane** now includes **per-kid tracking** on `dev` (roster, weekly focus logging/history, kid-linked training sessions, progress reflections (Outcome/Notes), competition log with optional on-device video, roster delete with cascade cleanup)—**validated in Dev / local pilot flows**; **not** implied shipped to testers until we cut a new TestFlight build. Surfaces remain **pilot/hidden** (Profile → Coach Share).
 
 ## Git checkpoint
 
@@ -79,23 +79,29 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `9fb7e3a` — Feat: add kid competition tracking and roster delete
+- `ab85fcd` — Feat: add kid training linkage and progress reflections
 
 ## What we completed most recently
 
 ### 1) Coach Share kid tracking flow + weekly focus history (`13f09f5`)
 - **Kids roster** (`/profile/coaches/kids`): add a kid, list pilot roster, **swipe-to-delete** with confirmation.
 - **Kid detail** (`/profile/coaches/kid/[kidId]`): **this week** focus (latest log for Monday-week), **Set Weekly Focus** → `weekly-focus` (templates + custom; **append-only** logs; fresh form each visit), **View History** → `history` (grouped by week, expandable).
-- **Coach outcome + notes** patch on the current week’s saved focus row (`patchKidWeeklyFocusCoachFields`); gated on having a focus saved for the week.
+- **Progress reflections (Outcome / Notes)**: saving on the kid detail appends coachOutcome/coachNotes onto this week’s focus context (append-only); gated on having a focus saved for the week.
 - **`coachKidStore`**: `KidsById` + `kidWeeklyFocusEntries` in AsyncStorage; caps (e.g. 60 focus rows/kid); weekly focus rows removed when a kid is hard-deleted (see `9fb7e3a` cascade).
 
 ### 2) Kid competition tracking + roster hard-delete (`9fb7e3a`)
 - **Competition** on kid detail: month-grouped list; **Add/edit** via `competition/edit` (tournament name, date, result, notes, optional video).
 - **`kidCompetitionStore`**: create/update/delete; per-kid cap (60); **best-effort delete of persisted video files** when entries are removed or a kid is deleted.
 - **`persistCameraRollMedia`**: copy picked camera-roll media into `documentDirectory/media/` (same pattern as training sessions); `bestEffortDeletePersistedMedia` for cleanup.
-- **Roster delete** (`deleteKidPilot`): ordered cleanup **competitions (incl. media) → weekly focus → roster** to avoid orphan `kidId`s.
+- **Roster delete** (`deleteKidPilot`): ordered cleanup **competitions (incl. media) → linked training sessions (kidId) → weekly focus → roster** to avoid orphan `kidId`s.
 
-### 3) Still in place from prior Coach Share pilot work (unchanged intent)
+### 3) Kid training linkage + progress reflections (`ab85fcd`)
+- **Kid detail** (`/profile/coaches/kid/[kidId]`): shows `This Week’s Training Sessions` and CTA to `Log Training for This Kid` via `/training/new?date=...&kidId=...`.
+- **Training tab** (`app/(tabs)/training.tsx`): when `kidId` param is present, sessions are filtered to that kid and the “Add Session” CTA preserves `kidId`.
+- Session editor (app/(tabs)/training/[id].tsx): persists kidId on the saved session so kid linkage survives navigation.
+- **Progress reflections rendering**: kid detail “Saved weekly progress reflections (this week)” reflects what was saved on the `PROGRESS ON THIS WEEK’S FOCUS` flow.
+
+### 4) Still in place from prior Coach Share pilot work (unchanged intent)
 Parent-first Coach Share hierarchy, coach pilot preview quality, **custom focus** in templates, and **reference link** support (**YouTube + Instagram**) on the template/preview path.
 
 ## What passed
@@ -113,13 +119,14 @@ Validated:
 ### Product / release validation
 Validated:
 - Build 8 remains live in TestFlight
-- **Kid roster / weekly focus / competition:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
+- **Kid roster / weekly focus / competition + kid-linked training sessions + progress reflections:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
 - Coach Share pilot remains intentionally contained/hidden
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
 - Custom focus is supported in Coach Share templates and preview
 - Reference link pill supports YouTube + Instagram links
 
 ## Commits landed most recently
+- `ab85fcd` — Feat: add kid training linkage and progress reflections  
 - `9fb7e3a` — Feat: add kid competition tracking and roster delete  
 - `13f09f5` — Feat: add Coach Share kid tracking flow and weekly focus history  
 - `ca25164` — Docs: finalize handoff after Coach Share pilot work  
@@ -133,10 +140,10 @@ Validated:
 - Feedback triage is intentionally tabled short-term
 - Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
 - **Coach Share pilot + per-kid tracking** is the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
-- Kid roster / weekly focus / competition data is **local-only (AsyncStorage + on-device media copies)** for the pilot; not synced
+- Kid roster / weekly focus / competition + kid-linked training session data is **local-only (AsyncStorage + on-device media copies)** for the pilot; not synced
 
 ## Open loops
-- Kyle internal testing: run the **full kid pilot path** (roster → kid → weekly focus → history → outcome/notes → competition incl. optional video → entry delete) plus **roster delete** and confirm UX + data cleanup feels right
+- Kyle internal testing: run the **full kid pilot path** (roster → kid → weekly focus → history → log training for kid → outcome/notes → progress reflections → competition incl. optional video → entry delete) plus **roster delete** and confirm UX + data cleanup feels right (incl. kid-linked training session cleanup).
 - Validate **video pick → persist → playback** across devices/OS versions (MediaLibrary resolution for `ph://` / `assets-library://` when needed)
 - Validate **caps** behavior (60 weekly focus rows/kid, 60 competitions/kid) under heavy use
 - Coach Share template lane: parent-first hierarchy, multi-item preview, custom focus, YouTube + Instagram reference links (formatting + tap behavior)
@@ -145,7 +152,7 @@ Validated:
 ## Best next-session recommendation
 Next likely moves:
 - Re-run gates (`npx tsc --noEmit`, `npx eslint .`) before further app changes or a TestFlight cut
-- Dev QA: **Kids (Pilot)** → create kid → **Set Weekly Focus** (template + custom) → **View History** → **Save Outcome / Notes** → **Add competition** (try optional video) → edit/delete entry → **swipe delete kid** and confirm related data + copied media cleanup
+- Dev QA: **Kids (Pilot)** → create kid → **Set Weekly Focus** (template + custom) → **View History** → **Log Training for This Kid** → **Save Outcome / Notes** → confirm “Saved weekly progress reflections (this week)” renders what was saved → **Add competition** (try optional video) → edit/delete entry → **swipe delete kid** and confirm related data + copied media cleanup
 - Keep Coach Share **pilot-hidden**; treat issues as pilot-blocking only if they break Kyle’s internal test
 - Resume Build 8 external feedback triage only when we’re ready to act on it
 
