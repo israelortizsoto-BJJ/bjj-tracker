@@ -70,8 +70,8 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-17  
-**Status:** Build 8 remains live in TestFlight. Feedback triage is intentionally tabled for now; today’s highest-ROI work was refining the **Coach Share pilot lane** for Kyle’s internal testing this week (still hidden/pilot-scoped).
+**Date:** 2026-03-18  
+**Status:** Build 8 remains live in TestFlight. Feedback triage is intentionally tabled short-term. The **Coach Share pilot lane** now includes **per-kid tracking** on `dev` (roster, weekly focus logging/history, optional coach outcome/notes, competition log with optional on-device video, roster delete with cascade cleanup)—**validated in Dev / local pilot flows**; **not** implied shipped to testers until we cut a new TestFlight build. Surfaces remain **pilot/hidden** (Profile → Coach Share).
 
 ## Git checkpoint
 
@@ -79,34 +79,30 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 - synced to `origin/dev`
 
 **Latest commit:**
-- `c2daab1` — Docs: update handoff for Coach Share pilot progress
+- `9fb7e3a` — Feat: add kid competition tracking and roster delete
 
 ## What we completed most recently
 
-### 1) Shifted near-term focus to Coach Share pilot refinement
-Build 8 is live in TestFlight, but we intentionally tabled broad feedback triage for now. Highest-ROI work today was tightening the Coach Share pilot lane for Kyle’s internal testing this week.
+### 1) Coach Share kid tracking flow + weekly focus history (`13f09f5`)
+- **Kids roster** (`/profile/coaches/kids`): add a kid, list pilot roster, **swipe-to-delete** with confirmation.
+- **Kid detail** (`/profile/coaches/kid/[kidId]`): **this week** focus (latest log for Monday-week), **Set Weekly Focus** → `weekly-focus` (templates + custom; **append-only** logs; fresh form each visit), **View History** → `history` (grouped by week, expandable).
+- **Coach outcome + notes** patch on the current week’s saved focus row (`patchKidWeeklyFocusCoachFields`); gated on having a focus saved for the week.
+- **`coachKidStore`**: `KidsById` + `kidWeeklyFocusEntries` in AsyncStorage; caps (e.g. 60 focus rows/kid); weekly focus rows removed when a kid is hard-deleted (see `9fb7e3a` cascade).
 
-### 2) Clarified the parent-first Coach Share hierarchy
-We clarified the Coach Share flow so the parent route and copy read as the primary lane, with the coach pilot path clearly subordinate. Coach Share remains **hidden/pilot-scoped** (not broadened into a main surface).
+### 2) Kid competition tracking + roster hard-delete (`9fb7e3a`)
+- **Competition** on kid detail: month-grouped list; **Add/edit** via `competition/edit` (tournament name, date, result, notes, optional video).
+- **`kidCompetitionStore`**: create/update/delete; per-kid cap (60); **best-effort delete of persisted video files** when entries are removed or a kid is deleted.
+- **`persistCameraRollMedia`**: copy picked camera-roll media into `documentDirectory/media/` (same pattern as training sessions); `bestEffortDeletePersistedMedia` for cleanup.
+- **Roster delete** (`deleteKidPilot`): ordered cleanup **competitions (incl. media) → weekly focus → roster** to avoid orphan `kidId`s.
 
-### 3) Expanded the coach pilot preview into a multi-item preview
-The coach pilot preview now supports a clearer **multi-item** preview (rather than a single isolated card), with state clarity improvements and debug data removed/hidden to keep the pilot surface clean.
-
-### 4) Added and threaded the custom focus flow end-to-end
-We added a **custom focus** option and ensured it threads through the Coach Share template experience:
-- custom focus added into the template chooser
-- template → preview now reflects the selected/custom focus reliably
-
-### 5) Added template-selected reference link support (YT pill now supports IG too)
-Coach Share templates now support a template-selected **reference link**. The current beta “YT pill” supports both:
-- YouTube links
-- Instagram links
+### 3) Still in place from prior Coach Share pilot work (unchanged intent)
+Parent-first Coach Share hierarchy, coach pilot preview quality, **custom focus** in templates, and **reference link** support (**YouTube + Instagram**) on the template/preview path.
 
 ## What passed
 
 ### Gates
-- `npm run typecheck` passed
-- `npm run lint` passed
+- `npx tsc --noEmit` passed (current `dev` HEAD)
+- `npx eslint .` passed (current `dev` HEAD)
 
 ### Production config validation
 Validated:
@@ -116,41 +112,42 @@ Validated:
 
 ### Product / release validation
 Validated:
+- Build 8 remains live in TestFlight
+- **Kid roster / weekly focus / competition:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
 - Coach Share pilot remains intentionally contained/hidden
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
 - Custom focus is supported in Coach Share templates and preview
 - Reference link pill supports YouTube + Instagram links
-- Build 8 remains live in TestFlight
 
 ## Commits landed most recently
+- `9fb7e3a` — Feat: add kid competition tracking and roster delete  
+- `13f09f5` — Feat: add Coach Share kid tracking flow and weekly focus history  
+- `ca25164` — Docs: finalize handoff after Coach Share pilot work  
 - `c2daab1` — Docs: update handoff for Coach Share pilot progress  
 - `469ea58` — Feat: add custom focus option to Coach Share templates  
 - `745059e` — Feat: expand Coach Share pilot preview with custom focus and IG links  
-- `e9dec08` — Fix: clarify Coach Share preview state and hide debug data  
-- `d195db7` — Feat: clarify Coach Share parent flow and coach pilot copy  
 
 ## Locked product / workflow decisions
 - Terminal-first execution remains a hard project rule
 - Build 8 remains live in TestFlight (beta reality)
 - Feedback triage is intentionally tabled short-term
 - Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
-- Coach Share pilot refinement (clarity + template/preview correctness) is currently the highest-ROI lane for Kyle internal testing
+- **Coach Share pilot + per-kid tracking** is the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
+- Kid roster / weekly focus / competition data is **local-only (AsyncStorage + on-device media copies)** for the pilot; not synced
 
 ## Open loops
-- Fix `expo lint` failure (`react/no-unescaped-entities`) in `app/(tabs)/profile/coaches/templates.tsx`
-- Kyle internal testing: validate Coach Share parent-first hierarchy is intuitive
-- Validate multi-item coach pilot preview readability and ordering
-- Validate custom focus flow: template chooser → preview consistency
-- Validate reference link handling across YouTube + Instagram links (formatting + tap behavior)
-- Decide when to resume external Build 8 feedback triage (after Kyle pilot signal / once Coach Share pilot stabilizes)
+- Kyle internal testing: run the **full kid pilot path** (roster → kid → weekly focus → history → outcome/notes → competition incl. optional video → entry delete) plus **roster delete** and confirm UX + data cleanup feels right
+- Validate **video pick → persist → playback** across devices/OS versions (MediaLibrary resolution for `ph://` / `assets-library://` when needed)
+- Validate **caps** behavior (60 weekly focus rows/kid, 60 competitions/kid) under heavy use
+- Coach Share template lane: parent-first hierarchy, multi-item preview, custom focus, YouTube + Instagram reference links (formatting + tap behavior)
+- Decide when to resume external Build 8 feedback triage (after Kyle pilot signal / once this lane stabilizes)
 
 ## Best next-session recommendation
 Next likely moves:
-- fix the current lint failure, re-run gates (`npm run typecheck`, `npm run lint`)
-- do a tight Coach Share pilot QA pass in Dev (parent route → coach pilot preview → custom focus → reference link pill)
-- support Kyle internal testing by addressing only issues that block pilot usability/clarity
-- keep Coach Share pilot hidden; avoid broad exposure work until pilot outcomes justify it
-- resume Build 8 external feedback triage only when we’re ready to act on it
+- Re-run gates (`npx tsc --noEmit`, `npx eslint .`) before further app changes or a TestFlight cut
+- Dev QA: **Kids (Pilot)** → create kid → **Set Weekly Focus** (template + custom) → **View History** → **Save Outcome / Notes** → **Add competition** (try optional video) → edit/delete entry → **swipe delete kid** and confirm related data + copied media cleanup
+- Keep Coach Share **pilot-hidden**; treat issues as pilot-blocking only if they break Kyle’s internal test
+- Resume Build 8 external feedback triage only when we’re ready to act on it
 
 ## Suggested restart commands for next session
 - `git status -sb`
@@ -159,5 +156,6 @@ Next likely moves:
 - `sed -n '1,260p' "docs/recaps/2026-03-13_dev-recap.md"`
 
 ## Assumptions
-- I treated Kyle internal Coach Share pilot usability as the highest-ROI signal for this lane.
-- I assumed broader external Build 8 feedback triage could stay tabled until the Coach Share pilot flow was stable enough for internal use.
+- Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
+- Broader external Build 8 feedback triage can stay tabled until this pilot lane is stable enough for internal use.
+- Gates above reflect the **current `dev` HEAD**; re-run before pushing if the tree changes.
