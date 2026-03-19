@@ -52,7 +52,7 @@ const SCREEN_W = Dimensions.get("window").width;
 // System id -> label (for lightweight display)
 const SYSTEM_LABEL_BY_ID = new Map<string, string>([
   ["ALL", "All"],
-  ...FUNDAMENTALS_TAXONOMY.map((l1: { id: string; label: string }) => [l1.id, l1.label]),
+  ...FUNDAMENTALS_TAXONOMY.map((l1) => [l1.id, l1.label] as [string, string]),
 ]);
 
 function resolveSystemLabel(systemId?: string) {
@@ -125,7 +125,7 @@ function sessionDrillNotesSummary(s: Session) {
 }
 
 function sessionBadges(s: Session) {
-  const badges: Array<"YT" | "IMG" | "VID"> = [];
+  const badges: ("YT" | "IMG" | "VID")[] = [];
   if (s.youtubeUrl?.trim()) badges.push("YT");
   if ((s.imageUri ?? "").trim()) badges.push("IMG");
   if ((s.videoUri ?? "").trim()) badges.push("VID");

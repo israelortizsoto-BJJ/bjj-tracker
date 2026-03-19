@@ -497,7 +497,7 @@ useFocusEffect(
       setLoading(false);
     })();
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
-  }, [isNew, router, sessionId, prefillDate, effectivePrefillSystem]);
+  }, [isNew, router, sessionId, prefillDate, effectivePrefillSystem, kidIdParam]);
 
 // Block 5: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
 const techResults = useMemo(() => {

@@ -413,7 +413,7 @@ useEffect(() => {
     date: "",
     ...(kidIdParam ? { kidId: kidIdParam } : {}),
   });
-}, [params.date, selectedDate, router]);
+}, [params.date, selectedDate, router, kidIdParam]);
 
 useFocusEffect(
   useCallback(() => {
