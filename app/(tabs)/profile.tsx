@@ -14,7 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { StorageKeys } from "../../src/storage/storageKeys";
 
-import { isDev } from "../../src/config/runtime";
+import { isCoachShareProfileEntryVisible, isDev } from "../../src/config/runtime";
 import { loadDevFlags } from "../../src/config/devFlagsStore";
 import { DEFAULT_DEV_FLAGS } from "../../src/config/flags";
 
@@ -344,6 +344,27 @@ export default function ProfileScreen() {
       </Text>
       <View style={{ height: 20 }} />
 
+      {isCoachShareProfileEntryVisible() ? (
+        <Pressable
+          onPress={() => router.push("/profile/coaches")}
+          style={({ pressed }) => ({
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+          })}
+        >
+          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
+            Coach Share
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
+            Share training updates with your coach
+          </Text>
+        </Pressable>
+      ) : null}
+
       {isDev() ? (
         <Pressable
           onPress={() => router.push("/profile/dev-settings")}
@@ -364,7 +385,9 @@ export default function ProfileScreen() {
         </Pressable>
       ) : null}
 
-      {isDev() && devFlags.enableCoachShareScaffold ? (
+      {isDev() &&
+      devFlags.enableCoachShareScaffold &&
+      !isCoachShareProfileEntryVisible() ? (
         <Pressable
           onPress={() => router.push("/profile/coaches")}
           style={({ pressed }) => ({

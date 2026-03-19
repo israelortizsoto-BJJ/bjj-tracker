@@ -15,6 +15,13 @@
     "production": {
       "distribution": "store",
       "autoIncrement": true
+    },
+    "testflight-internal": {
+      "distribution": "store",
+      "autoIncrement": true,
+      "env": {
+        "SHOW_COACH_SHARE_PROFILE_ENTRY": "1"
+      }
     }
   },
   "submit": {

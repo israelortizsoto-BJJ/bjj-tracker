@@ -10,6 +10,9 @@ const DEV_BUNDLE_ID = "com.ortizdigitalstudio.matmind.dev";
 
 const PROD_NAME = (base.name ?? "MatMind Jiu Jitsu") as string;
 
+const showCoachShareProfileEntry =
+  process.env.SHOW_COACH_SHARE_PROFILE_ENTRY === "1";
+
 export default (): ExpoConfig => ({
   ...base,
 
@@ -40,5 +43,6 @@ export default (): ExpoConfig => ({
   extra: {
     ...base.extra,
     appVariant: APP_VARIANT,
+    showCoachShareProfileEntry,
   },
 });
