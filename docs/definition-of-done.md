@@ -50,13 +50,13 @@ Examples:
 
 4) Type Safety (Hard Gate)
 	•	npx tsc --noEmit is clean
-	•	npm run lint is clean
+	•	npx eslint . is clean
 	•	No unused vars / dead types
 	•	No duplicate type definitions (single source of truth)
 	•	Storage keys imported only from src/storage/storageKeys.ts
 	•	No hardcoded storage strings in screens
 	•	Fundamentals types imported from src/fundamentals entry points (avoid unnecessary deep imports)
-	•	If VS Code shows squiggles but tsc is clean → restart TS server before continuing
+	•	If your editor shows squiggles but tsc is clean → restart TS server before continuing
 
 ⸻
 
@@ -101,6 +101,7 @@ If you stop using code
 
 Before Commit (Final Gate)
 	•	Completed Change Validation → Type Safety
+	•	For TestFlight/distribution changes: run Feature QA first, then a separate Distribution QA checkpoint (tester audience/access path/build profile explicitly set/recorded)
 	•	git diff reviewed
 	•	No accidental files changed
 	•	No duplicate UI elements

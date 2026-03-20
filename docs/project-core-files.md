@@ -17,7 +17,7 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - app/_layout.tsx
 - app/(tabs)/_layout.tsx
 
-## Core Build 7 product surfaces
+## Core App Surfaces
 - app/(tabs)/welcome.tsx
 - app/(tabs)/profile.tsx
 - app/(tabs)/training.tsx
@@ -57,6 +57,8 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - docs/release-checklist-ios.md
 - docs/builds/build-7-scope.md
 - docs/qa/build-7-release-readiness-pass-2026-03-13.md
+
+Note: build-specific docs here are structural reference points; treat the current coach-testing build as the active learning lane.
 
 ## Rule
 When project context feels stale:

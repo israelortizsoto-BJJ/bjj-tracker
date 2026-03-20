@@ -85,3 +85,33 @@ First prove that athletes return weekly.
 Habit before intelligence.
 
 ---
+
+## Environment Primacy
+
+Decision:
+Cursor is the primary coding environment; VS Code is fallback only.
+
+Why:
+It keeps edits, command runs, and release gates in one supervised workflow.
+
+---
+
+## Release Targeting Discipline
+
+Decision:
+Define tester audience, tester access path, and build profile explicitly before any TestFlight/distribution action; treat Feature QA and Distribution QA as separate checkpoints.
+
+Why:
+This prevents “it looked fine” uncertainty from masking the real distribution target and lane.
+
+---
+
+## Coach Share Exposure Gating
+
+Decision:
+Coach Share can be exposed from `Profile` for the dedicated TestFlight coach-testing flow, while remaining hidden by default otherwise.
+
+Why:
+Coach Share stays pilot-controlled without accidentally expanding its surface area.
+
+---

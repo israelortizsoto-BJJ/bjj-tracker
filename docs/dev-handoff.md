@@ -26,8 +26,8 @@ Use Dev Settings “Dev Shortcuts” to reach hidden routes.
 
 ## Hidden routes stay hidden from the tab bar by default unless intentionally exposed in dev.
 Use `href: null` for internal routes and Coach Share subroutes.
-Coach Share should still remain reachable from Profile, not as a main tab.
-Build 7/8 tab exposure is now intentional for tester-facing product clarity:
+Coach Share should still remain reachable from Profile, not as a main tab. For the dedicated TestFlight coach-testing lane, Coach Share can be exposed from `Profile` while remaining hidden by default otherwise.
+Tester-facing tab exposure is now intentional for product clarity:
 - Welcome
 - Profile
 - Training
@@ -71,7 +71,7 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
 **Date:** 2026-03-19  
-**Status:** Build 8 remains live in TestFlight. Feedback triage is intentionally tabled short-term. The **Coach Share pilot lane** now includes **per-kid tracking** on `dev` (roster, weekly focus logging/history, kid-linked training sessions, progress reflections (Outcome/Notes), competition log with optional on-device video, roster delete with cascade cleanup)—**validated in Dev / local pilot flows**; **not** implied shipped to testers until we cut a new TestFlight build. Surfaces remain **pilot/hidden** (Profile → Coach Share).
+**Status:** Build 12 is the current coach-testing build in TestFlight. Feedback triage is intentionally tabled short-term. The **Coach Share pilot lane** now includes **per-kid tracking** on `dev` (roster, weekly focus logging/history, kid-linked training sessions, progress reflections (Outcome/Notes), competition log with optional on-device video, roster delete with cascade cleanup)—**validated in Dev / local pilot flows**; **not** implied shipped to testers until we cut a new TestFlight build. Surfaces remain **pilot/hidden** (Profile → Coach Share).
 
 ## Git checkpoint
 
@@ -118,7 +118,7 @@ Validated:
 
 ### Product / release validation
 Validated:
-- Build 8 remains live in TestFlight
+- Build 12 is the current coach-testing build in TestFlight
 - **Kid roster / weekly focus / competition + kid-linked training sessions + progress reflections:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
 - Coach Share pilot remains intentionally contained/hidden
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
@@ -136,7 +136,7 @@ Validated:
 
 ## Locked product / workflow decisions
 - Terminal-first execution remains a hard project rule
-- Build 8 remains live in TestFlight (beta reality)
+- Build 12 is the current coach-testing build in TestFlight (beta reality)
 - Feedback triage is intentionally tabled short-term
 - Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
 - **Coach Share pilot + per-kid tracking** is the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
@@ -147,14 +147,14 @@ Validated:
 - Validate **video pick → persist → playback** across devices/OS versions (MediaLibrary resolution for `ph://` / `assets-library://` when needed)
 - Validate **caps** behavior (60 weekly focus rows/kid, 60 competitions/kid) under heavy use
 - Coach Share template lane: parent-first hierarchy, multi-item preview, custom focus, YouTube + Instagram reference links (formatting + tap behavior)
-- Decide when to resume external Build 8 feedback triage (after Kyle pilot signal / once this lane stabilizes)
+- Decide when to resume external feedback triage (after Kyle pilot signal / once this lane stabilizes)
 
 ## Best next-session recommendation
 Next likely moves:
 - Re-run gates (`npx tsc --noEmit`, `npx eslint .`) before further app changes or a TestFlight cut
 - Dev QA: **Kids (Pilot)** → create kid → **Set Weekly Focus** (template + custom) → **View History** → **Log Training for This Kid** → **Save Outcome / Notes** → confirm “Saved weekly progress reflections (this week)” renders what was saved → **Add competition** (try optional video) → edit/delete entry → **swipe delete kid** and confirm related data + copied media cleanup
 - Keep Coach Share **pilot-hidden**; treat issues as pilot-blocking only if they break Kyle’s internal test
-- Resume Build 8 external feedback triage only when we’re ready to act on it
+- Resume external feedback triage only when we’re ready to act on it
 
 ## Suggested restart commands for next session
 - `git status -sb`
@@ -164,5 +164,5 @@ Next likely moves:
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
-- Broader external Build 8 feedback triage can stay tabled until this pilot lane is stable enough for internal use.
+- Broader external feedback triage can stay tabled until this pilot lane is stable enough for internal use.
 - Gates above reflect the **current `dev` HEAD**; re-run before pushing if the tree changes.

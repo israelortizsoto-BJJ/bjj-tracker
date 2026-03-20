@@ -9,6 +9,7 @@
 
 ## Operating note
 Use terminal-first updates for prompt, template, and config files when practical.
+Cursor is the primary coding environment; VS Code is fallback only.
 Why:
 - reduces human error
 - increases speed
