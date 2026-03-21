@@ -126,6 +126,21 @@ export async function deleteKidWeeklyFocusEntriesForKid(kidId: KidId): Promise<v
   await setKidWeeklyFocusEntriesRaw(capped);
 }
 
+/** Remove one weekly focus / check-in log row (pilot). */
+export async function deleteKidWeeklyFocusEntryById(
+  entryId: string,
+  expectedKidId: KidId,
+): Promise<boolean> {
+  const all = await getKidWeeklyFocusEntriesRaw();
+  const found = all.find((e) => e.id === entryId);
+  if (!found || found.kidId !== expectedKidId) return false;
+
+  const next = all.filter((e) => e.id !== entryId);
+  const capped = capEntriesByKid(next);
+  await setKidWeeklyFocusEntriesRaw(capped);
+  return true;
+}
+
 /**
  * Pilot hard-delete guardrail:
  * remove training sessions linked to a deleted kid so `bjj.sessions.v2` has no orphan kid-linked sessions.
