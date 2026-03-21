@@ -36,6 +36,8 @@ Tester-facing tab exposure is now intentional for product clarity:
 
 ## Terminal-first workflow is the default.
 Prefer terminal-driven, repeatable edits and commands wherever practical.
+
+**Black Belt / coach feedback TestFlight lane** (Coach Share visible, same prod bundle ID): `npm run build:ios:feedback` → then `npm run submit:ios:feedback`. Full preflight, ASC audience rules, and prod vs feedback distinction: `docs/release-checklist-ios.md` (section *Black Belt / coach feedback build*).
 Minimize manual editor changes.
 If a task is not easy to do from terminal, treat that as a workflow gap to fix rather than a reason to default to hand-editing.
 Use Cursor in a supervised workflow with terminal-visible commands, scoped diffs, gates, and intentional commits.

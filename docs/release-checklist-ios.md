@@ -10,6 +10,42 @@ Use this checklist before submitting a production iOS build for MatMind Jiu Jits
 - Dev bundle id = com.ortizdigitalstudio.matmind.dev
 - Never submit the dev app to Apple/TestFlight
 
+## Black Belt / coach feedback build (TestFlight)
+Use this lane for **repeatable internal feedback** builds where **Coach Share must appear on Profile** (same production bundle ID as store/TestFlight; not the `.dev` app).
+
+### How this differs from production store builds
+- **`production` EAS profile:** App Store/TestFlight artifact with default env — **Coach Share Profile entry stays off** for broad releases unless product changes that contract.
+- **`testflight-internal` EAS profile:** Same `com.ortizdigitalstudio.matmind` app; build env sets `SHOW_COACH_SHARE_PROFILE_ENTRY=1` and `EXPO_PUBLIC_SHOW_COACH_SHARE_PROFILE_ENTRY=1` so the entry is **reliably visible** (see `app.config.ts` and `src/config/runtime.ts`).
+
+### Preflight (feedback lane)
+- Confirm intentional git state (`git status -sb`, `git log -5`)
+- Run quality gates: `npm run typecheck` and `npm run lint`
+- Sanity-check prod identity (no dev bundle): `npx expo config --type public` → `ios.bundleIdentifier` must be `com.ortizdigitalstudio.matmind`, `extra.appVariant` must be `prod`
+- Confirm `eas.json` → `build.testflight-internal.env` still includes both Coach Share flags (do not rely on remembering to export them locally)
+
+### Build (feedback)
+```bash
+npm run build:ios:feedback
+```
+Equivalent: `npx eas-cli build --platform ios --profile testflight-internal`
+
+Wait for the build to finish; note build ID / URL if tracking releases.
+
+### Submit (feedback)
+Submit uses the **same** App Store Connect app and `submit.production` credentials as production uploads (only the **build profile** differed).
+
+```bash
+npm run submit:ios:feedback
+```
+Equivalent: `npx eas-cli submit --platform ios --profile production --latest`
+
+If submit fails, use the same **Fallback path** as in [Submit path](#submit-path) (download `.ipa`, Transporter).
+
+### App Store Connect — audience (required)
+After the build processes in TestFlight:
+- Assign testers **deliberately** (Internal Testing and/or a **Black Belts–only** External group). Do not widen distribution by habit.
+- **Rule:** treat coach-feedback builds as **Black Belts / internal-pilot only** until product explicitly expands the audience.
+
 ## Preflight
 - Confirm repo is in an intentional state
 - Run:

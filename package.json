@@ -9,7 +9,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:ios:feedback": "npx eas-cli build --platform ios --profile testflight-internal",
+    "submit:ios:feedback": "npx eas-cli submit --platform ios --profile production --latest"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
