@@ -20,7 +20,8 @@
       "distribution": "store",
       "autoIncrement": true,
       "env": {
-        "SHOW_COACH_SHARE_PROFILE_ENTRY": "1"
+        "SHOW_COACH_SHARE_PROFILE_ENTRY": "1",
+        "EXPO_PUBLIC_SHOW_COACH_SHARE_PROFILE_ENTRY": "1"
       }
     }
   },
