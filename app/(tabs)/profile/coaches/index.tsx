@@ -36,9 +36,12 @@ const UI = {
   screenBg: "#f3f4f6",
   bgCard: "#ffffff",
   bgCardActive: "#edf2ff",
+  bgHero: "#fffbf5",
   border: "#e5e7eb",
   textPrimary: "#111827",
   textSecondary: "#4b5563",
+  primaryFill: "#1d4ed8",
+  primaryFillPressed: "#1e40af",
 };
 const CARD_RADIUS = 16;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
@@ -145,12 +148,6 @@ export default function CoachesScreen() {
       ? currentPack.modules.find(
           (module) => module.id === currentAssignment.moduleId,
         )
-      : undefined;
-
-  const currentModulePosition =
-    currentModule && currentPack?.modules
-      ? currentPack.modules.findIndex((module) => module.id === currentModule.id) +
-        1
       : undefined;
 
   const currentAssignmentAssignedDate =
@@ -312,9 +309,44 @@ export default function CoachesScreen() {
     }
   }, []);
 
+  const activeCoachLinks = coachLinks.filter((link) => link.status === "active");
+  const isLinked = activeCoachLinks.length > 0;
+  const hasCoachPilotPreviewOnDevice = pilotPreviewItems.length > 0;
+  const hasSeededOrLocalShareData =
+    !isLinked &&
+    (allAssignments.length > 0 ||
+      allPacks.length > 0 ||
+      allCoaches.length > 0);
+  const isPreviewOnlyOnDevice =
+    !isLinked && (hasCoachPilotPreviewOnDevice || hasSeededOrLocalShareData);
+
+  const focusTitle =
+    currentAssignment?.title ??
+    (isLinked
+      ? "Your coach hasn’t shared a new focus yet"
+      : "Connect to see this week’s focus");
+  const focusNotes =
+    currentAssignment?.notes ??
+    (isLinked
+      ? "When they post an update, it will show up here for your family."
+      : "Use your invite code to link this phone to your academy. What you see before then stays on this device only.");
+
+  const assignmentStatusLine =
+    !currentAssignment || !isLinked
+      ? null
+      : currentAssignment.status === "assigned"
+        ? currentAssignmentAssignedDate
+          ? `Shared ${currentAssignmentAssignedDate.toLocaleDateString()}`
+          : "Shared by your coach"
+        : currentAssignment.status === "completed"
+          ? "Marked done at home (saved on this phone)"
+          : null;
+
+  const showCoachPilotUi = __DEV__ && showDebugData;
+
   return (
     <>
-      <Stack.Screen options={{ title: "Coaches & Programs" }} />
+      <Stack.Screen options={{ title: "This week" }} />
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -326,195 +358,194 @@ export default function CoachesScreen() {
           onLongPress={
             __DEV__ ? () => setShowDebugData((prev) => !prev) : undefined
           }
-          style={{ fontSize: 24, fontWeight: "700", color: UI.textPrimary, marginBottom: 8 }}
+          style={{ fontSize: 26, fontWeight: "700", color: UI.textPrimary, marginBottom: 6 }}
         >
-          Coach Share
+          This week together
         </Text>
-        <Section title="What Coach Share is">
-          <Text style={{ fontSize: 15, color: UI.textPrimary, lineHeight: 22, fontWeight: "600" }}>
-            Stay aligned on the current focus so 1:1 lessons carry over more clearly into regular training.
+        <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 4 }}>
+          A simple weekly note from your coach so class and practice line up.
+        </Text>
+        {__DEV__ ? (
+          <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
+            Dev: long-press the title to show coach pilot tools.
           </Text>
-          <Text style={{ marginTop: 8, fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-            Coach Share helps parents understand what the coach is emphasizing so kids can recognize and apply that focus during regular class and throughout the training week.
-          </Text>
-        </Section>
+        ) : (
+          <View style={{ height: 14 }} />
+        )}
 
         {!ready ? (
-          <Text style={{ marginTop: 18, fontSize: 15, color: UI.textSecondary }}>
-            Loading Coach Share data…
+          <Text style={{ marginTop: 4, fontSize: 15, color: UI.textSecondary }}>
+            Loading…
           </Text>
         ) : (
           <>
-            <Section title="Current Focus This Week">
-              {coachLinks.length === 0 ? (
-                <>
-                  {pilotPreviewItems.length > 0 ? (
+            <View
+              style={{
+                padding: 20,
+                borderRadius: CARD_RADIUS,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgHero,
+              }}
+            >
+              <View
+                style={{
+                  alignSelf: "flex-start",
+                  marginBottom: 14,
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 999,
+                  backgroundColor: isLinked ? "#dcfce7" : isPreviewOnlyOnDevice ? "#fef3c7" : "#f3f4f6",
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "700",
+                    color: isLinked ? "#166534" : isPreviewOnlyOnDevice ? "#92400e" : UI.textSecondary,
+                  }}
+                >
+                  {isLinked
+                    ? "Linked to your coach"
+                    : isPreviewOnlyOnDevice
+                      ? "On this phone only — not linked yet"
+                      : "Not linked yet"}
+                </Text>
+              </View>
+
+              <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#78716c" }]}>
+                THIS WEEK&apos;S FOCUS
+              </Text>
+              <Text style={{ fontSize: 20, fontWeight: "700", color: UI.textPrimary, lineHeight: 28 }}>
+                {focusTitle}
+              </Text>
+              <Text style={{ marginTop: 10, fontSize: 15, color: UI.textSecondary, lineHeight: 23 }}>
+                {focusNotes}
+              </Text>
+
+              {isLinked && currentCoach ? (
+                <Text style={{ marginTop: 16, fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
+                  From{" "}
+                  <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
+                    {currentCoach.displayName}
+                  </Text>
+                  {currentCoach.academyName ? (
                     <>
-                      <Text style={{ fontSize: 15, marginBottom: 6, color: UI.textPrimary, fontWeight: "600" }}>
-                        No family-facing coach/program connected yet.
-                      </Text>
-                      <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                        Coach-side pilot preview items are saved below, but they are not assigned or published to families.
-                      </Text>
+                      {" "}
+                      at {currentCoach.academyName}
                     </>
-                  ) : (
-                    <>
-                      <Text style={{ fontSize: 15, marginBottom: 6, color: UI.textPrimary, fontWeight: "600" }}>
-                        No coach/program connected yet.
-                      </Text>
-                      <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                        Once you join, you&apos;ll see the coach&apos;s current weekly focus, what to watch for in regular class, and recent completions.
-                      </Text>
-                      <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
-                        For local preview, you can seed demo data from Developer Settings.
-                      </Text>
-                    </>
-                  )}
-                </>
-              ) : (
-                <View style={{ gap: 14 }}>
-                  <View>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, letterSpacing: 0.6, fontWeight: "600" }}>
-                      CURRENT COACH
-                    </Text>
-                    <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 6, color: UI.textPrimary }}>
-                      {currentCoach?.displayName ?? "—"}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, marginTop: 2 }}>
-                      {currentCoach?.academyName ?? "—"}
-                    </Text>
-                  </View>
+                  ) : null}
+                </Text>
+              ) : null}
 
-                  <View style={{ height: 1, backgroundColor: UI.border }} />
-
-                  <View>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, letterSpacing: 0.6, fontWeight: "600" }}>
-                      THIS WEEK&apos;S FOCUS
-                    </Text>
-                    <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 6, color: UI.textPrimary }}>
-                      {currentAssignment?.title ?? "No active focus yet"}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22, marginTop: 6 }}>
-                      {currentAssignment?.notes ??
-                        "Your coach&apos;s focus details will appear here."}
-                    </Text>
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                        Status:{" "}
-                        <Text style={{ fontWeight: "600", color: UI.textPrimary }}>
-                          {currentAssignment?.status ?? "—"}
-                        </Text>
-                      </Text>
-                      <Text style={{ fontSize: 14, marginTop: 2, color: UI.textSecondary }}>
-                        Assigned:{" "}
-                        <Text style={{ fontWeight: "600", color: UI.textPrimary }}>
-                          {currentAssignmentAssignedDate
-                            ? currentAssignmentAssignedDate.toLocaleDateString()
-                            : "—"}
-                        </Text>
-                      </Text>
-                    </View>
-                    {currentAssignment?.status === "assigned" ? (
-                      <Pressable
-                        onPress={() => void handleMarkCurrentAssignmentComplete()}
-                        style={({ pressed }) => ({
-                          marginTop: 12,
-                          paddingVertical: 12,
-                          paddingHorizontal: 16,
-                          borderRadius: CARD_RADIUS,
-                          borderWidth: 1,
-                          borderColor: UI.border,
-                          backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-                          alignSelf: "flex-start",
-                        })}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: UI.textPrimary }}>
-                          Mark Complete
-                        </Text>
-                      </Pressable>
-                    ) : null}
-                  </View>
-
-                  <View style={{ height: 1, backgroundColor: UI.border }} />
-
-                  <View>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, letterSpacing: 0.6, fontWeight: "600" }}>
-                      FOCUS AREA
-                    </Text>
-                    <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 6, color: UI.textPrimary }}>
-                      {currentModule?.title ?? "No specific focus area selected"}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22, marginTop: 6 }}>
-                      {currentModule?.summary ??
-                        "When your coach assigns a focus area, it will show here so you can spot it during regular class this week."}
-                    </Text>
-                    {currentModulePosition ? (
-                      <Text style={{ fontSize: 14, marginTop: 10, color: UI.textSecondary }}>
-                        Position in program:{" "}
-                        <Text style={{ fontWeight: "600", color: UI.textPrimary }}>
-                          {currentModulePosition}
-                        </Text>
-                      </Text>
-                    ) : null}
-                  </View>
-
-                  <View style={{ height: 1, backgroundColor: UI.border }} />
-
-                  <View>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, letterSpacing: 0.6, fontWeight: "600" }}>
-                      CURRENT TRAINING PLAN
-                    </Text>
-                    <Text style={{ fontSize: 16, fontWeight: "700", marginTop: 6, color: UI.textPrimary }}>
-                      {currentPack?.title ?? "—"}
-                    </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22, marginTop: 6 }}>
-                      {currentPack?.description ?? "Your coach’s current program details will appear here."}
-                    </Text>
-                    <Text style={{ fontSize: 14, marginTop: 10, color: UI.textSecondary }}>
-                      Modules:{" "}
-                      <Text style={{ fontWeight: "600", color: UI.textPrimary }}>
-                        {currentPack?.modules.length ?? 0}
-                      </Text>
-                    </Text>
-                  </View>
+              {currentModule?.title ? (
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.border }}>
+                  <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
+                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>In class, look for: </Text>
+                    {currentModule.title}
+                    {currentModule.summary ? ` — ${currentModule.summary}` : ""}
+                  </Text>
                 </View>
+              ) : null}
+
+              {currentPack?.title && isLinked ? (
+                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
+                  Program: <Text style={{ fontWeight: "600", color: UI.textPrimary }}>{currentPack.title}</Text>
+                  {currentPack.description ? ` · ${currentPack.description}` : ""}
+                </Text>
+              ) : null}
+
+              {assignmentStatusLine ? (
+                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
+                  {assignmentStatusLine}
+                </Text>
+              ) : null}
+
+              {!isLinked && hasCoachPilotPreviewOnDevice ? (
+                <Text style={{ marginTop: 12, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+                  Coach pilot previews on this phone are not shared with families until you connect with a real invite.
+                </Text>
+              ) : null}
+
+              {!isLinked && hasSeededOrLocalShareData && !hasCoachPilotPreviewOnDevice ? (
+                <Text style={{ marginTop: 12, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+                  Sample or local data on this phone only — connect to use your coach’s real weekly note.
+                </Text>
+              ) : null}
+
+              {isLinked && currentAssignment?.status === "assigned" ? (
+                <Pressable
+                  onPress={() => void handleMarkCurrentAssignmentComplete()}
+                  style={({ pressed }) => ({
+                    marginTop: 18,
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderRadius: CARD_RADIUS,
+                    backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
+                    Log practice for this week
+                  </Text>
+                </Pressable>
+              ) : !isLinked ? (
+                <Pressable
+                  onPress={() => router.push("/profile/coaches/join")}
+                  style={({ pressed }) => ({
+                    marginTop: 18,
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderRadius: CARD_RADIUS,
+                    backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
+                    Connect with your coach
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => void loadCoachShareData()}
+                  style={({ pressed }) => ({
+                    marginTop: 18,
+                    paddingVertical: 14,
+                    paddingHorizontal: 20,
+                    borderRadius: CARD_RADIUS,
+                    backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
+                    Refresh this week’s update
+                  </Text>
+                </Pressable>
               )}
-            </Section>
 
-            <Section title="Parent Actions">
-              <Pressable
-                onPress={() => router.push("/profile/coaches/join")}
-                style={({ pressed }) => cardButtonStyle(pressed)}
-              >
-                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>Join Coach / Program</Text>
-                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-                  Connect with a coach using an invite code
-                </Text>
-              </Pressable>
+              {isLinked ? (
+                <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
+                  <Pressable onPress={() => router.push("/profile/coaches/manage")}>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: UI.primaryFill }}>
+                      Manage coach link
+                    </Text>
+                  </Pressable>
+                  {currentAssignment?.status === "assigned" ? (
+                    <Pressable onPress={() => void loadCoachShareData()}>
+                      <Text style={{ fontSize: 14, fontWeight: "600", color: UI.primaryFill }}>
+                        Refresh
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
 
-              <Pressable
-                onPress={() => router.push("/profile/coaches/manage")}
-                style={({ pressed }) => cardButtonStyle(pressed)}
-              >
-                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>Manage Coach Link</Text>
-                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-                  Review who&apos;s linked and revoke access if needed
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => void loadCoachShareData()}
-                style={({ pressed }) => cardButtonStyle(pressed)}
-              >
-                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>Refresh Coach Share</Text>
-                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-                  Refresh the current focus and completion status
-                </Text>
-              </Pressable>
-            </Section>
-
-            {coachLinks.length > 0 && hasCompletionSummary ? (
-              <Section title="Recent Completion">
+            {isLinked && hasCompletionSummary ? (
+              <Section title="Nice work">
                 <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4, color: UI.textPrimary }}>
                   {completionAssignmentTitle}
                 </Text>
@@ -531,7 +562,7 @@ export default function CoachesScreen() {
                 ) : null}
                 <View style={{ marginTop: 10 }}>
                   <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Completed:{" "}
+                    Logged:{" "}
                     <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
                       {completionCompletedAtDate
                         ? completionCompletedAtDate.toLocaleDateString()
@@ -539,223 +570,225 @@ export default function CoachesScreen() {
                     </Text>
                   </Text>
                   <Text style={{ fontSize: 14, marginTop: 2, color: UI.textSecondary }}>
-                    Status:{" "}
-                    <Text style={{ fontWeight: "500", color: UI.textPrimary }}>Recorded locally</Text>
+                    Saved on this phone for now
                   </Text>
                 </View>
               </Section>
             ) : null}
 
-            <Section title="Coach Tools">
-              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                Internal pilot (coach-side). Parents can ignore this section.
-              </Text>
-              <Pressable
-                onPress={() => router.push("/profile/coaches/kids")}
-                style={({ pressed }) => cardButtonStyle(pressed)}
-              >
-                <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
-                  Kids (Pilot)
-                </Text>
-                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-                  Roster + kid-specific weekly focus
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => router.push("/profile/coaches/create-pack")}
-                style={({ pressed }) => cardButtonStyle(pressed)}
-              >
-                <Text style={{ fontSize: 15, color: UI.textSecondary, fontWeight: "600" }}>Template Preview (Coach Pilot)</Text>
-                <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-                  Coach-side preview only; use Kids (Pilot) for kid weekly focus.
-                </Text>
-              </Pressable>
-            </Section>
-
-            {pilotPreviewItems.length > 0 ? (
-              <Section title="Coach Pilot Preview">
-                <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                  Internal pilot preview (coach-side). This does not assign or publish anything to families.
-                </Text>
-
-                <View style={{ marginTop: 12, gap: 10 }}>
-                  {pilotPreviewItems.slice(0, 3).map((item) => {
-                    const label = item.type === "template" ? "TEMPLATE" : "CUSTOM";
-                    const meta = item.type === "template" ? item.metadata : item.note;
-                    return (
-                      <View
-                        key={item.id}
-                        style={{
-                          padding: 12,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: UI.border,
-                          backgroundColor: UI.bgCard,
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            color: UI.textSecondary,
-                            letterSpacing: 0.6,
-                            fontWeight: "600",
-                          }}
-                        >
-                          {label}
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 16,
-                            fontWeight: "700",
-                            marginTop: 6,
-                            color: UI.textPrimary,
-                          }}
-                        >
-                          {item.title}
-                        </Text>
-                        {meta ? (
-                          <Text
-                            style={{
-                              fontSize: 14,
-                              color: UI.textSecondary,
-                              marginTop: 6,
-                              lineHeight: 20,
-                            }}
-                          >
-                            {meta}
-                          </Text>
-                        ) : null}
-                        <View
-                          style={{
-                            marginTop: 10,
-                            flexDirection: "row",
-                            alignItems: "center",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                            Added:{" "}
-                            <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
-                              {new Date(item.createdAt).toLocaleDateString()}
-                            </Text>
-                          </Text>
-                          <View
-                            style={{
-                              flexDirection: "row",
-                              alignItems: "center",
-                              gap: 8,
-                            }}
-                          >
-                            {isUsableYoutubeUrl(item.youtubeUrl) ? (
-                              <Pressable
-                                onPress={() => void openYoutubeUrl(item.youtubeUrl)}
-                                style={({ pressed }) => ({
-                                  paddingVertical: 6,
-                                  paddingHorizontal: 10,
-                                  borderRadius: 999,
-                                  borderWidth: 1,
-                                  borderColor: UI.border,
-                                  backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-                                })}
-                              >
-                                <Text
-                                  style={{
-                                    fontSize: 11,
-                                    fontWeight: "700",
-                                    color: UI.textPrimary,
-                                  }}
-                                >
-                                  YT
-                                </Text>
-                              </Pressable>
-                            ) : null}
-                            <Pressable
-                              onPress={() => void handleRemovePilotPreviewItem(item.id)}
-                              style={({ pressed }) => ({
-                                paddingVertical: 6,
-                                paddingHorizontal: 10,
-                                borderRadius: 999,
-                                borderWidth: 1,
-                                borderColor: UI.border,
-                                backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-                              })}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 13,
-                                  color: UI.textPrimary,
-                                  fontWeight: "600",
-                                }}
-                              >
-                                Remove
-                              </Text>
-                            </Pressable>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                  <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                    {pilotPreviewItems.length}/3 items saved
+            {showCoachPilotUi ? (
+              <>
+                <Section title="Coach Tools (pilot)">
+                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                    Internal pilot (coach-side). Hidden from families unless dev debug is on.
                   </Text>
-                </View>
-
-                <View style={{ marginTop: 14, gap: 10 }}>
                   <Pressable
-                    onPress={() => router.push("/profile/coaches/custom-focus")}
-                    style={({ pressed }) => ({
-                      paddingVertical: 12,
-                      paddingHorizontal: 14,
-                      borderRadius: CARD_RADIUS,
-                      borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-                      alignSelf: "flex-start",
-                    })}
+                    onPress={() => router.push("/profile/coaches/kids")}
+                    style={({ pressed }) => cardButtonStyle(pressed)}
                   >
-                    <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "700" }}>
-                      Add Custom Focus
+                    <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
+                      Kids (Pilot)
                     </Text>
-                    <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-                      Title required. Optional short note. Internal pilot preview only.
+                    <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
+                      Roster + kid-specific weekly focus
                     </Text>
                   </Pressable>
-                </View>
-              </Section>
-            ) : (
-              <Section title="Coach Pilot Preview">
-                <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                  Internal pilot preview (coach-side). This does not assign or publish anything to families.
-                </Text>
-                <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary }}>
-                  No preview items yet. Add a template from Coach Tools or add a custom focus from the coach tools below.
-                </Text>
-              </Section>
-            )}
+                  <Pressable
+                    onPress={() => router.push("/profile/coaches/create-pack")}
+                    style={({ pressed }) => cardButtonStyle(pressed)}
+                  >
+                    <Text style={{ fontSize: 15, color: UI.textSecondary, fontWeight: "600" }}>
+                      Template Preview (Coach Pilot)
+                    </Text>
+                    <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
+                      Coach-side preview only; use Kids (Pilot) for kid weekly focus.
+                    </Text>
+                  </Pressable>
+                </Section>
 
-            {__DEV__ && showDebugData ? (
-              <Section title="Debug Data">
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>Links: {coachLinks.length}</Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Coaches: {Object.keys(coachesById).length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Packs: {Object.keys(packsById).length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Enrollments: {packEnrollments.length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Assignments: {Object.keys(assignmentsById).length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Receipt queue: {completionReceiptsQueue.length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Pilot preview items: {pilotPreviewItems.length}
-                </Text>
-                
-              </Section>
+                {pilotPreviewItems.length > 0 ? (
+                  <Section title="Coach Pilot Preview">
+                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                      Internal pilot preview (coach-side). This does not assign or publish anything to families.
+                    </Text>
+
+                    <View style={{ marginTop: 12, gap: 10 }}>
+                      {pilotPreviewItems.slice(0, 3).map((item) => {
+                        const label = item.type === "template" ? "TEMPLATE" : "CUSTOM";
+                        const meta = item.type === "template" ? item.metadata : item.note;
+                        return (
+                          <View
+                            key={item.id}
+                            style={{
+                              padding: 12,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: UI.border,
+                              backgroundColor: UI.bgCard,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                color: UI.textSecondary,
+                                letterSpacing: 0.6,
+                                fontWeight: "600",
+                              }}
+                            >
+                              {label}
+                            </Text>
+                            <Text
+                              style={{
+                                fontSize: 16,
+                                fontWeight: "700",
+                                marginTop: 6,
+                                color: UI.textPrimary,
+                              }}
+                            >
+                              {item.title}
+                            </Text>
+                            {meta ? (
+                              <Text
+                                style={{
+                                  fontSize: 14,
+                                  color: UI.textSecondary,
+                                  marginTop: 6,
+                                  lineHeight: 20,
+                                }}
+                              >
+                                {meta}
+                              </Text>
+                            ) : null}
+                            <View
+                              style={{
+                                marginTop: 10,
+                                flexDirection: "row",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                              }}
+                            >
+                              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                                Added:{" "}
+                                <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
+                                  {new Date(item.createdAt).toLocaleDateString()}
+                                </Text>
+                              </Text>
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                {isUsableYoutubeUrl(item.youtubeUrl) ? (
+                                  <Pressable
+                                    onPress={() => void openYoutubeUrl(item.youtubeUrl)}
+                                    style={({ pressed }) => ({
+                                      paddingVertical: 6,
+                                      paddingHorizontal: 10,
+                                      borderRadius: 999,
+                                      borderWidth: 1,
+                                      borderColor: UI.border,
+                                      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                                    })}
+                                  >
+                                    <Text
+                                      style={{
+                                        fontSize: 11,
+                                        fontWeight: "700",
+                                        color: UI.textPrimary,
+                                      }}
+                                    >
+                                      YT
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                                <Pressable
+                                  onPress={() => void handleRemovePilotPreviewItem(item.id)}
+                                  style={({ pressed }) => ({
+                                    paddingVertical: 6,
+                                    paddingHorizontal: 10,
+                                    borderRadius: 999,
+                                    borderWidth: 1,
+                                    borderColor: UI.border,
+                                    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                                  })}
+                                >
+                                  <Text
+                                    style={{
+                                      fontSize: 13,
+                                      color: UI.textPrimary,
+                                      fontWeight: "600",
+                                    }}
+                                  >
+                                    Remove
+                                  </Text>
+                                </Pressable>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })}
+                      <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                        {pilotPreviewItems.length}/3 items saved
+                      </Text>
+                    </View>
+
+                    <View style={{ marginTop: 14, gap: 10 }}>
+                      <Pressable
+                        onPress={() => router.push("/profile/coaches/custom-focus")}
+                        style={({ pressed }) => ({
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: CARD_RADIUS,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                          alignSelf: "flex-start",
+                        })}
+                      >
+                        <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "700" }}>
+                          Add Custom Focus
+                        </Text>
+                        <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
+                          Title required. Optional short note. Internal pilot preview only.
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </Section>
+                ) : (
+                  <Section title="Coach Pilot Preview">
+                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+                      Internal pilot preview (coach-side). This does not assign or publish anything to families.
+                    </Text>
+                    <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary }}>
+                      No preview items yet. Add a template from Coach Tools or add a custom focus.
+                    </Text>
+                  </Section>
+                )}
+
+                <Section title="Debug Data">
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>Links: {coachLinks.length}</Text>
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                    Coaches: {Object.keys(coachesById).length}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                    Packs: {Object.keys(packsById).length}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                    Enrollments: {packEnrollments.length}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                    Assignments: {Object.keys(assignmentsById).length}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                    Receipt queue: {completionReceiptsQueue.length}
+                  </Text>
+                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                    Pilot preview items: {pilotPreviewItems.length}
+                  </Text>
+                </Section>
+              </>
             ) : null}
           </>
         )}

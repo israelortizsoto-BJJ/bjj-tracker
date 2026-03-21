@@ -356,10 +356,10 @@ export default function ProfileScreen() {
         })}
       >
         <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
-          Coach Share
+          This week with your coach
         </Text>
         <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-          Share training updates with your coach
+          Weekly focus and practice notes from your academy
         </Text>
       </Pressable>
 
