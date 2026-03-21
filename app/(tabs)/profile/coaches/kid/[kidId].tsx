@@ -561,35 +561,16 @@ export default function KidDetailScreen() {
             borderWidth: 1,
             borderColor: UI.border,
             backgroundColor: UI.bgCard,
-            gap: 10,
+            gap: 8,
           }}
         >
           <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            This Week’s Private Session Focus
+            {"This week's focus"}
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            {focusTitle && currentWeekEntry ? (
-              <Pressable
-                onPress={() =>
-                  router.push(
-                    `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
-                  )
-                }
-                style={({ pressed }) => ({
-                  flex: 1,
-                  minWidth: 0,
-                  opacity: pressed ? 0.85 : 1,
-                })}
-              >
-                <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary }}>
-                  {focusTitle}
-                </Text>
-              </Pressable>
-            ) : (
-              <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
-                {focusTitle ?? "No focus saved yet"}
-              </Text>
-            )}
+            <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
+              {focusTitle ?? "No focus saved yet"}
+            </Text>
             {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry.youtubeUrl) ? (
               <Pressable
                 onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
@@ -610,50 +591,209 @@ export default function KidDetailScreen() {
           </View>
 
           {focusTitle ? (
-            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              Saved for week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
+            <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+              Week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
             </Text>
           ) : (
-            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              Choose a weekly focus to start building kid history over time.
+            <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+              Pick a focus to build history over time.
             </Text>
           )}
 
           <Pressable
-            onPress={() => router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)}
-            style={({ pressed }) => ({
-              marginTop: 4,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-              alignSelf: "flex-start",
-            })}
-          >
-            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
-              Set Weekly Focus
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+            onPress={() =>
+              currentWeekEntry
+                ? router.push(
+                    `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
+                  )
+                : router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)
+            }
             style={({ pressed }) => ({
               marginTop: 6,
               paddingVertical: 12,
               paddingHorizontal: 14,
               borderRadius: 12,
               borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-              alignSelf: "flex-start",
+              borderColor: "#1d4ed8",
+              backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
+              alignSelf: "stretch",
             })}
           >
-            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
-              View History
+            <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
+              {currentWeekEntry ? "Edit this week's focus" : "Set this week's focus"}
             </Text>
           </Pressable>
+
+          <Pressable
+            onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+            style={({ pressed }) => ({
+              paddingVertical: 4,
+              alignSelf: "flex-start",
+              opacity: pressed ? 0.65 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>History</Text>
+          </Pressable>
+        </View>
+
+        <View style={{ height: 14 }} />
+
+        <View
+          style={{
+            padding: 16,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
+            gap: 10,
+            opacity: canEditOutcome ? 1 : 0.65,
+          }}
+        >
+          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+            {"How it's going"}
+          </Text>
+
+          {!canEditOutcome ? (
+            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+              {"Set this week's focus first to track outcome and notes."}
+            </Text>
+          ) : (
+            <>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {(["not_yet", "developing", "on_track"] as CoachOutcome[]).map((o) => {
+                  const active = outcomeDraft === o;
+                  return (
+                    <Pressable
+                      key={o}
+                      disabled={!canEditOutcome}
+                      onPress={() => setOutcomeDraft(o)}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? "#1d4ed8" : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: UI.textPrimary,
+                          fontWeight: active ? "800" : "700",
+                        }}
+                      >
+                        {outcomeLabel(o)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={{ marginTop: 2, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+                Notes start empty; each save adds an entry below.
+              </Text>
+
+              <TextInput
+                key={progressNotesInputKey}
+                value={notesDraft}
+                scrollEnabled={false}
+                onChangeText={setNotesDraft}
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
+                placeholder="Add check-in notes"
+                placeholderTextColor={UI.textSecondary}
+                multiline
+                style={{
+                  marginTop: 6,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  padding: 12,
+                  minHeight: 92,
+                  color: UI.textPrimary,
+                  textAlignVertical: "top",
+                }}
+              />
+
+              <Pressable
+                disabled={savingOutcome}
+                onPress={() => void onSaveOutcome()}
+                style={({ pressed }) => ({
+                  marginTop: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#1d4ed8",
+                  backgroundColor: pressed ? "#1d4ed8" : "#1d4ed8",
+                  opacity: savingOutcome ? 0.6 : 1,
+                  alignSelf: "flex-start",
+                })}
+              >
+                <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
+                  Save check-in
+                </Text>
+              </Pressable>
+            </>
+          )}
+
+          <View style={{ marginTop: 10, gap: 8 }}>
+            <Text style={{ fontSize: 11, letterSpacing: 0.4, fontWeight: "700", color: UI.textSecondary }}>
+              This week
+            </Text>
+
+            {thisWeekReflections.length === 0 ? (
+              <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+                No saved check-ins yet.
+              </Text>
+            ) : (
+              <>
+                {thisWeekReflections.slice(0, 3).map((r) => {
+                  const outcomeText =
+                    typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
+                  const notesText = (r.coachNotes ?? "").trim();
+                  return (
+                    <Pressable
+                      key={r.id}
+                      onPress={() =>
+                        router.push(
+                          `/profile/coaches/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
+                        )
+                      }
+                      style={({ pressed }) => ({
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        backgroundColor: pressed ? "#eef2ff" : "#f9fafb",
+                        gap: 6,
+                      })}
+                    >
+                      {outcomeText ? (
+                        <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                          Outcome: {outcomeText}
+                        </Text>
+                      ) : null}
+                      {notesText ? (
+                        <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={3}>
+                          Notes: {notesText}
+                        </Text>
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
+                {thisWeekReflections.length > 3 ? (
+                  <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                    +{thisWeekReflections.length - 3} more
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </View>
         </View>
 
         <View style={{ height: 14 }} />
@@ -1005,167 +1145,6 @@ export default function KidDetailScreen() {
               })}
             </View>
           ) : null}
-        </View>
-
-        <View style={{ height: 14 }} />
-
-        <View
-          style={{
-            padding: 16,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: UI.bgCard,
-            gap: 10,
-            opacity: canEditOutcome ? 1 : 0.65,
-          }}
-        >
-          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            PROGRESS ON THIS WEEK’S FOCUS
-          </Text>
-
-          {!canEditOutcome ? (
-            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              Set weekly focus first to enable outcome tracking.
-            </Text>
-          ) : (
-            <>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {(["not_yet", "developing", "on_track"] as CoachOutcome[]).map((o) => {
-                  const active = outcomeDraft === o;
-                  return (
-                    <Pressable
-                      key={o}
-                      disabled={!canEditOutcome}
-                      onPress={() => setOutcomeDraft(o)}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        paddingVertical: 10,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: active ? "#1d4ed8" : UI.border,
-                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
-                        opacity: pressed ? 0.9 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: UI.textPrimary,
-                          fontWeight: active ? "800" : "700",
-                        }}
-                      >
-                        {outcomeLabel(o)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
-                New notes start empty here. Each save adds an entry in the list below (history stays
-                visible).
-              </Text>
-
-              <TextInput
-                key={progressNotesInputKey}
-                value={notesDraft}
-                scrollEnabled={false}
-                onChangeText={setNotesDraft}
-                onFocus={bumpScrollToFocusedInput}
-                onContentSizeChange={bumpScrollToFocusedInput}
-                placeholder="Add new weekly progress notes"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                style={{
-                  marginTop: 6,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  padding: 12,
-                  minHeight: 92,
-                  color: UI.textPrimary,
-                  textAlignVertical: "top",
-                }}
-              />
-
-              <Pressable
-                disabled={savingOutcome}
-                onPress={() => void onSaveOutcome()}
-                style={({ pressed }) => ({
-                  marginTop: 10,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#1d4ed8",
-                  backgroundColor: pressed ? "#1d4ed8" : "#1d4ed8",
-                  opacity: savingOutcome ? 0.6 : 1,
-                  alignSelf: "flex-start",
-                })}
-              >
-                <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
-                  Save Outcome / Notes
-                </Text>
-              </Pressable>
-            </>
-          )}
-
-          <View style={{ marginTop: 10, gap: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
-              Saved weekly progress reflections (this week)
-            </Text>
-
-            {thisWeekReflections.length === 0 ? (
-              <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-                No saved reflections yet.
-              </Text>
-            ) : (
-              <>
-                {thisWeekReflections.slice(0, 3).map((r) => {
-                  const outcomeText =
-                    typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
-                  const notesText = (r.coachNotes ?? "").trim();
-                  return (
-                    <Pressable
-                      key={r.id}
-                      onPress={() =>
-                        router.push(
-                          `/profile/coaches/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
-                        )
-                      }
-                      style={({ pressed }) => ({
-                        padding: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: UI.border,
-                        backgroundColor: pressed ? "#eef2ff" : "#f9fafb",
-                        gap: 6,
-                      })}
-                    >
-                      {outcomeText ? (
-                        <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                          Outcome: {outcomeText}
-                        </Text>
-                      ) : null}
-                      {notesText ? (
-                        <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={3}>
-                          Notes: {notesText}
-                        </Text>
-                      ) : null}
-                    </Pressable>
-                  );
-                })}
-                {thisWeekReflections.length > 3 ? (
-                  <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                    +{thisWeekReflections.length - 3} more
-                  </Text>
-                ) : null}
-              </>
-            )}
-          </View>
         </View>
 
         {!ready ? (
