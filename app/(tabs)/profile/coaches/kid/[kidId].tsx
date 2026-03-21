@@ -20,18 +20,24 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Swipeable } from "react-native-gesture-handler";
 
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
   appendKidWeeklyFocus,
   getKidWeeklyFocusEntriesForKid,
+  deleteKidWeeklyFocusEntryById,
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../../../../src/storage/coachKidStore";
+import { deleteSessionById } from "../../../../../src/storage/sessionsStore";
 import { getKidStandingGuidance } from "../../../../../src/storage/kidStandingGuidanceStore";
 import { StorageKeys } from "../../../../../src/storage/storageKeys";
-import { getKidCompetitionEntriesForKid } from "../../../../../src/storage/kidCompetitionStore";
+import {
+  deleteKidCompetitionEntry,
+  getKidCompetitionEntriesForKid,
+} from "../../../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../../../src/types";
 import type {
   CoachOutcome,
@@ -50,6 +56,8 @@ const UI = {
   border: "#e5e7eb",
   textPrimary: "#111827",
   textSecondary: "#4b5563",
+  danger: "#dc2626",
+  rowMutedBg: "#f9fafb",
 };
 
 const CARD_RADIUS = 16;
@@ -126,17 +134,6 @@ function techniqueSummaryForKidSession(s: Session): string {
   if (parts.length === 0) return "—";
   if (parts.length === 1) return parts[0];
   return `${parts[0]} · also: ${parts.slice(1).join(", ")}`;
-}
-
-function sessionDrillNotesSummary(s: Session) {
-  const drill = (s.drill || "").trim();
-  const notes = (s.notes || "").trim();
-  const parts: string[] = [];
-
-  if (drill) parts.push(`Drill: ${drill}`);
-  if (notes) parts.push(`Notes: ${notes}`);
-
-  return parts.join(" • ");
 }
 
 function sessionBadges(s: Session) {
@@ -459,6 +456,62 @@ export default function KidDetailScreen() {
     }
   }, [currentWeekEntry, notesDraft, outcomeDraft, load, kidId, weekStartYMD]);
 
+  const requestDeleteReflection = useCallback(
+    (entryId: string) => {
+      Alert.alert(
+        "Delete check-in?",
+        "This deletes this saved check-in from this kid’s log.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: async () => {
+              await deleteKidWeeklyFocusEntryById(entryId, kidId);
+              await load({ prefillProgressInputs: true });
+            },
+          },
+        ],
+      );
+    },
+    [kidId, load],
+  );
+
+  const requestDeleteCompetition = useCallback(
+    (entryId: string, tournamentName: string) => {
+      const label = tournamentName.trim() || "this entry";
+      Alert.alert("Delete competition?", `Delete “${label}”? This cannot be undone.`, [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteKidCompetitionEntry(entryId);
+            await load({ prefillProgressInputs: false });
+          },
+        },
+      ]);
+    },
+    [load],
+  );
+
+  const requestDeleteSession = useCallback(
+    (sessionId: string) => {
+      Alert.alert("Delete session?", "This cannot be undone.", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteSessionById(sessionId);
+            await load({ prefillProgressInputs: false });
+          },
+        },
+      ]);
+    },
+    [load],
+  );
+
   return (
     <>
       <Stack.Screen options={{ title: "Kid (Pilot)" }} />
@@ -757,39 +810,67 @@ export default function KidDetailScreen() {
                     typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
                   const notesText = (r.coachNotes ?? "").trim();
                   return (
-                    <Pressable
+                    <Swipeable
                       key={r.id}
-                      onPress={() =>
-                        router.push(
-                          `/profile/coaches/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
-                        )
-                      }
-                      style={({ pressed }) => ({
-                        padding: 12,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: UI.border,
-                        backgroundColor: pressed ? "#eef2ff" : "#f9fafb",
-                        gap: 6,
-                      })}
+                      overshootRight={false}
+                      renderRightActions={() => (
+                        <Pressable
+                          onPress={() => requestDeleteReflection(r.id)}
+                          accessibilityLabel="Delete check-in"
+                          style={({ pressed }) => ({
+                            justifyContent: "center",
+                            backgroundColor: pressed ? "#b91c1c" : UI.danger,
+                            borderRadius: 12,
+                            marginLeft: 8,
+                            paddingHorizontal: 20,
+                          })}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: "#ffffff" }}>Delete</Text>
+                        </Pressable>
+                      )}
                     >
-                      {outcomeText ? (
-                        <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                          Outcome: {outcomeText}
-                        </Text>
-                      ) : null}
-                      {notesText ? (
-                        <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={3}>
-                          Notes: {notesText}
-                        </Text>
-                      ) : null}
-                    </Pressable>
+                      <Pressable
+                        onPress={() =>
+                          router.push(
+                            `/profile/coaches/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
+                          )
+                        }
+                        style={({ pressed }) => ({
+                          alignSelf: "stretch",
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          gap: 4,
+                          backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          overflow: "hidden",
+                        })}
+                      >
+                        {outcomeText ? (
+                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>{outcomeText}</Text>
+                        ) : null}
+                        {notesText ? (
+                          <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={2}>
+                            {notesText}
+                          </Text>
+                        ) : null}
+                        {!outcomeText && !notesText ? (
+                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>(empty check-in)</Text>
+                        ) : null}
+                      </Pressable>
+                    </Swipeable>
                   );
                 })}
                 {thisWeekReflections.length > 3 ? (
-                  <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                    +{thisWeekReflections.length - 3} more
-                  </Text>
+                  <Pressable
+                    onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
+                  >
+                    <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
+                      +{thisWeekReflections.length - 3} more in history
+                    </Text>
+                  </Pressable>
                 ) : null}
               </>
             )}
@@ -800,150 +881,190 @@ export default function KidDetailScreen() {
 
         <View
           style={{
-            padding: 16,
+            padding: 14,
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: UI.border,
             backgroundColor: UI.bgCard,
-            gap: 10,
+            gap: 8,
           }}
         >
-          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            This Week’s Training Sessions
-          </Text>
-          <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-            {kidWeekSessions.length}{" "}
-            {kidWeekSessions.length === 1 ? "session" : "sessions"} logged
-          </Text>
-
-          <Pressable
-            onPress={() =>
-              router.push(
-                `/training/new?date=${encodeURIComponent(
-                  todayYMD(),
-                )}&kidId=${encodeURIComponent(kidId)}`,
-              )
-            }
-            style={({ pressed }) => ({
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-              alignSelf: "flex-start",
-            })}
-          >
-            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
-              Log Training for This Kid
+          <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+              {"This week's training"}
             </Text>
-          </Pressable>
+            <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
+              {kidWeekSessions.length} logged
+            </Text>
+          </View>
+
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+            <Pressable
+              onPress={() =>
+                router.push(
+                  `/training/new?date=${encodeURIComponent(
+                    todayYMD(),
+                  )}&kidId=${encodeURIComponent(kidId)}`,
+                )
+              }
+              style={({ pressed }) => ({
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+              })}
+            >
+              <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>Log session</Text>
+            </Pressable>
+            {kidWeekSessions.length > 0 ? (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    `/training?date=${encodeURIComponent(weekStartYMD)}&kidId=${encodeURIComponent(kidId)}`,
+                  )
+                }
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? "#f9fafb" : UI.rowMutedBg,
+                })}
+              >
+                <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>Open in Training</Text>
+              </Pressable>
+            ) : null}
+          </View>
 
           {kidWeekSessions.length === 0 ? (
-            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              No training sessions logged yet for this week.
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
+              None for this week yet.
             </Text>
           ) : (
-            <View style={{ gap: 8 }}>
+            <View style={{ gap: 6 }}>
               {kidWeekSessions.slice(0, 3).map((s) => {
                 const badges = sessionBadges(s);
-                const summary = sessionDrillNotesSummary(s);
 
                 return (
-                  <Pressable
+                  <Swipeable
                     key={s.id}
-                    onPress={(e) => {
-                      if ((e as any)?.defaultPrevented) return;
-                      router.push(`/training/${s.id}?kidId=${encodeURIComponent(kidId)}`);
-                    }}
-                    style={({ pressed }) => ({
-                      paddingVertical: 14,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: pressed ? "#edf2ff" : "#f9fafb",
-                      gap: 6,
-                    })}
+                    overshootRight={false}
+                    renderRightActions={() => (
+                      <Pressable
+                        onPress={() => requestDeleteSession(s.id)}
+                        accessibilityLabel="Delete training session"
+                        style={({ pressed }) => ({
+                          justifyContent: "center",
+                          backgroundColor: pressed ? "#b91c1c" : UI.danger,
+                          borderRadius: 10,
+                          marginLeft: 8,
+                          paddingHorizontal: 10,
+                        })}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>Delete</Text>
+                      </Pressable>
+                    )}
                   >
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary }}>
-                      {s.date} · {resolveSystemLabel(s.system)}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={4}>
-                      {techniqueSummaryForKidSession(s)}
-                    </Text>
-
-                    {badges.length > 0 ? (
-                      <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
-                        {badges.map((label) => (
-                          <Pressable
-                            key={label}
-                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                            onPress={(e) => {
-                              e.stopPropagation?.();
-                              (e as any).preventDefault?.();
-
-                              if (label === "YT") {
-                                void openYoutubeUrl(s.youtubeUrl);
-                                return;
-                              }
-
-                              if (label === "IMG") {
-                                const raw = (s.imageUri ?? "").trim();
-                                if (!raw) return;
-                                setMediaPreview({
-                                  type: "image",
-                                  uri: raw,
-                                  assetId: s.imageAssetId ?? null,
-                                });
-                                return;
-                              }
-
-                              if (label === "VID") {
-                                const raw = (s.videoUri ?? "").trim();
-                                if (!raw) return;
-                                setMediaPreview({
-                                  type: "video",
-                                  uri: raw,
-                                  assetId: s.videoAssetId ?? null,
-                                });
-                              }
-                            }}
-                            style={({ pressed }) => ({
-                              opacity: pressed ? 0.95 : 1,
-                            })}
-                          >
-                            <View
-                              style={{
-                                paddingHorizontal: 8,
-                                paddingVertical: 4,
-                                borderRadius: 999,
-                                backgroundColor: UI.bgCardActive,
-                                borderWidth: 1,
-                                borderColor: UI.border,
-                              }}
-                            >
-                              <Text style={{ color: UI.textSecondary, fontSize: 12, fontWeight: "700" }}>
-                                {label}
-                              </Text>
-                            </View>
-                          </Pressable>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    {summary ? (
-                      <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={2}>
-                        {summary}
+                    <Pressable
+                      onPress={() =>
+                        router.push(`/training/${s.id}?kidId=${encodeURIComponent(kidId)}`)
+                      }
+                      style={({ pressed }) => ({
+                        alignSelf: "stretch",
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        gap: 4,
+                        backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        overflow: "hidden",
+                      })}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary }} numberOfLines={1}>
+                        {s.date} · {resolveSystemLabel(s.system)}
                       </Text>
-                    ) : null}
-                  </Pressable>
+                      <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={1}>
+                        {techniqueSummaryForKidSession(s)}
+                      </Text>
+                      {badges.length > 0 ? (
+                        <View style={{ flexDirection: "row", gap: 4, flexWrap: "wrap", marginTop: 2 }}>
+                          {badges.map((label) => (
+                            <Pressable
+                              key={label}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              onPress={(e) => {
+                                e.stopPropagation?.();
+                                (e as { preventDefault?: () => void }).preventDefault?.();
+
+                                if (label === "YT") {
+                                  void openYoutubeUrl(s.youtubeUrl);
+                                  return;
+                                }
+
+                                if (label === "IMG") {
+                                  const raw = (s.imageUri ?? "").trim();
+                                  if (!raw) return;
+                                  setMediaPreview({
+                                    type: "image",
+                                    uri: raw,
+                                    assetId: s.imageAssetId ?? null,
+                                  });
+                                  return;
+                                }
+
+                                if (label === "VID") {
+                                  const raw = (s.videoUri ?? "").trim();
+                                  if (!raw) return;
+                                  setMediaPreview({
+                                    type: "video",
+                                    uri: raw,
+                                    assetId: s.videoAssetId ?? null,
+                                  });
+                                }
+                              }}
+                              style={({ pressed }) => ({
+                                opacity: pressed ? 0.95 : 1,
+                              })}
+                            >
+                              <View
+                                style={{
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 999,
+                                  backgroundColor: UI.bgCardActive,
+                                  borderWidth: 1,
+                                  borderColor: UI.border,
+                                }}
+                              >
+                                <Text style={{ color: UI.textSecondary, fontSize: 10, fontWeight: "700" }}>
+                                  {label}
+                                </Text>
+                              </View>
+                            </Pressable>
+                          ))}
+                        </View>
+                      ) : null}
+                    </Pressable>
+                  </Swipeable>
                 );
               })}
               {kidWeekSessions.length > 3 ? (
-                <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                  +{kidWeekSessions.length - 3} more
-                </Text>
+                <Pressable
+                  onPress={() =>
+                    router.push(
+                      `/training?date=${encodeURIComponent(weekStartYMD)}&kidId=${encodeURIComponent(kidId)}`,
+                    )
+                  }
+                  style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
+                >
+                  <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
+                    +{kidWeekSessions.length - 3} more in Training
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
           )}
@@ -953,64 +1074,43 @@ export default function KidDetailScreen() {
 
         <View
           style={{
-            padding: 16,
+            padding: 14,
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: UI.border,
             backgroundColor: UI.bgCard,
-            gap: 10,
+            gap: 8,
           }}
         >
           <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            COMPETITION
+            Competition
           </Text>
-          <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
-            Tournament log for this kid (local pilot). Grouped by month.
+          <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+            Local tournament log · grouped by month.
           </Text>
 
           <Pressable
-            onPress={() =>
-              router.push(`/profile/coaches/kid/${kidId}/competition/edit`)
-            }
+            onPress={() => router.push(`/profile/coaches/kid/${kidId}/competition/edit`)}
             style={({ pressed }) => ({
-              marginTop: 4,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 10,
               borderWidth: 1,
               borderColor: UI.border,
               backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
               alignSelf: "flex-start",
             })}
           >
-            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
-              Add competition
-            </Text>
+            <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>Add competition</Text>
           </Pressable>
 
           {ready && competitions.length === 0 ? (
-            <View
-              style={{
-                marginTop: 4,
-                paddingVertical: 14,
-                paddingHorizontal: 14,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: "#f9fafb",
-                gap: 6,
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
-                No competition entries yet
-              </Text>
-              <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-                Add a tournament name, date, result, notes, and optional video.
-              </Text>
-            </View>
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
+              No entries yet — add name, date, and result when ready.
+            </Text>
           ) : null}
           {ready && competitions.length > 0 ? (
-            <View style={{ gap: 8, marginTop: 4 }}>
+            <View style={{ gap: 6 }}>
               {monthGroups.map(({ monthKey, entries }) => {
                 const expanded = expandedMonths.has(monthKey);
                 const chevron = expanded ? "▼" : "▶";
@@ -1018,7 +1118,7 @@ export default function KidDetailScreen() {
                   <View
                     key={monthKey}
                     style={{
-                      borderRadius: 12,
+                      borderRadius: 10,
                       borderWidth: 1,
                       borderColor: UI.border,
                       overflow: "hidden",
@@ -1029,114 +1129,129 @@ export default function KidDetailScreen() {
                       style={({ pressed }) => ({
                         flexDirection: "row",
                         alignItems: "center",
-                        gap: 10,
-                        paddingVertical: 12,
-                        paddingHorizontal: 12,
-                        backgroundColor: pressed ? "#f9fafb" : UI.bgCard,
+                        gap: 8,
+                        paddingVertical: 10,
+                        paddingHorizontal: 10,
+                        backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
                       })}
                     >
-                      <Text style={{ fontSize: 14, color: UI.textSecondary, width: 22 }}>
-                        {chevron}
-                      </Text>
+                      <Text style={{ fontSize: 13, color: UI.textSecondary, width: 20 }}>{chevron}</Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "900", color: UI.textPrimary }}>
+                        <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
                           {formatMonthHeading(monthKey)}
                         </Text>
-                        <Text style={{ marginTop: 2, fontSize: 12, color: UI.textSecondary }}>
+                        <Text style={{ marginTop: 1, fontSize: 11, color: UI.textSecondary }}>
                           {entries.length} {entries.length === 1 ? "event" : "events"}
                         </Text>
                       </View>
                     </Pressable>
 
                     {expanded ? (
-                      <View style={{ paddingHorizontal: 12, paddingBottom: 12, gap: 8 }}>
+                      <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 6 }}>
                         {entries.map((row) => (
-                          <Pressable
+                          <Swipeable
                             key={row.id}
-                            onPress={(e) => {
-                              if ((e as { defaultPrevented?: boolean })?.defaultPrevented) return;
-                              router.push(
-                                `/profile/coaches/kid/${kidId}/competition/edit?entryId=${encodeURIComponent(row.id)}`,
-                              );
-                            }}
-                            style={({ pressed }) => ({
-                              padding: 12,
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: UI.border,
-                              backgroundColor: pressed ? "#eef2ff" : "#f9fafb",
-                              gap: 6,
-                            })}
-                          >
-                            <View
-                              style={{
-                                flexDirection: "row",
-                                justifyContent: "space-between",
-                                gap: 10,
-                                alignItems: "center",
-                              }}
-                            >
-                              <Text
-                                style={{
-                                  fontSize: 14,
-                                  fontWeight: "800",
-                                  color: UI.textPrimary,
-                                  flex: 1,
-                                  minWidth: 0,
-                                }}
-                                numberOfLines={2}
-                                ellipsizeMode="tail"
+                            overshootRight={false}
+                            renderRightActions={() => (
+                              <Pressable
+                                onPress={() => requestDeleteCompetition(row.id, row.tournamentName)}
+                                accessibilityLabel="Delete competition entry"
+                                style={({ pressed }) => ({
+                                  justifyContent: "center",
+                                  backgroundColor: pressed ? "#b91c1c" : UI.danger,
+                                  borderRadius: 10,
+                                  marginLeft: 8,
+                                  paddingHorizontal: 10,
+                                })}
                               >
-                                {row.tournamentName}
-                              </Text>
-                              {row.videoUri?.trim() ? (
-                                <Pressable
-                                  onPress={(e) => {
-                                    e.stopPropagation?.();
-                                    (e as { preventDefault?: () => void }).preventDefault?.();
-                                        setMediaPreview({
-                                      type: "video",
-                                      uri: row.videoUri!.trim(),
-                                      assetId: row.videoAssetId ?? null,
-                                    });
+                                <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>Delete</Text>
+                              </Pressable>
+                            )}
+                          >
+                            <Pressable
+                              onPress={() =>
+                                router.push(
+                                  `/profile/coaches/kid/${kidId}/competition/edit?entryId=${encodeURIComponent(row.id)}`,
+                                )
+                              }
+                              style={({ pressed }) => ({
+                                alignSelf: "stretch",
+                                paddingVertical: 10,
+                                paddingHorizontal: 10,
+                                gap: 3,
+                                backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
+                                borderRadius: 10,
+                                borderWidth: 1,
+                                borderColor: UI.border,
+                                overflow: "hidden",
+                              })}
+                            >
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 8,
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 13,
+                                    fontWeight: "800",
+                                    color: UI.textPrimary,
+                                    flex: 1,
+                                    minWidth: 0,
                                   }}
-                                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
                                 >
-                                  <View
-                                    style={{
-                                      paddingHorizontal: 8,
-                                      paddingVertical: 4,
-                                      borderRadius: 999,
-                                      backgroundColor: UI.bgCardActive,
-                                      borderWidth: 1,
-                                      borderColor: UI.border,
+                                  {row.tournamentName}
+                                </Text>
+                                {row.videoUri?.trim() ? (
+                                  <Pressable
+                                    onPress={(e) => {
+                                      e.stopPropagation?.();
+                                      (e as { preventDefault?: () => void }).preventDefault?.();
+                                      setMediaPreview({
+                                        type: "video",
+                                        uri: row.videoUri!.trim(),
+                                        assetId: row.videoAssetId ?? null,
+                                      });
                                     }}
+                                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                   >
-                                    <Text
+                                    <View
                                       style={{
-                                        color: UI.textSecondary,
-                                        fontSize: 12,
-                                        fontWeight: "700",
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                        borderRadius: 999,
+                                        backgroundColor: UI.bgCardActive,
+                                        borderWidth: 1,
+                                        borderColor: UI.border,
                                       }}
                                     >
-                                      VID
-                                    </Text>
-                                  </View>
-                                </Pressable>
-                              ) : null}
-                            </View>
-                            <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                              {row.eventDate} · {competitionResultLabel(row.result)}
-                            </Text>
-                            {row.coachNotes ? (
-                              <Text
-                                style={{ fontSize: 12, color: UI.textSecondary }}
-                                numberOfLines={2}
-                              >
-                                {row.coachNotes}
+                                      <Text
+                                        style={{
+                                          color: UI.textSecondary,
+                                          fontSize: 10,
+                                          fontWeight: "700",
+                                        }}
+                                      >
+                                        VID
+                                      </Text>
+                                    </View>
+                                  </Pressable>
+                                ) : null}
+                              </View>
+                              <Text style={{ fontSize: 11, color: UI.textSecondary }}>
+                                {row.eventDate} · {competitionResultLabel(row.result)}
                               </Text>
-                            ) : null}
-                          </Pressable>
+                              {row.coachNotes ? (
+                                <Text style={{ fontSize: 11, color: UI.textSecondary }} numberOfLines={1}>
+                                  {row.coachNotes}
+                                </Text>
+                              ) : null}
+                            </Pressable>
+                          </Swipeable>
                         ))}
                       </View>
                     ) : null}
