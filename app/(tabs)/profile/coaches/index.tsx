@@ -3,10 +3,13 @@ import { useCallback, useState } from "react";
 import {
   Alert,
   Linking,
+  Modal,
   Pressable,
+  ScrollView,
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
 import {
@@ -72,9 +75,14 @@ function Section({
   );
 }
 
+const WEEKLY_STORY_STEP_COUNT = 5;
+
 export default function CoachesScreen() {
+  const insets = useSafeAreaInsets();
   const [ready, setReady] = useState(false);
   const [showDebugData, setShowDebugData] = useState(false);
+  const [weeklyStoryOpen, setWeeklyStoryOpen] = useState(false);
+  const [weeklyStoryStep, setWeeklyStoryStep] = useState(0);
   const [coachLinks, setCoachLinks] = useState<CoachLink[]>([]);
   const [coachesById, setCoachesById] = useState<CoachIdentityMap>({});
   const [packsById, setPacksById] = useState<ProgramPackMap>({});
@@ -344,9 +352,334 @@ export default function CoachesScreen() {
 
   const showCoachPilotUi = __DEV__ && showDebugData;
 
+  const weeklyStoryConnectionLabel = isLinked
+    ? "Linked to your coach"
+    : isPreviewOnlyOnDevice
+      ? "On this phone only — not linked yet"
+      : "Not linked yet";
+
+  const weeklyStoryConnectionBody = isLinked
+    ? "Updates you see here come from your coach through this link. If something looks off, you can refresh or adjust the link from the main screen."
+    : isPreviewOnlyOnDevice
+      ? hasCoachPilotPreviewOnDevice
+        ? "Coach pilot previews on this phone are not shared with families until you connect with a real invite."
+        : "Sample or local data on this phone only — connect to use your coach’s real weekly note."
+      : "You’re not linked yet. What you see before connecting stays on this device only.";
+
+  const weeklyStoryPrimaryHint =
+    isLinked && currentAssignment?.status === "assigned"
+      ? "When you’re ready, use Log practice for this week on the screen behind this."
+      : !isLinked
+        ? "When you’re ready, use Connect with your coach on the screen behind this."
+        : "When you’re ready, use Refresh this week’s update on the screen behind this.";
+
+  const closeWeeklyStory = useCallback(() => {
+    setWeeklyStoryOpen(false);
+    setWeeklyStoryStep(0);
+  }, []);
+
+  const openWeeklyStory = useCallback(() => {
+    setWeeklyStoryStep(0);
+    setWeeklyStoryOpen(true);
+  }, []);
+
+  const weeklyStoryClassBody =
+    currentModule?.title || (isLinked && currentPack?.title)
+      ? [
+          currentModule?.title
+            ? `In class, look for: ${currentModule.title}${
+                currentModule.summary ? ` — ${currentModule.summary}` : ""
+              }`
+            : null,
+          isLinked && currentPack?.title
+            ? `Program: ${currentPack.title}${
+                currentPack.description ? ` · ${currentPack.description}` : ""
+              }`
+            : null,
+        ]
+          .filter(Boolean)
+          .join("\n\n")
+      : "No extra class or program line on this note right now — that’s okay.";
+
   return (
     <>
       <Stack.Screen options={{ title: "This week" }} />
+      <Modal
+        visible={weeklyStoryOpen}
+        animationType="fade"
+        presentationStyle="fullScreen"
+        onRequestClose={closeWeeklyStory}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: UI.screenBg,
+            paddingTop: insets.top + 12,
+            paddingBottom: insets.bottom + 16,
+            paddingHorizontal: 20,
+          }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+              marginBottom: 8,
+            }}
+          >
+            <Text
+              style={{
+                flex: 1,
+                fontSize: 12,
+                fontWeight: "600",
+                color: UI.textSecondary,
+                letterSpacing: 0.4,
+              }}
+            >
+              Read together · {weeklyStoryStep + 1} of {WEEKLY_STORY_STEP_COUNT}
+            </Text>
+            <Pressable
+              onPress={closeWeeklyStory}
+              accessibilityRole="button"
+              accessibilityLabel="Close story"
+              hitSlop={8}
+              style={({ pressed }) => ({
+                paddingVertical: 6,
+                paddingHorizontal: 4,
+                marginRight: -4,
+                opacity: pressed ? 0.75 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  fontSize: 15,
+                  fontWeight: "600",
+                  color: UI.primaryFill,
+                }}
+              >
+                Close
+              </Text>
+            </Pressable>
+          </View>
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: 24 }}
+            keyboardShouldPersistTaps="handled"
+          >
+            {weeklyStoryStep === 0 ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: UI.textPrimary,
+                    lineHeight: 32,
+                    marginBottom: 12,
+                  }}
+                >
+                  A few calm screens
+                </Text>
+                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
+                  This is the same weekly note as on the screen behind you — just spaced out so you can read it together. Tap Next when everyone is ready; tap Back anytime.
+                </Text>
+              </>
+            ) : null}
+
+            {weeklyStoryStep === 1 ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: UI.textPrimary,
+                    lineHeight: 32,
+                    marginBottom: 14,
+                  }}
+                >
+                  How this phone is set up
+                </Text>
+                <View
+                  style={{
+                    alignSelf: "flex-start",
+                    marginBottom: 14,
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    backgroundColor: isLinked
+                      ? "#dcfce7"
+                      : isPreviewOnlyOnDevice
+                        ? "#fef3c7"
+                        : "#f3f4f6",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: isLinked
+                        ? "#166534"
+                        : isPreviewOnlyOnDevice
+                          ? "#92400e"
+                          : UI.textSecondary,
+                    }}
+                  >
+                    {weeklyStoryConnectionLabel}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
+                  {weeklyStoryConnectionBody}
+                </Text>
+              </>
+            ) : null}
+
+            {weeklyStoryStep === 2 ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontWeight: "600",
+                    letterSpacing: 1,
+                    color: "#78716c",
+                    marginBottom: 8,
+                  }}
+                >
+                  THIS WEEK&apos;S FOCUS
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 22,
+                    fontWeight: "700",
+                    color: UI.textPrimary,
+                    lineHeight: 30,
+                    marginBottom: 12,
+                  }}
+                >
+                  {focusTitle}
+                </Text>
+                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
+                  {focusNotes}
+                </Text>
+                {isLinked && currentCoach ? (
+                  <Text style={{ marginTop: 16, fontSize: 15, color: UI.textSecondary, lineHeight: 22 }}>
+                    From{" "}
+                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
+                      {currentCoach.displayName}
+                    </Text>
+                    {currentCoach.academyName ? (
+                      <>
+                        {" "}
+                        at {currentCoach.academyName}
+                      </>
+                    ) : null}
+                  </Text>
+                ) : null}
+                {assignmentStatusLine ? (
+                  <Text style={{ marginTop: 12, fontSize: 14, color: UI.textSecondary }}>
+                    {assignmentStatusLine}
+                  </Text>
+                ) : null}
+              </>
+            ) : null}
+
+            {weeklyStoryStep === 3 ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: UI.textPrimary,
+                    lineHeight: 32,
+                    marginBottom: 12,
+                  }}
+                >
+                  Class and program
+                </Text>
+                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
+                  {weeklyStoryClassBody}
+                </Text>
+              </>
+            ) : null}
+
+            {weeklyStoryStep === 4 ? (
+              <>
+                <Text
+                  style={{
+                    fontSize: 24,
+                    fontWeight: "700",
+                    color: UI.textPrimary,
+                    lineHeight: 32,
+                    marginBottom: 12,
+                  }}
+                >
+                  You&apos;re all caught up
+                </Text>
+                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24, marginBottom: 16 }}>
+                  That&apos;s everything on this week&apos;s coach note. There isn&apos;t another page to scroll to — you can close this when you&apos;re ready.
+                </Text>
+                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
+                  {weeklyStoryPrimaryHint}
+                </Text>
+              </>
+            ) : null}
+          </ScrollView>
+
+          <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
+            {weeklyStoryStep > 0 ? (
+              <Pressable
+                onPress={() => setWeeklyStoryStep((s) => Math.max(0, s - 1))}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: UI.textPrimary }}>Back</Text>
+              </Pressable>
+            ) : (
+              <View style={{ flex: 1 }} />
+            )}
+            {weeklyStoryStep < WEEKLY_STORY_STEP_COUNT - 1 ? (
+              <Pressable
+                onPress={() =>
+                  setWeeklyStoryStep((s) =>
+                    Math.min(WEEKLY_STORY_STEP_COUNT - 1, s + 1),
+                  )
+                }
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: CARD_RADIUS,
+                  backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Next</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={closeWeeklyStory}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: CARD_RADIUS,
+                  backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Done</Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      </Modal>
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -472,6 +805,28 @@ export default function CoachesScreen() {
                   Sample or local data on this phone only — connect to use your coach’s real weekly note.
                 </Text>
               ) : null}
+
+              <Pressable
+                onPress={openWeeklyStory}
+                style={({ pressed }) => ({
+                  marginTop: 16,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                  alignSelf: "stretch",
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "700", color: UI.textPrimary }}>
+                  Read together
+                </Text>
+                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, textAlign: "center" }}>
+                  Walk through this week&apos;s note tap by tap — same words, calmer pace.
+                </Text>
+              </Pressable>
 
               {isLinked && currentAssignment?.status === "assigned" ? (
                 <Pressable
