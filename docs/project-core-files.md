@@ -34,6 +34,20 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - app/(tabs)/profile/coaches/template-preview.tsx
 - app/(tabs)/profile/coaches/template-selected.tsx
 
+## Coach kid pilot (internal, Profile → Coach Share → Kids)
+- app/(tabs)/profile/coaches/kids.tsx
+- app/(tabs)/profile/coaches/kid/[kidId].tsx
+- app/(tabs)/profile/coaches/kid/[kidId]/what-matters-next.tsx
+- app/(tabs)/profile/coaches/kid/[kidId]/weekly-focus.tsx
+- app/(tabs)/profile/coaches/kid/[kidId]/history.tsx
+- app/(tabs)/profile/coaches/kid/[kidId]/progress-reflection.tsx
+- app/(tabs)/profile/coaches/kid/[kidId]/competition/edit.tsx
+- src/storage/coachKidStore.ts
+- src/storage/kidStandingGuidanceStore.ts
+- src/storage/kidCompetitionStore.ts
+- src/storage/sessionsStore.ts
+- src/types/coachKid.ts
+
 ## Runtime / flags / storage
 - src/config/runtime.ts
 - src/config/flags.ts
