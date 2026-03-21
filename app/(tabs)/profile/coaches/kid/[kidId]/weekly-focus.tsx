@@ -6,8 +6,10 @@ import { useFocusEffect } from "@react-navigation/native";
 
 import {
   appendKidWeeklyFocus,
+  getKidWeeklyFocusEntryById,
   startOfWeekMondayYMD,
   todayYMD,
+  updateKidWeeklyFocusFocusById,
 } from "../../../../../../src/storage/coachKidStore";
 import { TEMPLATE_CONTENT } from "../../template-preview";
 
@@ -24,8 +26,10 @@ const CARD_RADIUS = 16;
 type Tab = "templates" | "custom";
 
 export default function KidWeeklyFocusScreen() {
-  const params = useLocalSearchParams<{ kidId?: string }>();
+  const params = useLocalSearchParams<{ kidId?: string; entryId?: string }>();
   const kidId = params.kidId ? String(params.kidId) : "";
+  const entryId = params.entryId ? String(params.entryId) : "";
+  const editEntryId = entryId.trim() || undefined;
 
   const weekStartYMD = useMemo(() => {
     if (!kidId) return "";
@@ -55,21 +59,47 @@ export default function KidWeeklyFocusScreen() {
   const [customNote, setCustomNote] = useState<string>("");
   const [customYoutubeUrl, setCustomYoutubeUrl] = useState<string>("");
 
-  /** Fresh form each visit — append-only logs; do not preload prior week saves. */
   const load = useCallback(async () => {
     if (!kidId || !weekStartYMD) return;
     setReady(false);
     try {
-      setTab("templates");
-      setSelectedTemplateId("guard-pull-defense-knee-middle");
-      setReferenceUrl("");
-      setCustomTitle("");
-      setCustomNote("");
-      setCustomYoutubeUrl("");
+      if (editEntryId) {
+        const existing = await getKidWeeklyFocusEntryById(editEntryId);
+        if (!existing || existing.kidId !== kidId) {
+          Alert.alert("Not found", "This weekly focus entry is missing or belongs to another kid.");
+          router.replace(`/profile/coaches/kid/${kidId}`);
+          return;
+        }
+        if (existing.focusType === "template" && !TEMPLATE_CONTENT[existing.templateId]) {
+          Alert.alert(
+            "Unavailable template",
+            "This log uses a template that is no longer in the pilot catalog. Add a new weekly focus from the kid screen.",
+          );
+          router.replace(`/profile/coaches/kid/${kidId}`);
+          return;
+        }
+        if (existing.focusType === "template") {
+          setTab("templates");
+          setSelectedTemplateId(existing.templateId);
+          setReferenceUrl(existing.youtubeUrl ?? "");
+        } else {
+          setTab("custom");
+          setCustomTitle(existing.title);
+          setCustomNote(existing.note ?? "");
+          setCustomYoutubeUrl(existing.youtubeUrl ?? "");
+        }
+      } else {
+        setTab("templates");
+        setSelectedTemplateId("guard-pull-defense-knee-middle");
+        setReferenceUrl("");
+        setCustomTitle("");
+        setCustomNote("");
+        setCustomYoutubeUrl("");
+      }
     } finally {
       setReady(true);
     }
-  }, [kidId, weekStartYMD]);
+  }, [kidId, weekStartYMD, editEntryId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -83,48 +113,88 @@ export default function KidWeeklyFocusScreen() {
       return;
     }
 
-    if (tab === "templates") {
-      if (!selectedTemplateId) {
-        Alert.alert("Pick a template", "Select a weekly focus template before saving.");
-        return;
+    try {
+      if (editEntryId) {
+        if (tab === "templates") {
+          if (!selectedTemplateId) {
+            Alert.alert("Pick a template", "Select a weekly focus template before saving.");
+            return;
+          }
+          const t = TEMPLATE_CONTENT[selectedTemplateId];
+          if (!t) {
+            Alert.alert("Pick a template", "Select a weekly focus template before saving.");
+            return;
+          }
+          const trimmedUrl = referenceUrl.trim();
+          await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
+            focusType: "template",
+            templateId: selectedTemplateId,
+            title: t.title,
+            metadata: t.metadata,
+            youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+          });
+        } else {
+          const trimmedTitle = customTitle.trim();
+          if (!trimmedTitle) {
+            Alert.alert("Title required", "Add a short title for this custom focus item.");
+            return;
+          }
+          const trimmedNote = customNote.trim();
+          const trimmedUrl = customYoutubeUrl.trim();
+          await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
+            focusType: "custom",
+            title: trimmedTitle,
+            note: trimmedNote ? trimmedNote : undefined,
+            youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+          });
+        }
+      } else if (tab === "templates") {
+        if (!selectedTemplateId) {
+          Alert.alert("Pick a template", "Select a weekly focus template before saving.");
+          return;
+        }
+
+        const t = TEMPLATE_CONTENT[selectedTemplateId];
+        const trimmedUrl = referenceUrl.trim();
+
+        await appendKidWeeklyFocus({
+          kidId,
+          weekStartYMD,
+          focusType: "template",
+          templateId: selectedTemplateId,
+          title: t.title,
+          metadata: t.metadata,
+          youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+        });
+      } else {
+        const trimmedTitle = customTitle.trim();
+        if (!trimmedTitle) {
+          Alert.alert("Title required", "Add a short title for this custom focus item.");
+          return;
+        }
+
+        const trimmedNote = customNote.trim();
+        const trimmedUrl = customYoutubeUrl.trim();
+
+        await appendKidWeeklyFocus({
+          kidId,
+          weekStartYMD,
+          focusType: "custom",
+          title: trimmedTitle,
+          note: trimmedNote ? trimmedNote : undefined,
+          youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+        });
       }
 
-      const t = TEMPLATE_CONTENT[selectedTemplateId];
-      const trimmedUrl = referenceUrl.trim();
-
-      await appendKidWeeklyFocus({
-        kidId,
-        weekStartYMD,
-        focusType: "template",
-        templateId: selectedTemplateId,
-        title: t.title,
-        metadata: t.metadata,
-        youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
-      });
-    } else {
-      const trimmedTitle = customTitle.trim();
-      if (!trimmedTitle) {
-        Alert.alert("Title required", "Add a short title for this custom focus item.");
-        return;
-      }
-
-      const trimmedNote = customNote.trim();
-      const trimmedUrl = customYoutubeUrl.trim();
-
-      await appendKidWeeklyFocus({
-        kidId,
-        weekStartYMD,
-        focusType: "custom",
-        title: trimmedTitle,
-        note: trimmedNote ? trimmedNote : undefined,
-        youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
-      });
+      router.replace(`/profile/coaches/kid/${kidId}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Could not save", msg || "Something went wrong saving this weekly focus.");
     }
-
-    router.replace(`/profile/coaches/kid/${kidId}`);
   }, [
     kidId,
     weekStartYMD,
+    editEntryId,
     tab,
     selectedTemplateId,
     referenceUrl,
@@ -152,7 +222,9 @@ export default function KidWeeklyFocusScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Set Weekly Focus (Pilot)" }} />
+      <Stack.Screen
+        options={{ title: editEntryId ? "Edit Weekly Focus (Pilot)" : "Set Weekly Focus (Pilot)" }}
+      />
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -177,19 +249,42 @@ export default function KidWeeklyFocusScreen() {
         </Pressable>
 
         <Text style={{ fontSize: 22, fontWeight: "900", marginBottom: 6, color: UI.textPrimary }}>
-          Set Weekly Focus
+          {editEntryId ? "Edit Weekly Focus" : "Set Weekly Focus"}
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          Log a focus for this kid (week of <Text style={{ fontWeight: "800" }}>{weekStartYMD}</Text>). Each save adds a new entry.
+          {editEntryId ? (
+            <>
+              Update this saved focus log. Outcome and progress notes on the kid screen are unchanged.
+            </>
+          ) : (
+            <>
+              Log a focus for this kid (week of <Text style={{ fontWeight: "800" }}>{weekStartYMD}</Text>
+              ). Each save adds a new entry.
+            </>
+          )}
         </Text>
 
         <View style={{ height: 14 }} />
 
         <View style={{ flexDirection: "row", gap: 10 }}>
-          <Pressable onPress={() => setTab("templates")} style={({ pressed }) => ({ ...tabButtonStyle(tab === "templates"), opacity: pressed ? 0.85 : 1 })}>
+          <Pressable
+            disabled={Boolean(editEntryId)}
+            onPress={() => setTab("templates")}
+            style={({ pressed }) => ({
+              ...tabButtonStyle(tab === "templates"),
+              opacity: editEntryId ? (tab === "templates" ? 1 : 0.45) : pressed ? 0.85 : 1,
+            })}
+          >
             <Text style={tabTextStyle(tab === "templates")}>Templates</Text>
           </Pressable>
-          <Pressable onPress={() => setTab("custom")} style={({ pressed }) => ({ ...tabButtonStyle(tab === "custom"), opacity: pressed ? 0.85 : 1 })}>
+          <Pressable
+            disabled={Boolean(editEntryId)}
+            onPress={() => setTab("custom")}
+            style={({ pressed }) => ({
+              ...tabButtonStyle(tab === "custom"),
+              opacity: editEntryId ? (tab === "custom" ? 1 : 0.45) : pressed ? 0.85 : 1,
+            })}
+          >
             <Text style={tabTextStyle(tab === "custom")}>Custom Focus</Text>
           </Pressable>
         </View>
@@ -356,7 +451,7 @@ export default function KidWeeklyFocusScreen() {
           })}
         >
           <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "900", textAlign: "center" }}>
-            Save Focus for This Week
+            {editEntryId ? "Save changes" : "Save Focus for This Week"}
           </Text>
         </Pressable>
 

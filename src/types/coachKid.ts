@@ -42,6 +42,15 @@ export type Kid = {
 export type KidsById = Record<KidId, Kid>;
 export type KidWeeklyFocusEntries = KidWeeklyFocusEntry[];
 
+/** Coach “standing” note for a kid; persisted until changed (not week-scoped). */
+export type KidStandingGuidance = {
+  headline: string;
+  detail?: string;
+  updatedAt: string;
+};
+
+export type KidStandingGuidanceByKidId = Record<KidId, KidStandingGuidance>;
+
 /** Simple pilot-only tournament outcome (no bracket / match modeling). */
 export type KidCompetitionResult =
   | "gold"

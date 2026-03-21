@@ -19,4 +19,5 @@ export const StorageKeys = {
   coachKidsById: "mm:v1:coachKidsById",
   kidWeeklyFocusEntries: "mm:v1:kidWeeklyFocusEntries",
   kidCompetitionEntries: "mm:v1:kidCompetitionEntries",
+  kidStandingGuidanceByKidId: "mm:v1:kidStandingGuidanceByKidId",
 } as const;

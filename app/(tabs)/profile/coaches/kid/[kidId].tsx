@@ -1,14 +1,17 @@
+import { useHeaderHeight } from "@react-navigation/elements";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ResizeMode, Video } from "expo-av";
 import * as MediaLibrary from "expo-media-library";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Dimensions,
   Image,
+  Keyboard,
   Linking,
   Modal,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -16,6 +19,7 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   getKidsById,
@@ -25,6 +29,7 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../../../../src/storage/coachKidStore";
+import { getKidStandingGuidance } from "../../../../../src/storage/kidStandingGuidanceStore";
 import { StorageKeys } from "../../../../../src/storage/storageKeys";
 import { getKidCompetitionEntriesForKid } from "../../../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../../../src/types";
@@ -32,6 +37,7 @@ import type {
   CoachOutcome,
   KidCompetitionEntry,
   KidCompetitionResult,
+  KidStandingGuidance,
   KidWeeklyFocusEntry,
 } from "../../../../../src/types/coachKid";
 import { toDateKey } from "../../../../../src/_domain/dateKey";
@@ -106,11 +112,20 @@ function outcomeLabel(o: CoachOutcome) {
   }
 }
 
-function techniqueWithMore(s: Session) {
-  const tech = (s.technique || "").trim();
-  const extraCount = (s.techniques?.length ?? 0) - 1;
-  const base = tech || "—";
-  return extraCount > 0 ? `${base} (+${extraCount} more)` : base;
+function techniqueSummaryForKidSession(s: Session): string {
+  const primary = (s.technique || "").trim();
+  const fromMulti = (s.techniques ?? [])
+    .map((t) => (t.customTechnique || t.technique || "").trim())
+    .filter(Boolean);
+
+  const parts: string[] = [];
+  if (primary) parts.push(primary);
+  for (const p of fromMulti) {
+    if (p && !parts.includes(p)) parts.push(p);
+  }
+  if (parts.length === 0) return "—";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} · also: ${parts.slice(1).join(", ")}`;
 }
 
 function sessionDrillNotesSummary(s: Session) {
@@ -242,6 +257,30 @@ export default function KidDetailScreen() {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewState | null>(null);
   const [playableMediaUri, setPlayableMediaUri] = useState<string | null>(null);
+  const [standingGuidance, setStandingGuidance] = useState<KidStandingGuidance | null>(null);
+  const [progressNotesInputKey, setProgressNotesInputKey] = useState(0);
+
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
+
+  const bumpScrollToFocusedInput = useCallback(() => {
+    const run = () => {
+      (keyboardAwareRef.current as { update?: () => void } | null)?.update?.();
+    };
+    requestAnimationFrame(run);
+    setTimeout(run, 120);
+    setTimeout(run, 340);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "ios") {
+      const sub = Keyboard.addListener("keyboardWillChangeFrame", bumpScrollToFocusedInput);
+      return () => sub.remove();
+    }
+    const sub = Keyboard.addListener("keyboardDidShow", bumpScrollToFocusedInput);
+    return () => sub.remove();
+  }, [bumpScrollToFocusedInput]);
 
   const load = useCallback(async (opts?: { prefillProgressInputs?: boolean }) => {
     if (!kidId || !weekStartYMD) return;
@@ -258,7 +297,9 @@ export default function KidDetailScreen() {
       if (prefillProgressInputs) {
         const initialOutcome: CoachOutcome = entry?.coachOutcome ?? "not_yet";
         setOutcomeDraft(initialOutcome);
-        setNotesDraft(entry?.coachNotes ?? "");
+        // Latest week row is often a saved reflection (newest createdAt) and includes coachNotes;
+        // prefilling that into the draft looks like text "stuck" after save. Outcome can track forward.
+        setNotesDraft("");
       } else {
         // After a successful save, we want a fresh blank input.
         setOutcomeDraft("not_yet");
@@ -276,6 +317,9 @@ export default function KidDetailScreen() {
 
       const compRows = await getKidCompetitionEntriesForKid(kidId);
       setCompetitions(compRows);
+
+      const guidanceRow = await getKidStandingGuidance(kidId);
+      setStandingGuidance(guidanceRow);
 
       // Lightweight "this week's training" display (pilot-only).
       const weekEndYMD = addDaysYMDLocal(weekStartYMD, 6);
@@ -369,6 +413,14 @@ export default function KidDetailScreen() {
 
   const focusTitle = currentWeekEntry?.title ?? null;
 
+  const standingHeadline = (standingGuidance?.headline ?? "").trim();
+  const standingDetail = (standingGuidance?.detail ?? "").trim();
+  const standingPrimary =
+    standingHeadline || standingDetail;
+  const standingSecondaryMuted =
+    standingHeadline && standingDetail ? standingDetail : "";
+  const standingIsActive = Boolean(standingPrimary);
+
   const onSaveOutcome = useCallback(async () => {
     if (!currentWeekEntry) return;
     setSavingOutcome(true);
@@ -401,6 +453,7 @@ export default function KidDetailScreen() {
       }
 
       await load({ prefillProgressInputs: false });
+      setProgressNotesInputKey((k) => k + 1);
     } finally {
       setSavingOutcome(false);
     }
@@ -410,11 +463,21 @@ export default function KidDetailScreen() {
     <>
       <Stack.Screen options={{ title: "Kid (Pilot)" }} />
       <KeyboardAwareScrollView
+        ref={keyboardAwareRef}
         enableOnAndroid
-        extraScrollHeight={80}
+        enableAutomaticScroll
+        enableResetScrollToCoords={false}
+        keyboardOpeningTime={120}
+        viewIsInsideTabBar
+        extraHeight={headerHeight + 24}
+        extraScrollHeight={Math.max(300, insets.bottom + 150)}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         style={{ flex: 1, backgroundColor: UI.screenBg }}
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        contentContainerStyle={{
+          padding: 20,
+          paddingBottom: insets.bottom + 280,
+        }}
       >
         <Pressable
           onPress={() => router.push("/profile/coaches/kids")}
@@ -452,12 +515,81 @@ export default function KidDetailScreen() {
           }}
         >
           <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+            What matters next
+          </Text>
+          {standingIsActive ? (
+            <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary }}>
+              {standingPrimary}
+            </Text>
+          ) : (
+            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
+              Capture the main takeaway and next focus for this kid.
+            </Text>
+          )}
+          {standingSecondaryMuted ? (
+            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+              {standingSecondaryMuted}
+            </Text>
+          ) : null}
+          <Pressable
+            onPress={() =>
+              router.push(`/profile/coaches/kid/${kidId}/what-matters-next`)
+            }
+            style={({ pressed }) => ({
+              marginTop: 4,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+              alignSelf: "flex-start",
+            })}
+          >
+            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
+              {standingIsActive ? "Edit direction" : "Add note"}
+            </Text>
+          </Pressable>
+        </View>
+
+        <View style={{ height: 14 }} />
+
+        <View
+          style={{
+            padding: 16,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
             This Week’s Private Session Focus
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
-              {focusTitle ?? "No focus saved yet"}
-            </Text>
+            {focusTitle && currentWeekEntry ? (
+              <Pressable
+                onPress={() =>
+                  router.push(
+                    `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
+                  )
+                }
+                style={({ pressed }) => ({
+                  flex: 1,
+                  minWidth: 0,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary }}>
+                  {focusTitle}
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
+                {focusTitle ?? "No focus saved yet"}
+              </Text>
+            )}
             {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry.youtubeUrl) ? (
               <Pressable
                 onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
@@ -597,8 +729,8 @@ export default function KidDetailScreen() {
                     <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary }}>
                       {s.date} · {resolveSystemLabel(s.system)}
                     </Text>
-                    <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={2}>
-                      {techniqueWithMore(s)}
+                    <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={4}>
+                      {techniqueSummaryForKidSession(s)}
                     </Text>
 
                     {badges.length > 0 ? (
@@ -931,10 +1063,19 @@ export default function KidDetailScreen() {
                 })}
               </View>
 
+              <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+                New notes start empty here. Each save adds an entry in the list below (history stays
+                visible).
+              </Text>
+
               <TextInput
+                key={progressNotesInputKey}
                 value={notesDraft}
+                scrollEnabled={false}
                 onChangeText={setNotesDraft}
-                placeholder="Weekly progress notes"
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
+                placeholder="Add new weekly progress notes"
                 placeholderTextColor={UI.textSecondary}
                 multiline
                 style={{
@@ -988,16 +1129,21 @@ export default function KidDetailScreen() {
                     typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
                   const notesText = (r.coachNotes ?? "").trim();
                   return (
-                    <View
+                    <Pressable
                       key={r.id}
-                      style={{
+                      onPress={() =>
+                        router.push(
+                          `/profile/coaches/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
+                        )
+                      }
+                      style={({ pressed }) => ({
                         padding: 12,
                         borderRadius: 12,
                         borderWidth: 1,
                         borderColor: UI.border,
-                        backgroundColor: "#f9fafb",
+                        backgroundColor: pressed ? "#eef2ff" : "#f9fafb",
                         gap: 6,
-                      }}
+                      })}
                     >
                       {outcomeText ? (
                         <Text style={{ fontSize: 12, color: UI.textSecondary }}>
@@ -1009,7 +1155,7 @@ export default function KidDetailScreen() {
                           Notes: {notesText}
                         </Text>
                       ) : null}
-                    </View>
+                    </Pressable>
                   );
                 })}
                 {thisWeekReflections.length > 3 ? (

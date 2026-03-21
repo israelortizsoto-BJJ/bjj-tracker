@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { Alert, Linking, Pressable, ScrollView, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 
 import {
@@ -36,6 +36,85 @@ function outcomeLabel(o?: CoachOutcome) {
     case "on_track":
       return "On track";
   }
+}
+
+function isUsableYoutubeUrl(raw?: string) {
+  if (!raw) return false;
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  const hasProtocol =
+    trimmed.startsWith("http://") || trimmed.startsWith("https://");
+  const candidate = hasProtocol ? trimmed : `https://${trimmed}`;
+  const lower = candidate.toLowerCase();
+  const looksLikeYoutube =
+    lower.includes("youtube.com") || lower.includes("youtu.be");
+  const looksLikeInstagram =
+    lower.includes("instagram.com") || lower.includes("instagr.am");
+  return looksLikeYoutube || looksLikeInstagram;
+}
+
+async function openYoutubeUrl(rawUrl: string | undefined) {
+  if (!isUsableYoutubeUrl(rawUrl)) return;
+  const trimmed = rawUrl!.trim();
+  const normalized =
+    trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
+  try {
+    const canOpen = await Linking.canOpenURL(normalized);
+    if (!canOpen) {
+      Alert.alert(
+        "Unable to open link",
+        "This reference link cannot be opened on this device.",
+      );
+      return;
+    }
+    await Linking.openURL(normalized);
+  } catch {
+    Alert.alert(
+      "Unable to open link",
+      "Something went wrong opening this reference link.",
+    );
+  }
+}
+
+function entryHasCoachReflection(e: KidWeeklyFocusEntry) {
+  return (
+    typeof e.coachOutcome !== "undefined" || Boolean((e.coachNotes ?? "").trim())
+  );
+}
+
+function openEntryEditor(kidId: string, entry: KidWeeklyFocusEntry) {
+  const hasCoach = entryHasCoachReflection(entry);
+
+  const goFocus = () =>
+    router.push({
+      pathname: "/profile/coaches/kid/[kidId]/weekly-focus",
+      params: { kidId, entryId: entry.id },
+    });
+
+  const goProgress = () =>
+    router.push({
+      pathname: "/profile/coaches/kid/[kidId]/progress-reflection",
+      params: { kidId, entryId: entry.id },
+    });
+
+  if (!hasCoach) {
+    goFocus();
+    return;
+  }
+
+  Alert.alert("Edit log entry", "This save includes weekly focus details and/or progress notes.", [
+    { text: "Cancel", style: "cancel" },
+    {
+      text: "Focus & video link",
+      onPress: goFocus,
+    },
+    {
+      text: "Outcome / notes",
+      onPress: goProgress,
+    },
+  ]);
 }
 
 function groupEntriesByWeek(entries: KidWeeklyFocusEntry[]): {
@@ -225,20 +304,64 @@ export default function KidWeeklyHistoryScreen() {
                         {entries.map((entry) => {
                           const outcomeText = outcomeLabel(entry.coachOutcome);
                           return (
-                            <View
+                            <Pressable
                               key={entry.id}
-                              style={{
+                              onPress={(e) => {
+                                if ((e as { defaultPrevented?: boolean })?.defaultPrevented) return;
+                                openEntryEditor(kidId, entry);
+                              }}
+                              style={({ pressed }) => ({
                                 padding: 12,
                                 borderRadius: 12,
                                 borderWidth: 1,
                                 borderColor: UI.border,
-                                backgroundColor: "#f9fafb",
+                                backgroundColor: pressed ? "#eef2ff" : "#f9fafb",
                                 gap: 6,
-                              }}
+                              })}
                             >
-                              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
-                                {entry.title}
-                              </Text>
+                              <View
+                                style={{
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  flexWrap: "wrap",
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 14,
+                                    fontWeight: "800",
+                                    color: UI.textPrimary,
+                                    flex: 1,
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  {entry.title}
+                                </Text>
+                                {isUsableYoutubeUrl(entry.youtubeUrl) ? (
+                                  <Pressable
+                                    onPress={(ev) => {
+                                      ev.stopPropagation?.();
+                                      (ev as { preventDefault?: () => void }).preventDefault?.();
+                                      void openYoutubeUrl(entry.youtubeUrl);
+                                    }}
+                                    style={({ pressed }) => ({
+                                      paddingVertical: 6,
+                                      paddingHorizontal: 10,
+                                      borderRadius: 999,
+                                      borderWidth: 1,
+                                      borderColor: UI.border,
+                                      backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                                    })}
+                                  >
+                                    <Text
+                                      style={{ fontSize: 11, fontWeight: "700", color: UI.textPrimary }}
+                                    >
+                                      YT
+                                    </Text>
+                                  </Pressable>
+                                ) : null}
+                              </View>
                               {outcomeText ? (
                                 <Text style={{ fontSize: 12, color: UI.textSecondary }}>
                                   Outcome: {outcomeText}
@@ -252,7 +375,7 @@ export default function KidWeeklyHistoryScreen() {
                                   Notes: {entry.coachNotes}
                                 </Text>
                               ) : null}
-                            </View>
+                            </Pressable>
                           );
                         })}
                       </View>

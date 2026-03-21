@@ -1,16 +1,21 @@
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { ResizeMode, Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   Text,
   TextInput,
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   persistMediaFromCameraRoll,
@@ -83,6 +88,22 @@ export default function KidCompetitionEditScreen() {
   const [saving, setSaving] = useState(false);
   const videoRef = useRef<Video>(null);
   const [videoKey, setVideoKey] = useState(0);
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
+
+  const bumpScrollToFocusedNotes = useCallback(() => {
+    requestAnimationFrame(() => {
+      // `update` exists on the HOC instance but is missing from library typings
+      (keyboardAwareRef.current as { update?: () => void } | null)?.update?.();
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== "ios") return;
+    const sub = Keyboard.addListener("keyboardWillChangeFrame", bumpScrollToFocusedNotes);
+    return () => sub.remove();
+  }, [bumpScrollToFocusedNotes]);
 
   const loadExisting = useCallback(async () => {
     if (!entryId) return;
@@ -144,16 +165,21 @@ export default function KidCompetitionEditScreen() {
   async function pickVideo() {
     if (!(await ensureMediaPermissions())) return;
 
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-    });
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      });
 
-    if (!result.canceled && result.assets?.[0]?.uri) {
-      const asset = result.assets[0];
-      const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
-      setVideoUri(persisted);
-      setVideoAssetId(asset.assetId ?? undefined);
-      setVideoKey((k) => k + 1);
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const asset = result.assets[0];
+        const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
+        setVideoUri(persisted);
+        setVideoAssetId(asset.assetId ?? undefined);
+        setVideoKey((k) => k + 1);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Could not attach video", msg || "Try another clip or check storage space.");
     }
   }
 
@@ -189,6 +215,13 @@ export default function KidCompetitionEditScreen() {
         });
       }
       router.replace(`/profile/coaches/kid/${kidId}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert(
+        "Could not save",
+        msg ||
+          "Competition data could not be saved. If this keeps happening, try shorter notes or remove the video and save again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -227,13 +260,24 @@ export default function KidCompetitionEditScreen() {
       <Stack.Screen
         options={{ title: isNew ? "Add Competition" : "Edit Competition" }}
       />
-      <KeyboardAwareScrollView
-        enableOnAndroid
-        extraScrollHeight={80}
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: UI.screenBg }}
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-      >
+      <View style={{ flex: 1, backgroundColor: UI.screenBg }}>
+        <KeyboardAwareScrollView
+          ref={keyboardAwareRef}
+          enableOnAndroid
+          enableAutomaticScroll
+          enableResetScrollToCoords={false}
+          keyboardOpeningTime={120}
+          viewIsInsideTabBar
+          extraHeight={headerHeight + 24}
+          extraScrollHeight={Math.max(220, insets.bottom + 120)}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          style={{ flex: 1, backgroundColor: UI.screenBg }}
+          contentContainerStyle={{
+            padding: 20,
+            paddingBottom: 24,
+          }}
+        >
         <Pressable
           onPress={() => router.replace(`/profile/coaches/kid/${kidId}`)}
           style={({ pressed }) => ({
@@ -357,7 +401,10 @@ export default function KidCompetitionEditScreen() {
             </Text>
             <TextInput
               value={notesDraft}
+              scrollEnabled={false}
               onChangeText={setNotesDraft}
+              onFocus={bumpScrollToFocusedNotes}
+              onContentSizeChange={bumpScrollToFocusedNotes}
               placeholder="Reflections, what to work on next…"
               placeholderTextColor={UI.textSecondary}
               multiline
@@ -456,11 +503,31 @@ export default function KidCompetitionEditScreen() {
                 </View>
               </View>
             ) : null}
+          </>
+        )}
 
-            <View style={{ height: 20 }} />
+          <Text style={{ marginTop: 16, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>
+            Internal pilot (coach-side)
+          </Text>
+        </KeyboardAwareScrollView>
 
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={headerHeight}
+        >
+          <View
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 12,
+              paddingBottom: Math.max(insets.bottom, 12),
+              backgroundColor: UI.screenBg,
+              borderTopWidth: 1,
+              borderTopColor: UI.border,
+              gap: 12,
+            }}
+          >
             <Pressable
-              disabled={!canSave || saving}
+              disabled={!canSave || saving || loading}
               onPress={() => void onSave()}
               style={({ pressed }) => ({
                 paddingVertical: 14,
@@ -469,7 +536,7 @@ export default function KidCompetitionEditScreen() {
                 borderWidth: 1,
                 borderColor: UI.accent,
                 backgroundColor: pressed ? UI.accent : UI.accent,
-                opacity: !canSave || saving ? 0.5 : 1,
+                opacity: !canSave || saving || loading ? 0.5 : 1,
                 alignItems: "center",
               })}
             >
@@ -480,9 +547,9 @@ export default function KidCompetitionEditScreen() {
 
             {!isNew ? (
               <Pressable
+                disabled={loading}
                 onPress={onDelete}
                 style={({ pressed }) => ({
-                  marginTop: 12,
                   paddingVertical: 14,
                   paddingHorizontal: 16,
                   borderRadius: 12,
@@ -490,6 +557,7 @@ export default function KidCompetitionEditScreen() {
                   borderColor: UI.border,
                   backgroundColor: pressed ? "#fef2f2" : UI.bgCard,
                   alignItems: "center",
+                  opacity: loading ? 0.5 : 1,
                 })}
               >
                 <Text style={{ fontSize: 16, color: UI.danger, fontWeight: "800" }}>
@@ -497,13 +565,9 @@ export default function KidCompetitionEditScreen() {
                 </Text>
               </Pressable>
             ) : null}
-          </>
-        )}
-
-        <Text style={{ marginTop: 16, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>
-          Internal pilot (coach-side)
-        </Text>
-      </KeyboardAwareScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </View>
     </>
   );
 }

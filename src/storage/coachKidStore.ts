@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { deleteAllKidCompetitionEntriesForKid } from "./kidCompetitionStore";
+import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { StorageKeys } from "./storageKeys";
 import type {
   CoachOutcome,
@@ -158,6 +159,7 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   await deleteAllKidCompetitionEntriesForKid(kidId);
   await deleteKidTrainingSessionsForKid(kidId);
   await deleteKidWeeklyFocusEntriesForKid(kidId);
+  await deleteKidStandingGuidanceForKid(kidId);
 
   const { [kidId]: _removed, ...rest } = kids;
   await setKidsById(rest);
@@ -193,6 +195,77 @@ export async function getLatestKidWeeklyFocusForWeek(
   return matches.reduce((best, e) =>
     e.createdAt > best.createdAt ? e : best,
   );
+}
+
+export async function getKidWeeklyFocusEntryById(
+  entryId: string,
+): Promise<KidWeeklyFocusEntry | null> {
+  const all = await getKidWeeklyFocusEntriesRaw();
+  return all.find((e) => e.id === entryId) ?? null;
+}
+
+export type KidWeeklyFocusFocusUpdate =
+  | {
+      focusType: "template";
+      templateId: string;
+      title: string;
+      metadata?: string;
+      youtubeUrl?: string;
+    }
+  | {
+      focusType: "custom";
+      title: string;
+      note?: string;
+      youtubeUrl?: string;
+    };
+
+/**
+ * In-place update of the focus fields on an existing log row (same id / week / timestamps for createdAt).
+ */
+export async function updateKidWeeklyFocusFocusById(
+  entryId: string,
+  expectedKidId: KidId,
+  focus: KidWeeklyFocusFocusUpdate,
+): Promise<KidWeeklyFocusEntry | null> {
+  const all = await getKidWeeklyFocusEntriesRaw();
+  const idx = all.findIndex((e) => e.id === entryId);
+  if (idx === -1) return null;
+  const existing = all[idx];
+  if (existing.kidId !== expectedKidId) return null;
+
+  const nowIso = new Date().toISOString();
+  const base = {
+    id: existing.id,
+    kidId: existing.kidId,
+    weekStartYMD: existing.weekStartYMD,
+    createdAt: existing.createdAt,
+    updatedAt: nowIso,
+    coachOutcome: existing.coachOutcome,
+    coachNotes: existing.coachNotes,
+  };
+
+  const updated: KidWeeklyFocusEntry =
+    focus.focusType === "template"
+      ? {
+          ...base,
+          focusType: "template",
+          templateId: focus.templateId,
+          title: focus.title,
+          metadata: focus.metadata,
+          youtubeUrl: focus.youtubeUrl,
+        }
+      : {
+          ...base,
+          focusType: "custom",
+          title: focus.title,
+          note: focus.note,
+          youtubeUrl: focus.youtubeUrl,
+        };
+
+  all[idx] = updated;
+  const capped = capEntriesByKid(all);
+  await setKidWeeklyFocusEntriesRaw(capped);
+  return capped.find((e) => e.id === entryId) ?? updated;
 }
 
 /**
@@ -251,17 +324,23 @@ export async function patchKidWeeklyFocusCoachFields(
 
   const existing = all[idx];
   const nowIso = new Date().toISOString();
+
+  let nextCoachOutcome = existing.coachOutcome;
+  if (Object.prototype.hasOwnProperty.call(patch, "coachOutcome")) {
+    nextCoachOutcome = patch.coachOutcome;
+  }
+
+  let nextCoachNotes = existing.coachNotes;
+  if (Object.prototype.hasOwnProperty.call(patch, "coachNotes")) {
+    const raw = patch.coachNotes;
+    nextCoachNotes = raw?.trim() ? raw.trim() : undefined;
+  }
+
   const updated: KidWeeklyFocusEntry = {
     ...existing,
     updatedAt: nowIso,
-    coachOutcome:
-      typeof patch.coachOutcome !== "undefined"
-        ? patch.coachOutcome
-        : existing.coachOutcome,
-    coachNotes:
-      typeof patch.coachNotes !== "undefined"
-        ? patch.coachNotes
-        : existing.coachNotes,
+    coachOutcome: nextCoachOutcome,
+    coachNotes: nextCoachNotes,
   };
 
   all[idx] = updated;
