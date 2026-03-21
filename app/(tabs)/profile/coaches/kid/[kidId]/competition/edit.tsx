@@ -4,16 +4,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { ResizeMode, Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -28,7 +19,11 @@ import {
   updateKidCompetitionEntry,
 } from "../../../../../../../src/storage/kidCompetitionStore";
 import { todayYMD } from "../../../../../../../src/storage/coachKidStore";
-import type { KidCompetitionResult } from "../../../../../../../src/types/coachKid";
+import type {
+  KidCompetitionEventStatus,
+  KidCompetitionOutcomeKind,
+  KidCompetitionResult,
+} from "../../../../../../../src/types/coachKid";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -49,6 +44,23 @@ const RESULTS: KidCompetitionResult[] = [
   "other",
 ];
 
+const EVENT_STATUSES: KidCompetitionEventStatus[] = [
+  "upcoming",
+  "completed",
+  "cancelled",
+  "unknown",
+];
+
+const OUTCOME_KINDS: KidCompetitionOutcomeKind[] = [
+  "points",
+  "submission",
+  "decision",
+  "disqualification",
+  "medical",
+  "other",
+  "unknown",
+];
+
 function resultLabel(r: KidCompetitionResult): string {
   switch (r) {
     case "gold":
@@ -63,6 +75,38 @@ function resultLabel(r: KidCompetitionResult): string {
       return "DNF";
     case "other":
       return "Other";
+  }
+}
+
+function eventStatusLabel(s: KidCompetitionEventStatus): string {
+  switch (s) {
+    case "upcoming":
+      return "Upcoming";
+    case "completed":
+      return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    case "unknown":
+      return "Unknown";
+  }
+}
+
+function outcomeKindLabel(k: KidCompetitionOutcomeKind): string {
+  switch (k) {
+    case "points":
+      return "Points";
+    case "submission":
+      return "Submission";
+    case "decision":
+      return "Decision";
+    case "disqualification":
+      return "DQ";
+    case "medical":
+      return "Medical";
+    case "other":
+      return "Other";
+    case "unknown":
+      return "Unknown";
   }
 }
 
@@ -82,6 +126,13 @@ export default function KidCompetitionEditScreen() {
   const [nameDraft, setNameDraft] = useState("");
   const [dateDraft, setDateDraft] = useState(todayYMD());
   const [resultDraft, setResultDraft] = useState<KidCompetitionResult>("participated");
+  const [eventStatusDraft, setEventStatusDraft] = useState<
+    KidCompetitionEventStatus | undefined
+  >(undefined);
+  const [promoterDraft, setPromoterDraft] = useState("");
+  const [outcomeKindDraft, setOutcomeKindDraft] = useState<
+    KidCompetitionOutcomeKind | undefined
+  >(undefined);
   const [notesDraft, setNotesDraft] = useState("");
   const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
   const [videoAssetId, setVideoAssetId] = useState<string | undefined>(undefined);
@@ -92,18 +143,12 @@ export default function KidCompetitionEditScreen() {
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
 
-  const bumpScrollToFocusedNotes = useCallback(() => {
+  /** Single nudge after focus — avoid keyboard frame + content-size loops (dictation overscrolls). */
+  const onNotesFocusScroll = useCallback(() => {
     requestAnimationFrame(() => {
-      // `update` exists on the HOC instance but is missing from library typings
       (keyboardAwareRef.current as { update?: () => void } | null)?.update?.();
     });
   }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== "ios") return;
-    const sub = Keyboard.addListener("keyboardWillChangeFrame", bumpScrollToFocusedNotes);
-    return () => sub.remove();
-  }, [bumpScrollToFocusedNotes]);
 
   const loadExisting = useCallback(async () => {
     if (!entryId) return;
@@ -118,6 +163,9 @@ export default function KidCompetitionEditScreen() {
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
       setResultDraft(found.result);
+      setEventStatusDraft(found.eventStatus);
+      setPromoterDraft(found.organizationOrPromoter ?? "");
+      setOutcomeKindDraft(found.outcomeKind);
       setNotesDraft(found.coachNotes ?? "");
       setVideoUri(found.videoUri);
       setVideoAssetId(found.videoAssetId);
@@ -139,6 +187,9 @@ export default function KidCompetitionEditScreen() {
         setNameDraft("");
         setDateDraft(todayYMD());
         setResultDraft("participated");
+        setEventStatusDraft(undefined);
+        setPromoterDraft("");
+        setOutcomeKindDraft(undefined);
         setNotesDraft("");
         setVideoUri(undefined);
         setVideoAssetId(undefined);
@@ -152,6 +203,17 @@ export default function KidCompetitionEditScreen() {
   const canSave = useMemo(() => {
     return nameDraft.trim().length > 0 && isValidYMD(dateDraft);
   }, [nameDraft, dateDraft]);
+
+  const saveDisabledHint = useMemo(() => {
+    if (canSave) return null;
+    const missingName = nameDraft.trim().length === 0;
+    const badDate = !isValidYMD(dateDraft);
+    if (missingName && badDate) {
+      return "Add a tournament name and a valid event date (YYYY-MM-DD) to enable Save.";
+    }
+    if (missingName) return "Add a tournament name to enable Save.";
+    return "Use a valid event date (YYYY-MM-DD) to enable Save.";
+  }, [canSave, nameDraft, dateDraft]);
 
   async function ensureMediaPermissions() {
     const ok = await requestMediaLibraryPermission();
@@ -200,6 +262,11 @@ export default function KidCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          eventStatus: eventStatusDraft,
+          organizationOrPromoter: promoterDraft.trim()
+            ? promoterDraft.trim()
+            : undefined,
+          outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
           videoUri,
           videoAssetId,
@@ -209,6 +276,11 @@ export default function KidCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          eventStatus: eventStatusDraft,
+          organizationOrPromoter: promoterDraft.trim()
+            ? promoterDraft.trim()
+            : undefined,
+          outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
           videoUri,
           videoAssetId,
@@ -268,14 +340,14 @@ export default function KidCompetitionEditScreen() {
           enableResetScrollToCoords={false}
           keyboardOpeningTime={120}
           viewIsInsideTabBar
-          extraHeight={headerHeight + 24}
-          extraScrollHeight={Math.max(220, insets.bottom + 120)}
+          extraHeight={headerHeight}
+          extraScrollHeight={Math.max(32, insets.bottom + 16)}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           style={{ flex: 1, backgroundColor: UI.screenBg }}
           contentContainerStyle={{
             padding: 20,
-            paddingBottom: 24,
+            paddingBottom: Math.max(24, insets.bottom + 20),
           }}
         >
         <Pressable
@@ -326,6 +398,33 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textSecondary,
               }}
             >
+              ORGANIZATION / PROMOTER (OPTIONAL)
+            </Text>
+            <TextInput
+              value={promoterDraft}
+              onChangeText={setPromoterDraft}
+              placeholder="e.g. IBJJF, local academy…"
+              placeholderTextColor={UI.textSecondary}
+              style={{
+                marginTop: 8,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                padding: 12,
+                color: UI.textPrimary,
+              }}
+            />
+
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                letterSpacing: 0.6,
+                fontWeight: "700",
+                color: UI.textSecondary,
+              }}
+            >
               EVENT DATE (YYYY-MM-DD)
             </Text>
             <TextInput
@@ -345,6 +444,100 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textPrimary,
               }}
             />
+
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                letterSpacing: 0.6,
+                fontWeight: "700",
+                color: UI.textSecondary,
+              }}
+            >
+              EVENT STATUS (OPTIONAL)
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+              Tap again to clear. Omit if you are not tracking status here.
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              {EVENT_STATUSES.map((s) => {
+                const active = eventStatusDraft === s;
+                return (
+                  <Pressable
+                    key={s}
+                    onPress={() =>
+                      setEventStatusDraft((prev) => (prev === s ? undefined : s))
+                    }
+                    style={({ pressed }) => ({
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: active ? UI.accent : UI.border,
+                      backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: active ? "800" : "600",
+                        color: UI.textPrimary,
+                      }}
+                    >
+                      {eventStatusLabel(s)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                letterSpacing: 0.6,
+                fontWeight: "700",
+                color: UI.textSecondary,
+              }}
+            >
+              HOW IT ENDED (OPTIONAL)
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+              Match outcome type. Tap again to clear.
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              {OUTCOME_KINDS.map((k) => {
+                const active = outcomeKindDraft === k;
+                return (
+                  <Pressable
+                    key={k}
+                    onPress={() =>
+                      setOutcomeKindDraft((prev) => (prev === k ? undefined : k))
+                    }
+                    style={({ pressed }) => ({
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: active ? UI.accent : UI.border,
+                      backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: active ? "800" : "600",
+                        color: UI.textPrimary,
+                      }}
+                    >
+                      {outcomeKindLabel(k)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             <Text
               style={{
@@ -403,8 +596,7 @@ export default function KidCompetitionEditScreen() {
               value={notesDraft}
               scrollEnabled={false}
               onChangeText={setNotesDraft}
-              onFocus={bumpScrollToFocusedNotes}
-              onContentSizeChange={bumpScrollToFocusedNotes}
+              onFocus={onNotesFocusScroll}
               placeholder="Reflections, what to work on next…"
               placeholderTextColor={UI.textSecondary}
               multiline
@@ -503,33 +695,12 @@ export default function KidCompetitionEditScreen() {
                 </View>
               </View>
             ) : null}
-          </>
-        )}
 
-          <Text style={{ marginTop: 16, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>
-            Internal pilot (coach-side)
-          </Text>
-        </KeyboardAwareScrollView>
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          keyboardVerticalOffset={headerHeight}
-        >
-          <View
-            style={{
-              paddingHorizontal: 20,
-              paddingTop: 12,
-              paddingBottom: Math.max(insets.bottom, 12),
-              backgroundColor: UI.screenBg,
-              borderTopWidth: 1,
-              borderTopColor: UI.border,
-              gap: 12,
-            }}
-          >
             <Pressable
               disabled={!canSave || saving || loading}
               onPress={() => void onSave()}
               style={({ pressed }) => ({
+                marginTop: 24,
                 paddingVertical: 14,
                 paddingHorizontal: 16,
                 borderRadius: 12,
@@ -545,11 +716,26 @@ export default function KidCompetitionEditScreen() {
               </Text>
             </Pressable>
 
+            {saveDisabledHint && !loading && !saving ? (
+              <Text
+                style={{
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: UI.textSecondary,
+                  lineHeight: 17,
+                  textAlign: "center",
+                }}
+              >
+                {saveDisabledHint}
+              </Text>
+            ) : null}
+
             {!isNew ? (
               <Pressable
                 disabled={loading}
                 onPress={onDelete}
                 style={({ pressed }) => ({
+                  marginTop: 12,
                   paddingVertical: 14,
                   paddingHorizontal: 16,
                   borderRadius: 12,
@@ -565,8 +751,13 @@ export default function KidCompetitionEditScreen() {
                 </Text>
               </Pressable>
             ) : null}
-          </View>
-        </KeyboardAvoidingView>
+          </>
+        )}
+
+          <Text style={{ marginTop: 16, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>
+            Internal pilot (coach-side)
+          </Text>
+        </KeyboardAwareScrollView>
       </View>
     </>
   );
