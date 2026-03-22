@@ -4,6 +4,8 @@ import { bestEffortDeletePersistedMedia } from "../media/persistCameraRollMedia"
 import { StorageKeys } from "./storageKeys";
 import type {
   KidCompetitionEntry,
+  KidCompetitionEventStatus,
+  KidCompetitionOutcomeKind,
   KidCompetitionResult,
   KidId,
 } from "../types/coachKid";
@@ -19,6 +21,61 @@ function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
 
 function newEntryId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+const EVENT_STATUS_SET = new Set<KidCompetitionEventStatus>([
+  "upcoming",
+  "completed",
+  "cancelled",
+  "unknown",
+]);
+
+const OUTCOME_KIND_SET = new Set<KidCompetitionOutcomeKind>([
+  "points",
+  "submission",
+  "decision",
+  "disqualification",
+  "medical",
+  "other",
+  "unknown",
+]);
+
+function normalizeEventStatus(
+  raw: unknown,
+): KidCompetitionEventStatus | undefined {
+  if (typeof raw !== "string") return undefined;
+  return EVENT_STATUS_SET.has(raw as KidCompetitionEventStatus)
+    ? (raw as KidCompetitionEventStatus)
+    : undefined;
+}
+
+function normalizeOutcomeKind(
+  raw: unknown,
+): KidCompetitionOutcomeKind | undefined {
+  if (typeof raw !== "string") return undefined;
+  return OUTCOME_KIND_SET.has(raw as KidCompetitionOutcomeKind)
+    ? (raw as KidCompetitionOutcomeKind)
+    : undefined;
+}
+
+function normalizeOrganizationOrPromoter(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  return t ? t : undefined;
+}
+
+/** Strips unknown enum strings so legacy JSON and bad values never break the read path. */
+function normalizeKidCompetitionEntry(
+  raw: KidCompetitionEntry,
+): KidCompetitionEntry {
+  return {
+    ...raw,
+    eventStatus: normalizeEventStatus(raw.eventStatus),
+    organizationOrPromoter: normalizeOrganizationOrPromoter(
+      raw.organizationOrPromoter,
+    ),
+    outcomeKind: normalizeOutcomeKind(raw.outcomeKind),
+  };
 }
 
 const MAX_COMPETITION_ENTRIES_PER_KID = 60;
@@ -52,7 +109,10 @@ function capCompetitionsByKid(all: KidCompetitionEntry[]): KidCompetitionEntry[]
 async function getRaw(): Promise<KidCompetitionEntry[]> {
   const raw = await AsyncStorage.getItem(StorageKeys.kidCompetitionEntries);
   const parsed = safeParseOrDefault<KidCompetitionEntry[] | null>(raw, null);
-  return parsed && Array.isArray(parsed) ? parsed : [];
+  if (!parsed || !Array.isArray(parsed)) return [];
+  return parsed
+    .filter((e): e is KidCompetitionEntry => Boolean(e && typeof e === "object"))
+    .map((e) => normalizeKidCompetitionEntry(e as KidCompetitionEntry));
 }
 
 async function setRaw(entries: KidCompetitionEntry[]): Promise<void> {
@@ -88,6 +148,9 @@ export type KidCompetitionCreateInput = {
   tournamentName: string;
   eventDate: string;
   result: KidCompetitionResult;
+  eventStatus?: KidCompetitionEventStatus;
+  organizationOrPromoter?: string;
+  outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;
   videoUri?: string;
   videoAssetId?: string;
@@ -100,12 +163,19 @@ export async function createKidCompetitionEntry(
   const nowIso = new Date().toISOString();
   const id = newEntryId();
 
+  const org = input.organizationOrPromoter?.trim()
+    ? input.organizationOrPromoter.trim()
+    : undefined;
+
   const created: KidCompetitionEntry = {
     id,
     kidId: input.kidId,
     tournamentName: input.tournamentName.trim(),
     eventDate: input.eventDate,
     result: input.result,
+    ...(input.eventStatus ? { eventStatus: input.eventStatus } : {}),
+    ...(org ? { organizationOrPromoter: org } : {}),
+    ...(input.outcomeKind ? { outcomeKind: input.outcomeKind } : {}),
     coachNotes: input.coachNotes?.trim() ? input.coachNotes.trim() : undefined,
     videoUri: input.videoUri,
     videoAssetId: input.videoAssetId,
@@ -123,6 +193,9 @@ export type KidCompetitionUpdateInput = Partial<{
   tournamentName: string;
   eventDate: string;
   result: KidCompetitionResult;
+  eventStatus: KidCompetitionEventStatus | undefined;
+  organizationOrPromoter: string | undefined;
+  outcomeKind: KidCompetitionOutcomeKind | undefined;
   coachNotes: string | undefined;
   videoUri: string | undefined;
   videoAssetId: string | undefined;
@@ -158,6 +231,23 @@ export async function updateKidCompetitionEntry(
     nextCoachNotes = patch.coachNotes?.trim() ? patch.coachNotes.trim() : undefined;
   }
 
+  let nextEventStatus = existing.eventStatus;
+  if (Object.prototype.hasOwnProperty.call(patch, "eventStatus")) {
+    nextEventStatus = patch.eventStatus;
+  }
+
+  let nextOrganizationOrPromoter = existing.organizationOrPromoter;
+  if (Object.prototype.hasOwnProperty.call(patch, "organizationOrPromoter")) {
+    nextOrganizationOrPromoter = patch.organizationOrPromoter?.trim()
+      ? patch.organizationOrPromoter.trim()
+      : undefined;
+  }
+
+  let nextOutcomeKind = existing.outcomeKind;
+  if (Object.prototype.hasOwnProperty.call(patch, "outcomeKind")) {
+    nextOutcomeKind = patch.outcomeKind;
+  }
+
   const updated: KidCompetitionEntry = {
     ...existing,
     updatedAt: nowIso,
@@ -169,6 +259,9 @@ export async function updateKidCompetitionEntry(
       typeof patch.eventDate !== "undefined" ? patch.eventDate : existing.eventDate,
     result:
       typeof patch.result !== "undefined" ? patch.result : existing.result,
+    eventStatus: nextEventStatus,
+    organizationOrPromoter: nextOrganizationOrPromoter,
+    outcomeKind: nextOutcomeKind,
     coachNotes: nextCoachNotes,
     videoUri: nextVideoUri,
     videoAssetId: nextVideoAssetId,

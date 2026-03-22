@@ -60,6 +60,23 @@ export type KidCompetitionResult =
   | "dnf"
   | "other";
 
+/** Coach-facing event lifecycle (appearance / planning); optional on stored entries. */
+export type KidCompetitionEventStatus =
+  | "upcoming"
+  | "completed"
+  | "cancelled"
+  | "unknown";
+
+/** How the match was decided, when known; optional on stored entries. */
+export type KidCompetitionOutcomeKind =
+  | "points"
+  | "submission"
+  | "decision"
+  | "disqualification"
+  | "medical"
+  | "other"
+  | "unknown";
+
 export type KidCompetitionEntry = {
   id: string;
   kidId: KidId;
@@ -67,6 +84,9 @@ export type KidCompetitionEntry = {
   /** YYYY-MM-DD */
   eventDate: string;
   result: KidCompetitionResult;
+  eventStatus?: KidCompetitionEventStatus;
+  organizationOrPromoter?: string;
+  outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;
   videoUri?: string;
   videoAssetId?: string;

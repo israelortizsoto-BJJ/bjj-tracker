@@ -42,6 +42,8 @@ import type { Session } from "../../../../../src/types";
 import type {
   CoachOutcome,
   KidCompetitionEntry,
+  KidCompetitionEventStatus,
+  KidCompetitionOutcomeKind,
   KidCompetitionResult,
   KidStandingGuidance,
   KidWeeklyFocusEntry,
@@ -174,6 +176,47 @@ function competitionResultLabel(r: KidCompetitionResult): string {
     case "other":
       return "Other";
   }
+}
+
+function competitionEventStatusLabel(s: KidCompetitionEventStatus): string {
+  switch (s) {
+    case "upcoming":
+      return "Upcoming";
+    case "completed":
+      return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    case "unknown":
+      return "Unknown";
+  }
+}
+
+function competitionOutcomeKindLabel(k: KidCompetitionOutcomeKind): string {
+  switch (k) {
+    case "points":
+      return "Points";
+    case "submission":
+      return "Submission";
+    case "decision":
+      return "Decision";
+    case "disqualification":
+      return "DQ";
+    case "medical":
+      return "Medical";
+    case "other":
+      return "Other";
+    case "unknown":
+      return "Unknown";
+  }
+}
+
+function competitionMetaLine(row: KidCompetitionEntry): string | null {
+  const parts: string[] = [];
+  const org = row.organizationOrPromoter?.trim();
+  if (org) parts.push(org);
+  if (row.eventStatus) parts.push(competitionEventStatusLabel(row.eventStatus));
+  if (row.outcomeKind) parts.push(competitionOutcomeKindLabel(row.outcomeKind));
+  return parts.length ? parts.join(" · ") : null;
 }
 
 function formatMonthHeading(monthKey: string) {
@@ -1148,7 +1191,9 @@ export default function KidDetailScreen() {
 
                     {expanded ? (
                       <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 6 }}>
-                        {entries.map((row) => (
+                        {entries.map((row) => {
+                          const competitionMeta = competitionMetaLine(row);
+                          return (
                           <Swipeable
                             key={row.id}
                             overshootRight={false}
@@ -1245,6 +1290,14 @@ export default function KidDetailScreen() {
                               <Text style={{ fontSize: 11, color: UI.textSecondary }}>
                                 {row.eventDate} · {competitionResultLabel(row.result)}
                               </Text>
+                              {competitionMeta ? (
+                                <Text
+                                  style={{ fontSize: 10, color: UI.textSecondary, opacity: 0.95 }}
+                                  numberOfLines={2}
+                                >
+                                  {competitionMeta}
+                                </Text>
+                              ) : null}
                               {row.coachNotes ? (
                                 <Text style={{ fontSize: 11, color: UI.textSecondary }} numberOfLines={1}>
                                   {row.coachNotes}
@@ -1252,7 +1305,8 @@ export default function KidDetailScreen() {
                               ) : null}
                             </Pressable>
                           </Swipeable>
-                        ))}
+                          );
+                        })}
                       </View>
                     ) : null}
                   </View>
