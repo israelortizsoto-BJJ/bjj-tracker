@@ -627,6 +627,17 @@ export default function KidDetailScreen() {
               {standingSecondaryMuted}
             </Text>
           ) : null}
+          <Text
+            style={{
+              marginTop: 2,
+              fontSize: 12,
+              color: UI.textSecondary,
+              lineHeight: 17,
+              opacity: 0.92,
+            }}
+          >
+            AI can help draft this and save time
+          </Text>
           <Pressable
             onPress={() =>
               router.push(`/profile/coaches/kid/${kidId}/what-matters-next`)
