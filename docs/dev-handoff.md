@@ -72,23 +72,43 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-20  
-**Status:** Build 12 is the current coach-testing build in TestFlight. Feedback triage is intentionally tabled short-term. On `dev`, the **coach kid profile** is now **guidance-first** (standing **What matters next** + weekly focus + **How it’s going** check-ins + training + competition), with **hardened edit routes**, **swipe-to-delete** on key kid-detail rows, and **shared storage helpers** for row deletes. Same beta reality as before: **not** implied in TestFlight until a new build ships. Surfaces remain **pilot/hidden** (Profile → Coach Share → Kids).
+**Date:** 2026-03-21  
+**Status:** Build 12 remains the **last documented** coach-testing build in TestFlight until a new upload is explicitly recorded here. Local `dev` may be **ahead of `origin/dev`** with unpushed work—confirm with `git status -sb` before assuming remote parity.
+
+On `dev`, the **coach kid profile** stays **guidance-first**. New since yesterday: a **warmer family-facing Coach Share weekly surface** (copy + join flow + finite weekly story with **early exit**), **competition structured fields** for future analysis/drafting, **competition form** polish, and **AI Drafting Slice 1** on **What matters next**—**mock/on-device only** (no remote model, no auto-save); coach **review → apply or discard**. Same beta reality: **do not** treat these changes as live for broad TestFlight until a build ships. Coach Share + kid pilot remain **pilot-scoped** (Profile → Coach Share → Kids).
 
 ## Git checkpoint
 
 **Working tree:**
-- synced to `origin/dev`
+- check `git status -sb` (may be **ahead of `origin/dev`** until pushed)
 
-**Latest commit:**
-- `89f0813` — Add shared delete helpers for coach kid row actions
+**Latest commit (at handoff write):**
+- `23a4047` — Add coach-guidance drafting flow for what matters next
 
-## Process note (2026-03-20)
-This coach kid profile batch used a **small slice → manual QA → fix** loop (repeat), rather than a single large drop.
+## Process note (2026-03-21)
+Continued **slice → device QA → fix**. Several issues were **only visible on device** (layout, scroll, visibility); detailed step-by-step QA stays high leverage. AI Drafting Slice 1 validates **UX shell and trust**, not production model quality.
+
+## Product / strategy (planning; not shipped product)
+- Michelle feedback pushed **competition/tournament structure** toward **future AI analysis**.
+- **Tier model / pricing** exploration started; **AI capabilities likely land in Pro by default**; **dashboard cost posture** under discussion.
 
 ## What we completed most recently
 
-### 0) Coach kid profile: standing guidance, guidance-first stack, swipe deletes (`56f7b43` → `89f0813`)
+### 0) Family Coach Share weekly surface + join + weekly story (`624a50e` → `ec7c8f5`)
+- **Profile** entry line: **“This week with your coach”** (`app/(tabs)/profile.tsx`).
+- **Coach Share home** weekly framing: **“This week together”**; **finite weekly story** with step label **Read together · N of M**; **early-exit** control so families are not trapped in the story.
+- **Join** flow polish and copy (e.g. **“This week together”** privacy note on device-only storage in `join.tsx`).
+
+### 1) Competition: structured context + form polish (`746a1af`, `a3dfaa6`)
+- **Types / persistence**: optional **`eventStatus`**, **`organizationOrPromoter`**, **`outcomeKind`** on `KidCompetitionEntry` (`src/types/coachKid.ts`); wired through store and **competition/edit** for future AI-readiness.
+- **Form UX**: field visibility and order fixes, **notes** scroll behavior, **save helper**; **Save / Delete** actions moved back into the **normal scroll flow** (not pinned outside scroll).
+
+### 2) AI Drafting Slice 1 — `what-matters-next` (`6d57f00`, `23a4047`)
+- **Coach-in-the-loop** flow on `app/(tabs)/profile/coaches/kid/[kidId]/what-matters-next.tsx`: load local payload → **mock generator** → modal **review** → coach **applies** to drafts or **discards** (**no auto-save** from drafting).
+- **Implementation**: `src/ai-coach/whatMattersNextDraftTypes.ts`, `loadWhatMattersNextDraftPayload.ts`, `whatMattersNextDraftGenerator.ts` — **deterministic local stand-in** until a real provider exists (`mockWhatMattersNextDraftFromPayload` / `getDefaultWhatMattersNextDraftGenerator`).
+- Copy/instructions tuned for **adoption** and clarity that this is **assistive**, not autonomous.
+
+### 3) Coach kid profile: standing guidance, guidance-first stack, swipe deletes (`56f7b43` → `89f0813`) — prior day, still current
 - **Standing guidance — “What matters next”** (`kidStandingGuidanceStore`, `what-matters-next`): per-kid headline + optional detail; **top card** on kid detail; cleared when the kid is roster-deleted.
 - **Guidance-first top stack** on kid detail: *What matters next* → *This week’s focus* → *How it’s going* (outcome + append-only **check-ins** + this-week list) → *This week’s training* → *Competition*.
 - **Lower-half simplification**: compact summary cards; week lists **cap at 3 rows** with overflow to **History** / **Training** where relevant.
@@ -97,25 +117,25 @@ This coach kid profile batch used a **small slice → manual QA → fix** loop (
 - **Shared delete helpers**: `deleteKidWeeklyFocusEntryById` (`coachKidStore`) and `deleteSessionById` (`sessionsStore`) back the swipe paths and keep persistence aligned with the training editor / weekly-focus log.
 - **Tab layout**: hidden routes registered for `what-matters-next` and `progress-reflection` (`app/(tabs)/_layout.tsx`).
 
-### 1) Coach Share kid tracking flow + weekly focus history (`13f09f5`)
+### 4) Coach Share kid tracking flow + weekly focus history (`13f09f5`)
 - **Kids roster** (`/profile/coaches/kids`): add a kid, list pilot roster, **swipe-to-delete** with confirmation.
 - **Kid detail** (`/profile/coaches/kid/[kidId]`): **this week** focus (latest log for Monday-week), **Set / edit this week’s focus** → `weekly-focus` (templates + custom; **append-only** logs; **edit via `entryId`** when improving an existing row), **History** → `history` (grouped by week, expandable; opens appropriate editor).
 - **How it’s going (was: progress reflections on detail)**: outcome chips + notes on kid detail append **check-ins** for the week (append-only); gated on having a focus saved for the week. Tap a row → `progress-reflection`; swipe → delete check-in.
 - **`coachKidStore`**: `KidsById` + `kidWeeklyFocusEntries` in AsyncStorage; caps (e.g. 60 focus rows/kid); weekly focus rows removed when a kid is hard-deleted (see `9fb7e3a` cascade). Roster hard-delete also removes **standing guidance** (`deleteKidPilot` order: competitions incl. media → linked training sessions → weekly focus → standing guidance → roster).
 
-### 2) Kid competition tracking + roster hard-delete (`9fb7e3a`)
-- **Competition** on kid detail: month-grouped list; **Add/edit** via `competition/edit` (tournament name, date, result, notes, optional video).
+### 5) Kid competition tracking + roster hard-delete (`9fb7e3a`)
+- **Competition** on kid detail: month-grouped list; **Add/edit** via `competition/edit` (tournament name, date, result, notes, optional video; **plus** optional structured fields `eventStatus` / `organizationOrPromoter` / `outcomeKind` as of 2026-03-21).
 - **`kidCompetitionStore`**: create/update/delete; per-kid cap (60); **best-effort delete of persisted video files** when entries are removed or a kid is deleted.
 - **`persistCameraRollMedia`**: copy picked camera-roll media into `documentDirectory/media/` (same pattern as training sessions); `bestEffortDeletePersistedMedia` for cleanup.
 - **Roster delete** (`deleteKidPilot`): ordered cleanup **competitions (incl. media) → linked training sessions (kidId) → weekly focus → standing guidance → roster** to avoid orphan `kidId`s and stray pilot data.
 
-### 3) Kid training linkage + progress reflections (`ab85fcd`)
+### 6) Kid training linkage + progress reflections (`ab85fcd`)
 - **Kid detail** (`/profile/coaches/kid/[kidId]`): **This week’s training** with CTA to log via `/training/new?date=...&kidId=...`; session rows open the training editor; **swipe** deletes via `deleteSessionById`.
 - **Training tab** (`app/(tabs)/training.tsx`): when `kidId` param is present, sessions are filtered to that kid and the “Add Session” CTA preserves `kidId`.
 - Session editor (app/(tabs)/training/[id].tsx): persists kidId on the saved session so kid linkage survives navigation.
 - **Check-ins / reflections**: this-week list on kid detail reflects saved check-ins; deep-edit on `progress-reflection`.
 
-### 4) Still in place from prior Coach Share pilot work (unchanged intent)
+### 7) Still in place from prior Coach Share pilot work (unchanged intent)
 Parent-first Coach Share hierarchy, coach pilot preview quality, **custom focus** in templates, and **reference link** support (**YouTube + Instagram**) on the template/preview path.
 
 ## What passed
@@ -132,14 +152,22 @@ Validated:
 
 ### Product / release validation
 Validated:
-- Build 12 is the current coach-testing build in TestFlight
+- Build 12 is the **last documented** coach-testing build in TestFlight (update when a new build ships)
+- **2026-03-21 batch** (family weekly Coach Share surface, competition structured fields + form polish, mock **What matters next** drafting): treat as **Dev / local** until a new TestFlight is explicitly validated and noted here—not assumed for **broad** TestFlight testers
 - **Kid roster / standing guidance / weekly focus / check-ins / kid-linked training / competition + swipe row deletes:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
-- Coach Share pilot remains intentionally contained/hidden
+- Coach Share pilot remains intentionally contained/hidden for general testers
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
 - Custom focus is supported in Coach Share templates and preview
 - Reference link pill supports YouTube + Instagram links
 
 ## Commits landed most recently
+- `23a4047` — Add coach-guidance drafting flow for what matters next  
+- `6d57f00` — Simplify AI drafting instructions for coach guidance  
+- `746a1af` — Add structured competition context for AI-ready analysis  
+- `a3dfaa6` — Move competition actions back into scroll flow  
+- `ec7c8f5` — Add early exit control to family weekly story  
+- `ee6df4e` — Polish family-facing coach join flow  
+- `624a50e` — Refactor Coach Share into a warmer family-facing weekly view  
 - `89f0813` — Add shared delete helpers for coach kid row actions  
 - `084b355` — Standardize coach kid row deletion with swipe actions  
 - `4532ca7` — Refactor coach kid top stack into guidance-first hierarchy  
@@ -154,14 +182,16 @@ Validated:
 
 ## Locked product / workflow decisions
 - Terminal-first execution remains a hard project rule
-- Build 12 is the current coach-testing build in TestFlight (beta reality)
+- Build 12 is the **last documented** coach-testing build in TestFlight until handoff is updated after a new upload (beta reality)
 - Feedback triage is intentionally tabled short-term
 - Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
 - **Coach Share pilot + per-kid tracking** is the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
 - Kid roster / weekly focus / competition + kid-linked training session data is **local-only (AsyncStorage + on-device media copies)** for the pilot; not synced
+- **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
-- Kyle internal testing: run the **full kid pilot path** including **What matters next**, **edit this week’s focus** (existing row), **History** editor routing, **check-ins** (save + **swipe delete**), **log training** + **swipe delete session**, **competition** (optional video + **swipe delete**), and **roster delete** — confirm UX + cascade cleanup (incl. standing guidance + kid-linked sessions).
+- Kyle internal testing: run the **full kid pilot path** including **What matters next** (**Help me phrase** → review → **apply or discard**; confirm drafts do not save until apply), **edit this week’s focus** (existing row), **History** editor routing, **check-ins** (save + **swipe delete**), **log training** + **swipe delete session**, **competition** (new optional fields + notes scroll + save/delete in scroll + optional video + **swipe delete**), and **roster delete** — confirm UX + cascade cleanup (incl. standing guidance + kid-linked sessions).
+- **Family Coach Share path (device QA):** Profile → **This week with your coach** → weekly surface (**This week together**), **join** flow, **weekly story** (**Read together** steps + **early exit**).
 - **Deferred / unchanged intent:** broader Coach Share template/parent preview polish, collapsible long check-in lists, extra taxonomy items, and resuming **external** feedback triage — still tabled until this lane is stable.
 - Validate **video pick → persist → playback** across devices/OS versions (MediaLibrary resolution for `ph://` / `assets-library://` when needed)
 - Validate **caps** behavior (60 weekly focus rows/kid, 60 competitions/kid) under heavy use
@@ -170,15 +200,17 @@ Validated:
 ## Best next-session recommendation
 Next likely moves:
 - Re-run gates (`npx tsc --noEmit`, `npx eslint .`) before further app changes or a TestFlight cut
-- Dev QA: **Kids (Pilot)** → create kid → **What matters next** (add/edit/clear via empty save) → **Set / edit this week’s focus** → **History** (open row → correct editor) → **How it’s going** (save check-in, **swipe delete** check-in) → **Log session** + **swipe delete** from kid detail → **Competition** (add, edit via row tap, **swipe delete**) → **swipe delete kid** on roster and confirm cascade (incl. standing guidance + media)
-- Keep Coach Share **pilot-hidden**; treat issues as pilot-blocking only if they break Kyle’s internal test
+- **Push** when ready if local `dev` is ahead of `origin/dev`; re-verify remote after push
+- Dev QA: **Kids (Pilot)** → create kid → **What matters next** (add/edit/clear via empty save; **drafting** modal apply/discard) → **Set / edit this week’s focus** → **History** (open row → correct editor) → **How it’s going** (save check-in, **swipe delete** check-in) → **Log session** + **swipe delete** from kid detail → **Competition** (structured fields, notes scroll, save helper, add/edit via row tap, **swipe delete**) → **swipe delete kid** on roster and confirm cascade (incl. standing guidance + media)
+- **Family lane QA:** weekly story + join + Profile entry copy (see Open loops)
+- Keep Coach Share **pilot-hidden** for broad testers; treat issues as pilot-blocking only if they break Kyle’s internal test
 - Resume external feedback triage only when we’re ready to act on it
 
 ## Suggested restart commands for next session
 - `git status -sb`
 - `git log -5 --oneline`
 - `sed -n '1,260p' "docs/dev-handoff.md"`
-- `sed -n '1,200p' "docs/recaps/2026-03-20_dev-recap.md"`
+- `sed -n '1,200p' "docs/recaps/2026-03-21_dev-recap.md"`
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.

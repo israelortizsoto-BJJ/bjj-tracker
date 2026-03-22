@@ -48,6 +48,11 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - src/storage/sessionsStore.ts
 - src/types/coachKid.ts
 
+## AI drafting — Slice 1 (mock / on-device, `what-matters-next`)
+- src/ai-coach/whatMattersNextDraftTypes.ts
+- src/ai-coach/loadWhatMattersNextDraftPayload.ts
+- src/ai-coach/whatMattersNextDraftGenerator.ts
+
 ## Runtime / flags / storage
 - src/config/runtime.ts
 - src/config/flags.ts
