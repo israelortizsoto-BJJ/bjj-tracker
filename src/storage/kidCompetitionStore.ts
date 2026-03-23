@@ -5,6 +5,7 @@ import { StorageKeys } from "./storageKeys";
 import type {
   KidCompetitionEntry,
   KidCompetitionEventStatus,
+  KidCompetitionFormat,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
   KidId,
@@ -40,6 +41,15 @@ const OUTCOME_KIND_SET = new Set<KidCompetitionOutcomeKind>([
   "unknown",
 ]);
 
+const FORMAT_SET = new Set<KidCompetitionFormat>(["gi", "nogi", "both"]);
+
+function normalizeFormat(raw: unknown): KidCompetitionFormat | undefined {
+  if (typeof raw !== "string") return undefined;
+  return FORMAT_SET.has(raw as KidCompetitionFormat)
+    ? (raw as KidCompetitionFormat)
+    : undefined;
+}
+
 function normalizeEventStatus(
   raw: unknown,
 ): KidCompetitionEventStatus | undefined {
@@ -71,6 +81,7 @@ function normalizeKidCompetitionEntry(
   return {
     ...raw,
     eventStatus: normalizeEventStatus(raw.eventStatus),
+    format: normalizeFormat(raw.format),
     organizationOrPromoter: normalizeOrganizationOrPromoter(
       raw.organizationOrPromoter,
     ),
@@ -147,8 +158,9 @@ export type KidCompetitionCreateInput = {
   kidId: KidId;
   tournamentName: string;
   eventDate: string;
-  result: KidCompetitionResult;
+  result?: KidCompetitionResult;
   eventStatus?: KidCompetitionEventStatus;
+  format?: KidCompetitionFormat;
   organizationOrPromoter?: string;
   outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;
@@ -172,8 +184,9 @@ export async function createKidCompetitionEntry(
     kidId: input.kidId,
     tournamentName: input.tournamentName.trim(),
     eventDate: input.eventDate,
-    result: input.result,
+    ...(input.result ? { result: input.result } : {}),
     ...(input.eventStatus ? { eventStatus: input.eventStatus } : {}),
+    ...(input.format ? { format: input.format } : {}),
     ...(org ? { organizationOrPromoter: org } : {}),
     ...(input.outcomeKind ? { outcomeKind: input.outcomeKind } : {}),
     coachNotes: input.coachNotes?.trim() ? input.coachNotes.trim() : undefined,
@@ -192,8 +205,9 @@ export async function createKidCompetitionEntry(
 export type KidCompetitionUpdateInput = Partial<{
   tournamentName: string;
   eventDate: string;
-  result: KidCompetitionResult;
+  result: KidCompetitionResult | undefined;
   eventStatus: KidCompetitionEventStatus | undefined;
+  format: KidCompetitionFormat | undefined;
   organizationOrPromoter: string | undefined;
   outcomeKind: KidCompetitionOutcomeKind | undefined;
   coachNotes: string | undefined;
@@ -236,6 +250,11 @@ export async function updateKidCompetitionEntry(
     nextEventStatus = patch.eventStatus;
   }
 
+  let nextFormat = existing.format;
+  if (Object.prototype.hasOwnProperty.call(patch, "format")) {
+    nextFormat = patch.format;
+  }
+
   let nextOrganizationOrPromoter = existing.organizationOrPromoter;
   if (Object.prototype.hasOwnProperty.call(patch, "organizationOrPromoter")) {
     nextOrganizationOrPromoter = patch.organizationOrPromoter?.trim()
@@ -257,9 +276,11 @@ export async function updateKidCompetitionEntry(
         : existing.tournamentName,
     eventDate:
       typeof patch.eventDate !== "undefined" ? patch.eventDate : existing.eventDate,
-    result:
-      typeof patch.result !== "undefined" ? patch.result : existing.result,
+    result: Object.prototype.hasOwnProperty.call(patch, "result")
+      ? patch.result
+      : existing.result,
     eventStatus: nextEventStatus,
+    format: nextFormat,
     organizationOrPromoter: nextOrganizationOrPromoter,
     outcomeKind: nextOutcomeKind,
     coachNotes: nextCoachNotes,

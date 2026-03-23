@@ -35,7 +35,7 @@ export type WhatMattersNextDraftCheckIn = {
 export type WhatMattersNextDraftCompetition = {
   eventDate: string;
   tournamentName: string;
-  result: KidCompetitionResult;
+  result?: KidCompetitionResult;
   eventStatus?: KidCompetitionEventStatus;
   organizationOrPromoter?: string;
   outcomeKind?: KidCompetitionOutcomeKind;

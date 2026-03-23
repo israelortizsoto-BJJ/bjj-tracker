@@ -51,7 +51,7 @@ function competitionToPayload(row: KidCompetitionEntry): WhatMattersNextDraftCom
   return {
     eventDate: row.eventDate,
     tournamentName: row.tournamentName,
-    result: row.result,
+    ...(typeof row.result !== "undefined" ? { result: row.result } : {}),
     ...(row.eventStatus ? { eventStatus: row.eventStatus } : {}),
     ...(row.organizationOrPromoter
       ? { organizationOrPromoter: row.organizationOrPromoter }

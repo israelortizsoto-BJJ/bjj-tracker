@@ -21,6 +21,7 @@ import {
 import { todayYMD } from "../../../../../../../src/storage/coachKidStore";
 import type {
   KidCompetitionEventStatus,
+  KidCompetitionFormat,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
 } from "../../../../../../../src/types/coachKid";
@@ -60,6 +61,8 @@ const OUTCOME_KINDS: KidCompetitionOutcomeKind[] = [
   "other",
   "unknown",
 ];
+
+const FORMATS: KidCompetitionFormat[] = ["gi", "nogi", "both"];
 
 function resultLabel(r: KidCompetitionResult): string {
   switch (r) {
@@ -110,6 +113,17 @@ function outcomeKindLabel(k: KidCompetitionOutcomeKind): string {
   }
 }
 
+function formatChipLabel(f: KidCompetitionFormat): string {
+  switch (f) {
+    case "gi":
+      return "Gi";
+    case "nogi":
+      return "No-Gi";
+    case "both":
+      return "Both";
+  }
+}
+
 function isValidYMD(s: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(s.trim())) return false;
   const t = new Date(`${s.trim()}T12:00:00`);
@@ -133,6 +147,9 @@ export default function KidCompetitionEditScreen() {
   const [outcomeKindDraft, setOutcomeKindDraft] = useState<
     KidCompetitionOutcomeKind | undefined
   >(undefined);
+  const [formatDraft, setFormatDraft] = useState<KidCompetitionFormat | undefined>(
+    undefined,
+  );
   const [notesDraft, setNotesDraft] = useState("");
   const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
   const [videoAssetId, setVideoAssetId] = useState<string | undefined>(undefined);
@@ -162,9 +179,10 @@ export default function KidCompetitionEditScreen() {
       }
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
-      setResultDraft(found.result);
+      setResultDraft(found.result ?? "participated");
       setEventStatusDraft(found.eventStatus);
       setPromoterDraft(found.organizationOrPromoter ?? "");
+      setFormatDraft(found.format);
       setOutcomeKindDraft(found.outcomeKind);
       setNotesDraft(found.coachNotes ?? "");
       setVideoUri(found.videoUri);
@@ -189,6 +207,7 @@ export default function KidCompetitionEditScreen() {
         setResultDraft("participated");
         setEventStatusDraft(undefined);
         setPromoterDraft("");
+        setFormatDraft(undefined);
         setOutcomeKindDraft(undefined);
         setNotesDraft("");
         setVideoUri(undefined);
@@ -266,6 +285,7 @@ export default function KidCompetitionEditScreen() {
           organizationOrPromoter: promoterDraft.trim()
             ? promoterDraft.trim()
             : undefined,
+          format: formatDraft,
           outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
           videoUri,
@@ -280,6 +300,7 @@ export default function KidCompetitionEditScreen() {
           organizationOrPromoter: promoterDraft.trim()
             ? promoterDraft.trim()
             : undefined,
+          format: formatDraft,
           outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
           videoUri,
@@ -415,6 +436,53 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textPrimary,
               }}
             />
+
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                letterSpacing: 0.6,
+                fontWeight: "700",
+                color: UI.textSecondary,
+              }}
+            >
+              FORMAT (OPTIONAL)
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+              Tap again to clear.
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+              {FORMATS.map((f) => {
+                const active = formatDraft === f;
+                return (
+                  <Pressable
+                    key={f}
+                    onPress={() =>
+                      setFormatDraft((prev) => (prev === f ? undefined : f))
+                    }
+                    style={({ pressed }) => ({
+                      paddingVertical: 10,
+                      paddingHorizontal: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: active ? UI.accent : UI.border,
+                      backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                      opacity: pressed ? 0.9 : 1,
+                    })}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        fontWeight: active ? "800" : "600",
+                        color: UI.textPrimary,
+                      }}
+                    >
+                      {formatChipLabel(f)}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             <Text
               style={{

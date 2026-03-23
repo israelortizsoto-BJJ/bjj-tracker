@@ -1,5 +1,5 @@
 import { Stack, router, useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Linking,
@@ -11,6 +11,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import {
+  Swipeable,
+  TouchableOpacity as GestureTouchableOpacity,
+} from "react-native-gesture-handler";
 
 import {
   getAssignmentsById,
@@ -33,6 +37,24 @@ import type {
   PackEnrollment,
   ProgramPackMap,
 } from "../../../../src/types/coachShare";
+import {
+  familyCompetitionChipForEntry,
+  familyCompetitionPromoterFormatLine,
+  familyCompetitionResultLabel,
+  formatFamilyCompetitionDate,
+  formatFamilyCompetitionMonthHeading,
+  groupFamilyCompetitionEntriesByMonth,
+  kidDisplayNameForId,
+  partitionFamilyCompetitionEntries,
+  pickFamilyCompetitionKidId,
+  shouldShowFamilyCompetitionResult,
+} from "../../../../src/family/coachShareCompetitionBuckets";
+import { getKidsById, todayYMD } from "../../../../src/storage/coachKidStore";
+import {
+  deleteKidCompetitionEntry,
+  getKidCompetitionEntriesForKid,
+} from "../../../../src/storage/kidCompetitionStore";
+import type { KidCompetitionEntry } from "../../../../src/types/coachKid";
 
 // Build 7 light visual system (matches training + profile)
 const UI = {
@@ -45,6 +67,9 @@ const UI = {
   textSecondary: "#4b5563",
   primaryFill: "#1d4ed8",
   primaryFillPressed: "#1e40af",
+  deleteBg: "#dc2626",
+  deleteText: "#ffffff",
+  rowMutedBg: "#f9fafb",
 };
 const CARD_RADIUS = 16;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
@@ -77,6 +102,24 @@ function Section({
 
 const WEEKLY_STORY_STEP_COUNT = 5;
 
+type FamilyCompetitionLoadState = {
+  todayYMD: string;
+  kidId: string | null;
+  kidName: string | null;
+  multiKidOnRoster: boolean;
+  upcoming: KidCompetitionEntry[];
+  recent: KidCompetitionEntry[];
+};
+
+const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
+  todayYMD: "",
+  kidId: null,
+  kidName: null,
+  multiKidOnRoster: false,
+  upcoming: [],
+  recent: [],
+};
+
 export default function CoachesScreen() {
   const insets = useSafeAreaInsets();
   const [ready, setReady] = useState(false);
@@ -92,6 +135,11 @@ export default function CoachesScreen() {
     CompletionReceipt[]
   >([]);
   const [pilotPreviewItems, setPilotPreviewItemsState] = useState<CoachPilotPreviewItem[]>([]);
+  const [familyCompetition, setFamilyCompetition] = useState<FamilyCompetitionLoadState>(
+    INITIAL_FAMILY_COMPETITION,
+  );
+  /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
+  const applyFamilyCompGenRef = useRef(0);
 
   const loadCoachShareData = useCallback(async () => {
     setReady(false);
@@ -104,6 +152,7 @@ export default function CoachesScreen() {
       loadedAssignmentsById,
       loadedCompletionReceiptsQueue,
       loadedPilotPreviewItems,
+      loadedKidsById,
     ] = await Promise.all([
       getCoachLinks(),
       getCoachesById(),
@@ -112,7 +161,34 @@ export default function CoachesScreen() {
       getAssignmentsById(),
       getCompletionReceiptsQueue(),
       getCoachPilotPreviewItems(),
+      getKidsById(),
     ]);
+
+    const today = todayYMD();
+    const rosterKidId = pickFamilyCompetitionKidId(loadedKidsById);
+    let nextFamily: FamilyCompetitionLoadState = {
+      todayYMD: today,
+      kidId: rosterKidId,
+      kidName: rosterKidId ? kidDisplayNameForId(loadedKidsById, rosterKidId) : null,
+      multiKidOnRoster: Object.keys(loadedKidsById).length > 1,
+      upcoming: [],
+      recent: [],
+    };
+    const compApplyGen = ++applyFamilyCompGenRef.current;
+    if (rosterKidId) {
+      const compEntries = await getKidCompetitionEntriesForKid(rosterKidId);
+      const part = partitionFamilyCompetitionEntries(compEntries, today);
+      nextFamily = {
+        ...nextFamily,
+        upcoming: part.upcoming,
+        recent: part.recent,
+      };
+    }
+
+    setFamilyCompetition((prev) => {
+      if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
+      return nextFamily;
+    });
 
     setCoachLinks(loadedCoachLinks);
     setCoachesById(loadedCoachesById);
@@ -129,6 +205,69 @@ export default function CoachesScreen() {
       void loadCoachShareData();
     }, [loadCoachShareData]),
   );
+
+  const familyUpcomingMonthGroups = useMemo(
+    () =>
+      groupFamilyCompetitionEntriesByMonth(familyCompetition.upcoming, {
+        monthOrder: "asc",
+        entryOrder: "asc",
+      }),
+    [familyCompetition.upcoming],
+  );
+  const familyRecentMonthGroups = useMemo(
+    () =>
+      groupFamilyCompetitionEntriesByMonth(familyCompetition.recent, {
+        monthOrder: "desc",
+        entryOrder: "desc",
+      }),
+    [familyCompetition.recent],
+  );
+
+  const [familyUpcomingMonthsExpanded, setFamilyUpcomingMonthsExpanded] = useState(
+    () => new Set<string>(),
+  );
+  const [familyRecentMonthsExpanded, setFamilyRecentMonthsExpanded] = useState(
+    () => new Set<string>(),
+  );
+
+  useEffect(() => {
+    if (!familyUpcomingMonthGroups.length) return;
+    setFamilyUpcomingMonthsExpanded((prev) => {
+      if (prev.size > 0) return prev;
+      const cur = familyCompetition.todayYMD.slice(0, 7);
+      const hasCur = familyUpcomingMonthGroups.some((g) => g.monthKey === cur);
+      return new Set([hasCur ? cur : familyUpcomingMonthGroups[0]!.monthKey]);
+    });
+  }, [familyUpcomingMonthGroups, familyCompetition.todayYMD]);
+
+  useEffect(() => {
+    if (!familyRecentMonthGroups.length) return;
+    setFamilyRecentMonthsExpanded((prev) => {
+      if (prev.size > 0) return prev;
+      const cur = familyCompetition.todayYMD.slice(0, 7);
+      const hasCur = familyRecentMonthGroups.some((g) => g.monthKey === cur);
+      return new Set([hasCur ? cur : familyRecentMonthGroups[0]!.monthKey]);
+    });
+  }, [familyRecentMonthGroups, familyCompetition.todayYMD]);
+
+  const toggleFamilyUpcomingMonth = useCallback((monthKey: string) => {
+    setFamilyUpcomingMonthsExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(monthKey)) next.delete(monthKey);
+      else next.add(monthKey);
+      return next;
+    });
+  }, []);
+
+  const toggleFamilyRecentMonth = useCallback((monthKey: string) => {
+    setFamilyRecentMonthsExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(monthKey)) next.delete(monthKey);
+      else next.add(monthKey);
+      return next;
+    });
+  }, []);
+
   const allCoaches = Object.values(coachesById);
   const allPacks = Object.values(packsById);
   const allAssignments = Object.values(assignmentsById);
@@ -351,6 +490,70 @@ export default function CoachesScreen() {
           : null;
 
   const showCoachPilotUi = __DEV__ && showDebugData;
+
+  const familyCompetitionGlobalEmpty =
+    familyCompetition.upcoming.length === 0 &&
+    familyCompetition.recent.length === 0;
+
+  const onConfirmDeleteFamilyCompetitionEntry = useCallback(
+    async (entryId: string) => {
+      const ok = await deleteKidCompetitionEntry(entryId);
+      if (ok) {
+        applyFamilyCompGenRef.current += 1;
+        setFamilyCompetition((prev) => ({
+          ...prev,
+          upcoming: prev.upcoming.filter((e) => e.id !== entryId),
+          recent: prev.recent.filter((e) => e.id !== entryId),
+        }));
+      }
+    },
+    [],
+  );
+
+  const requestDeleteFamilyCompetitionEntry = useCallback(
+    (entry: KidCompetitionEntry) => {
+      const label = entry.tournamentName.trim() || "this competition";
+      Alert.alert(
+        "Delete this competition?",
+        `This removes “${label}” from your calendar on this phone. If your coach added notes or a video to this entry, those will be deleted too. This cannot be undone.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => void onConfirmDeleteFamilyCompetitionEntry(entry.id),
+          },
+        ],
+      );
+    },
+    [onConfirmDeleteFamilyCompetitionEntry],
+  );
+
+  const familyCompetitionSwipeDeleteAction = (entry: KidCompetitionEntry) => (
+    <Pressable
+      onPress={() => requestDeleteFamilyCompetitionEntry(entry)}
+      accessibilityLabel="Delete competition entry"
+      accessibilityRole="button"
+      style={({ pressed }) => ({
+        justifyContent: "center",
+        backgroundColor: pressed ? "#b91c1c" : UI.deleteBg,
+        borderRadius: 12,
+        marginLeft: 8,
+        paddingHorizontal: 22,
+        minWidth: 88,
+      })}
+    >
+      <Text
+        style={{
+          color: UI.deleteText,
+          fontWeight: "800",
+          fontSize: 15,
+        }}
+      >
+        Delete
+      </Text>
+    </Pressable>
+  );
 
   const weeklyStoryConnectionLabel = isLinked
     ? "Linked to your coach"
@@ -898,6 +1101,444 @@ export default function CoachesScreen() {
                 </View>
               ) : null}
             </View>
+
+            <Section title="Competition">
+                {familyCompetition.kidName ? (
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: UI.textSecondary,
+                      marginBottom: familyCompetition.multiKidOnRoster ? 4 : 10,
+                      lineHeight: 19,
+                    }}
+                  >
+                    For {familyCompetition.kidName}
+                  </Text>
+                ) : null}
+                {familyCompetition.multiKidOnRoster ? (
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      color: "#92400e",
+                      marginBottom: 10,
+                      lineHeight: 18,
+                    }}
+                  >
+                    This phone lists more than one athlete; competitions show for the first one
+                    added on this device.
+                  </Text>
+                ) : null}
+
+                {!familyCompetition.kidId ? (
+                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
+                    Add an athlete on this device (coach pilot roster) to track competitions here.
+                  </Text>
+                ) : null}
+
+                {familyCompetition.kidId ? (
+                  <Pressable
+                    onPress={() =>
+                      router.push(
+                        `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(familyCompetition.kidId!)}&openNonce=${Date.now()}`,
+                      )
+                    }
+                    style={({ pressed }) => ({
+                      marginBottom: familyCompetitionGlobalEmpty ? 12 : 14,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: CARD_RADIUS,
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                      backgroundColor: pressed ? UI.bgCardActive : UI.screenBg,
+                      alignSelf: "stretch",
+                    })}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: UI.primaryFill }}>
+                      Add competition
+                    </Text>
+                    <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
+                      Tournament name, date, and basics — saved on this phone.
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                {familyCompetitionGlobalEmpty && familyCompetition.kidId ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        color: UI.textPrimary,
+                        lineHeight: 22,
+                        fontWeight: "600",
+                      }}
+                    >
+                      No competitions on the calendar yet
+                    </Text>
+                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 8 }}>
+                      Add one for your family, or your coach may add details from their side.
+                    </Text>
+                  </>
+                ) : null}
+
+                {!familyCompetitionGlobalEmpty ? (
+                  <>
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        letterSpacing: 0.9,
+                        color: UI.textSecondary,
+                        fontWeight: "700",
+                        marginBottom: 8,
+                      }}
+                    >
+                      Coming up
+                    </Text>
+                    {familyCompetition.upcoming.length === 0 ? (
+                      <Text
+                        style={{
+                          fontSize: 14,
+                          color: UI.textSecondary,
+                          lineHeight: 21,
+                          marginBottom: 16,
+                        }}
+                      >
+                        None right now
+                      </Text>
+                    ) : (
+                      <View style={{ marginBottom: 16, gap: 6 }}>
+                        {familyUpcomingMonthGroups.map(({ monthKey, entries }) => {
+                          const expanded = familyUpcomingMonthsExpanded.has(monthKey);
+                          const chevron = expanded ? "▼" : "▶";
+                          return (
+                            <View
+                              key={monthKey}
+                              style={{
+                                borderRadius: 10,
+                                borderWidth: 1,
+                                borderColor: UI.border,
+                                overflow: "hidden",
+                              }}
+                            >
+                              <Pressable
+                                onPress={() => toggleFamilyUpcomingMonth(monthKey)}
+                                style={({ pressed }) => ({
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 10,
+                                  backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                                })}
+                              >
+                                <Text style={{ fontSize: 13, color: UI.textSecondary, width: 20 }}>
+                                  {chevron}
+                                </Text>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                                    {formatFamilyCompetitionMonthHeading(monthKey)}
+                                  </Text>
+                                  <Text style={{ marginTop: 1, fontSize: 11, color: UI.textSecondary }}>
+                                    {entries.length} {entries.length === 1 ? "event" : "events"}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                              {expanded ? (
+                                <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 0 }}>
+                                  {entries.map((entry, idx) => {
+                                    const chip = familyCompetitionChipForEntry(
+                                      entry,
+                                      familyCompetition.todayYMD,
+                                    );
+                                    const promoterFmt = familyCompetitionPromoterFormatLine(
+                                      entry,
+                                      72,
+                                    );
+                                    const isLastInMonth = idx === entries.length - 1;
+                                    return (
+                                      <Swipeable
+                                        key={entry.id}
+                                        overshootRight={false}
+                                        enabled={Boolean(familyCompetition.kidId)}
+                                        renderRightActions={() =>
+                                          familyCompetitionSwipeDeleteAction(entry)
+                                        }
+                                      >
+                                        <GestureTouchableOpacity
+                                          disabled={!familyCompetition.kidId}
+                                          activeOpacity={familyCompetition.kidId ? 0.85 : 1}
+                                          onPress={() => {
+                                            const k = familyCompetition.kidId;
+                                            if (!k) return;
+                                            router.push(
+                                              `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
+                                            );
+                                          }}
+                                          style={{
+                                            paddingVertical: 12,
+                                            borderBottomWidth: isLastInMonth ? 0 : 1,
+                                            borderBottomColor: UI.border,
+                                          }}
+                                        >
+                                          <View
+                                            style={{
+                                              flexDirection: "row",
+                                              justifyContent: "space-between",
+                                              alignItems: "flex-start",
+                                              gap: 10,
+                                            }}
+                                          >
+                                            <View style={{ flex: 1, minWidth: 0 }}>
+                                              <Text
+                                                numberOfLines={2}
+                                                ellipsizeMode="tail"
+                                                style={{
+                                                  fontSize: 16,
+                                                  fontWeight: "700",
+                                                  color: UI.textPrimary,
+                                                  lineHeight: 22,
+                                                }}
+                                              >
+                                                {entry.tournamentName}
+                                              </Text>
+                                              <Text
+                                                style={{
+                                                  fontSize: 14,
+                                                  color: UI.textSecondary,
+                                                  marginTop: 4,
+                                                }}
+                                              >
+                                                {formatFamilyCompetitionDate(entry.eventDate)}
+                                              </Text>
+                                              {promoterFmt ? (
+                                                <Text
+                                                  numberOfLines={1}
+                                                  ellipsizeMode="tail"
+                                                  style={{
+                                                    fontSize: 13,
+                                                    color: UI.textSecondary,
+                                                    marginTop: 2,
+                                                  }}
+                                                >
+                                                  {promoterFmt}
+                                                </Text>
+                                              ) : null}
+                                            </View>
+                                            <View
+                                              style={{
+                                                paddingVertical: 5,
+                                                paddingHorizontal: 10,
+                                                borderRadius: 999,
+                                                backgroundColor: chip.backgroundColor,
+                                              }}
+                                            >
+                                              <Text
+                                                style={{
+                                                  fontSize: 11,
+                                                  fontWeight: "700",
+                                                  color: chip.textColor,
+                                                }}
+                                              >
+                                                {chip.label}
+                                              </Text>
+                                            </View>
+                                          </View>
+                                        </GestureTouchableOpacity>
+                                      </Swipeable>
+                                    );
+                                  })}
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        letterSpacing: 0.9,
+                        color: UI.textSecondary,
+                        fontWeight: "700",
+                        marginBottom: 8,
+                        marginTop: 4,
+                      }}
+                    >
+                      Recent competitions
+                    </Text>
+                    {familyCompetition.recent.length === 0 ? (
+                      <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
+                        None yet
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 6 }}>
+                        {familyRecentMonthGroups.map(({ monthKey, entries }) => {
+                          const expanded = familyRecentMonthsExpanded.has(monthKey);
+                          const chevron = expanded ? "▼" : "▶";
+                          return (
+                            <View
+                              key={monthKey}
+                              style={{
+                                borderRadius: 10,
+                                borderWidth: 1,
+                                borderColor: UI.border,
+                                overflow: "hidden",
+                              }}
+                            >
+                              <Pressable
+                                onPress={() => toggleFamilyRecentMonth(monthKey)}
+                                style={({ pressed }) => ({
+                                  flexDirection: "row",
+                                  alignItems: "center",
+                                  gap: 8,
+                                  paddingVertical: 10,
+                                  paddingHorizontal: 10,
+                                  backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                                })}
+                              >
+                                <Text style={{ fontSize: 13, color: UI.textSecondary, width: 20 }}>
+                                  {chevron}
+                                </Text>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                                    {formatFamilyCompetitionMonthHeading(monthKey)}
+                                  </Text>
+                                  <Text style={{ marginTop: 1, fontSize: 11, color: UI.textSecondary }}>
+                                    {entries.length} {entries.length === 1 ? "event" : "events"}
+                                  </Text>
+                                </View>
+                              </Pressable>
+                              {expanded ? (
+                                <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 0 }}>
+                                  {entries.map((entry, idx) => {
+                                    const chip = familyCompetitionChipForEntry(
+                                      entry,
+                                      familyCompetition.todayYMD,
+                                    );
+                                    const promoterFmt = familyCompetitionPromoterFormatLine(
+                                      entry,
+                                      72,
+                                    );
+                                    const showResult = shouldShowFamilyCompetitionResult(
+                                      entry,
+                                      "recent",
+                                      familyCompetition.todayYMD,
+                                    );
+                                    const isLastInMonth = idx === entries.length - 1;
+                                    return (
+                                      <Swipeable
+                                        key={entry.id}
+                                        overshootRight={false}
+                                        enabled={Boolean(familyCompetition.kidId)}
+                                        renderRightActions={() =>
+                                          familyCompetitionSwipeDeleteAction(entry)
+                                        }
+                                      >
+                                        <GestureTouchableOpacity
+                                          disabled={!familyCompetition.kidId}
+                                          activeOpacity={familyCompetition.kidId ? 0.85 : 1}
+                                          onPress={() => {
+                                            const k = familyCompetition.kidId;
+                                            if (!k) return;
+                                            router.push(
+                                              `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
+                                            );
+                                          }}
+                                          style={{
+                                            paddingVertical: 12,
+                                            borderBottomWidth: isLastInMonth ? 0 : 1,
+                                            borderBottomColor: UI.border,
+                                          }}
+                                        >
+                                          <View
+                                            style={{
+                                              flexDirection: "row",
+                                              justifyContent: "space-between",
+                                              alignItems: "flex-start",
+                                              gap: 10,
+                                            }}
+                                          >
+                                            <View style={{ flex: 1, minWidth: 0 }}>
+                                              <Text
+                                                numberOfLines={2}
+                                                ellipsizeMode="tail"
+                                                style={{
+                                                  fontSize: 16,
+                                                  fontWeight: "700",
+                                                  color: UI.textPrimary,
+                                                  lineHeight: 22,
+                                                }}
+                                              >
+                                                {entry.tournamentName}
+                                              </Text>
+                                              <Text
+                                                style={{
+                                                  fontSize: 14,
+                                                  color: UI.textSecondary,
+                                                  marginTop: 4,
+                                                }}
+                                              >
+                                                {formatFamilyCompetitionDate(entry.eventDate)}
+                                              </Text>
+                                              {promoterFmt ? (
+                                                <Text
+                                                  numberOfLines={1}
+                                                  ellipsizeMode="tail"
+                                                  style={{
+                                                    fontSize: 13,
+                                                    color: UI.textSecondary,
+                                                    marginTop: 2,
+                                                  }}
+                                                >
+                                                  {promoterFmt}
+                                                </Text>
+                                              ) : null}
+                                              {showResult && entry.result ? (
+                                                <Text
+                                                  style={{
+                                                    fontSize: 13,
+                                                    color: UI.textSecondary,
+                                                    marginTop: 6,
+                                                  }}
+                                                >
+                                                  Result:{" "}
+                                                  {familyCompetitionResultLabel(entry.result)}
+                                                </Text>
+                                              ) : null}
+                                            </View>
+                                            <View
+                                              style={{
+                                                paddingVertical: 5,
+                                                paddingHorizontal: 10,
+                                                borderRadius: 999,
+                                                backgroundColor: chip.backgroundColor,
+                                              }}
+                                            >
+                                              <Text
+                                                style={{
+                                                  fontSize: 11,
+                                                  fontWeight: "700",
+                                                  color: chip.textColor,
+                                                }}
+                                              >
+                                                {chip.label}
+                                              </Text>
+                                            </View>
+                                          </View>
+                                        </GestureTouchableOpacity>
+                                      </Swipeable>
+                                    );
+                                  })}
+                                </View>
+                              ) : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
+                ) : null}
+              </Section>
 
             {isLinked && hasCompletionSummary ? (
               <Section title="Nice work">

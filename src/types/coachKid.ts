@@ -77,14 +77,19 @@ export type KidCompetitionOutcomeKind =
   | "other"
   | "unknown";
 
+/** Gi / No-Gi / both; optional on stored entries. */
+export type KidCompetitionFormat = "gi" | "nogi" | "both";
+
 export type KidCompetitionEntry = {
   id: string;
   kidId: KidId;
   tournamentName: string;
   /** YYYY-MM-DD */
   eventDate: string;
-  result: KidCompetitionResult;
+  /** Omitted until the family or coach sets an outcome. */
+  result?: KidCompetitionResult;
   eventStatus?: KidCompetitionEventStatus;
+  format?: KidCompetitionFormat;
   organizationOrPromoter?: string;
   outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;

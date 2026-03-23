@@ -87,7 +87,7 @@ export function mockWhatMattersNextDraftFromPayload(
       const bits = [
         e.eventDate,
         e.tournamentName,
-        resultLabel(e.result),
+        typeof e.result !== "undefined" ? resultLabel(e.result) : "",
         e.eventStatus ? `status ${e.eventStatus}` : "",
         e.organizationOrPromoter ? e.organizationOrPromoter : "",
         e.outcomeKind ? `how ${e.outcomeKind}` : "",

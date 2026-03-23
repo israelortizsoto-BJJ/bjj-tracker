@@ -29,6 +29,7 @@ export default function TabLayout() {
             <Tabs.Screen key="profile/coaches/kid/[kidId]/history" name="profile/coaches/kid/[kidId]/history" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/kid/[kidId]/progress-reflection" name="profile/coaches/kid/[kidId]/progress-reflection" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/kid/[kidId]/competition/edit" name="profile/coaches/kid/[kidId]/competition/edit" options={HIDDEN} />,
+            <Tabs.Screen key="profile/coaches/family-competition/edit" name="profile/coaches/family-competition/edit" options={HIDDEN} />,
             <Tabs.Screen key="training/[id]" name="training/[id]" options={HIDDEN} />,
             <Tabs.Screen key="health" name="health" options={HIDDEN} />,
           ]
@@ -54,6 +55,7 @@ export default function TabLayout() {
             <Tabs.Screen key="profile/coaches/kid/[kidId]/history" name="profile/coaches/kid/[kidId]/history" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/kid/[kidId]/progress-reflection" name="profile/coaches/kid/[kidId]/progress-reflection" options={HIDDEN} />,
             <Tabs.Screen key="profile/coaches/kid/[kidId]/competition/edit" name="profile/coaches/kid/[kidId]/competition/edit" options={HIDDEN} />,
+            <Tabs.Screen key="profile/coaches/family-competition/edit" name="profile/coaches/family-competition/edit" options={HIDDEN} />,
             <Tabs.Screen key="training/[id]" name="training/[id]" options={HIDDEN} />,
             <Tabs.Screen key="health" name="health" options={HIDDEN} />,
           ]}

@@ -42,7 +42,7 @@ import type { Session } from "../../../../../src/types";
 import type {
   CoachOutcome,
   KidCompetitionEntry,
-  KidCompetitionEventStatus,
+  KidCompetitionFormat,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
   KidStandingGuidance,
@@ -161,7 +161,8 @@ function isUsableYoutubeUrl(raw?: string) {
   return looksLikeYoutube || looksLikeInstagram;
 }
 
-function competitionResultLabel(r: KidCompetitionResult): string {
+function competitionResultLabel(r: KidCompetitionResult | undefined): string {
+  if (!r) return "No result yet";
   switch (r) {
     case "gold":
       return "Gold";
@@ -175,19 +176,6 @@ function competitionResultLabel(r: KidCompetitionResult): string {
       return "DNF";
     case "other":
       return "Other";
-  }
-}
-
-function competitionEventStatusLabel(s: KidCompetitionEventStatus): string {
-  switch (s) {
-    case "upcoming":
-      return "Upcoming";
-    case "completed":
-      return "Completed";
-    case "cancelled":
-      return "Cancelled";
-    case "unknown":
-      return "Unknown";
   }
 }
 
@@ -210,11 +198,54 @@ function competitionOutcomeKindLabel(k: KidCompetitionOutcomeKind): string {
   }
 }
 
+function competitionFormatLabel(f: KidCompetitionFormat | undefined): string | null {
+  switch (f) {
+    case "gi":
+      return "Gi";
+    case "nogi":
+      return "No-Gi";
+    case "both":
+      return "Both";
+    default:
+      return null;
+  }
+}
+
+const COACH_COMP_YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function compareCoachCompYMD(a: string, b: string): number {
+  return a.localeCompare(b);
+}
+
+/**
+ * Coach list: always show a clear lifecycle label even when the family left `eventStatus` unset.
+ */
+function coachCompetitionRowStatusLabel(row: KidCompetitionEntry, todayYMD: string): string {
+  const st = row.eventStatus;
+  const dateOk = COACH_COMP_YMD_RE.test(row.eventDate);
+  const isFutureOrToday =
+    dateOk && compareCoachCompYMD(row.eventDate, todayYMD) >= 0;
+  const isPastDate = dateOk && compareCoachCompYMD(row.eventDate, todayYMD) < 0;
+
+  if (st === "cancelled") return "Cancelled";
+  if (st === "completed") return "Completed";
+  if (st === "upcoming") {
+    return isPastDate ? "Past date" : "Upcoming";
+  }
+  if (st === "unknown") {
+    return isFutureOrToday ? "Upcoming" : "Past";
+  }
+  if (!dateOk) return "Unknown";
+  if (isFutureOrToday) return "Upcoming";
+  return "Past";
+}
+
 function competitionMetaLine(row: KidCompetitionEntry): string | null {
   const parts: string[] = [];
   const org = row.organizationOrPromoter?.trim();
   if (org) parts.push(org);
-  if (row.eventStatus) parts.push(competitionEventStatusLabel(row.eventStatus));
+  const fmt = competitionFormatLabel(row.format);
+  if (fmt) parts.push(fmt);
   if (row.outcomeKind) parts.push(competitionOutcomeKindLabel(row.outcomeKind));
   return parts.length ? parts.join(" · ") : null;
 }
@@ -450,6 +481,8 @@ export default function KidDetailScreen() {
   }, [kidId]);
 
   const canEditOutcome = Boolean(currentWeekEntry);
+
+  const competitionListTodayYMD = todayYMD();
 
   const focusTitle = currentWeekEntry?.title ?? null;
 
@@ -1299,7 +1332,13 @@ export default function KidDetailScreen() {
                                 ) : null}
                               </View>
                               <Text style={{ fontSize: 11, color: UI.textSecondary }}>
-                                {row.eventDate} · {competitionResultLabel(row.result)}
+                                <Text style={{ fontWeight: "800", color: UI.textPrimary }}>
+                                  {coachCompetitionRowStatusLabel(row, competitionListTodayYMD)}
+                                </Text>
+                                {" · "}
+                                {row.eventDate}
+                                {" · "}
+                                {competitionResultLabel(row.result)}
                               </Text>
                               {competitionMeta ? (
                                 <Text
