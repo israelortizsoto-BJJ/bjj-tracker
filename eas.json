@@ -8,7 +8,8 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "dev",
-        "EXPO_NO_DOCTOR": "1"
+        "EXPO_NO_DOCTOR": "1",
+        "EXPO_PUBLIC_COACH_SYNC_BASE_URL": "https://matmind-coach-sync.ortizdigitalstudio.workers.dev"
       },
       "prebuildCommand": "npx expo prebuild"
     },
