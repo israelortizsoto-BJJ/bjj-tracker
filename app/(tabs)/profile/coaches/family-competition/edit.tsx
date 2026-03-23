@@ -1,0 +1,621 @@
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useFocusEffect } from "@react-navigation/native";
+import { Stack, router, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { todayYMD } from "../../../../../src/storage/coachKidStore";
+import {
+  createKidCompetitionEntry,
+  deleteKidCompetitionEntry,
+  getKidCompetitionEntryById,
+  updateKidCompetitionEntry,
+} from "../../../../../src/storage/kidCompetitionStore";
+import type {
+  KidCompetitionEventStatus,
+  KidCompetitionFormat,
+  KidCompetitionResult,
+} from "../../../../../src/types/coachKid";
+
+const UI = {
+  screenBg: "#f3f4f6",
+  bgCard: "#ffffff",
+  border: "#e5e7eb",
+  textPrimary: "#111827",
+  textSecondary: "#4b5563",
+  accent: "#1d4ed8",
+  danger: "#dc2626",
+};
+
+const RESULTS: KidCompetitionResult[] = [
+  "gold",
+  "silver",
+  "bronze",
+  "participated",
+  "dnf",
+  "other",
+];
+
+const EVENT_STATUSES: KidCompetitionEventStatus[] = [
+  "upcoming",
+  "completed",
+  "cancelled",
+  "unknown",
+];
+
+const FORMATS: KidCompetitionFormat[] = ["gi", "nogi", "both"];
+
+function resultLabel(r: KidCompetitionResult): string {
+  switch (r) {
+    case "gold":
+      return "Gold";
+    case "silver":
+      return "Silver";
+    case "bronze":
+      return "Bronze";
+    case "participated":
+      return "Participated";
+    case "dnf":
+      return "DNF";
+    case "other":
+      return "Other";
+  }
+}
+
+function eventStatusLabel(s: KidCompetitionEventStatus): string {
+  switch (s) {
+    case "upcoming":
+      return "Upcoming";
+    case "completed":
+      return "Completed";
+    case "cancelled":
+      return "Cancelled";
+    case "unknown":
+      return "Unknown";
+  }
+}
+
+function formatChipLabel(f: KidCompetitionFormat): string {
+  switch (f) {
+    case "gi":
+      return "Gi";
+    case "nogi":
+      return "No-Gi";
+    case "both":
+      return "Both";
+  }
+}
+
+function isValidYMD(s: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s.trim())) return false;
+  const t = new Date(`${s.trim()}T12:00:00`);
+  return !Number.isNaN(t.getTime());
+}
+
+/** Expo Router may pass a string or string[] for the same key. */
+function searchParamOne(v: string | string[] | undefined): string {
+  if (v == null) return "";
+  return Array.isArray(v) ? String(v[0] ?? "") : String(v);
+}
+
+export default function FamilyCompetitionEditScreen() {
+  const params = useLocalSearchParams<{
+    kidId?: string | string[];
+    entryId?: string | string[];
+    /** New add opens pass a fresh nonce so each visit resets without wiping drafts on tab refocus. */
+    openNonce?: string | string[];
+  }>();
+  const kidId = searchParamOne(params.kidId);
+  const entryId = searchParamOne(params.entryId);
+  const openNonce = searchParamOne(params.openNonce);
+  const isNew = !entryId;
+
+  const [loading, setLoading] = useState(!isNew);
+  const [nameDraft, setNameDraft] = useState("");
+  /** New adds start empty (placeholder hints today); avoids carrying the last saved date across tab revisits. */
+  const [dateDraft, setDateDraft] = useState("");
+  const [resultDraft, setResultDraft] = useState<KidCompetitionResult | undefined>(
+    undefined,
+  );
+  const [eventStatusDraft, setEventStatusDraft] = useState<
+    KidCompetitionEventStatus | undefined
+  >(undefined);
+  const [formatDraft, setFormatDraft] = useState<KidCompetitionFormat | undefined>(
+    undefined,
+  );
+  const [promoterDraft, setPromoterDraft] = useState("");
+  const [saving, setSaving] = useState(false);
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  /**
+   * New-entry form: reset when `openNonce` changes (each in-app "Add competition" push).
+   * Without a nonce, fall back to once-per-kid bootstrap for deep links / older URLs.
+   *
+   * This screen is a sibling tab route; it often stays mounted when returning to the coaches
+   * index, so React state persists. `useLayoutEffect` runs after params update and before
+   * paint — `useFocusEffect` alone can run while `useLocalSearchParams` still holds the prior
+   * nonce, skipping a reset and leaving date/result stuck.
+   */
+  const lastProcessedOpenNonceRef = useRef<string | null>(null);
+  const familyNewFormBootstrapKidRef = useRef<string | null>(null);
+
+  const loadExisting = useCallback(async () => {
+    if (!entryId) return;
+    setLoading(true);
+    try {
+      const found = await getKidCompetitionEntryById(entryId);
+      if (!found || found.kidId !== kidId) {
+        Alert.alert("Not found", "This competition is missing or belongs to another athlete.");
+        router.replace("/profile/coaches");
+        return;
+      }
+      setNameDraft(found.tournamentName);
+      setDateDraft(found.eventDate);
+      setResultDraft(found.result);
+      setEventStatusDraft(found.eventStatus);
+      setFormatDraft(found.format);
+      setPromoterDraft(found.organizationOrPromoter ?? "");
+    } finally {
+      setLoading(false);
+    }
+  }, [entryId, kidId]);
+
+  useEffect(() => {
+    if (!kidId) {
+      Alert.alert("Missing athlete", "Go back to This week together and try again.");
+      router.replace("/profile/coaches");
+    }
+  }, [kidId]);
+
+  useLayoutEffect(() => {
+    if (!kidId || !isNew) return;
+    const shouldResetFromNonce =
+      openNonce.length > 0 && lastProcessedOpenNonceRef.current !== openNonce;
+    const shouldResetLegacyNoNonce =
+      openNonce.length === 0 && familyNewFormBootstrapKidRef.current !== kidId;
+    if (!shouldResetFromNonce && !shouldResetLegacyNoNonce) return;
+    if (openNonce.length > 0) {
+      lastProcessedOpenNonceRef.current = openNonce;
+    } else {
+      familyNewFormBootstrapKidRef.current = kidId;
+    }
+    setNameDraft("");
+    setDateDraft("");
+    setResultDraft(undefined);
+    setEventStatusDraft(undefined);
+    setFormatDraft(undefined);
+    setPromoterDraft("");
+    setLoading(false);
+  }, [kidId, isNew, openNonce]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!kidId) return;
+      if (!isNew) {
+        lastProcessedOpenNonceRef.current = null;
+        familyNewFormBootstrapKidRef.current = null;
+        void loadExisting();
+      }
+    }, [kidId, isNew, loadExisting]),
+  );
+
+  const canSave = useMemo(() => {
+    return nameDraft.trim().length > 0 && isValidYMD(dateDraft);
+  }, [nameDraft, dateDraft]);
+
+  const saveDisabledHint = useMemo(() => {
+    if (canSave) return null;
+    const missingName = nameDraft.trim().length === 0;
+    const badDate = !isValidYMD(dateDraft);
+    if (missingName && badDate) {
+      return "Add a tournament name and a valid event date (YYYY-MM-DD) to enable Save.";
+    }
+    if (missingName) return "Add a tournament name to enable Save.";
+    return "Use a valid event date (YYYY-MM-DD) to enable Save.";
+  }, [canSave, nameDraft, dateDraft]);
+
+  async function onSave() {
+    if (!canSave || !kidId) return;
+    const name = nameDraft.trim();
+    const eventDate = dateDraft.trim();
+    if (!isValidYMD(eventDate)) {
+      Alert.alert("Invalid date", "Use YYYY-MM-DD.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (isNew) {
+        await createKidCompetitionEntry({
+          kidId,
+          tournamentName: name,
+          eventDate,
+          ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+          eventStatus: eventStatusDraft,
+          organizationOrPromoter: promoterDraft.trim()
+            ? promoterDraft.trim()
+            : undefined,
+          format: formatDraft,
+        });
+      } else {
+        await updateKidCompetitionEntry(entryId, {
+          tournamentName: name,
+          eventDate,
+          result: resultDraft,
+          eventStatus: eventStatusDraft,
+          organizationOrPromoter: promoterDraft.trim()
+            ? promoterDraft.trim()
+            : undefined,
+          format: formatDraft,
+        });
+      }
+      router.replace("/profile/coaches");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      Alert.alert("Could not save", msg || "Try again.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function onDelete() {
+    if (isNew) {
+      router.replace("/profile/coaches");
+      return;
+    }
+    Alert.alert(
+      "Delete this competition?",
+      "This removes the event from your calendar on this phone. If your coach added notes or a video to this entry, those will be deleted too. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            await deleteKidCompetitionEntry(entryId);
+            router.replace("/profile/coaches");
+          },
+        },
+      ],
+    );
+  }
+
+  return (
+    <>
+      <Stack.Screen
+        options={{ title: isNew ? "Add competition" : "Edit competition" }}
+      />
+      <View style={{ flex: 1, backgroundColor: UI.screenBg }}>
+        <KeyboardAwareScrollView
+          enableOnAndroid
+          enableAutomaticScroll
+          enableResetScrollToCoords={false}
+          keyboardOpeningTime={120}
+          viewIsInsideTabBar
+          extraHeight={headerHeight}
+          extraScrollHeight={Math.max(32, insets.bottom + 16)}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          style={{ flex: 1, backgroundColor: UI.screenBg }}
+          contentContainerStyle={{
+            padding: 20,
+            paddingBottom: Math.max(24, insets.bottom + 20),
+          }}
+        >
+          <Pressable
+            onPress={() => router.replace("/profile/coaches")}
+            style={({ pressed }) => ({
+              marginBottom: 12,
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+              alignSelf: "flex-start",
+            })}
+          >
+            <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back</Text>
+          </Pressable>
+
+          {loading ? (
+            <Text style={{ fontSize: 14, color: UI.textSecondary }}>Loading…</Text>
+          ) : (
+            <>
+              <Text
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                TOURNAMENT NAME
+              </Text>
+              <TextInput
+                value={nameDraft}
+                onChangeText={setNameDraft}
+                placeholder="e.g. Spring Open 2026"
+                placeholderTextColor={UI.textSecondary}
+                style={{
+                  marginTop: 8,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  padding: 12,
+                  color: UI.textPrimary,
+                }}
+              />
+
+              <Text
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                ORGANIZATION / PROMOTER (OPTIONAL)
+              </Text>
+              <TextInput
+                value={promoterDraft}
+                onChangeText={setPromoterDraft}
+                placeholder="e.g. IBJJF, local academy…"
+                placeholderTextColor={UI.textSecondary}
+                style={{
+                  marginTop: 8,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  padding: 12,
+                  color: UI.textPrimary,
+                }}
+              />
+
+              <Text
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                FORMAT (OPTIONAL)
+              </Text>
+              <Text
+                style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}
+              >
+                Tap again to clear.
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                {FORMATS.map((f) => {
+                  const active = formatDraft === f;
+                  return (
+                    <Pressable
+                      key={f}
+                      onPress={() =>
+                        setFormatDraft((prev) => (prev === f ? undefined : f))
+                      }
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? UI.accent : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: active ? "800" : "600",
+                          color: UI.textPrimary,
+                        }}
+                      >
+                        {formatChipLabel(f)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                EVENT DATE (YYYY-MM-DD)
+              </Text>
+              <TextInput
+                value={dateDraft}
+                onChangeText={setDateDraft}
+                placeholder={todayYMD()}
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={{
+                  marginTop: 8,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  padding: 12,
+                  color: UI.textPrimary,
+                }}
+              />
+
+              <Text
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                EVENT STATUS (OPTIONAL)
+              </Text>
+              <Text
+                style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}
+              >
+                Tap again to clear.
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                {EVENT_STATUSES.map((s) => {
+                  const active = eventStatusDraft === s;
+                  return (
+                    <Pressable
+                      key={s}
+                      onPress={() =>
+                        setEventStatusDraft((prev) => (prev === s ? undefined : s))
+                      }
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? UI.accent : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: active ? "800" : "600",
+                          color: UI.textPrimary,
+                        }}
+                      >
+                        {eventStatusLabel(s)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                RESULT (OPTIONAL)
+              </Text>
+              <Text
+                style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}
+              >
+                Tap again to clear.
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                {RESULTS.map((r) => {
+                  const active = resultDraft === r;
+                  return (
+                    <Pressable
+                      key={r}
+                      onPress={() =>
+                        setResultDraft((prev) => (prev === r ? undefined : r))
+                      }
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? UI.accent : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: active ? "800" : "600",
+                          color: UI.textPrimary,
+                        }}
+                      >
+                        {resultLabel(r)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                disabled={!canSave || saving || loading}
+                onPress={() => void onSave()}
+                style={({ pressed }) => ({
+                  marginTop: 24,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.accent,
+                  backgroundColor: pressed ? UI.accent : UI.accent,
+                  opacity: !canSave || saving || loading ? 0.5 : 1,
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ fontSize: 16, color: "#fff", fontWeight: "800" }}>
+                  {saving ? "Saving…" : "Save"}
+                </Text>
+              </Pressable>
+
+              {saveDisabledHint && !loading && !saving ? (
+                <Text
+                  style={{
+                    marginTop: 10,
+                    fontSize: 12,
+                    color: UI.textSecondary,
+                    lineHeight: 17,
+                    textAlign: "center",
+                  }}
+                >
+                  {saveDisabledHint}
+                </Text>
+              ) : null}
+
+              {!isNew ? (
+                <Pressable
+                  disabled={loading}
+                  onPress={onDelete}
+                  style={({ pressed }) => ({
+                    marginTop: 12,
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: pressed ? "#fef2f2" : UI.bgCard,
+                    alignItems: "center",
+                    opacity: loading ? 0.5 : 1,
+                  })}
+                >
+                  <Text style={{ fontSize: 16, color: UI.danger, fontWeight: "800" }}>
+                    Delete
+                  </Text>
+                </Pressable>
+              ) : null}
+            </>
+          )}
+
+          <Text style={{ marginTop: 16, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>
+            Saved on this phone. Coach-only details stay when you edit here.
+          </Text>
+        </KeyboardAwareScrollView>
+      </View>
+    </>
+  );
+}
