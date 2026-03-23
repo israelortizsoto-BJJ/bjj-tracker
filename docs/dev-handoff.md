@@ -72,27 +72,47 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-21  
-**Status:** Build 12 remains the **last documented** coach-testing build in TestFlight until a new upload is explicitly recorded here. Local `dev` may be **ahead of `origin/dev`** with unpushed work—confirm with `git status -sb` before assuming remote parity.
+**Date:** 2026-03-22  
+**Status:** Build 12 remains the **last documented** coach-testing build in TestFlight until a new upload is explicitly recorded here. Local `dev` is **ahead of `origin/dev` by 22 commits** (unpushed as of this handoff). The repo also has a **dirty working tree**: **weekly two-device sync** code (worker + app wiring) is **not yet committed** — confirm with `git status -sb` and `git diff` before assuming what another machine or remote contains.
 
-On `dev`, the **coach kid profile** stays **guidance-first**. New since yesterday: a **warmer family-facing Coach Share weekly surface** (copy + join flow + finite weekly story with **early exit**), **competition structured fields** for future analysis/drafting, **competition form** polish, and **AI Drafting Slice 1** on **What matters next**—**mock/on-device only** (no remote model, no auto-save); coach **review → apply or discard**. Same beta reality: **do not** treat these changes as live for broad TestFlight until a build ships. Coach Share + kid pilot remain **pilot-scoped** (Profile → Coach Share → Kids).
+On `dev`, the **coach kid profile** stays **guidance-first**. **Family Competition** is now a **meaningful parent-owned local lane** on the weekly Coach Share surface (add/edit/delete, format, month grouping, multi-kid chips, palette). **Coach roster** supports **household** label on create, **grouping by household**, and **household editing** on kid detail. **AI Drafting Slice 1** on **What matters next** remains **mock/on-device only**. **Two-device weekly sync** is **coded in the working tree** (invite session, coach publish, parent read, worker-backed weekly document) but is **not deployed**, **not committed**, and **not live-smoke-tested**; **competition and training data remain local-only** across devices for this milestone (sync targets the **narrow weekly message**, not full pilot replication). Same beta reality: **do not** treat any of this as broad TestFlight availability until a build ships and is called out here. Coach Share + kid pilot remain **pilot-scoped** (Profile → Coach Share → Kids).
 
 ## Git checkpoint
 
 **Working tree:**
-- check `git status -sb` (may be **ahead of `origin/dev`** until pushed)
+- **`git status -sb`:** branch **ahead of `origin/dev` by 22**; **modified** Coach Share screens, `app.config.ts`, `coachShareStore`, `storageKeys`, `tsconfig.json`, and related types; **untracked** `coach-sync-worker/` and weekly-sync `src/*` files (see `docs/project-core-files.md`).
+- Treat **family competition + household + keyboard fix** as **committed locally** (`6e10dd7` … `83588d7`). Treat **weekly sync** as **coded but only in the dirty tree** until committed and deployed.
 
-**Latest commit (at handoff write):**
-- `23a4047` — Add coach-guidance drafting flow for what matters next
+**Latest commit (last clean checkpoint for shipped-local batch):**
+- `83588d7` — Add household editing for existing coach pilot kids
 
-## Process note (2026-03-21)
-Continued **slice → device QA → fix**. Several issues were **only visible on device** (layout, scroll, visibility); detailed step-by-step QA stays high leverage. AI Drafting Slice 1 validates **UX shell and trust**, not production model quality.
+## Process note (2026-03-22)
+Continued **slice → device QA → fix**. **Family competition** and **household** work are **validated in local dev** on a tree that includes the commits above — not claimed for TestFlight. **Weekly sync** is the next **integration** step: worker + env + **two builds** before end-to-end smoke. Assume **older external tester devices** may be on a **build that does not yet include** sync changes until explicitly verified.
 
 ## Product / strategy (planning; not shipped product)
 - Michelle feedback pushed **competition/tournament structure** toward **future AI analysis**.
 - **Tier model / pricing** exploration started; **AI capabilities likely land in Pro by default**; **dashboard cost posture** under discussion.
 
 ## What we completed most recently
+
+### 2026-03-22 — Family Competition parent lane (**committed** locally: `6e10dd7` → `c1b4369`, `d5cb4af`, `353f6bd`)
+- **Parent-owned local lane** on the Coach Share weekly surface: **add / edit / delete** competition entries for the family view, **format** support, **month grouping** with **chevron** expand/collapse, **multi-kid child chips** (selection stored per device; resolves against pilot roster via `src/family/coachShareCompetitionBuckets.ts`), and a **stronger family palette** aligned with the weekly story.
+- **Screens / wiring:** `app/(tabs)/profile/coaches/family-competition/edit.tsx` (hidden route in `app/(tabs)/_layout.tsx`); list + navigation from `app/(tabs)/profile/coaches/index.tsx`; shared bucketing/helpers in `coachShareCompetitionBuckets.ts`; stores/types as in `kidCompetitionStore`, `coachKidStore`, `src/types/coachKid.ts`.
+- **Explicit scope:** this is **local AsyncStorage / on-device** behavior for the family competition lane — **not** replicated by the weekly sync milestone below.
+
+### 2026-03-22 — Household grouping + editing (**committed:** `83588d7` and related roster work)
+- **Household label on create** when adding a pilot kid; **roster grouped by household** on `kids.tsx`; **edit household** on existing **`kid/[kidId]`** detail.
+- **Explicit scope:** household metadata is **local** to the device like the rest of the pilot roster until a future sync design ships.
+
+### 2026-03-22 — Coach add-kid form keyboard (**committed:** `f7873a3`)
+- **Keyboard visibility** issue on the coach **add-kid** form addressed (layout / scroll behavior as implemented in `kids.tsx`).
+
+### 2026-03-22 — Weekly two-device sync loop (**coded in working tree only** — **not committed** at handoff; **not** live-validated)
+- **Intent:** narrow **weekly message** sync — **not** competition rows, **not** training sessions, **not** full coach pilot state.
+- **Coach path:** create/link session (tokens + writer secret), publish weekly focus-shaped payload (`src/coach/weeklyFocusPublish.ts` mapping from `KidWeeklyFocusEntry`), HTTP client `src/services/coachWeeklySyncApi.ts`, config `src/config/coachSync.ts` + `app.config.ts` `extra.coachSyncBaseUrl` / `EXPO_PUBLIC_COACH_SYNC_BASE_URL`.
+- **Parent path:** join / fetch session + weekly doc, local cache `src/storage/coachWeeklySyncCacheStore.ts`, types `src/types/coachWeeklySync.ts`; UI wiring lives in the **modified** Coach Share files (see `git diff`).
+- **Worker:** `coach-sync-worker/` — Cloudflare Worker + KV; `wrangler.toml` still shows **placeholder** KV id — **not** production-deployed from this handoff.
+- **Honest status:** **no end-to-end smoke test** yet; needs **deployed worker**, **real base URL**, **two app builds** that include this code, and awareness that **another household device** may still be on an **older build without these changes**.
 
 ### 0) Family Coach Share weekly surface + join + weekly story (`624a50e` → `ec7c8f5`)
 - **Profile** entry line: **“This week with your coach”** (`app/(tabs)/profile.tsx`).
@@ -141,8 +161,8 @@ Parent-first Coach Share hierarchy, coach pilot preview quality, **custom focus*
 ## What passed
 
 ### Gates
-- `npx tsc --noEmit` passed (current `dev` HEAD)
-- `npx eslint .` passed (current `dev` HEAD)
+- `npx tsc --noEmit` and `npx eslint .` passed at **`83588d7`** for the **committed** batch (per prior session discipline).
+- The **uncommitted weekly-sync working tree** has **not** been asserted as gated in this handoff — **re-run both** after committing or before any push/release cut.
 
 ### Production config validation
 Validated:
@@ -154,6 +174,8 @@ Validated:
 Validated:
 - Build 12 is the **last documented** coach-testing build in TestFlight (update when a new build ships)
 - **2026-03-21 batch** (family weekly Coach Share surface, competition structured fields + form polish, mock **What matters next** drafting): treat as **Dev / local** until a new TestFlight is explicitly validated and noted here—not assumed for **broad** TestFlight testers
+- **2026-03-22 batch** (**Family Competition** lane, **household** roster/editing, **keyboard** fix, palette): **working in local dev** on commits through **`83588d7`** — **not** claimed for TestFlight or broad testers
+- **Weekly two-device sync:** **not** validated end-to-end; **do not** conflate with “data syncs across devices” for competition/training — only the **narrow weekly document path** is in scope for this experiment
 - **Kid roster / standing guidance / weekly focus / check-ins / kid-linked training / competition + swipe row deletes:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
 - Coach Share pilot remains intentionally contained/hidden for general testers
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
@@ -161,6 +183,13 @@ Validated:
 - Reference link pill supports YouTube + Instagram links
 
 ## Commits landed most recently
+- `83588d7` — Add household editing for existing coach pilot kids  
+- `f7873a3` — Fix keyboard visibility in coach kid add form  
+- `d5cb4af` — Add family competition child selection for multi-kid households  
+- `353f6bd` — Strengthen family palette for weekly story and competition  
+- `c1b4369` — Add shared family competition flow and format support  
+- `6e10dd7` — Fix family competition add form reset behavior  
+- `8510ce8` — Docs: update handoff and recap for family weekly, AI draft, and competition context  
 - `23a4047` — Add coach-guidance drafting flow for what matters next  
 - `6d57f00` — Simplify AI drafting instructions for coach guidance  
 - `746a1af` — Add structured competition context for AI-ready analysis  
@@ -186,11 +215,14 @@ Validated:
 - Feedback triage is intentionally tabled short-term
 - Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
 - **Coach Share pilot + per-kid tracking** is the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
-- Kid roster / weekly focus / competition + kid-linked training session data is **local-only (AsyncStorage + on-device media copies)** for the pilot; not synced
+- Kid roster / weekly focus / **coach kid competition** rows / kid-linked training session data remain **local-only (AsyncStorage + on-device media copies)** for the pilot. The **weekly sync experiment** (when committed and deployed) targets a **narrow weekly message document** only — **not** a full multi-device replication of competition or training.
 - **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
+- **Likely next-session blocker / risk (weekly sync):** **Worker deployment** (real KV namespace in `wrangler.toml`), **`EXPO_PUBLIC_COACH_SYNC_BASE_URL` / `extra.coachSyncBaseUrl` parity** across builds, **committing** the sync working tree, and **two-device build parity** — an **older external tester build** (e.g. spouse device) may **not include** sync UI/API code until a fresh install/build. Do **not** start “smoke test” before those align.
+- **Weekly sync E2E (after the above):** coach **create session / share link** → parent **join or fetch** → coach **publish weekly** → parent **sees updated weekly doc** — still **narrow weekly payload only**; competition/training remain local-only.
 - Kyle internal testing: run the **full kid pilot path** including **What matters next** (**Help me phrase** → review → **apply or discard**; confirm drafts do not save until apply), **edit this week’s focus** (existing row), **History** editor routing, **check-ins** (save + **swipe delete**), **log training** + **swipe delete session**, **competition** (new optional fields + notes scroll + save/delete in scroll + optional video + **swipe delete**), and **roster delete** — confirm UX + cascade cleanup (incl. standing guidance + kid-linked sessions).
+- **Family Competition + households (local dev):** exercise **child chips** with **multiple kids**, **month chevrons**, **family competition editor** add/edit/delete, **household** create + grouped roster + **kid detail household edit**.
 - **Family Coach Share path (device QA):** Profile → **This week with your coach** → weekly surface (**This week together**), **join** flow, **weekly story** (**Read together** steps + **early exit**).
 - **Deferred / unchanged intent:** broader Coach Share template/parent preview polish, collapsible long check-in lists, extra taxonomy items, and resuming **external** feedback triage — still tabled until this lane is stable.
 - Validate **video pick → persist → playback** across devices/OS versions (MediaLibrary resolution for `ph://` / `assets-library://` when needed)
@@ -199,20 +231,21 @@ Validated:
 
 ## Best next-session recommendation
 Next likely moves:
-- Re-run gates (`npx tsc --noEmit`, `npx eslint .`) before further app changes or a TestFlight cut
-- **Push** when ready if local `dev` is ahead of `origin/dev`; re-verify remote after push
-- Dev QA: **Kids (Pilot)** → create kid → **What matters next** (add/edit/clear via empty save; **drafting** modal apply/discard) → **Set / edit this week’s focus** → **History** (open row → correct editor) → **How it’s going** (save check-in, **swipe delete** check-in) → **Log session** + **swipe delete** from kid detail → **Competition** (structured fields, notes scroll, save helper, add/edit via row tap, **swipe delete**) → **swipe delete kid** on roster and confirm cascade (incl. standing guidance + media)
-- **Family lane QA:** weekly story + join + Profile entry copy (see Open loops)
-- Keep Coach Share **pilot-hidden** for broad testers; treat issues as pilot-blocking only if they break Kyle’s internal test
-- Resume external feedback triage only when we’re ready to act on it
+1. **Weekly sync prep (before any two-device smoke):** finish **worker** setup (KV id + deploy), wire **base URL** for both coach and parent builds, **gate** the full tree (`tsc`, `eslint`), **commit** sync files + screen changes, and confirm **both phones** run builds that **include** that commit — especially if one device has an **older TestFlight or ad-hoc** build.
+2. **Then** run a minimal **E2E smoke:** create session → parent consumes link → publish weekly → parent read/refresh — document pass/fail honestly.
+3. **Push** when ready: local `dev` is **22 commits** ahead of `origin/dev`; push only after the sync bundle is committed and gated unless intentionally pushing the pre-sync batch first.
+4. Dev QA (ongoing): **Kids (Pilot)** path as before; add **Family Competition** + **household** flows; **Family lane QA:** weekly story + join + Profile entry copy (see Open loops).
+5. Keep Coach Share **pilot-hidden** for broad testers; do **not** assume TestFlight testers see new work until a build is shipped and recorded.
+6. Resume external feedback triage only when we’re ready to act on it
 
 ## Suggested restart commands for next session
 - `git status -sb`
-- `git log -5 --oneline`
-- `sed -n '1,260p' "docs/dev-handoff.md"`
-- `sed -n '1,200p' "docs/recaps/2026-03-21_dev-recap.md"`
+- `git log -8 --oneline`
+- `sed -n '1,280p' "docs/dev-handoff.md"`
+- `sed -n '1,220p' "docs/recaps/2026-03-22_dev-recap.md"`
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
 - Broader external feedback triage can stay tabled until this pilot lane is stable enough for internal use.
-- Gates above reflect the **current `dev` HEAD**; re-run before pushing if the tree changes.
+- **Gates** were last asserted for the **committed** snapshot at **`83588d7`**; the **dirty** sync tree needs a fresh run before trust.
+- **Spouse / external tester device** build age is **unknown** — assume **no sync features** until a matching dev/client build is installed.

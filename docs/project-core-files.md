@@ -34,6 +34,21 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - app/(tabs)/profile/coaches/template-preview.tsx
 - app/(tabs)/profile/coaches/template-selected.tsx
 
+## Family Competition (parent-facing lane on Coach Share weekly surface)
+- app/(tabs)/profile/coaches/family-competition/edit.tsx
+- src/family/coachShareCompetitionBuckets.ts
+- (routing) app/(tabs)/_layout.tsx — hidden tab screen for `family-competition/edit`
+
+## Coach weekly sync — two-device weekly message (narrow scope; verify git status)
+These files implement an **invite/link session**, **coach publish** of a weekly focus-shaped payload, and **parent read** via a **Cloudflare Worker** + local cache. **Competition and training stay local-only**; this path does **not** sync full pilot data. As of 2026-03-22 handoff notes, this stack may still be **uncommitted** — check `git status` before assuming it is on `origin/dev`.
+- coach-sync-worker/ (Wrangler: `wrangler.toml`, `src/index.ts`, `package.json`)
+- src/config/coachSync.ts
+- src/types/coachWeeklySync.ts
+- src/services/coachWeeklySyncApi.ts
+- src/storage/coachWeeklySyncCacheStore.ts
+- src/coach/weeklyFocusPublish.ts
+- app.config.ts — `extra.coachSyncBaseUrl` / env wiring for `EXPO_PUBLIC_COACH_SYNC_BASE_URL`
+
 ## Coach kid pilot (internal, Profile → Coach Share → Kids)
 - app/(tabs)/profile/coaches/kids.tsx
 - app/(tabs)/profile/coaches/kid/[kidId].tsx
@@ -42,7 +57,7 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - app/(tabs)/profile/coaches/kid/[kidId]/history.tsx
 - app/(tabs)/profile/coaches/kid/[kidId]/progress-reflection.tsx
 - app/(tabs)/profile/coaches/kid/[kidId]/competition/edit.tsx
-- src/storage/coachKidStore.ts
+- src/storage/coachKidStore.ts (roster + **household** fields / grouping helpers as implemented)
 - src/storage/kidStandingGuidanceStore.ts
 - src/storage/kidCompetitionStore.ts
 - src/storage/sessionsStore.ts
