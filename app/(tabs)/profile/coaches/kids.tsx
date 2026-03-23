@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   deleteKidPilot,
   getKidsById,
+  normalizeKidHouseholdLabel,
   setKidsById,
 } from "../../../../src/storage/coachKidStore";
 import type { Kid, KidsById } from "../../../../src/types/coachKid";
@@ -29,12 +30,8 @@ const CARD_RADIUS = 16;
 /** Internal map key for kids with no household label (displayed as "No household"). */
 const UNGROUPED_HOUSEHOLD_KEY = "__ungrouped__";
 
-function normalizeHouseholdLabel(raw: string): string {
-  return raw.replace(/\s+/g, " ").trim();
-}
-
 function householdSectionKey(kid: Kid): string {
-  const t = normalizeHouseholdLabel(kid.householdLabel ?? "");
+  const t = normalizeKidHouseholdLabel(kid.householdLabel ?? "");
   return t ? t : UNGROUPED_HOUSEHOLD_KEY;
 }
 
@@ -141,7 +138,7 @@ export default function KidsRosterScreen() {
       const id = `kid_${Date.now()}`;
 
       const existing = await getKidsById();
-      const labelNorm = normalizeHouseholdLabel(householdLabelDraft);
+      const labelNorm = normalizeKidHouseholdLabel(householdLabelDraft);
       const created: Kid = {
         id,
         name: trimmed,

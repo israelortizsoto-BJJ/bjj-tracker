@@ -30,6 +30,7 @@ import {
   deleteKidWeeklyFocusEntryById,
   startOfWeekMondayYMD,
   todayYMD,
+  updateKidHouseholdLabel,
 } from "../../../../../src/storage/coachKidStore";
 import { deleteSessionById } from "../../../../../src/storage/sessionsStore";
 import { getKidStandingGuidance } from "../../../../../src/storage/kidStandingGuidanceStore";
@@ -317,6 +318,9 @@ export default function KidDetailScreen() {
 
   const [ready, setReady] = useState(false);
   const [kidName, setKidName] = useState<string>("—");
+  const [householdDraft, setHouseholdDraft] = useState("");
+  const [savingHousehold, setSavingHousehold] = useState(false);
+  const [householdSavedAck, setHouseholdSavedAck] = useState(false);
   const [currentWeekEntry, setCurrentWeekEntry] = useState<KidWeeklyFocusEntry | null>(null);
   const [thisWeekReflections, setThisWeekReflections] = useState<KidWeeklyFocusEntry[]>([]);
 
@@ -361,6 +365,7 @@ export default function KidDetailScreen() {
       const kids = await getKidsById();
       const kid = kids[kidId];
       setKidName(kid?.name ?? "—");
+      setHouseholdDraft(kid?.householdLabel ?? "");
 
       const entry = await getLatestKidWeeklyFocusForWeek(kidId, weekStartYMD);
       setCurrentWeekEntry(entry);
@@ -480,6 +485,10 @@ export default function KidDetailScreen() {
     }
   }, [kidId]);
 
+  useEffect(() => {
+    setHouseholdSavedAck(false);
+  }, [kidId]);
+
   const canEditOutcome = Boolean(currentWeekEntry);
 
   const competitionListTodayYMD = todayYMD();
@@ -493,6 +502,24 @@ export default function KidDetailScreen() {
   const standingSecondaryMuted =
     standingHeadline && standingDetail ? standingDetail : "";
   const standingIsActive = Boolean(standingPrimary);
+
+  const onSaveHousehold = useCallback(async () => {
+    if (!kidId) return;
+    setSavingHousehold(true);
+    setHouseholdSavedAck(false);
+    try {
+      const updated = await updateKidHouseholdLabel(kidId, householdDraft);
+      if (!updated) {
+        Alert.alert("Kid not found", "This roster entry may have been removed.");
+        router.replace("/profile/coaches/kids");
+        return;
+      }
+      setHouseholdDraft(updated.householdLabel ?? "");
+      setHouseholdSavedAck(true);
+    } finally {
+      setSavingHousehold(false);
+    }
+  }, [kidId, householdDraft]);
 
   const onSaveOutcome = useCallback(async () => {
     if (!currentWeekEntry) return;
@@ -630,6 +657,80 @@ export default function KidDetailScreen() {
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
           Kid-specific weekly focus tracking (internal pilot).
         </Text>
+
+        <View style={{ height: 12 }} />
+
+        <View
+          style={{
+            padding: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
+            gap: 8,
+          }}
+        >
+          <Text
+            style={{
+              fontSize: 11,
+              letterSpacing: 0.5,
+              fontWeight: "700",
+              color: UI.textSecondary,
+            }}
+          >
+            Roster · Household
+          </Text>
+          <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+            Used only to group kids on the pilot roster. Same kid id; does not change coaching data.
+          </Text>
+          <TextInput
+            value={householdDraft}
+            onChangeText={(t) => {
+              setHouseholdSavedAck(false);
+              setHouseholdDraft(t);
+            }}
+            placeholder="No household"
+            placeholderTextColor={UI.textSecondary}
+            autoCapitalize="words"
+            editable={ready}
+            style={{
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.rowMutedBg,
+              color: UI.textPrimary,
+            }}
+          />
+          <Pressable
+            disabled={!ready || savingHousehold}
+            onPress={() => void onSaveHousehold()}
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              paddingVertical: 10,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+              opacity: !ready || savingHousehold ? 0.55 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>
+              {savingHousehold
+                ? "Saving…"
+                : householdSavedAck
+                  ? "Saved"
+                  : "Save household"}
+            </Text>
+          </Pressable>
+          {householdSavedAck && !savingHousehold ? (
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+              Household saved
+            </Text>
+          ) : null}
+        </View>
 
         <View style={{ height: 16 }} />
 

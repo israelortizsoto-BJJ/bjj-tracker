@@ -5,6 +5,7 @@ import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { StorageKeys } from "./storageKeys";
 import type {
   CoachOutcome,
+  Kid,
   KidId,
   KidWeeklyFocusEntry,
   KidWeeklyFocusEntryCustom,
@@ -130,6 +131,46 @@ export async function getKidsById(): Promise<KidsById> {
 
 export async function setKidsById(kidsById: KidsById): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.coachKidsById, JSON.stringify(kidsById));
+}
+
+/** Collapse whitespace; trim. Used for roster grouping labels. */
+export function normalizeKidHouseholdLabel(raw: string): string {
+  return raw.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Metadata-only: set or clear `householdLabel` and bump `updatedAt`.
+ * Preserves `id`, `name`, `createdAt`. Does not touch weekly focus, training, competition, etc.
+ * Cleared / whitespace-only input omits `householdLabel` so the kid appears under "No household".
+ */
+export async function updateKidHouseholdLabel(
+  kidId: KidId,
+  householdLabelRaw: string,
+): Promise<Kid | null> {
+  const kids = await getKidsById();
+  const existing = kids[kidId];
+  if (!existing) return null;
+
+  const normalized = normalizeKidHouseholdLabel(householdLabelRaw);
+  const nowIso = new Date().toISOString();
+
+  const next: Kid = normalized
+    ? {
+        id: existing.id,
+        name: existing.name,
+        createdAt: existing.createdAt,
+        updatedAt: nowIso,
+        householdLabel: normalized,
+      }
+    : {
+        id: existing.id,
+        name: existing.name,
+        createdAt: existing.createdAt,
+        updatedAt: nowIso,
+      };
+
+  await setKidsById({ ...kids, [kidId]: next });
+  return next;
 }
 
 /** Remove all weekly focus log rows for one kid (pilot roster hard-delete). */
