@@ -1,4 +1,5 @@
 import type {
+  Kid,
   KidCompetitionEntry,
   KidCompetitionFormat,
   KidCompetitionResult,
@@ -26,6 +27,35 @@ export function pickFamilyCompetitionKidId(kidsById: KidsById): KidId | null {
     return a.id.localeCompare(b.id);
   });
   return sorted[0]!.id;
+}
+
+/** Same ordering as `pickFamilyCompetitionKidId` (first-added-first on device). */
+export function sortedKidsForFamilyCompetitionChips(kidsById: KidsById): Kid[] {
+  const kids = Object.values(kidsById);
+  if (kids.length <= 1) return kids;
+  return kids.slice().sort((a, b) => {
+    const c = a.createdAt.localeCompare(b.createdAt);
+    if (c !== 0) return c;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/**
+ * Resolves which kid the family Competition lane should use.
+ * - 0 kids → null
+ * - 1 kid → that kid (ignores stale stored id)
+ * - 2+ kids → stored id if still on roster, else deterministic `pickFamilyCompetitionKidId`
+ */
+export function resolveFamilyCompetitionKidId(
+  kidsById: KidsById,
+  storedKidId: string | null | undefined,
+): KidId | null {
+  const kids = Object.values(kidsById);
+  if (kids.length === 0) return null;
+  if (kids.length === 1) return kids[0]!.id;
+  const trimmed = storedKidId?.trim();
+  if (trimmed && kidsById[trimmed]) return trimmed;
+  return pickFamilyCompetitionKidId(kidsById);
 }
 
 export function kidDisplayNameForId(kidsById: KidsById, kidId: KidId): string | null {

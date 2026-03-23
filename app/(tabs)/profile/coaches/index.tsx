@@ -46,10 +46,17 @@ import {
   groupFamilyCompetitionEntriesByMonth,
   kidDisplayNameForId,
   partitionFamilyCompetitionEntries,
-  pickFamilyCompetitionKidId,
+  resolveFamilyCompetitionKidId,
   shouldShowFamilyCompetitionResult,
+  sortedKidsForFamilyCompetitionChips,
 } from "../../../../src/family/coachShareCompetitionBuckets";
-import { getKidsById, todayYMD } from "../../../../src/storage/coachKidStore";
+import {
+  clearFamilyCompetitionSelectedKidId,
+  getFamilyCompetitionSelectedKidId,
+  getKidsById,
+  setFamilyCompetitionSelectedKidId,
+  todayYMD,
+} from "../../../../src/storage/coachKidStore";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntriesForKid,
@@ -153,6 +160,8 @@ type FamilyCompetitionLoadState = {
   kidId: string | null;
   kidName: string | null;
   multiKidOnRoster: boolean;
+  /** Populated only when `multiKidOnRoster` (2+ kids), for horizontal chips. */
+  competitionChipRows: { id: string; label: string }[];
   upcoming: KidCompetitionEntry[];
   recent: KidCompetitionEntry[];
 };
@@ -162,6 +171,7 @@ const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
   kidId: null,
   kidName: null,
   multiKidOnRoster: false,
+  competitionChipRows: [],
   upcoming: [],
   recent: [],
 };
@@ -199,6 +209,7 @@ export default function CoachesScreen() {
       loadedCompletionReceiptsQueue,
       loadedPilotPreviewItems,
       loadedKidsById,
+      storedFamilyCompKidId,
     ] = await Promise.all([
       getCoachLinks(),
       getCoachesById(),
@@ -208,15 +219,40 @@ export default function CoachesScreen() {
       getCompletionReceiptsQueue(),
       getCoachPilotPreviewItems(),
       getKidsById(),
+      getFamilyCompetitionSelectedKidId(),
     ]);
 
     const today = todayYMD();
-    const rosterKidId = pickFamilyCompetitionKidId(loadedKidsById);
+    const rosterKidId = resolveFamilyCompetitionKidId(
+      loadedKidsById,
+      storedFamilyCompKidId,
+    );
+    if (storedFamilyCompKidId) {
+      if (!rosterKidId) {
+        await clearFamilyCompetitionSelectedKidId();
+      } else if (
+        !loadedKidsById[storedFamilyCompKidId] ||
+        storedFamilyCompKidId !== rosterKidId
+      ) {
+        await setFamilyCompetitionSelectedKidId(rosterKidId);
+      }
+    }
+
+    const rosterCount = Object.keys(loadedKidsById).length;
+    const competitionChipRows =
+      rosterCount > 1
+        ? sortedKidsForFamilyCompetitionChips(loadedKidsById).map((k) => ({
+            id: k.id,
+            label: kidDisplayNameForId(loadedKidsById, k.id) ?? "Athlete",
+          }))
+        : [];
+
     let nextFamily: FamilyCompetitionLoadState = {
       todayYMD: today,
       kidId: rosterKidId,
       kidName: rosterKidId ? kidDisplayNameForId(loadedKidsById, rosterKidId) : null,
-      multiKidOnRoster: Object.keys(loadedKidsById).length > 1,
+      multiKidOnRoster: rosterCount > 1,
+      competitionChipRows,
       upcoming: [],
       recent: [],
     };
@@ -244,6 +280,36 @@ export default function CoachesScreen() {
     setCompletionReceiptsQueue(loadedCompletionReceiptsQueue);
     setPilotPreviewItemsState(loadedPilotPreviewItems);
     setReady(true);
+  }, []);
+
+  const selectFamilyCompetitionKid = useCallback(async (nextKidId: string) => {
+    await setFamilyCompetitionSelectedKidId(nextKidId);
+    const compApplyGen = ++applyFamilyCompGenRef.current;
+    const today = todayYMD();
+    const compEntries = await getKidCompetitionEntriesForKid(nextKidId);
+    const part = partitionFamilyCompetitionEntries(compEntries, today);
+    const loadedKidsById = await getKidsById();
+    setFamilyCompetition((prev) => {
+      if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
+      if (!loadedKidsById[nextKidId]) return prev;
+      const rosterCount = Object.keys(loadedKidsById).length;
+      return {
+        ...prev,
+        todayYMD: today,
+        kidId: nextKidId,
+        kidName: kidDisplayNameForId(loadedKidsById, nextKidId),
+        multiKidOnRoster: rosterCount > 1,
+        competitionChipRows:
+          rosterCount > 1
+            ? sortedKidsForFamilyCompetitionChips(loadedKidsById).map((k) => ({
+                id: k.id,
+                label: kidDisplayNameForId(loadedKidsById, k.id) ?? "Athlete",
+              }))
+            : [],
+        upcoming: part.upcoming,
+        recent: part.recent,
+      };
+    });
   }, []);
 
   useFocusEffect(
@@ -1212,33 +1278,70 @@ export default function CoachesScreen() {
                 >
                   Tournament dates on this phone: what is coming up, then what already happened.
                 </Text>
+
+                {familyCompetition.competitionChipRows.length > 0 ? (
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 8,
+                      paddingBottom: 2,
+                      marginBottom: 10,
+                    }}
+                  >
+                    {familyCompetition.competitionChipRows.map((row) => {
+                      const selected = row.id === familyCompetition.kidId;
+                      return (
+                        <Pressable
+                          key={row.id}
+                          onPress={() => void selectFamilyCompetitionKid(row.id)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          accessibilityLabel={`Competitions for ${row.label}`}
+                          style={({ pressed }) => ({
+                            paddingVertical: 10,
+                            paddingHorizontal: 14,
+                            borderRadius: 999,
+                            borderWidth: selected ? 2 : 1,
+                            borderColor: selected ? UI.primaryFill : UI.addCompetitionBorder,
+                            backgroundColor: selected ? UI.bgCardActive : UI.addCompetitionBg,
+                            opacity: pressed ? 0.92 : 1,
+                          })}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: selected ? "800" : "600",
+                              color: selected ? UI.primaryFill : UI.textPrimary,
+                            }}
+                          >
+                            {row.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null}
+
                 <Text
                   style={{
                     fontSize: 14,
                     color: UI.textSecondary,
                     lineHeight: 21,
-                    marginBottom: familyCompetition.multiKidOnRoster ? 8 : 12,
+                    marginBottom: 12,
                   }}
                 >
-                  {familyCompetition.kidName
-                    ? `These entries follow ${familyCompetition.kidName}. Tap a row to review or edit; swipe left to remove it from this device.`
-                    : familyCompetition.kidId
-                      ? "Tap a row to review or edit; swipe left to remove it from this device."
-                      : "Add an athlete below so this calendar knows who you are planning for."}
+                  {familyCompetition.multiKidOnRoster && familyCompetition.kidId
+                    ? "Tap a row to review or edit; swipe left to remove it from this device."
+                    : familyCompetition.kidName
+                      ? `These entries follow ${familyCompetition.kidName}. Tap a row to review or edit; swipe left to remove it from this device.`
+                      : familyCompetition.kidId
+                        ? "Tap a row to review or edit; swipe left to remove it from this device."
+                        : "Add an athlete below so this calendar knows who you are planning for."}
                 </Text>
-                {familyCompetition.multiKidOnRoster ? (
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      color: "#92400e",
-                      marginBottom: 12,
-                      lineHeight: 18,
-                    }}
-                  >
-                    This phone lists more than one athlete; competitions show for the first one
-                    added on this device.
-                  </Text>
-                ) : null}
 
                 {!familyCompetition.kidId ? (
                   <>

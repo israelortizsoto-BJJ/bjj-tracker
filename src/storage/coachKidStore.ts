@@ -109,6 +109,20 @@ async function setKidWeeklyFocusEntriesRaw(
   );
 }
 
+export async function getFamilyCompetitionSelectedKidId(): Promise<KidId | null> {
+  const raw = await AsyncStorage.getItem(StorageKeys.familyCompetitionSelectedKidId);
+  const t = raw?.trim();
+  return t ? t : null;
+}
+
+export async function setFamilyCompetitionSelectedKidId(kidId: KidId): Promise<void> {
+  await AsyncStorage.setItem(StorageKeys.familyCompetitionSelectedKidId, kidId);
+}
+
+export async function clearFamilyCompetitionSelectedKidId(): Promise<void> {
+  await AsyncStorage.removeItem(StorageKeys.familyCompetitionSelectedKidId);
+}
+
 export async function getKidsById(): Promise<KidsById> {
   const raw = await AsyncStorage.getItem(StorageKeys.coachKidsById);
   return safeParseOrDefault<KidsById>(raw, {});
@@ -170,6 +184,11 @@ async function deleteKidTrainingSessionsForKid(kidId: KidId): Promise<void> {
 export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   const kids = await getKidsById();
   if (!kids[kidId]) return false;
+
+  const familyCompPick = await getFamilyCompetitionSelectedKidId();
+  if (familyCompPick === kidId) {
+    await clearFamilyCompetitionSelectedKidId();
+  }
 
   await deleteAllKidCompetitionEntriesForKid(kidId);
   await deleteKidTrainingSessionsForKid(kidId);
