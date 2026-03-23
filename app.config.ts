@@ -14,6 +14,10 @@ const showCoachShareProfileEntry =
   process.env.SHOW_COACH_SHARE_PROFILE_ENTRY === "1" ||
   process.env.EXPO_PUBLIC_SHOW_COACH_SHARE_PROFILE_ENTRY === "1";
 
+const coachSyncBaseUrl = (process.env.EXPO_PUBLIC_COACH_SYNC_BASE_URL ?? "")
+  .trim()
+  .replace(/\/+$/, "");
+
 export default (): ExpoConfig => ({
   ...base,
 
@@ -45,5 +49,6 @@ export default (): ExpoConfig => ({
     ...base.extra,
     appVariant: APP_VARIANT,
     showCoachShareProfileEntry,
+    coachSyncBaseUrl,
   },
 });

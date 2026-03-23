@@ -61,6 +61,20 @@ export async function setCoachLinks(links: CoachLink[]): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.coachLinks, JSON.stringify(links));
 }
 
+function randomSuffix(): string {
+  return `${Date.now().toString(36)}_${Math.random().toString(16).slice(2, 10)}`;
+}
+
+/** Stable id for parent-scoped Coach Share rows on this device (not an account system). */
+export async function getOrCreateLocalParentProfileId(): Promise<string> {
+  const raw = await AsyncStorage.getItem(StorageKeys.parentProfileLocalId);
+  const t = raw?.trim();
+  if (t) return t;
+  const id = `parent_local_${randomSuffix()}`;
+  await AsyncStorage.setItem(StorageKeys.parentProfileLocalId, id);
+  return id;
+}
+
 export async function getCoachesById(): Promise<CoachIdentityMap> {
   const raw = await AsyncStorage.getItem(StorageKeys.coachesById);
   return safeParseOrDefault<CoachIdentityMap>(raw, {});

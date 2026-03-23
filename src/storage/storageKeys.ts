@@ -22,4 +22,10 @@ export const StorageKeys = {
   kidStandingGuidanceByKidId: "mm:v1:kidStandingGuidanceByKidId",
   /** Family-facing Competition lane only: last explicit child choice on this device. */
   familyCompetitionSelectedKidId: "mm:v1:familyCompetitionSelectedKidId",
+
+  /** Stable pseudo-profile id for locally stored Coach Share rows (parent device). */
+  parentProfileLocalId: "mm:v1:parentProfileLocalId",
+
+  /** Last fetched weekly sync payload per link token (parent read cache). */
+  coachWeeklySyncCacheByToken: "mm:v1:coachWeeklySyncCacheByToken",
 } as const;

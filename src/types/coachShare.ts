@@ -21,6 +21,15 @@ export interface CoachIdentity {
   updatedAt: string;
 }
 
+/** Narrow two-device weekly note sync (coach writer / parent reader). */
+export type CoachLinkWeeklySync = {
+  /** API root used when this link was created or redeemed (no trailing slash). */
+  apiBaseUrl: string;
+  linkToken: string;
+  /** Present only on the coach device that created the invite; never sent to parents. */
+  writerSecret?: string;
+};
+
 export interface CoachLink {
   id: CoachLinkId;
   coachId: CoachId;
@@ -31,6 +40,8 @@ export interface CoachLink {
   createdAt: string;
   updatedAt: string;
   revokedAt?: string;
+  /** When set, weekly hero / Read together prefer remote weekly document over local assignments. */
+  weeklySync?: CoachLinkWeeklySync;
 }
 
 export interface PackModule {

@@ -2,17 +2,38 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/config/coachSync";
+import {
+  CoachWeeklySyncApiError,
+  coachSyncCreateSession,
+} from "../../../../src/services/coachWeeklySyncApi";
+import {
+  getCoachLinks,
+  getCoachesById,
+  getOrCreateLocalParentProfileId,
+  setCoachLinks,
+  setCoachesById,
+} from "../../../../src/storage/coachShareStore";
 import {
   deleteKidPilot,
   getKidsById,
   normalizeKidHouseholdLabel,
   setKidsById,
 } from "../../../../src/storage/coachKidStore";
+import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../../src/types/coachKid";
 
 const UI = {
@@ -68,14 +89,23 @@ export default function KidsRosterScreen() {
   const [kidName, setKidName] = useState("");
   const [householdLabelDraft, setHouseholdLabelDraft] = useState("");
   const [savingKid, setSavingKid] = useState(false);
+  const [writerLinks, setWriterLinks] = useState<CoachLink[]>([]);
+  const [coachNameDraft, setCoachNameDraft] = useState("");
+  const [academyDraft, setAcademyDraft] = useState("");
+  const [creatingInvite, setCreatingInvite] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
+  const syncConfigured = isCoachSyncConfigured();
 
   const loadKids = useCallback(async () => {
     setReady(false);
     try {
       const kids = await getKidsById();
       setKidsByIdState(kids);
+      const links = await getCoachLinks();
+      setWriterLinks(
+        links.filter((l) => l.status === "active" && l.weeklySync?.writerSecret),
+      );
     } finally {
       setReady(true);
     }
@@ -124,6 +154,71 @@ export default function KidsRosterScreen() {
     },
     [onConfirmDeleteKid],
   );
+
+  const onCreateFamilyInvite = useCallback(async () => {
+    const display = coachNameDraft.trim() || "Coach";
+    if (!syncConfigured) {
+      Alert.alert(
+        "Sync not configured",
+        "Set EXPO_PUBLIC_COACH_SYNC_BASE_URL to your deployed worker URL and rebuild before creating invites.",
+      );
+      return;
+    }
+    setCreatingInvite(true);
+    try {
+      const res = await coachSyncCreateSession({
+        coachDisplayName: display,
+        academyName: academyDraft.trim() ? academyDraft.trim().slice(0, 160) : undefined,
+      });
+      const nowIso = new Date().toISOString();
+      const parentProfileId = await getOrCreateLocalParentProfileId();
+      const baseUrl = getCoachSyncApiBaseUrl()!;
+
+      const coach: CoachIdentity = {
+        id: res.coachId,
+        displayName: display,
+        academyName: academyDraft.trim() ? academyDraft.trim().slice(0, 160) : undefined,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      const newLink: CoachLink = {
+        id: `link_sync_writer_${Date.now()}`,
+        coachId: res.coachId,
+        parentProfileId,
+        scope: "household",
+        status: "active",
+        canReceiveCompletionReceipts: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        weeklySync: {
+          apiBaseUrl: baseUrl,
+          linkToken: res.linkToken,
+          writerSecret: res.writerSecret,
+        },
+      };
+
+      const existingCoaches = await getCoachesById();
+      const existingLinks = await getCoachLinks();
+      await setCoachesById({ ...existingCoaches, [coach.id]: coach });
+      await setCoachLinks([...existingLinks, newLink]);
+      await loadKids();
+      Alert.alert(
+        "Invite ready",
+        "Copy the invite code below and share it with a parent device. They paste it under Connect with your coach. Keep this coach phone safe — it holds the publish key.",
+      );
+    } catch (e) {
+      const msg =
+        e instanceof CoachWeeklySyncApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Could not create invite.";
+      Alert.alert("Could not create invite", msg);
+    } finally {
+      setCreatingInvite(false);
+    }
+  }, [academyDraft, coachNameDraft, loadKids, syncConfigured]);
 
   const onAddKid = useCallback(async () => {
     const trimmed = kidName.trim();
@@ -203,6 +298,129 @@ export default function KidsRosterScreen() {
         </Text>
 
         <View style={{ height: 14 }} />
+
+        {syncConfigured ? (
+          <View
+            style={{
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: "#93c5fd",
+              backgroundColor: "#eff6ff",
+              gap: 10,
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "800", color: "#1e3a8a" }}>
+              FAMILY WEEKLY NOTE (SYNC)
+            </Text>
+            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
+              Create an invite for a parent phone. Only the weekly title and family-facing text you publish
+              from a kid’s weekly focus are shared — not check-in notes or video links.
+            </Text>
+            <TextInput
+              value={coachNameDraft}
+              onChangeText={setCoachNameDraft}
+              placeholder="Your name as families see it"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="words"
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+              }}
+            />
+            <TextInput
+              value={academyDraft}
+              onChangeText={setAcademyDraft}
+              placeholder="Academy name (optional)"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="words"
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+              }}
+            />
+            <Pressable
+              disabled={creatingInvite}
+              onPress={() => void onCreateFamilyInvite()}
+              style={({ pressed }) => ({
+                paddingVertical: 12,
+                borderRadius: 12,
+                backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: 10,
+                opacity: creatingInvite ? 0.65 : 1,
+              })}
+            >
+              {creatingInvite ? <ActivityIndicator color="#ffffff" /> : null}
+              <Text style={{ fontSize: 15, fontWeight: "800", color: "#ffffff" }}>
+                {creatingInvite ? "Creating…" : "Create family invite"}
+              </Text>
+            </Pressable>
+
+            {writerLinks.length > 0 ? (
+              <View style={{ gap: 12, marginTop: 4 }}>
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#1e3a8a" }}>Active invites</Text>
+                {writerLinks.map((l) => (
+                  <View
+                    key={l.id}
+                    style={{
+                      padding: 12,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                      backgroundColor: UI.bgCard,
+                    }}
+                  >
+                    <Text style={{ fontSize: 11, color: UI.textSecondary, marginBottom: 6 }}>
+                      Invite code (parent pastes this)
+                    </Text>
+                    <Text
+                      selectable
+                      style={{
+                        fontSize: 13,
+                        color: UI.textPrimary,
+                        fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+                      }}
+                    >
+                      {l.weeklySync!.linkToken}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View
+            style={{
+              padding: 14,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: "#fef3c7",
+              marginBottom: 14,
+            }}
+          >
+            <Text style={{ fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+              Weekly family sync URL is not set on this build. Add EXPO_PUBLIC_COACH_SYNC_BASE_URL and
+              redeploy the worker (see coach-sync-worker/) to enable invites.
+            </Text>
+          </View>
+        )}
+
+        <View style={{ height: 4 }} />
 
         {!ready ? (
           <Text style={{ fontSize: 14, color: UI.textSecondary }}>Loading kids…</Text>
@@ -356,7 +574,10 @@ export default function KidsRosterScreen() {
             </Text>
           </Pressable>
           <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-            Internal pilot (coach-side). No sharing with families yet.
+            Internal pilot (coach-side).
+            {syncConfigured
+              ? " Weekly note sharing uses the blue Family weekly note card above."
+              : " Weekly note sharing is off until the sync URL is configured."}
           </Text>
         </View>
         </KeyboardAwareScrollView>

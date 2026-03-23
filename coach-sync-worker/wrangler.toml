@@ -1,0 +1,9 @@
+name = "matmind-coach-sync"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Create a KV namespace: `npx wrangler kv namespace create SESSIONS`
+# then paste its id below.
+[[kv_namespaces]]
+binding = "SESSIONS"
+id = "f0bdf0b98ab5482e83238874cd7bb160"

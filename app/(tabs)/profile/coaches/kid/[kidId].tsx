@@ -22,6 +22,12 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Swipeable } from "react-native-gesture-handler";
 
+import { kidWeeklyFocusToPublishPayload } from "../../../../../src/coach/weeklyFocusPublish";
+import {
+  CoachWeeklySyncApiError,
+  coachSyncPublishWeekly,
+} from "../../../../../src/services/coachWeeklySyncApi";
+import { getCoachLinks } from "../../../../../src/storage/coachShareStore";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
@@ -334,6 +340,7 @@ export default function KidDetailScreen() {
   const [playableMediaUri, setPlayableMediaUri] = useState<string | null>(null);
   const [standingGuidance, setStandingGuidance] = useState<KidStandingGuidance | null>(null);
   const [progressNotesInputKey, setProgressNotesInputKey] = useState(0);
+  const [publishingWeekly, setPublishingWeekly] = useState(false);
 
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -597,6 +604,48 @@ export default function KidDetailScreen() {
     },
     [load],
   );
+
+  const onPublishWeeklyToFamilies = useCallback(async () => {
+    if (!currentWeekEntry || !weekStartYMD) {
+      Alert.alert("Set focus first", "Save this week’s focus before publishing to families.");
+      return;
+    }
+    const links = await getCoachLinks();
+    const cred = links
+      .filter((l) => l.status === "active" && l.weeklySync?.writerSecret)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+    if (!cred?.weeklySync?.writerSecret) {
+      Alert.alert(
+        "No invite on this device",
+        "Create a family invite from Kids (Pilot) on this coach phone first.",
+      );
+      return;
+    }
+    const payload = kidWeeklyFocusToPublishPayload(currentWeekEntry, weekStartYMD);
+    setPublishingWeekly(true);
+    try {
+      await coachSyncPublishWeekly(
+        cred.weeklySync.linkToken,
+        cred.weeklySync.writerSecret,
+        payload,
+        cred.weeklySync.apiBaseUrl,
+      );
+      Alert.alert(
+        "Published",
+        "Linked parent phones will see this note after they refresh This week together.",
+      );
+    } catch (e) {
+      const msg =
+        e instanceof CoachWeeklySyncApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Publish failed.";
+      Alert.alert("Could not publish", msg);
+    } finally {
+      setPublishingWeekly(false);
+    }
+  }, [currentWeekEntry, weekStartYMD]);
 
   const requestDeleteSession = useCallback(
     (sessionId: string) => {
@@ -862,6 +911,29 @@ export default function KidDetailScreen() {
           >
             <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
               {currentWeekEntry ? "Edit this week's focus" : "Set this week's focus"}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            disabled={!currentWeekEntry || publishingWeekly}
+            onPress={() => void onPublishWeeklyToFamilies()}
+            style={({ pressed }) => ({
+              marginTop: 10,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: pressed ? "#f9fafb" : UI.rowMutedBg,
+              alignSelf: "stretch",
+              opacity: !currentWeekEntry || publishingWeekly ? 0.55 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800", textAlign: "center" }}>
+              {publishingWeekly ? "Publishing…" : "Publish weekly note to family devices"}
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, textAlign: "center" }}>
+              Shares title + family text only (not check-ins or video links). Parents need your invite code.
             </Text>
           </Pressable>
 

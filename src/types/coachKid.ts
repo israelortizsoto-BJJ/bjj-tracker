@@ -35,6 +35,7 @@ export type KidWeeklyFocusEntry = {
 export type Kid = {
   id: KidId;
   name: string;
+  householdLabel?: string;
   createdAt: string;
   updatedAt: string;
 };

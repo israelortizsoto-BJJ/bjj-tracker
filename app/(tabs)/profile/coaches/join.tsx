@@ -1,9 +1,29 @@
 import { Stack, router, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import { getCoachLinks } from "../../../../src/storage/coachShareStore";
+import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/config/coachSync";
+import {
+  CoachWeeklySyncApiError,
+  coachSyncFetchSession,
+} from "../../../../src/services/coachWeeklySyncApi";
+import {
+  getCoachLinks,
+  getCoachesById,
+  getOrCreateLocalParentProfileId,
+  setCoachLinks,
+  setCoachesById,
+} from "../../../../src/storage/coachShareStore";
+import { setCachedWeeklyForLinkToken } from "../../../../src/storage/coachWeeklySyncCacheStore";
+import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -14,6 +34,7 @@ const UI = {
   textSecondary: "#4b5563",
   primaryFill: "#1d4ed8",
   primaryFillPressed: "#1e40af",
+  danger: "#b91c1c",
 };
 const CARD_RADIUS = 16;
 const SECTION_LABEL = {
@@ -23,9 +44,17 @@ const SECTION_LABEL = {
   fontWeight: "600" as const,
 };
 
+function normalizeInviteToken(raw: string): string {
+  return raw.trim().toLowerCase().replace(/\s+/g, "");
+}
+
 export default function CoachJoinScreen() {
   const [ready, setReady] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
+  const [tokenDraft, setTokenDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const syncConfigured = isCoachSyncConfigured();
 
   const refreshLinks = useCallback(async () => {
     setReady(false);
@@ -40,6 +69,81 @@ export default function CoachJoinScreen() {
       void refreshLinks();
     }, [refreshLinks]),
   );
+
+  const onConnect = useCallback(async () => {
+    setFormError(null);
+    const token = normalizeInviteToken(tokenDraft);
+    if (!token) {
+      setFormError("Paste the invite code your coach shared.");
+      return;
+    }
+    if (!syncConfigured) {
+      setFormError("This app build is not configured for coach sync yet.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      const session = await coachSyncFetchSession(token);
+      const parentProfileId = await getOrCreateLocalParentProfileId();
+      const nowIso = new Date().toISOString();
+
+      const coach: CoachIdentity = {
+        id: session.coach.id,
+        displayName: session.coach.displayName,
+        academyName: session.coach.academyName,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+
+      const existingCoaches = await getCoachesById();
+      const priorCoach = existingCoaches[coach.id];
+      if (priorCoach) {
+        coach.createdAt = priorCoach.createdAt;
+      }
+
+      const newLink: CoachLink = {
+        id: `link_sync_${Date.now()}`,
+        coachId: coach.id,
+        parentProfileId,
+        scope: "household",
+        status: "active",
+        canReceiveCompletionReceipts: false,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        weeklySync: {
+          apiBaseUrl: getCoachSyncApiBaseUrl()!,
+          linkToken: token,
+        },
+      };
+
+      const existingLinks = await getCoachLinks();
+      const withoutDup = existingLinks.filter(
+        (l) =>
+          !(
+            l.weeklySync &&
+            l.weeklySync.linkToken === token &&
+            l.status === "active"
+          ),
+      );
+
+      await setCoachesById({ ...existingCoaches, [coach.id]: coach });
+      await setCoachLinks([...withoutDup, newLink]);
+      await setCachedWeeklyForLinkToken(token, session.weekly, nowIso);
+
+      router.replace("/profile/coaches");
+    } catch (e) {
+      const msg =
+        e instanceof CoachWeeklySyncApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Could not connect.";
+      setFormError(msg);
+    } finally {
+      setBusy(false);
+    }
+  }, [syncConfigured, tokenDraft]);
 
   return (
     <>
@@ -69,8 +173,8 @@ export default function CoachJoinScreen() {
             marginBottom: 18,
           }}
         >
-          When it&apos;s ready, you&apos;ll link this phone to your academy so
-          class and practice stay in sync—no child login needed.
+          Paste the invite code from your coach. This links this phone to their weekly family note
+          — competition and practice stay on this device unless we add more sync later.
         </Text>
 
         {!ready ? (
@@ -79,6 +183,27 @@ export default function CoachJoinScreen() {
           </Text>
         ) : (
           <>
+            {!syncConfigured ? (
+              <View
+                style={{
+                  padding: 16,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: "#fef3c7",
+                  marginBottom: 16,
+                }}
+              >
+                <Text style={{ fontSize: 14, color: "#92400e", lineHeight: 21, fontWeight: "700" }}>
+                  Coach sync URL missing
+                </Text>
+                <Text style={{ marginTop: 8, fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
+                  Set EXPO_PUBLIC_COACH_SYNC_BASE_URL to your deployed worker URL, rebuild the app, then
+                  return here. Without it, linking cannot reach the shared weekly message.
+                </Text>
+              </View>
+            ) : null}
+
             <View
               style={{
                 padding: 20,
@@ -95,113 +220,107 @@ export default function CoachJoinScreen() {
                   paddingVertical: 6,
                   paddingHorizontal: 10,
                   borderRadius: 999,
-                  backgroundColor: isLinked ? "#dcfce7" : "#fef3c7",
+                  backgroundColor: isLinked ? "#dcfce7" : "#dbeafe",
                 }}
               >
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: "700",
-                    color: isLinked ? "#166534" : "#92400e",
+                    color: isLinked ? "#166534" : "#1e40af",
                   }}
                 >
-                  {isLinked
-                    ? "Already linked on this phone"
-                    : "Not available in this app version yet"}
+                  {isLinked ? "This phone has an active link" : "Invite code"}
                 </Text>
               </View>
 
               <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#78716c" }]}>
-                {isLinked ? "YOU'RE SET" : "WHAT TO EXPECT"}
+                {isLinked ? "ADD ANOTHER OR GO BACK" : "PASTE INVITE"}
               </Text>
 
               {isLinked ? (
-                <>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      color: UI.textPrimary,
-                      lineHeight: 24,
-                      fontWeight: "600",
-                    }}
-                  >
-                    This phone already has an active coach link.
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 10,
-                      fontSize: 15,
-                      color: UI.textSecondary,
-                      lineHeight: 23,
-                    }}
-                  >
-                    Your family&apos;s weekly focus and practice note live on the
-                    previous screen—tap below when you&apos;re ready to head back.
-                  </Text>
-                </>
+                <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 23 }}>
+                  You can add another academy link below, or return to This week together.
+                </Text>
               ) : (
-                <>
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      color: UI.textPrimary,
-                      lineHeight: 24,
-                      fontWeight: "600",
-                    }}
-                  >
-                    We&apos;re not turning on invites or codes in this build.
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 10,
-                      fontSize: 15,
-                      color: UI.textSecondary,
-                      lineHeight: 23,
-                    }}
-                  >
-                    Soon you&apos;ll be able to paste an invite from your coach or
-                    open a link they send you. Until then, anything you see in
-                    &quot;This week together&quot; stays on this device only.
-                  </Text>
-                </>
+                <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 23, marginBottom: 12 }}>
+                  Only the weekly title and family-facing text your coach publishes are shared — not their
+                  private check-in notes.
+                </Text>
               )}
 
+              <TextInput
+                value={tokenDraft}
+                onChangeText={(t) => {
+                  setFormError(null);
+                  setTokenDraft(t);
+                }}
+                placeholder="Invite code from your coach"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!busy && syncConfigured}
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 12,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  color: UI.textPrimary,
+                  fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+                }}
+              />
+
+              {formError ? (
+                <Text style={{ marginTop: 10, fontSize: 14, color: UI.danger, lineHeight: 20 }}>
+                  {formError}
+                </Text>
+              ) : null}
+
               <Pressable
-                onPress={() => router.push("/profile/coaches")}
+                disabled={busy || !syncConfigured}
+                onPress={() => void onConnect()}
                 style={({ pressed }) => ({
-                  marginTop: 20,
+                  marginTop: 16,
                   paddingVertical: 14,
                   paddingHorizontal: 20,
                   borderRadius: CARD_RADIUS,
                   backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
                   alignSelf: "stretch",
                   alignItems: "center",
+                  opacity: busy || !syncConfigured ? 0.55 : 1,
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  gap: 10,
                 })}
               >
+                {busy ? <ActivityIndicator color="#ffffff" /> : null}
                 <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
-                  Back to this week together
+                  {busy ? "Connecting…" : "Connect this phone"}
                 </Text>
               </Pressable>
             </View>
 
-            <View
-              style={{
+            <Pressable
+              onPress={() => router.push("/profile/coaches")}
+              style={({ pressed }) => ({
                 marginTop: 18,
-                padding: 18,
+                paddingVertical: 14,
+                paddingHorizontal: 20,
                 borderRadius: CARD_RADIUS,
                 borderWidth: 1,
                 borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-              }}
+                backgroundColor: pressed ? "#e5e7eb" : UI.bgCard,
+                alignSelf: "stretch",
+                alignItems: "center",
+              })}
             >
-              <Text style={[SECTION_LABEL, { marginBottom: 10 }]}>
-                LATER ON
+              <Text style={{ fontSize: 16, fontWeight: "700", color: UI.textPrimary }}>
+                Back to this week together
               </Text>
-              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                When connecting goes live, you&apos;ll finish linking here in a few
-                taps—still parent-led, still without handing a login to your child.
-              </Text>
-            </View>
+            </Pressable>
           </>
         )}
       </KeyboardAwareScrollView>

@@ -25,9 +25,16 @@ import {
   getPackEnrollments,
   getPacksById,
   setAssignmentsById as persistAssignmentsById,
+  setCoachesById as persistCoachesById,
   setCompletionReceiptsQueue as persistCompletionReceiptsQueue,
   setCoachPilotPreviewItems,
 } from "../../../../src/storage/coachShareStore";
+import {
+  getCachedWeeklyForLinkToken,
+  setCachedWeeklyForLinkToken,
+} from "../../../../src/storage/coachWeeklySyncCacheStore";
+import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
+import type { SyncedWeeklyMessagePayload } from "../../../../src/types/coachWeeklySync";
 import type { CoachPilotPreviewItem } from "../../../../src/storage/coachShareStore";
 import type {
   AssignmentMap,
@@ -194,6 +201,11 @@ export default function CoachesScreen() {
   const [familyCompetition, setFamilyCompetition] = useState<FamilyCompetitionLoadState>(
     INITIAL_FAMILY_COMPETITION,
   );
+  const [weeklySyncDoc, setWeeklySyncDoc] = useState<SyncedWeeklyMessagePayload | null>(null);
+  const [weeklySyncFetchFailed, setWeeklySyncFetchFailed] = useState(false);
+  const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
+  const [weeklySyncFromCache, setWeeklySyncFromCache] = useState(false);
+  const [weeklySyncNetworkOk, setWeeklySyncNetworkOk] = useState(false);
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
 
@@ -202,7 +214,7 @@ export default function CoachesScreen() {
 
     const [
       loadedCoachLinks,
-      loadedCoachesById,
+      loadedCoachesByIdInitial,
       loadedPacksById,
       loadedPackEnrollments,
       loadedAssignmentsById,
@@ -221,6 +233,65 @@ export default function CoachesScreen() {
       getKidsById(),
       getFamilyCompetitionSelectedKidId(),
     ]);
+
+    let loadedCoachesById = loadedCoachesByIdInitial;
+
+    const activeWeeklySyncLink = loadedCoachLinks.find(
+      (l) => l.status === "active" && l.weeklySync,
+    );
+    let nextWeeklyDoc: SyncedWeeklyMessagePayload | null = null;
+    let nextWeeklyFetchFailed = false;
+    let nextWeeklyFetchedAt: string | null = null;
+    let nextWeeklyFromCache = false;
+    let nextWeeklyNetworkOk = false;
+
+    if (activeWeeklySyncLink?.weeklySync) {
+      try {
+        const session = await coachSyncFetchSession(
+          activeWeeklySyncLink.weeklySync.linkToken,
+          activeWeeklySyncLink.weeklySync.apiBaseUrl,
+        );
+        nextWeeklyDoc = session.weekly;
+        nextWeeklyFetchFailed = false;
+        nextWeeklyFromCache = false;
+        nextWeeklyNetworkOk = true;
+        const nowIso = new Date().toISOString();
+        nextWeeklyFetchedAt = nowIso;
+        await setCachedWeeklyForLinkToken(
+          activeWeeklySyncLink.weeklySync.linkToken,
+          session.weekly,
+          nowIso,
+        );
+        const c = session.coach;
+        const merged: typeof loadedCoachesById = {
+          ...loadedCoachesById,
+          [c.id]: {
+            id: c.id,
+            displayName: c.displayName,
+            academyName: c.academyName,
+            createdAt: loadedCoachesById[c.id]?.createdAt ?? nowIso,
+            updatedAt: nowIso,
+          },
+        };
+        loadedCoachesById = merged;
+        await persistCoachesById(merged);
+      } catch {
+        nextWeeklyFetchFailed = true;
+        nextWeeklyNetworkOk = false;
+        const cached = await getCachedWeeklyForLinkToken(
+          activeWeeklySyncLink.weeklySync.linkToken,
+        );
+        nextWeeklyDoc = cached?.weekly ?? null;
+        nextWeeklyFetchedAt = cached?.fetchedAt ?? null;
+        nextWeeklyFromCache = true;
+      }
+    }
+
+    setWeeklySyncDoc(nextWeeklyDoc);
+    setWeeklySyncFetchFailed(nextWeeklyFetchFailed);
+    setWeeklySyncFetchedAt(nextWeeklyFetchedAt);
+    setWeeklySyncFromCache(nextWeeklyFromCache);
+    setWeeklySyncNetworkOk(nextWeeklyNetworkOk);
 
     const today = todayYMD();
     const rosterKidId = resolveFamilyCompetitionKidId(
@@ -392,6 +463,11 @@ export default function CoachesScreen() {
   const allPacks = Object.values(packsById);
   const allAssignments = Object.values(assignmentsById);
 
+  const activeCoachLinks = coachLinks.filter((link) => link.status === "active");
+  const isLinked = activeCoachLinks.length > 0;
+  const weeklySyncLink = activeCoachLinks.find((l) => l.weeklySync);
+  const useWeeklySyncHero = Boolean(weeklySyncLink);
+
   const firstCoach = allCoaches[0];
   const firstPack = allPacks[0];
 
@@ -403,7 +479,11 @@ export default function CoachesScreen() {
   const currentCoachFromAssignment = currentAssignment
     ? coachesById[currentAssignment.coachId]
     : undefined;
-  const currentCoach = currentCoachFromAssignment ?? firstCoach;
+  const weeklySyncCoach =
+    weeklySyncLink && coachesById[weeklySyncLink.coachId]
+      ? coachesById[weeklySyncLink.coachId]
+      : undefined;
+  const currentCoach = weeklySyncCoach ?? currentCoachFromAssignment ?? firstCoach;
 
   const currentPackFromAssignment = currentAssignment
     ? packsById[currentAssignment.packId]
@@ -576,8 +656,6 @@ export default function CoachesScreen() {
     }
   }, []);
 
-  const activeCoachLinks = coachLinks.filter((link) => link.status === "active");
-  const isLinked = activeCoachLinks.length > 0;
   const hasCoachPilotPreviewOnDevice = pilotPreviewItems.length > 0;
   const hasSeededOrLocalShareData =
     !isLinked &&
@@ -587,19 +665,40 @@ export default function CoachesScreen() {
   const isPreviewOnlyOnDevice =
     !isLinked && (hasCoachPilotPreviewOnDevice || hasSeededOrLocalShareData);
 
-  const focusTitle =
-    currentAssignment?.title ??
-    (isLinked
-      ? "Your coach hasn’t shared a new focus yet"
-      : "Connect to see this week’s focus");
-  const focusNotes =
-    currentAssignment?.notes ??
-    (isLinked
-      ? "When they post an update, it will show up here for your family."
-      : "Use your invite code to link this phone to your academy. What you see before then stays on this device only.");
+  const focusTitle = useWeeklySyncHero
+    ? !weeklySyncNetworkOk && !weeklySyncDoc
+      ? "Couldn’t refresh this week’s note"
+      : !weeklySyncDoc
+        ? "Your coach hasn’t published this week’s note yet"
+        : weeklySyncDoc.headline
+    : (currentAssignment?.title ??
+      (isLinked
+        ? "Your coach hasn’t shared a new focus yet"
+        : "Connect to see this week’s focus"));
+
+  const focusNotes = useWeeklySyncHero
+    ? !weeklySyncNetworkOk && !weeklySyncDoc
+      ? "Check your connection and tap Refresh. Your link is still saved — we just could not reach the sync service."
+      : !weeklySyncDoc
+        ? "When your coach publishes from their weekly focus tools, the title and family-facing text will appear here."
+        : weeklySyncDoc.body
+    : (currentAssignment?.notes ??
+      (isLinked
+        ? "When they post an update, it will show up here for your family."
+        : "Use your invite code to link this phone to your academy. What you see before then stays on this device only."));
+
+  const weeklySyncStatusLine =
+    useWeeklySyncHero && weeklySyncDoc
+      ? weeklySyncFromCache
+        ? `Last saved on this phone${
+            weeklySyncFetchedAt ? ` · ${new Date(weeklySyncFetchedAt).toLocaleString()}` : ""
+          }`
+        : `Published ${new Date(weeklySyncDoc.updatedAt).toLocaleString()}`
+      : null;
 
   const assignmentStatusLine =
-    !currentAssignment || !isLinked
+    weeklySyncStatusLine ??
+    (!currentAssignment || !isLinked
       ? null
       : currentAssignment.status === "assigned"
         ? currentAssignmentAssignedDate
@@ -607,7 +706,7 @@ export default function CoachesScreen() {
           : "Shared by your coach"
         : currentAssignment.status === "completed"
           ? "Marked done at home (saved on this phone)"
-          : null;
+          : null);
 
   const showCoachPilotUi = __DEV__ && showDebugData;
 
@@ -675,26 +774,32 @@ export default function CoachesScreen() {
     </Pressable>
   );
 
-  const weeklyStoryConnectionLabel = isLinked
-    ? "Linked to your coach"
-    : isPreviewOnlyOnDevice
-      ? "On this phone only — not linked yet"
-      : "Not linked yet";
+  const weeklyStoryConnectionLabel = useWeeklySyncHero
+    ? "Linked — weekly note sync"
+    : isLinked
+      ? "Linked to your coach"
+      : isPreviewOnlyOnDevice
+        ? "On this phone only — not linked yet"
+        : "Not linked yet";
 
-  const weeklyStoryConnectionBody = isLinked
-    ? "Updates you see here come from your coach through this link. If something looks off, you can refresh or adjust the link from the main screen."
-    : isPreviewOnlyOnDevice
-      ? hasCoachPilotPreviewOnDevice
-        ? "Coach pilot previews on this phone are not shared with families until you connect with a real invite."
-        : "Sample or local data on this phone only — connect to use your coach’s real weekly note."
-      : "You’re not linked yet. What you see before connecting stays on this device only.";
+  const weeklyStoryConnectionBody = useWeeklySyncHero
+    ? "The focus screens in this story use the same published weekly title and text your coach shared for families — not their private check-in notes."
+    : isLinked
+      ? "Updates you see here come from your coach through this link. If something looks off, you can refresh or adjust the link from the main screen."
+      : isPreviewOnlyOnDevice
+        ? hasCoachPilotPreviewOnDevice
+          ? "Coach pilot previews on this phone are not shared with families until you connect with a real invite."
+          : "Sample or local data on this phone only — connect to use your coach’s real weekly note."
+        : "You’re not linked yet. What you see before connecting stays on this device only.";
 
   const weeklyStoryPrimaryHint =
-    isLinked && currentAssignment?.status === "assigned"
+    isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
       ? "When you’re ready, use Log practice for this week on the screen behind this."
-      : !isLinked
-        ? "When you’re ready, use Connect with your coach on the screen behind this."
-        : "When you’re ready, use Refresh this week’s update on the screen behind this.";
+      : useWeeklySyncHero
+        ? "When you’re ready, use Refresh this week’s update on the screen behind this."
+        : !isLinked
+          ? "When you’re ready, use Connect with your coach on the screen behind this."
+          : "When you’re ready, use Refresh this week’s update on the screen behind this.";
 
   const closeWeeklyStory = useCallback(() => {
     setWeeklyStoryOpen(false);
@@ -706,8 +811,14 @@ export default function CoachesScreen() {
     setWeeklyStoryOpen(true);
   }, []);
 
-  const weeklyStoryClassBody =
-    currentModule?.title || (isLinked && currentPack?.title)
+  const weeklyStoryClassBody = useWeeklySyncHero
+    ? weeklySyncDoc
+      ? [weeklySyncDoc.classLine, weeklySyncDoc.programLine].filter(Boolean).join("\n\n") ||
+        "No separate class or program line came with this published note — the focus step is the full shared message."
+      : weeklySyncNetworkOk
+        ? "Your coach has not added extra class or program lines for this week — the focus step is what they published for families."
+        : "We could not load the latest note — go back and refresh when you are online."
+    : currentModule?.title || (isLinked && currentPack?.title)
       ? [
           currentModule?.title
             ? `In class, look for: ${currentModule.title}${
@@ -1106,11 +1217,13 @@ export default function CoachesScreen() {
                         : "#5b21b6",
                   }}
                 >
-                  {isLinked
-                    ? "Linked to your coach"
-                    : isPreviewOnlyOnDevice
-                      ? "On this phone only — not linked yet"
-                      : "Not linked yet"}
+                  {useWeeklySyncHero
+                    ? "Linked — weekly note sync"
+                    : isLinked
+                      ? "Linked to your coach"
+                      : isPreviewOnlyOnDevice
+                        ? "On this phone only — not linked yet"
+                        : "Not linked yet"}
                 </Text>
               </View>
 
@@ -1123,6 +1236,20 @@ export default function CoachesScreen() {
               <Text style={{ marginTop: 10, fontSize: 15, color: UI.textSecondary, lineHeight: 23 }}>
                 {focusNotes}
               </Text>
+
+              {useWeeklySyncHero ? (
+                <Text style={{ marginTop: 12, fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
+                  Families only see the published weekly title and text (and any class/program lines your coach
+                  adds there) — not coach-only check-ins or private notes.
+                </Text>
+              ) : null}
+
+              {useWeeklySyncHero && weeklySyncFetchFailed && weeklySyncDoc ? (
+                <Text style={{ marginTop: 10, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+                  Showing last saved note — could not reach the sync service. Pull to refresh or try again
+                  shortly.
+                </Text>
+              ) : null}
 
               {isLinked && currentCoach ? (
                 <Text style={{ marginTop: 16, fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
@@ -1139,7 +1266,21 @@ export default function CoachesScreen() {
                 </Text>
               ) : null}
 
-              {currentModule?.title ? (
+              {useWeeklySyncHero && weeklySyncDoc?.classLine ? (
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.heroBorder }}>
+                  <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
+                    {weeklySyncDoc.classLine}
+                  </Text>
+                </View>
+              ) : null}
+
+              {useWeeklySyncHero && weeklySyncDoc?.programLine ? (
+                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
+                  {weeklySyncDoc.programLine}
+                </Text>
+              ) : null}
+
+              {!useWeeklySyncHero && currentModule?.title ? (
                 <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.heroBorder }}>
                   <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
                     <Text style={{ fontWeight: "700", color: UI.textPrimary }}>In class, look for: </Text>
@@ -1149,7 +1290,7 @@ export default function CoachesScreen() {
                 </View>
               ) : null}
 
-              {currentPack?.title && isLinked ? (
+              {!useWeeklySyncHero && currentPack?.title && isLinked ? (
                 <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
                   Program: <Text style={{ fontWeight: "600", color: UI.textPrimary }}>{currentPack.title}</Text>
                   {currentPack.description ? ` · ${currentPack.description}` : ""}
