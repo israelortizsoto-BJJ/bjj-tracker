@@ -86,6 +86,18 @@ On `dev`, the **coach kid profile** stays **guidance-first**. **Family Competiti
 **Latest commit (last clean checkpoint for shipped-local batch):**
 - `83588d7` — Add household editing for existing coach pilot kids
 
+## ODS founder roll-up rule
+If MatMind had meaningful work today, that work should be reflected in ODS the same day.
+
+Do not copy the full engineering handoff into ODS.
+Instead, roll up the founder-level meaning:
+- product movement
+- user signal
+- proof value
+- strategic implications
+- risks
+- next move
+
 ## Process note (2026-03-22)
 Continued **slice → device QA → fix**. **Family competition** and **household** work are **validated in local dev** on a tree that includes the commits above — not claimed for TestFlight. **Weekly sync** is the next **integration** step: worker + env + **two builds** before end-to-end smoke. Assume **older external tester devices** may be on a **build that does not yet include** sync changes until explicitly verified.
 

@@ -34,3 +34,17 @@ Start by giving me:
 7. End-of-day proof I need to paste
 
 Keep me focused on real product progress, current release quality, and the narrowest high-value slice of work.
+
+
+## ODS roll-up reminder
+If today includes meaningful MatMind product work, user learning, proof value, or strategic movement, that work must be rolled up into ODS during ODS end-of-day shutdown.
+
+MatMind is the product lane.
+ODS is the founder operating system.
+
+Before ending the day, be ready to summarize:
+- what moved
+- why it matters to ODS
+- what proof / user signal came from it
+- risks / open loops
+- next product block
