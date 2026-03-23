@@ -56,31 +56,77 @@ import {
 } from "../../../../src/storage/kidCompetitionStore";
 import type { KidCompetitionEntry } from "../../../../src/types/coachKid";
 
-// Build 7 light visual system (matches training + profile)
+// Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
 const UI = {
-  screenBg: "#f3f4f6",
-  bgCard: "#ffffff",
-  bgCardActive: "#edf2ff",
-  bgHero: "#fffbf5",
+  screenBg: "#f3f2f8",
+  bgCard: "#fefdff",
+  bgCardActive: "#e8e4ff",
+  bgHero: "#fff5ec",
   border: "#e5e7eb",
+  heroBorder: "#e8d4ec",
   textPrimary: "#111827",
   textSecondary: "#4b5563",
-  primaryFill: "#1d4ed8",
-  primaryFillPressed: "#1e40af",
+  primaryFill: "#4f46e5",
+  primaryFillPressed: "#4338ca",
   deleteBg: "#dc2626",
   deleteText: "#ffffff",
   rowMutedBg: "#f9fafb",
+  monthBannerBg: "#e8e4f7",
+  monthBannerPressed: "#d8d0f0",
+  monthListWellBg: "#f3f0ff",
+  monthGroupBorder: "#dcd6f0",
+  competitionRowBg: "#faf8ff",
+  competitionRowBorder: "#e4dff5",
+  nextUpcomingFill: "#e0e7ff",
+  nextUpcomingBorder: "#818cf8",
+  familySectionBg: "#fffaf7",
+  familySectionBorder: "#eadcf0",
+  addCompetitionBg: "#ede9fe",
+  addCompetitionBgPressed: "#ddd6fe",
+  addCompetitionBorder: "#c4b5fd",
 };
+
+/** Full-screen weekly story modal — lavender cream, aligned with hero energy */
+const WEEKLY_STORY_MODAL_BG = "#faf5ff";
+const WEEKLY_STORY_DOT_ACTIVE = "#6366f1";
+const WEEKLY_STORY_DOT_REST = "#e9d5ff";
+
+/** Richer chip fills for competition rows (labels stable from `familyCompetitionChipForEntry`). */
+function familyFacingCompetitionChipStyle(chip: {
+  label: string;
+  backgroundColor: string;
+  textColor: string;
+}): { backgroundColor: string; textColor: string } {
+  switch (chip.label) {
+    case "Coming up":
+      return { backgroundColor: "#c7d2fe", textColor: "#312e81" };
+    case "Past event":
+      return { backgroundColor: "#ede9fe", textColor: "#5b21b6" };
+    case "Completed":
+      return { backgroundColor: "#bfdbfe", textColor: "#1e3a8a" };
+    case "Cancelled":
+      return { backgroundColor: "#fed7aa", textColor: "#9a3412" };
+    default:
+      return { backgroundColor: chip.backgroundColor, textColor: chip.textColor };
+  }
+}
+
 const CARD_RADIUS = 16;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
 
 function Section({
   title,
   children,
+  tone = "default",
 }: {
   title: string;
   children: React.ReactNode;
+  tone?: "default" | "family";
 }) {
+  const surface =
+    tone === "family"
+      ? { backgroundColor: UI.familySectionBg, borderColor: UI.familySectionBorder }
+      : { backgroundColor: UI.bgCard, borderColor: UI.border };
   return (
     <View
       style={{
@@ -88,8 +134,8 @@ function Section({
         padding: 18,
         borderRadius: CARD_RADIUS,
         borderWidth: 1,
-        borderColor: UI.border,
-        backgroundColor: UI.bgCard,
+        borderColor: surface.borderColor,
+        backgroundColor: surface.backgroundColor,
       }}
     >
       <Text style={[SECTION_LABEL, { marginBottom: 10 }]}>
@@ -221,6 +267,14 @@ export default function CoachesScreen() {
         entryOrder: "desc",
       }),
     [familyCompetition.recent],
+  );
+
+  const nextFamilyUpcomingEntryId = useMemo(
+    () =>
+      familyCompetition.upcoming.length > 0
+        ? familyCompetition.upcoming[0]!.id
+        : null,
+    [familyCompetition.upcoming],
   );
 
   const [familyUpcomingMonthsExpanded, setFamilyUpcomingMonthsExpanded] = useState(
@@ -616,7 +670,7 @@ export default function CoachesScreen() {
         <View
           style={{
             flex: 1,
-            backgroundColor: UI.screenBg,
+            backgroundColor: WEEKLY_STORY_MODAL_BG,
             paddingTop: insets.top + 12,
             paddingBottom: insets.bottom + 16,
             paddingHorizontal: 20,
@@ -636,7 +690,7 @@ export default function CoachesScreen() {
                 flex: 1,
                 fontSize: 12,
                 fontWeight: "600",
-                color: UI.textSecondary,
+                color: "#5b4d7a",
                 letterSpacing: 0.4,
               }}
             >
@@ -665,6 +719,32 @@ export default function CoachesScreen() {
               </Text>
             </Pressable>
           </View>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: 7,
+              marginBottom: 14,
+            }}
+            accessibilityRole="none"
+            importantForAccessibility="no-hide-descendants"
+          >
+            {Array.from({ length: WEEKLY_STORY_STEP_COUNT }, (_, i) => (
+              <View
+                key={i}
+                style={{
+                  width: i === weeklyStoryStep ? 7 : 6,
+                  height: i === weeklyStoryStep ? 7 : 6,
+                  borderRadius: 999,
+                  backgroundColor:
+                    i === weeklyStoryStep ? WEEKLY_STORY_DOT_ACTIVE : WEEKLY_STORY_DOT_REST,
+                }}
+                accessibilityElementsHidden
+                importantForAccessibility="no"
+              />
+            ))}
+          </View>
           <ScrollView
             style={{ flex: 1 }}
             contentContainerStyle={{ paddingBottom: 24 }}
@@ -681,10 +761,10 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  A few calm screens
+                  Read this week together
                 </Text>
                 <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  This is the same weekly note as on the screen behind you — just spaced out so you can read it together. Tap Next when everyone is ready; tap Back anytime.
+                  This is the same weekly note as on the screen behind you — split into short steps so you can share it side by side at an easy pace. Tap Next when everyone is ready; tap Back anytime.
                 </Text>
               </>
             ) : null}
@@ -710,10 +790,10 @@ export default function CoachesScreen() {
                     paddingHorizontal: 10,
                     borderRadius: 999,
                     backgroundColor: isLinked
-                      ? "#dcfce7"
+                      ? "#a7f3d0"
                       : isPreviewOnlyOnDevice
-                        ? "#fef3c7"
-                        : "#f3f4f6",
+                        ? "#fde68a"
+                        : "#ede9fe",
                   }}
                 >
                   <Text
@@ -721,10 +801,10 @@ export default function CoachesScreen() {
                       fontSize: 12,
                       fontWeight: "700",
                       color: isLinked
-                        ? "#166534"
+                        ? "#065f46"
                         : isPreviewOnlyOnDevice
-                          ? "#92400e"
-                          : UI.textSecondary,
+                          ? "#b45309"
+                          : "#5b21b6",
                     }}
                   >
                     {weeklyStoryConnectionLabel}
@@ -743,11 +823,22 @@ export default function CoachesScreen() {
                     fontSize: 13,
                     fontWeight: "600",
                     letterSpacing: 1,
-                    color: "#78716c",
+                    color: "#6d28d9",
                     marginBottom: 8,
                   }}
                 >
                   THIS WEEK&apos;S FOCUS
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 15,
+                    fontWeight: "600",
+                    color: "#5b4d7a",
+                    lineHeight: 22,
+                    marginBottom: 10,
+                  }}
+                >
+                  Here&apos;s something your coach picked for you to notice.
                 </Text>
                 <Text
                   style={{
@@ -815,10 +906,10 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  You&apos;re all caught up
+                  Thanks for reading together
                 </Text>
                 <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24, marginBottom: 16 }}>
-                  That&apos;s everything on this week&apos;s coach note. There isn&apos;t another page to scroll to — you can close this when you&apos;re ready.
+                  You&apos;ve seen this week&apos;s coach note in full — nothing extra is hiding on another page. Close when you&apos;re ready; your usual weekly screen is right behind this.
                 </Text>
                 <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
                   {weeklyStoryPrimaryHint}
@@ -837,8 +928,8 @@ export default function CoachesScreen() {
                   paddingHorizontal: 16,
                   borderRadius: CARD_RADIUS,
                   borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                  borderColor: UI.addCompetitionBorder,
+                  backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
                   alignItems: "center",
                 })}
               >
@@ -920,7 +1011,7 @@ export default function CoachesScreen() {
                 padding: 20,
                 borderRadius: CARD_RADIUS,
                 borderWidth: 1,
-                borderColor: UI.border,
+                borderColor: UI.heroBorder,
                 backgroundColor: UI.bgHero,
               }}
             >
@@ -931,14 +1022,22 @@ export default function CoachesScreen() {
                   paddingVertical: 6,
                   paddingHorizontal: 10,
                   borderRadius: 999,
-                  backgroundColor: isLinked ? "#dcfce7" : isPreviewOnlyOnDevice ? "#fef3c7" : "#f3f4f6",
+                  backgroundColor: isLinked
+                    ? "#a7f3d0"
+                    : isPreviewOnlyOnDevice
+                      ? "#fde68a"
+                      : "#ede9fe",
                 }}
               >
                 <Text
                   style={{
                     fontSize: 12,
                     fontWeight: "700",
-                    color: isLinked ? "#166534" : isPreviewOnlyOnDevice ? "#92400e" : UI.textSecondary,
+                    color: isLinked
+                      ? "#065f46"
+                      : isPreviewOnlyOnDevice
+                        ? "#b45309"
+                        : "#5b21b6",
                   }}
                 >
                   {isLinked
@@ -949,7 +1048,7 @@ export default function CoachesScreen() {
                 </Text>
               </View>
 
-              <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#78716c" }]}>
+              <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#6d28d9" }]}>
                 THIS WEEK&apos;S FOCUS
               </Text>
               <Text style={{ fontSize: 20, fontWeight: "700", color: UI.textPrimary, lineHeight: 28 }}>
@@ -975,7 +1074,7 @@ export default function CoachesScreen() {
               ) : null}
 
               {currentModule?.title ? (
-                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.border }}>
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.heroBorder }}>
                   <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
                     <Text style={{ fontWeight: "700", color: UI.textPrimary }}>In class, look for: </Text>
                     {currentModule.title}
@@ -1017,8 +1116,8 @@ export default function CoachesScreen() {
                   paddingHorizontal: 16,
                   borderRadius: CARD_RADIUS,
                   borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                  borderColor: UI.addCompetitionBorder,
+                  backgroundColor: pressed ? UI.addCompetitionBgPressed : "#f5f3ff",
                   alignSelf: "stretch",
                   alignItems: "center",
                 })}
@@ -1027,7 +1126,7 @@ export default function CoachesScreen() {
                   Read together
                 </Text>
                 <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, textAlign: "center" }}>
-                  Walk through this week&apos;s note tap by tap — same words, calmer pace.
+                  Sit together and read the same note one short screen at a time — same words from your coach, just a little easier to share.
                 </Text>
               </Pressable>
 
@@ -1102,25 +1201,37 @@ export default function CoachesScreen() {
               ) : null}
             </View>
 
-            <Section title="Competition">
-                {familyCompetition.kidName ? (
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: UI.textSecondary,
-                      marginBottom: familyCompetition.multiKidOnRoster ? 4 : 10,
-                      lineHeight: 19,
-                    }}
-                  >
-                    For {familyCompetition.kidName}
-                  </Text>
-                ) : null}
+            <Section title="Competition" tone="family">
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: UI.textSecondary,
+                    lineHeight: 23,
+                    marginBottom: 6,
+                  }}
+                >
+                  Tournament dates on this phone: what is coming up, then what already happened.
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    color: UI.textSecondary,
+                    lineHeight: 21,
+                    marginBottom: familyCompetition.multiKidOnRoster ? 8 : 12,
+                  }}
+                >
+                  {familyCompetition.kidName
+                    ? `These entries follow ${familyCompetition.kidName}. Tap a row to review or edit; swipe left to remove it from this device.`
+                    : familyCompetition.kidId
+                      ? "Tap a row to review or edit; swipe left to remove it from this device."
+                      : "Add an athlete below so this calendar knows who you are planning for."}
+                </Text>
                 {familyCompetition.multiKidOnRoster ? (
                   <Text
                     style={{
                       fontSize: 12,
                       color: "#92400e",
-                      marginBottom: 10,
+                      marginBottom: 12,
                       lineHeight: 18,
                     }}
                   >
@@ -1130,9 +1241,22 @@ export default function CoachesScreen() {
                 ) : null}
 
                 {!familyCompetition.kidId ? (
-                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
-                    Add an athlete on this device (coach pilot roster) to track competitions here.
-                  </Text>
+                  <>
+                    <Text
+                      style={{
+                        fontSize: 15,
+                        color: UI.textPrimary,
+                        lineHeight: 22,
+                        fontWeight: "600",
+                      }}
+                    >
+                      No athlete selected on this phone yet
+                    </Text>
+                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 6 }}>
+                      Add someone on the coach roster on this device to track their competitions
+                      here. Nothing is shared until you link with your coach.
+                    </Text>
+                  </>
                 ) : null}
 
                 {familyCompetition.kidId ? (
@@ -1148,8 +1272,8 @@ export default function CoachesScreen() {
                       paddingHorizontal: 14,
                       borderRadius: CARD_RADIUS,
                       borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: pressed ? UI.bgCardActive : UI.screenBg,
+                      borderColor: UI.addCompetitionBorder,
+                      backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
                       alignSelf: "stretch",
                     })}
                   >
@@ -1172,10 +1296,11 @@ export default function CoachesScreen() {
                         fontWeight: "600",
                       }}
                     >
-                      No competitions on the calendar yet
+                      Nothing on the calendar yet
                     </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 8 }}>
-                      Add one for your family, or your coach may add details from their side.
+                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 6 }}>
+                      When you are ready, add a tournament date for your family, or check back if your
+                      coach shared one on this phone.
                     </Text>
                   </>
                 ) : null}
@@ -1186,26 +1311,39 @@ export default function CoachesScreen() {
                       style={{
                         fontSize: 12,
                         letterSpacing: 0.9,
-                        color: UI.textSecondary,
+                        color: "#5b21b6",
                         fontWeight: "700",
-                        marginBottom: 8,
+                        marginBottom: 10,
                       }}
                     >
                       Coming up
                     </Text>
                     {familyCompetition.upcoming.length === 0 ? (
-                      <Text
-                        style={{
-                          fontSize: 14,
-                          color: UI.textSecondary,
-                          lineHeight: 21,
-                          marginBottom: 16,
-                        }}
-                      >
-                        None right now
-                      </Text>
+                      <View style={{ marginBottom: 18 }}>
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            color: UI.textPrimary,
+                            lineHeight: 22,
+                            fontWeight: "600",
+                          }}
+                        >
+                          No upcoming dates right now
+                        </Text>
+                        <Text
+                          style={{
+                            fontSize: 14,
+                            color: UI.textSecondary,
+                            lineHeight: 21,
+                            marginTop: 6,
+                          }}
+                        >
+                          Add one when you know the next tournament, or scroll to Recent to look back
+                          at past events.
+                        </Text>
+                      </View>
                     ) : (
-                      <View style={{ marginBottom: 16, gap: 6 }}>
+                      <View style={{ marginBottom: 18, gap: 10 }}>
                         {familyUpcomingMonthGroups.map(({ monthKey, entries }) => {
                           const expanded = familyUpcomingMonthsExpanded.has(monthKey);
                           const chevron = expanded ? "▼" : "▶";
@@ -1213,47 +1351,80 @@ export default function CoachesScreen() {
                             <View
                               key={monthKey}
                               style={{
-                                borderRadius: 10,
+                                borderRadius: 14,
                                 borderWidth: 1,
-                                borderColor: UI.border,
+                                borderColor: UI.monthGroupBorder,
                                 overflow: "hidden",
+                                backgroundColor: UI.bgCard,
                               }}
                             >
                               <Pressable
                                 onPress={() => toggleFamilyUpcomingMonth(monthKey)}
+                                hitSlop={{ top: 6, bottom: 6 }}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded }}
                                 style={({ pressed }) => ({
                                   flexDirection: "row",
                                   alignItems: "center",
-                                  gap: 8,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 10,
-                                  backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                                  gap: 12,
+                                  minHeight: 52,
+                                  paddingVertical: 14,
+                                  paddingHorizontal: 14,
+                                  backgroundColor: pressed ? UI.monthBannerPressed : UI.monthBannerBg,
+                                  borderBottomWidth: expanded ? 1 : 0,
+                                  borderBottomColor: UI.monthGroupBorder,
                                 })}
                               >
-                                <Text style={{ fontSize: 13, color: UI.textSecondary, width: 20 }}>
+                                <Text
+                                  style={{
+                                    fontSize: 14,
+                                    color: UI.textSecondary,
+                                    width: 22,
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                  }}
+                                >
                                   {chevron}
                                 </Text>
                                 <View style={{ flex: 1 }}>
-                                  <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                                  <Text
+                                    style={{
+                                      fontSize: 15,
+                                      fontWeight: "700",
+                                      color: UI.textPrimary,
+                                      letterSpacing: 0.15,
+                                    }}
+                                  >
                                     {formatFamilyCompetitionMonthHeading(monthKey)}
                                   </Text>
-                                  <Text style={{ marginTop: 1, fontSize: 11, color: UI.textSecondary }}>
+                                  <Text style={{ marginTop: 3, fontSize: 12, color: UI.textSecondary }}>
                                     {entries.length} {entries.length === 1 ? "event" : "events"}
                                   </Text>
                                 </View>
                               </Pressable>
                               {expanded ? (
-                                <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 0 }}>
-                                  {entries.map((entry, idx) => {
-                                    const chip = familyCompetitionChipForEntry(
+                                <View
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 12,
+                                    gap: 10,
+                                    backgroundColor: UI.monthListWellBg,
+                                  }}
+                                >
+                                  {entries.map((entry) => {
+                                    const chipBase = familyCompetitionChipForEntry(
                                       entry,
                                       familyCompetition.todayYMD,
                                     );
+                                    const chip = {
+                                      ...chipBase,
+                                      ...familyFacingCompetitionChipStyle(chipBase),
+                                    };
                                     const promoterFmt = familyCompetitionPromoterFormatLine(
                                       entry,
                                       72,
                                     );
-                                    const isLastInMonth = idx === entries.length - 1;
+                                    const isNextUpcoming = entry.id === nextFamilyUpcomingEntryId;
                                     return (
                                       <Swipeable
                                         key={entry.id}
@@ -1274,9 +1445,16 @@ export default function CoachesScreen() {
                                             );
                                           }}
                                           style={{
-                                            paddingVertical: 12,
-                                            borderBottomWidth: isLastInMonth ? 0 : 1,
-                                            borderBottomColor: UI.border,
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: isNextUpcoming
+                                              ? UI.nextUpcomingBorder
+                                              : UI.competitionRowBorder,
+                                            backgroundColor: isNextUpcoming
+                                              ? UI.nextUpcomingFill
+                                              : UI.competitionRowBg,
+                                            paddingVertical: 14,
+                                            paddingHorizontal: 14,
                                           }}
                                         >
                                           <View
@@ -1284,7 +1462,7 @@ export default function CoachesScreen() {
                                               flexDirection: "row",
                                               justifyContent: "space-between",
                                               alignItems: "flex-start",
-                                              gap: 10,
+                                              gap: 12,
                                             }}
                                           >
                                             <View style={{ flex: 1, minWidth: 0 }}>
@@ -1304,7 +1482,7 @@ export default function CoachesScreen() {
                                                 style={{
                                                   fontSize: 14,
                                                   color: UI.textSecondary,
-                                                  marginTop: 4,
+                                                  marginTop: 6,
                                                 }}
                                               >
                                                 {formatFamilyCompetitionDate(entry.eventDate)}
@@ -1316,7 +1494,7 @@ export default function CoachesScreen() {
                                                   style={{
                                                     fontSize: 13,
                                                     color: UI.textSecondary,
-                                                    marginTop: 2,
+                                                    marginTop: 4,
                                                   }}
                                                 >
                                                   {promoterFmt}
@@ -1358,20 +1536,33 @@ export default function CoachesScreen() {
                       style={{
                         fontSize: 12,
                         letterSpacing: 0.9,
-                        color: UI.textSecondary,
+                        color: "#5b21b6",
                         fontWeight: "700",
-                        marginBottom: 8,
-                        marginTop: 4,
+                        marginBottom: 10,
+                        marginTop: 2,
                       }}
                     >
                       Recent competitions
                     </Text>
                     {familyCompetition.recent.length === 0 ? (
-                      <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
-                        None yet
-                      </Text>
+                      <View>
+                        <Text
+                          style={{
+                            fontSize: 15,
+                            color: UI.textPrimary,
+                            lineHeight: 22,
+                            fontWeight: "600",
+                          }}
+                        >
+                          No recent events logged yet
+                        </Text>
+                        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 6 }}>
+                          After a competition day passes, it moves here so you can add results when you
+                          are ready.
+                        </Text>
+                      </View>
                     ) : (
-                      <View style={{ gap: 6 }}>
+                      <View style={{ gap: 10 }}>
                         {familyRecentMonthGroups.map(({ monthKey, entries }) => {
                           const expanded = familyRecentMonthsExpanded.has(monthKey);
                           const chevron = expanded ? "▼" : "▶";
@@ -1379,42 +1570,75 @@ export default function CoachesScreen() {
                             <View
                               key={monthKey}
                               style={{
-                                borderRadius: 10,
+                                borderRadius: 14,
                                 borderWidth: 1,
-                                borderColor: UI.border,
+                                borderColor: UI.monthGroupBorder,
                                 overflow: "hidden",
+                                backgroundColor: UI.bgCard,
                               }}
                             >
                               <Pressable
                                 onPress={() => toggleFamilyRecentMonth(monthKey)}
+                                hitSlop={{ top: 6, bottom: 6 }}
+                                accessibilityRole="button"
+                                accessibilityState={{ expanded }}
                                 style={({ pressed }) => ({
                                   flexDirection: "row",
                                   alignItems: "center",
-                                  gap: 8,
-                                  paddingVertical: 10,
-                                  paddingHorizontal: 10,
-                                  backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                                  gap: 12,
+                                  minHeight: 52,
+                                  paddingVertical: 14,
+                                  paddingHorizontal: 14,
+                                  backgroundColor: pressed ? UI.monthBannerPressed : UI.monthBannerBg,
+                                  borderBottomWidth: expanded ? 1 : 0,
+                                  borderBottomColor: UI.monthGroupBorder,
                                 })}
                               >
-                                <Text style={{ fontSize: 13, color: UI.textSecondary, width: 20 }}>
+                                <Text
+                                  style={{
+                                    fontSize: 14,
+                                    color: UI.textSecondary,
+                                    width: 22,
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                  }}
+                                >
                                   {chevron}
                                 </Text>
                                 <View style={{ flex: 1 }}>
-                                  <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                                  <Text
+                                    style={{
+                                      fontSize: 15,
+                                      fontWeight: "700",
+                                      color: UI.textPrimary,
+                                      letterSpacing: 0.15,
+                                    }}
+                                  >
                                     {formatFamilyCompetitionMonthHeading(monthKey)}
                                   </Text>
-                                  <Text style={{ marginTop: 1, fontSize: 11, color: UI.textSecondary }}>
+                                  <Text style={{ marginTop: 3, fontSize: 12, color: UI.textSecondary }}>
                                     {entries.length} {entries.length === 1 ? "event" : "events"}
                                   </Text>
                                 </View>
                               </Pressable>
                               {expanded ? (
-                                <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 0 }}>
-                                  {entries.map((entry, idx) => {
-                                    const chip = familyCompetitionChipForEntry(
+                                <View
+                                  style={{
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 12,
+                                    gap: 10,
+                                    backgroundColor: UI.monthListWellBg,
+                                  }}
+                                >
+                                  {entries.map((entry) => {
+                                    const chipBase = familyCompetitionChipForEntry(
                                       entry,
                                       familyCompetition.todayYMD,
                                     );
+                                    const chip = {
+                                      ...chipBase,
+                                      ...familyFacingCompetitionChipStyle(chipBase),
+                                    };
                                     const promoterFmt = familyCompetitionPromoterFormatLine(
                                       entry,
                                       72,
@@ -1424,7 +1648,6 @@ export default function CoachesScreen() {
                                       "recent",
                                       familyCompetition.todayYMD,
                                     );
-                                    const isLastInMonth = idx === entries.length - 1;
                                     return (
                                       <Swipeable
                                         key={entry.id}
@@ -1445,9 +1668,12 @@ export default function CoachesScreen() {
                                             );
                                           }}
                                           style={{
-                                            paddingVertical: 12,
-                                            borderBottomWidth: isLastInMonth ? 0 : 1,
-                                            borderBottomColor: UI.border,
+                                            borderRadius: 12,
+                                            borderWidth: 1,
+                                            borderColor: UI.competitionRowBorder,
+                                            backgroundColor: UI.competitionRowBg,
+                                            paddingVertical: 14,
+                                            paddingHorizontal: 14,
                                           }}
                                         >
                                           <View
@@ -1455,7 +1681,7 @@ export default function CoachesScreen() {
                                               flexDirection: "row",
                                               justifyContent: "space-between",
                                               alignItems: "flex-start",
-                                              gap: 10,
+                                              gap: 12,
                                             }}
                                           >
                                             <View style={{ flex: 1, minWidth: 0 }}>
@@ -1475,7 +1701,7 @@ export default function CoachesScreen() {
                                                 style={{
                                                   fontSize: 14,
                                                   color: UI.textSecondary,
-                                                  marginTop: 4,
+                                                  marginTop: 6,
                                                 }}
                                               >
                                                 {formatFamilyCompetitionDate(entry.eventDate)}
@@ -1487,7 +1713,7 @@ export default function CoachesScreen() {
                                                   style={{
                                                     fontSize: 13,
                                                     color: UI.textSecondary,
-                                                    marginTop: 2,
+                                                    marginTop: 4,
                                                   }}
                                                 >
                                                   {promoterFmt}
@@ -1498,7 +1724,7 @@ export default function CoachesScreen() {
                                                   style={{
                                                     fontSize: 13,
                                                     color: UI.textSecondary,
-                                                    marginTop: 6,
+                                                    marginTop: 8,
                                                   }}
                                                 >
                                                   Result:{" "}
