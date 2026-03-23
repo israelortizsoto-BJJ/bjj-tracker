@@ -21,7 +21,8 @@
       "autoIncrement": true,
       "env": {
         "SHOW_COACH_SHARE_PROFILE_ENTRY": "1",
-        "EXPO_PUBLIC_SHOW_COACH_SHARE_PROFILE_ENTRY": "1"
+        "EXPO_PUBLIC_SHOW_COACH_SHARE_PROFILE_ENTRY": "1",
+        "EXPO_PUBLIC_COACH_SYNC_BASE_URL": "https://matmind-coach-sync.ortizdigitalstudio.workers.dev"
       }
     }
   },
