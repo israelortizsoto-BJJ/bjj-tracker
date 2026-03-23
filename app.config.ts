@@ -49,6 +49,7 @@ export default (): ExpoConfig => ({
     ...base.extra,
     appVariant: APP_VARIANT,
     showCoachShareProfileEntry,
-    coachSyncBaseUrl,
+    // Omit when unset so dev-client + Metro does not overwrite embedded EAS `extra` with "".
+    ...(coachSyncBaseUrl ? { coachSyncBaseUrl } : {}),
   },
 });

@@ -1,21 +1,29 @@
 import Constants from "expo-constants";
 
+function isExtraValuePresent(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === "string" && value.trim() === "") return false;
+  return true;
+}
+
+/** Same layer order as `runtime.ts`, but empty strings do not block embedded manifest values. */
 function readExtraValue(key: string): unknown {
-  const fromExpoConfig = (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>;
-  if (Object.prototype.hasOwnProperty.call(fromExpoConfig, key)) return fromExpoConfig[key];
-
   const m2e = (Constants.manifest2 as { extra?: Record<string, unknown> } | null)?.extra;
-  if (m2e && Object.prototype.hasOwnProperty.call(m2e, key)) return m2e[key];
-
   const m2ClientExtra = (m2e as { expoClient?: { extra?: Record<string, unknown> } } | undefined)?.expoClient
     ?.extra;
-  if (m2ClientExtra && Object.prototype.hasOwnProperty.call(m2ClientExtra, key)) return m2ClientExtra[key];
 
-  const m1 = ((Constants.manifest as { extra?: Record<string, unknown> } | null)?.extra ?? {}) as Record<
-    string,
-    unknown
-  >;
-  if (Object.prototype.hasOwnProperty.call(m1, key)) return m1[key];
+  const layers: Record<string, unknown>[] = [
+    (Constants.expoConfig?.extra ?? {}) as Record<string, unknown>,
+    (m2e ?? {}) as Record<string, unknown>,
+    (m2ClientExtra ?? {}) as Record<string, unknown>,
+    ((Constants.manifest as { extra?: Record<string, unknown> } | null)?.extra ?? {}) as Record<string, unknown>,
+  ];
+
+  for (const bucket of layers) {
+    if (!Object.prototype.hasOwnProperty.call(bucket, key)) continue;
+    const v = bucket[key];
+    if (isExtraValuePresent(v)) return v;
+  }
 
   return undefined;
 }
