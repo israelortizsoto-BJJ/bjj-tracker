@@ -10,6 +10,7 @@ import type {
   KidCompetitionResult,
   KidId,
 } from "../types/coachKid";
+import type { SyncedSharedCompetition } from "../types/coachWeeklySync";
 
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
@@ -74,12 +75,54 @@ function normalizeOrganizationOrPromoter(raw: unknown): string | undefined {
   return t ? t : undefined;
 }
 
+/** Local rows mirrored from the worker use `id` `shared-comp-<workerCompetitionId>`. */
+const SHARED_COMP_LOCAL_ID_PREFIX = "shared-comp-";
+
+function trimSharedIdField(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  return t ? t : undefined;
+}
+
+/**
+ * Ensures linkage fields are trimmed strings; recovers worker competition id from `shared-comp-`
+ * row ids when the field was dropped by legacy writes or partial JSON.
+ */
+function normalizeSharedLinkageFields(
+  raw: KidCompetitionEntry,
+): Partial<Pick<KidCompetitionEntry, "sharedAthleteId" | "sharedCompetitionId">> {
+  let sharedCompetitionId = trimSharedIdField(raw.sharedCompetitionId);
+  if (!sharedCompetitionId && raw.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX)) {
+    const suffix = raw.id.slice(SHARED_COMP_LOCAL_ID_PREFIX.length).trim();
+    if (suffix) sharedCompetitionId = suffix;
+  }
+  const sharedAthleteId = trimSharedIdField(raw.sharedAthleteId);
+  return {
+    ...(sharedCompetitionId ? { sharedCompetitionId } : {}),
+    ...(sharedAthleteId ? { sharedAthleteId } : {}),
+  };
+}
+
+/** Worker competition id for parent sync DELETE/PUT/POST; field first, then `shared-comp-` row id. */
+export function getWorkerCompetitionIdForEntry(entry: KidCompetitionEntry): string {
+  const fromField = trimSharedIdField(entry.sharedCompetitionId);
+  if (fromField) return fromField;
+  if (entry.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX)) {
+    return entry.id.slice(SHARED_COMP_LOCAL_ID_PREFIX.length).trim();
+  }
+  return "";
+}
+
 /** Strips unknown enum strings so legacy JSON and bad values never break the read path. */
 function normalizeKidCompetitionEntry(
   raw: KidCompetitionEntry,
 ): KidCompetitionEntry {
+  const { sharedAthleteId: _omitAthlete, sharedCompetitionId: _omitComp, ...rest } =
+    raw;
+  const linkage = normalizeSharedLinkageFields(raw);
   return {
-    ...raw,
+    ...rest,
+    ...linkage,
     eventStatus: normalizeEventStatus(raw.eventStatus),
     format: normalizeFormat(raw.format),
     organizationOrPromoter: normalizeOrganizationOrPromoter(
@@ -147,6 +190,211 @@ export async function getKidCompetitionEntriesForKid(
     );
 }
 
+/**
+ * Merge shared worker competitions into one kid's local list.
+ * Dedupe key is strictly `sharedCompetitionId` (no name/date heuristics).
+ * Keeps local-only rows untouched and prunes only stale shared rows for this athlete.
+ */
+export async function upsertSharedCompetitionsForKid(
+  kidId: KidId,
+  sharedAthleteId: string,
+  remote: SyncedSharedCompetition[],
+): Promise<KidCompetitionEntry[]> {
+  const all = await getRaw();
+  const nowIso = new Date().toISOString();
+  const targetKid = all.filter((e) => e.kidId === kidId);
+  const rest = all.filter((e) => e.kidId !== kidId);
+
+  const remoteById = new Map(remote.map((r) => [r.id, r] as const));
+  const remoteIdSet = new Set(remote.map((r) => r.id));
+  const devLogTag = "[bjj-coach-comp-reconcile]";
+
+  if (__DEV__) {
+    const summarize = (r: KidCompetitionEntry) => ({
+      id: r.id,
+      sharedCompetitionId: r.sharedCompetitionId ?? null,
+      sharedAthleteId: r.sharedAthleteId ?? null,
+      tournamentName: r.tournamentName,
+    });
+    console.log(devLogTag, "before reconcile", {
+      kidId,
+      sharedAthleteId,
+      remoteCompetitionCount: remote.length,
+      remoteCompetitionIds: remote.map((r) => r.id),
+      localRowsForKid: targetKid.map(summarize),
+    });
+    for (const row of targetKid) {
+      if (!row.sharedCompetitionId) continue;
+      const rowAthlete = row.sharedAthleteId ?? "";
+      const skippedOtherAthlete = Boolean(rowAthlete) && rowAthlete !== sharedAthleteId;
+      if (skippedOtherAthlete) {
+        console.log(devLogTag, "local shared row skipped (other athlete)", summarize(row));
+        continue;
+      }
+      const athleteMissing = !rowAthlete;
+      const absentFromRemote = !remoteIdSet.has(row.sharedCompetitionId);
+      console.log(devLogTag, "local shared row (reconcile scope)", {
+        ...summarize(row),
+        athleteMissingOnLocalRow: athleteMissing,
+        absentFromRemote,
+      });
+    }
+  }
+
+  const keptTarget: KidCompetitionEntry[] = [];
+
+  // Keep local-only rows; remove stale shared rows for this athlete only.
+  for (const row of targetKid) {
+    if (!row.sharedCompetitionId) {
+      keptTarget.push(row);
+      continue;
+    }
+    const rowAthlete = row.sharedAthleteId ?? "";
+    // Explicit tag for another shared athlete: leave untouched (no fuzzy match).
+    if (rowAthlete && rowAthlete !== sharedAthleteId) {
+      keptTarget.push(row);
+      continue;
+    }
+    if (remoteById.has(row.sharedCompetitionId)) {
+      keptTarget.push(row);
+      continue;
+    }
+    // Absent from remote: drop this shared row. Reconcile uses exact `sharedCompetitionId` ↔ worker
+    // competition id only (no fuzzy match). Local-only coach rows have no `sharedCompetitionId`.
+  }
+
+  const bySharedId = new Map(
+    keptTarget
+      .filter((r) => Boolean(r.sharedCompetitionId))
+      .map((r) => [r.sharedCompetitionId as string, r] as const),
+  );
+
+  for (const r of remote) {
+    const existing = bySharedId.get(r.id);
+    const nextRow: KidCompetitionEntry = {
+      ...(existing ?? {}),
+      id: existing?.id ?? `shared-comp-${r.id}`,
+      kidId,
+      sharedAthleteId,
+      sharedCompetitionId: r.id,
+      tournamentName: r.tournamentName,
+      eventDate: r.eventDate,
+      result: r.result,
+      eventStatus: r.eventStatus,
+      format: r.format,
+      organizationOrPromoter: r.organizationOrPromoter,
+      createdAt: existing?.createdAt ?? r.createdAt,
+      updatedAt: nowIso,
+    };
+    if (existing) {
+      const idx = keptTarget.findIndex((x) => x.id === existing.id);
+      if (idx >= 0) keptTarget[idx] = nextRow;
+      else keptTarget.push(nextRow);
+    } else {
+      keptTarget.push(nextRow);
+    }
+    bySharedId.set(r.id, nextRow);
+  }
+
+  if (__DEV__) {
+    const summarize = (r: KidCompetitionEntry) => ({
+      id: r.id,
+      sharedCompetitionId: r.sharedCompetitionId ?? null,
+      sharedAthleteId: r.sharedAthleteId ?? null,
+      tournamentName: r.tournamentName,
+    });
+    const inScopeBefore = targetKid.filter((row) => {
+      if (!row.sharedCompetitionId) return false;
+      const rowAthlete = row.sharedAthleteId ?? "";
+      return !rowAthlete || rowAthlete === sharedAthleteId;
+    });
+    const sharedIdsBefore = new Set(
+      inScopeBefore.map((r) => r.sharedCompetitionId as string),
+    );
+    const inScopeAfterKept = keptTarget.filter((row) => {
+      if (!row.sharedCompetitionId) return false;
+      const rowAthlete = row.sharedAthleteId ?? "";
+      return !rowAthlete || rowAthlete === sharedAthleteId;
+    });
+    const sharedIdsAfterKept = new Set(
+      inScopeAfterKept.map((r) => r.sharedCompetitionId as string),
+    );
+    console.log(devLogTag, "after reconcile (pre-cap)", {
+      kidId,
+      keptTargetRowsForKid: keptTarget.map(summarize),
+    });
+    for (const sid of sharedIdsBefore) {
+      const absentFromRemote = !remoteIdSet.has(sid);
+      console.log(devLogTag, "delete-propagation", {
+        sharedCompetitionId: sid,
+        absentFromRemote,
+        stillPresentLocallyBeforeReconcile: true,
+        stillPresentLocallyAfterReconcilePreCap: sharedIdsAfterKept.has(sid),
+      });
+    }
+  }
+
+  const nextAll = capCompetitionsByKid([...rest, ...keptTarget]);
+  await setRaw(nextAll);
+  const returnedForKid = nextAll
+    .filter((e) => e.kidId === kidId)
+    .slice()
+    .sort(
+      (a, b) =>
+        b.eventDate.localeCompare(a.eventDate) ||
+        b.createdAt.localeCompare(a.createdAt),
+    );
+
+  if (__DEV__) {
+    const summarize = (r: KidCompetitionEntry) => ({
+      id: r.id,
+      sharedCompetitionId: r.sharedCompetitionId ?? null,
+      sharedAthleteId: r.sharedAthleteId ?? null,
+      tournamentName: r.tournamentName,
+    });
+    const inScopeReturned = returnedForKid.filter((row) => {
+      if (!row.sharedCompetitionId) return false;
+      const rowAthlete = row.sharedAthleteId ?? "";
+      return !rowAthlete || rowAthlete === sharedAthleteId;
+    });
+    const sharedIdsAfterCap = new Set(
+      inScopeReturned.map((r) => r.sharedCompetitionId as string),
+    );
+    console.log(devLogTag, "after reconcile (post-cap, returned for kid)", {
+      kidId,
+      rowCount: returnedForKid.length,
+      rows: returnedForKid.map(summarize),
+    });
+    for (const sid of remoteIdSet) {
+      if (!sharedIdsAfterCap.has(sid)) {
+        console.log(devLogTag, "remote id missing from post-cap local (unexpected)", {
+          sharedCompetitionId: sid,
+        });
+      }
+    }
+    const inScopeBeforeIds = new Set(
+      targetKid
+        .filter((row) => {
+          if (!row.sharedCompetitionId) return false;
+          const rowAthlete = row.sharedAthleteId ?? "";
+          return !rowAthlete || rowAthlete === sharedAthleteId;
+        })
+        .map((r) => r.sharedCompetitionId as string),
+    );
+    for (const sid of inScopeBeforeIds) {
+      const absentFromRemote = !remoteIdSet.has(sid);
+      if (!absentFromRemote) continue;
+      console.log(devLogTag, "delete-propagation (post-cap)", {
+        sharedCompetitionId: sid,
+        absentFromRemote: true,
+        stillPresentLocallyAfterReconcile: sharedIdsAfterCap.has(sid),
+      });
+    }
+  }
+
+  return returnedForKid;
+}
+
 export async function getKidCompetitionEntryById(
   id: string,
 ): Promise<KidCompetitionEntry | null> {
@@ -156,6 +404,8 @@ export async function getKidCompetitionEntryById(
 
 export type KidCompetitionCreateInput = {
   kidId: KidId;
+  sharedAthleteId?: string;
+  sharedCompetitionId?: string;
   tournamentName: string;
   eventDate: string;
   result?: KidCompetitionResult;
@@ -182,6 +432,8 @@ export async function createKidCompetitionEntry(
   const created: KidCompetitionEntry = {
     id,
     kidId: input.kidId,
+    ...(input.sharedAthleteId ? { sharedAthleteId: input.sharedAthleteId } : {}),
+    ...(input.sharedCompetitionId ? { sharedCompetitionId: input.sharedCompetitionId } : {}),
     tournamentName: input.tournamentName.trim(),
     eventDate: input.eventDate,
     ...(input.result ? { result: input.result } : {}),
@@ -196,6 +448,16 @@ export async function createKidCompetitionEntry(
     updatedAt: nowIso,
   };
 
+  if (__DEV__ && input.sharedCompetitionId) {
+    console.log("[bjj-sync-debug] createKidCompetitionEntry persisted linkage", {
+      id,
+      kidId: input.kidId,
+      sharedAthleteId: input.sharedAthleteId ?? null,
+      sharedCompetitionId: input.sharedCompetitionId,
+      tournamentName: created.tournamentName,
+    });
+  }
+
   all.unshift(created);
   const capped = capCompetitionsByKid(all);
   await setRaw(capped);
@@ -203,6 +465,8 @@ export async function createKidCompetitionEntry(
 }
 
 export type KidCompetitionUpdateInput = Partial<{
+  sharedAthleteId: string | undefined;
+  sharedCompetitionId: string | undefined;
   tournamentName: string;
   eventDate: string;
   result: KidCompetitionResult | undefined;
@@ -267,9 +531,28 @@ export async function updateKidCompetitionEntry(
     nextOutcomeKind = patch.outcomeKind;
   }
 
+  let nextSharedAthleteId = existing.sharedAthleteId;
+  if (Object.prototype.hasOwnProperty.call(patch, "sharedAthleteId")) {
+    if (typeof patch.sharedAthleteId === "string") {
+      const t = patch.sharedAthleteId.trim();
+      nextSharedAthleteId = t ? t : undefined;
+    }
+    // undefined / null / non-string: do not strip linkage from accidental patches.
+  }
+
+  let nextSharedCompetitionId = existing.sharedCompetitionId;
+  if (Object.prototype.hasOwnProperty.call(patch, "sharedCompetitionId")) {
+    if (typeof patch.sharedCompetitionId === "string") {
+      const t = patch.sharedCompetitionId.trim();
+      nextSharedCompetitionId = t ? t : undefined;
+    }
+  }
+
   const updated: KidCompetitionEntry = {
     ...existing,
     updatedAt: nowIso,
+    sharedAthleteId: nextSharedAthleteId,
+    sharedCompetitionId: nextSharedCompetitionId,
     tournamentName:
       typeof patch.tournamentName !== "undefined"
         ? patch.tournamentName.trim()

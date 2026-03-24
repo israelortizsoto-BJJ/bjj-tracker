@@ -25,6 +25,7 @@ import { Swipeable } from "react-native-gesture-handler";
 import { kidWeeklyFocusToPublishPayload } from "../../../../../src/coach/weeklyFocusPublish";
 import {
   CoachWeeklySyncApiError,
+  coachSyncFetchSession,
   coachSyncPublishWeekly,
 } from "../../../../../src/services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../../../../src/storage/coachShareStore";
@@ -44,6 +45,7 @@ import { StorageKeys } from "../../../../../src/storage/storageKeys";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntriesForKid,
+  upsertSharedCompetitionsForKid,
 } from "../../../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../../../src/types";
 import type {
@@ -55,6 +57,7 @@ import type {
   KidStandingGuidance,
   KidWeeklyFocusEntry,
 } from "../../../../../src/types/coachKid";
+import type { SyncedSharedCompetition } from "../../../../../src/types/coachWeeklySync";
 import { toDateKey } from "../../../../../src/_domain/dateKey";
 import { FUNDAMENTALS_TAXONOMY } from "../../../../../src/fundamentals/taxonomy";
 
@@ -345,6 +348,8 @@ export default function KidDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
+  /** Dev: correlates competition sync logs within one `load()` and across focus replays. */
+  const coachCompDetailLoadSeqRef = useRef(0);
 
   const bumpScrollToFocusedInput = useCallback(() => {
     const run = () => {
@@ -398,7 +403,124 @@ export default function KidDetailScreen() {
       weekReflections.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
       setThisWeekReflections(weekReflections);
 
-      const compRows = await getKidCompetitionEntriesForKid(kidId);
+      let compRows = await getKidCompetitionEntriesForKid(kidId);
+      const sharedAthleteId = kid?.sharedAthleteId?.trim() ?? "";
+      coachCompDetailLoadSeqRef.current += 1;
+      const coachCompLoadSeq = coachCompDetailLoadSeqRef.current;
+
+      if (__DEV__) {
+        const linksForLog = await getCoachLinks();
+        const syncLinksForLog = linksForLog.filter(
+          (l) => l.status === "active" && l.weeklySync,
+        );
+        console.log("[bjj-coach-kid-detail] focus/load", {
+          loadSeq: coachCompLoadSeq,
+          kidId,
+          sharedAthleteId: sharedAthleteId || null,
+          activeSyncLinkCount: syncLinksForLog.length,
+        });
+      }
+
+      if (sharedAthleteId) {
+        const links = await getCoachLinks();
+        const syncLinks = links.filter((l) => l.status === "active" && l.weeklySync);
+        const remoteForKid: SyncedSharedCompetition[] = [];
+        let sessionFetchFailures = 0;
+        let sessionIndex = 0;
+        for (const l of syncLinks) {
+          sessionIndex += 1;
+          const ws = l.weeklySync!;
+          const token = ws.linkToken ?? "";
+          const linkTokenTail = token.length > 8 ? token.slice(-8) : token;
+          try {
+            const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+            const totalRemote = session.competitions.length;
+            const matching = session.competitions.filter(
+              (c) => c.sharedAthleteId === sharedAthleteId,
+            );
+            if (__DEV__) {
+              console.log("[bjj-coach-kid-detail] session fetch", {
+                loadSeq: coachCompLoadSeq,
+                sessionIndex,
+                totalSessionsInLoop: syncLinks.length,
+                linkTokenTail,
+                remoteCompetitionsTotal: totalRemote,
+                matchingSharedAthleteCount: matching.length,
+                matchingSharedAthleteIds: matching.map((c) => c.id),
+              });
+            }
+            remoteForKid.push(...matching);
+          } catch {
+            sessionFetchFailures += 1;
+            if (__DEV__) {
+              console.log("[bjj-coach-kid-detail] session fetch failed", {
+                loadSeq: coachCompLoadSeq,
+                sessionIndex,
+                totalSessionsInLoop: syncLinks.length,
+                linkTokenTail,
+              });
+            }
+            // Best-effort read path: keep current local rows if every session fetch fails.
+          }
+        }
+        if (__DEV__) {
+          const idCounts = new Map<string, number>();
+          for (const c of remoteForKid) {
+            idCounts.set(c.id, (idCounts.get(c.id) ?? 0) + 1);
+          }
+          const duplicateRemoteIds = [...idCounts.entries()]
+            .filter(([, n]) => n > 1)
+            .map(([id, n]) => ({ id, count: n }));
+          console.log("[bjj-coach-kid-detail] merged remote for athlete", {
+            loadSeq: coachCompLoadSeq,
+            mergedRemoteCount: remoteForKid.length,
+            mergedRemoteIds: remoteForKid.map((c) => c.id),
+            duplicateRemoteIds,
+            sessionFetchFailures,
+          });
+        }
+        const haveAuthoritativeRemote =
+          syncLinks.length > 0 && sessionFetchFailures < syncLinks.length;
+        // When any session fetch succeeds, merged remote list (possibly empty) is source of truth
+        // for this athlete’s shared competition ids; prune stale shared rows either way.
+        const shouldReconcileSharedComps = haveAuthoritativeRemote;
+        if (__DEV__) {
+          console.log("[bjj-coach-kid-detail] reconcile gate", {
+            loadSeq: coachCompLoadSeq,
+            haveAuthoritativeRemote,
+            shouldReconcileSharedComps,
+            syncLinkCount: syncLinks.length,
+            sessionFetchFailures,
+          });
+        }
+        if (shouldReconcileSharedComps) {
+          if (__DEV__) {
+            console.log("[bjj-coach-kid-detail] before upsert (reconcile runs before setState)", {
+              loadSeq: coachCompLoadSeq,
+              kidId,
+              sharedAthleteId,
+            });
+          }
+          compRows = await upsertSharedCompetitionsForKid(kidId, sharedAthleteId, remoteForKid);
+          if (__DEV__) {
+            console.log("[bjj-coach-kid-detail] after upsert, before setCompetitions", {
+              loadSeq: coachCompLoadSeq,
+              compRowCount: compRows.length,
+            });
+          }
+        } else if (__DEV__) {
+          console.log("[bjj-coach-kid-detail] reconcile skipped (no upsert)", {
+            loadSeq: coachCompLoadSeq,
+          });
+        }
+      }
+      if (__DEV__) {
+        console.log("[bjj-coach-kid-detail] setCompetitions", {
+          loadSeq: coachCompLoadSeq,
+          kidId,
+          compRowCount: compRows.length,
+        });
+      }
       setCompetitions(compRows);
 
       const guidanceRow = await getKidStandingGuidance(kidId);
@@ -1409,11 +1531,13 @@ export default function KidDetailScreen() {
                     {expanded ? (
                       <View style={{ paddingHorizontal: 8, paddingBottom: 8, gap: 6 }}>
                         {entries.map((row) => {
+                          const isSyncedRow = Boolean(row.sharedCompetitionId);
                           const competitionMeta = competitionMetaLine(row);
                           return (
                           <Swipeable
                             key={row.id}
                             overshootRight={false}
+                            enabled={!isSyncedRow}
                             renderRightActions={() => (
                               <Pressable
                                 onPress={() => requestDeleteCompetition(row.id, row.tournamentName)}
@@ -1431,21 +1555,24 @@ export default function KidDetailScreen() {
                             )}
                           >
                             <Pressable
-                              onPress={() =>
+                              disabled={isSyncedRow}
+                              onPress={() => {
+                                if (isSyncedRow) return;
                                 router.push(
                                   `/profile/coaches/kid/${kidId}/competition/edit?entryId=${encodeURIComponent(row.id)}`,
-                                )
-                              }
+                                );
+                              }}
                               style={({ pressed }) => ({
                                 alignSelf: "stretch",
                                 paddingVertical: 10,
                                 paddingHorizontal: 10,
                                 gap: 3,
-                                backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
+                                backgroundColor: isSyncedRow ? "#f8fafc" : pressed ? "#eef2ff" : UI.rowMutedBg,
                                 borderRadius: 10,
                                 borderWidth: 1,
                                 borderColor: UI.border,
                                 overflow: "hidden",
+                                opacity: isSyncedRow ? 0.95 : 1,
                               })}
                             >
                               <View
@@ -1513,6 +1640,11 @@ export default function KidDetailScreen() {
                                 {" · "}
                                 {competitionResultLabel(row.result)}
                               </Text>
+                              {isSyncedRow ? (
+                                <Text style={{ fontSize: 10, color: UI.textSecondary }}>
+                                  Synced from parent link (read-only here)
+                                </Text>
+                              ) : null}
                               {competitionMeta ? (
                                 <Text
                                   style={{ fontSize: 10, color: UI.textSecondary, opacity: 0.95 }}

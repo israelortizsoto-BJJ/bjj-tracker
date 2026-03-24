@@ -19,6 +19,7 @@ import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/c
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSession,
+  coachSyncFetchSession,
 } from "../../../../src/services/coachWeeklySyncApi";
 import {
   getCoachLinks,
@@ -30,11 +31,13 @@ import {
 import {
   deleteKidPilot,
   getKidsById,
+  mergeRemoteSharedAthletesIntoKids,
   normalizeKidHouseholdLabel,
   setKidsById,
 } from "../../../../src/storage/coachKidStore";
 import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../../src/types/coachKid";
+import type { SyncedSharedAthlete } from "../../../../src/types/coachWeeklySync";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -93,6 +96,7 @@ export default function KidsRosterScreen() {
   const [coachNameDraft, setCoachNameDraft] = useState("");
   const [academyDraft, setAcademyDraft] = useState("");
   const [creatingInvite, setCreatingInvite] = useState(false);
+  const [moreInvitesExpanded, setMoreInvitesExpanded] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const syncConfigured = isCoachSyncConfigured();
@@ -100,16 +104,32 @@ export default function KidsRosterScreen() {
   const loadKids = useCallback(async () => {
     setReady(false);
     try {
+      const links = await getCoachLinks();
+      const writers = links.filter((l) => l.status === "active" && l.weeklySync?.writerSecret);
+      setWriterLinks(writers);
+
+      const merged: SyncedSharedAthlete[] = [];
+      if (syncConfigured) {
+        for (const l of writers) {
+          const ws = l.weeklySync!;
+          try {
+            const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+            merged.push(...session.athletes);
+          } catch {
+            // Best-effort: keep local roster if sync is unreachable.
+          }
+        }
+      }
+      if (merged.length > 0) {
+        await mergeRemoteSharedAthletesIntoKids(merged);
+      }
+
       const kids = await getKidsById();
       setKidsByIdState(kids);
-      const links = await getCoachLinks();
-      setWriterLinks(
-        links.filter((l) => l.status === "active" && l.weeklySync?.writerSecret),
-      );
     } finally {
       setReady(true);
     }
-  }, []);
+  }, [syncConfigured]);
 
   useFocusEffect(
     useCallback(() => {
@@ -123,6 +143,19 @@ export default function KidsRosterScreen() {
     );
     return { kids: sorted, householdSections: buildHouseholdSections(sorted) };
   }, [kidsById]);
+
+  /** Newest invite first — shown as the primary row; older codes live under “More invites”. */
+  const sortedWriterLinks = useMemo(
+    () =>
+      [...writerLinks].sort((a, b) => {
+        const c = b.createdAt.localeCompare(a.createdAt);
+        if (c !== 0) return c;
+        return b.updatedAt.localeCompare(a.updatedAt);
+      }),
+    [writerLinks],
+  );
+  const primaryWriterLink = sortedWriterLinks[0];
+  const extraWriterLinks = sortedWriterLinks.slice(1);
 
   const onConfirmDeleteKid = useCallback(
     async (kid: Kid) => {
@@ -153,6 +186,37 @@ export default function KidsRosterScreen() {
       );
     },
     [onConfirmDeleteKid],
+  );
+
+  const requestArchiveWriterLink = useCallback(
+    (link: CoachLink) => {
+      const tail = (link.weeklySync?.linkToken ?? "").trim();
+      const preview = tail.length > 12 ? `${tail.slice(0, 6)}…${tail.slice(-4)}` : tail || "this invite";
+      Alert.alert(
+        "Archive invite?",
+        `Remove ${preview} from this device? Parents who already joined keep their link until they disconnect. You can create a new invite anytime.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Archive",
+            style: "destructive",
+            onPress: async () => {
+              const nowIso = new Date().toISOString();
+              const all = await getCoachLinks();
+              const next = all.map((l) =>
+                l.id === link.id
+                  ? { ...l, status: "revoked" as const, revokedAt: nowIso, updatedAt: nowIso }
+                  : l,
+              );
+              await setCoachLinks(next);
+              setMoreInvitesExpanded(false);
+              await loadKids();
+            },
+          },
+        ],
+      );
+    },
+    [loadKids],
   );
 
   const onCreateFamilyInvite = useCallback(async () => {
@@ -205,7 +269,7 @@ export default function KidsRosterScreen() {
       await loadKids();
       Alert.alert(
         "Invite ready",
-        "Copy the invite code below and share it with a parent device. They paste it under Connect with your coach. Keep this coach phone safe — it holds the publish key.",
+        "Share this code with a parent device (Connect with your coach on their weekly screen). It links them to this coach’s published weekly family note — one channel per invite, not per athlete. Keep this coach phone safe — it holds the publish key.",
       );
     } catch (e) {
       const msg =
@@ -275,7 +339,7 @@ export default function KidsRosterScreen() {
           }}
         >
         <Pressable
-          onPress={() => router.push("/profile/coaches")}
+          onPress={() => router.replace("/profile")}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,
@@ -287,7 +351,7 @@ export default function KidsRosterScreen() {
             alignSelf: "flex-start",
           })}
         >
-          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Coach Tools</Text>
+          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Profile</Text>
         </Pressable>
 
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
@@ -315,8 +379,9 @@ export default function KidsRosterScreen() {
               FAMILY WEEKLY NOTE (SYNC)
             </Text>
             <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
-              Create an invite for a parent phone. Only the weekly title and family-facing text you publish
-              from a kid’s weekly focus are shared — not check-in notes or video links.
+              Create a coach-level invite for a parent phone. It syncs one shared weekly family note channel
+              (title + family-facing text your coach publishes) — not tied to a specific kid yet, and not
+              check-in notes or video links.
             </Text>
             <TextInput
               value={coachNameDraft}
@@ -370,35 +435,121 @@ export default function KidsRosterScreen() {
               </Text>
             </Pressable>
 
-            {writerLinks.length > 0 ? (
+            {sortedWriterLinks.length > 0 && primaryWriterLink ? (
               <View style={{ gap: 12, marginTop: 4 }}>
                 <Text style={{ fontSize: 12, fontWeight: "800", color: "#1e3a8a" }}>Active invites</Text>
-                {writerLinks.map((l) => (
-                  <View
-                    key={l.id}
+                <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
+                  Each code is its own weekly note channel. Most academies only need one live invite; create
+                  another if a second parent phone should subscribe separately.
+                </Text>
+
+                <View
+                  style={{
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: "#93c5fd",
+                    backgroundColor: UI.bgCard,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: UI.textSecondary, marginBottom: 6 }}>
+                    Current invite · parent pastes this code
+                  </Text>
+                  <Text
+                    selectable
                     style={{
-                      padding: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: UI.bgCard,
+                      fontSize: 13,
+                      color: UI.textPrimary,
+                      fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
                     }}
                   >
-                    <Text style={{ fontSize: 11, color: UI.textSecondary, marginBottom: 6 }}>
-                      Invite code (parent pastes this)
-                    </Text>
-                    <Text
-                      selectable
-                      style={{
-                        fontSize: 13,
-                        color: UI.textPrimary,
-                        fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
-                      }}
+                    {primaryWriterLink.weeklySync!.linkToken}
+                  </Text>
+                  <Pressable
+                    onPress={() => requestArchiveWriterLink(primaryWriterLink)}
+                    style={({ pressed }) => ({
+                      marginTop: 10,
+                      alignSelf: "flex-start",
+                      paddingVertical: 6,
+                      paddingHorizontal: 2,
+                      opacity: pressed ? 0.65 : 1,
+                    })}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "700", color: "#b45309" }}>Archive invite</Text>
+                  </Pressable>
+                </View>
+
+                {extraWriterLinks.length > 0 ? (
+                  <View style={{ gap: 8 }}>
+                    <Pressable
+                      onPress={() => setMoreInvitesExpanded((v) => !v)}
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        backgroundColor: pressed ? "#f9fafb" : UI.bgCard,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: 12,
+                      })}
                     >
-                      {l.weeklySync!.linkToken}
-                    </Text>
+                      <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary }}>
+                        More invites ({extraWriterLinks.length})
+                      </Text>
+                      <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "700" }}>
+                        {moreInvitesExpanded ? "Hide" : "Show"}
+                      </Text>
+                    </Pressable>
+
+                    {moreInvitesExpanded ? (
+                      <View style={{ gap: 10 }}>
+                        {extraWriterLinks.map((l, idx) => (
+                          <View
+                            key={l.id}
+                            style={{
+                              padding: 12,
+                              borderRadius: 12,
+                              borderWidth: 1,
+                              borderColor: UI.border,
+                              backgroundColor: UI.bgCard,
+                            }}
+                          >
+                            <Text style={{ fontSize: 11, color: UI.textSecondary, marginBottom: 6 }}>
+                              Older invite {idx + 1} of {extraWriterLinks.length}
+                            </Text>
+                            <Text
+                              selectable
+                              style={{
+                                fontSize: 13,
+                                color: UI.textPrimary,
+                                fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+                              }}
+                            >
+                              {l.weeklySync!.linkToken}
+                            </Text>
+                            <Pressable
+                              onPress={() => requestArchiveWriterLink(l)}
+                              style={({ pressed }) => ({
+                                marginTop: 10,
+                                alignSelf: "flex-start",
+                                paddingVertical: 6,
+                                paddingHorizontal: 2,
+                                opacity: pressed ? 0.65 : 1,
+                              })}
+                            >
+                              <Text style={{ fontSize: 12, fontWeight: "700", color: "#b45309" }}>
+                                Archive invite
+                              </Text>
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                   </View>
-                ))}
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -497,6 +648,12 @@ export default function KidsRosterScreen() {
                       >
                         <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
                           {kid.name}
+                          {kid.sharedAthleteId ? (
+                            <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
+                              {" "}
+                              · linked
+                            </Text>
+                          ) : null}
                         </Text>
                         <Text style={{ color: UI.textSecondary, fontSize: 18 }}>›</Text>
                       </Pressable>
