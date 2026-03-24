@@ -53,6 +53,8 @@ export default function KidWeeklyFocusScreen() {
   // Templates selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [referenceUrl, setReferenceUrl] = useState<string>("");
+  const [familyResourceUrl, setFamilyResourceUrl] = useState<string>("");
+  const [familyResourceLabel, setFamilyResourceLabel] = useState<string>("");
 
   // Custom selection
   const [customTitle, setCustomTitle] = useState<string>("");
@@ -82,16 +84,22 @@ export default function KidWeeklyFocusScreen() {
           setTab("templates");
           setSelectedTemplateId(existing.templateId);
           setReferenceUrl(existing.youtubeUrl ?? "");
+          setFamilyResourceUrl(existing.familyResourceUrl ?? "");
+          setFamilyResourceLabel(existing.familyResourceLabel ?? "");
         } else {
           setTab("custom");
           setCustomTitle(existing.title);
           setCustomNote(existing.note ?? "");
           setCustomYoutubeUrl(existing.youtubeUrl ?? "");
+          setFamilyResourceUrl(existing.familyResourceUrl ?? "");
+          setFamilyResourceLabel(existing.familyResourceLabel ?? "");
         }
       } else {
         setTab("templates");
         setSelectedTemplateId("guard-pull-defense-knee-middle");
         setReferenceUrl("");
+        setFamilyResourceUrl("");
+        setFamilyResourceLabel("");
         setCustomTitle("");
         setCustomNote("");
         setCustomYoutubeUrl("");
@@ -126,12 +134,16 @@ export default function KidWeeklyFocusScreen() {
             return;
           }
           const trimmedUrl = referenceUrl.trim();
+          const famUrl = familyResourceUrl.trim();
+          const famLabel = familyResourceLabel.trim();
           await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
             focusType: "template",
             templateId: selectedTemplateId,
             title: t.title,
             metadata: t.metadata,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+            familyResourceUrl: famUrl ? famUrl : undefined,
+            familyResourceLabel: famLabel ? famLabel : undefined,
           });
         } else {
           const trimmedTitle = customTitle.trim();
@@ -141,11 +153,15 @@ export default function KidWeeklyFocusScreen() {
           }
           const trimmedNote = customNote.trim();
           const trimmedUrl = customYoutubeUrl.trim();
+          const famUrl = familyResourceUrl.trim();
+          const famLabel = familyResourceLabel.trim();
           await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
             focusType: "custom",
             title: trimmedTitle,
             note: trimmedNote ? trimmedNote : undefined,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+            familyResourceUrl: famUrl ? famUrl : undefined,
+            familyResourceLabel: famLabel ? famLabel : undefined,
           });
         }
       } else if (tab === "templates") {
@@ -156,6 +172,8 @@ export default function KidWeeklyFocusScreen() {
 
         const t = TEMPLATE_CONTENT[selectedTemplateId];
         const trimmedUrl = referenceUrl.trim();
+        const famUrl = familyResourceUrl.trim();
+        const famLabel = familyResourceLabel.trim();
 
         await appendKidWeeklyFocus({
           kidId,
@@ -165,6 +183,8 @@ export default function KidWeeklyFocusScreen() {
           title: t.title,
           metadata: t.metadata,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+          familyResourceUrl: famUrl ? famUrl : undefined,
+          familyResourceLabel: famLabel ? famLabel : undefined,
         });
       } else {
         const trimmedTitle = customTitle.trim();
@@ -175,6 +195,8 @@ export default function KidWeeklyFocusScreen() {
 
         const trimmedNote = customNote.trim();
         const trimmedUrl = customYoutubeUrl.trim();
+        const famUrl = familyResourceUrl.trim();
+        const famLabel = familyResourceLabel.trim();
 
         await appendKidWeeklyFocus({
           kidId,
@@ -183,6 +205,8 @@ export default function KidWeeklyFocusScreen() {
           title: trimmedTitle,
           note: trimmedNote ? trimmedNote : undefined,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+          familyResourceUrl: famUrl ? famUrl : undefined,
+          familyResourceLabel: famLabel ? famLabel : undefined,
         });
       }
 
@@ -201,6 +225,8 @@ export default function KidWeeklyFocusScreen() {
     customTitle,
     customNote,
     customYoutubeUrl,
+    familyResourceUrl,
+    familyResourceLabel,
   ]);
 
   const tabButtonStyle = (active: boolean) => ({
@@ -339,7 +365,7 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={referenceUrl}
               onChangeText={setReferenceUrl}
-              placeholder="Reference video URL (optional)"
+              placeholder="Reference video URL — coach only, not published"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -352,6 +378,48 @@ export default function KidWeeklyFocusScreen() {
                 borderWidth: 1,
                 borderColor: UI.border,
                 backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+              }}
+            />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#047857", marginTop: 10 }}>
+              Family link (optional — publishes with weekly note)
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Parents can open this after you publish. Use a regular web link (https).
+            </Text>
+            <TextInput
+              value={familyResourceUrl}
+              onChangeText={setFamilyResourceUrl}
+              placeholder="https://…"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={{
+                marginTop: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+              }}
+            />
+            <TextInput
+              value={familyResourceLabel}
+              onChangeText={setFamilyResourceLabel}
+              placeholder="Short label (e.g. Drill video, Academy schedule)"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="sentences"
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
                 color: UI.textPrimary,
               }}
             />
@@ -417,7 +485,7 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={customYoutubeUrl}
               onChangeText={setCustomYoutubeUrl}
-              placeholder="Reference video URL (optional)"
+              placeholder="Reference video URL — coach only, not published"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="none"
               autoCorrect={false}
@@ -429,6 +497,48 @@ export default function KidWeeklyFocusScreen() {
                 borderWidth: 1,
                 borderColor: UI.border,
                 backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+              }}
+            />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: "#047857", marginTop: 10 }}>
+              Family link (optional — publishes with weekly note)
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Parents can open this after you publish.
+            </Text>
+            <TextInput
+              value={familyResourceUrl}
+              onChangeText={setFamilyResourceUrl}
+              placeholder="https://…"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={{
+                marginTop: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+              }}
+            />
+            <TextInput
+              value={familyResourceLabel}
+              onChangeText={setFamilyResourceLabel}
+              placeholder="Short label for parents (optional)"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="sentences"
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
                 color: UI.textPrimary,
               }}
             />

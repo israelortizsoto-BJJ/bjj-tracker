@@ -1,6 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { deleteAllKidCompetitionEntriesForKid } from "./kidCompetitionStore";
+import { CoachWeeklySyncApiError, coachSyncDeleteSessionAthlete } from "../services/coachWeeklySyncApi";
+import {
+  deleteAllKidCompetitionEntriesForKid,
+  stripWorkerSyncLinkageForKid,
+} from "./kidCompetitionStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { StorageKeys } from "./storageKeys";
 import type {
@@ -21,12 +25,16 @@ type KidWeeklyFocusAppendInput =
       weekStartYMD: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
       coachNotes?: string;
+      familyResourceUrl?: string;
+      familyResourceLabel?: string;
     })
   | (KidWeeklyFocusEntryCustom & {
       kidId: KidId;
       weekStartYMD: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
       coachNotes?: string;
+      familyResourceUrl?: string;
+      familyResourceLabel?: string;
     });
 
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
@@ -134,12 +142,80 @@ export async function setKidsById(kidsById: KidsById): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.coachKidsById, JSON.stringify(kidsById));
 }
 
+/** Drop sync-session athlete id only; keeps name and other pilot data. */
+export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | null> {
+  const kids = await getKidsById();
+  const existing = kids[kidId];
+  if (!existing) return null;
+  const sid = existing.sharedAthleteId?.trim();
+  if (!sid) return existing;
+
+  const nowIso = new Date().toISOString();
+  const { sharedAthleteId: _omit, ...rest } = existing;
+  const nextKid: Kid = { ...rest, updatedAt: nowIso };
+  await setKidsById({ ...kids, [kidId]: nextKid });
+  return nextKid;
+}
+
+/** After parent creates a session athlete, bind it to an existing roster row (relink / no duplicate kid). */
+export async function attachSharedAthleteToKid(
+  kidId: KidId,
+  athlete: SyncedSharedAthlete,
+): Promise<Kid | null> {
+  const kids = await getKidsById();
+  const existing = kids[kidId];
+  if (!existing) return null;
+
+  const nowIso = new Date().toISOString();
+  const next: Kid = {
+    ...existing,
+    name: athlete.name,
+    sharedAthleteId: athlete.id,
+    updatedAt: nowIso,
+  };
+  await setKidsById({ ...kids, [kidId]: next });
+  return next;
+}
+
 /**
- * Upsert roster rows for athletes returned from linked sync sessions (coach read path).
- * Does not remove local-only kids or rows already mapped by sharedAthleteId.
+ * Parent removes one athlete from the linked coach’s sync session (server + local unlink).
+ * Idempotent when the athlete is already gone on the server (404).
+ */
+export async function unlinkParentAthleteFromCoachSession(opts: {
+  kidId: KidId;
+  linkToken: string;
+  parentWriterSecret: string;
+  apiBaseUrl?: string | null;
+}): Promise<void> {
+  const { kidId, linkToken, parentWriterSecret, apiBaseUrl } = opts;
+  const kids = await getKidsById();
+  const kid = kids[kidId];
+  const sharedAthleteId = kid?.sharedAthleteId?.trim();
+  if (!kid || !sharedAthleteId) {
+    throw new CoachWeeklySyncApiError("This athlete is not linked for coach sharing.", 0);
+  }
+
+  await coachSyncDeleteSessionAthlete(
+    linkToken,
+    sharedAthleteId,
+    parentWriterSecret,
+    apiBaseUrl,
+  );
+
+  await clearKidSharedAthleteLink(kidId);
+  await stripWorkerSyncLinkageForKid(kidId);
+}
+
+/**
+ * Upsert roster rows for athletes returned from linked sync sessions (parent roster refresh).
+ * Does not remove local-only kids (no `sharedAthleteId`).
+ * When `pruneOrphansWhenAuthoritative` is true, every writer session fetch succeeded and `remote`
+ * is the exact union of server athletes — local rows with a `sharedAthleteId` not in that set are
+ * removed via `deleteKidPilot` (competitions, weekly focus, etc. for that kid id).
  */
 export async function mergeRemoteSharedAthletesIntoKids(
   remote: SyncedSharedAthlete[],
+  options?: { pruneOrphansWhenAuthoritative?: boolean },
 ): Promise<KidsById> {
   const kids = await getKidsById();
   const next: KidsById = { ...kids };
@@ -180,6 +256,30 @@ export async function mergeRemoteSharedAthletesIntoKids(
   }
 
   await setKidsById(next);
+
+  if (options?.pruneOrphansWhenAuthoritative) {
+    const remoteIds = new Set(remote.map((r) => r.id));
+    const current = await getKidsById();
+    const orphanIds = Object.values(current)
+      .filter(
+        (k) =>
+          typeof k.sharedAthleteId === "string" &&
+          k.sharedAthleteId.trim() !== "" &&
+          !remoteIds.has(k.sharedAthleteId.trim()),
+      )
+      .map((k) => k.id);
+    if (__DEV__ && orphanIds.length > 0) {
+      console.log("[bjj-coach-kid-roster] prune orphaned shared athletes", {
+        orphanIds,
+        remoteAthleteIdCount: remoteIds.size,
+      });
+    }
+    for (const oid of orphanIds) {
+      await deleteKidPilot(oid);
+    }
+    return getKidsById();
+  }
+
   return next;
 }
 
@@ -341,12 +441,16 @@ export type KidWeeklyFocusFocusUpdate =
       title: string;
       metadata?: string;
       youtubeUrl?: string;
+      familyResourceUrl?: string;
+      familyResourceLabel?: string;
     }
   | {
       focusType: "custom";
       title: string;
       note?: string;
       youtubeUrl?: string;
+      familyResourceUrl?: string;
+      familyResourceLabel?: string;
     };
 
 /**
@@ -374,6 +478,15 @@ export async function updateKidWeeklyFocusFocusById(
     coachNotes: existing.coachNotes,
   };
 
+  const famUrl =
+    typeof focus.familyResourceUrl === "string" && focus.familyResourceUrl.trim()
+      ? focus.familyResourceUrl.trim()
+      : undefined;
+  const famLabel =
+    typeof focus.familyResourceLabel === "string" && focus.familyResourceLabel.trim()
+      ? focus.familyResourceLabel.trim()
+      : undefined;
+
   const updated: KidWeeklyFocusEntry =
     focus.focusType === "template"
       ? {
@@ -383,6 +496,8 @@ export async function updateKidWeeklyFocusFocusById(
           title: focus.title,
           metadata: focus.metadata,
           youtubeUrl: focus.youtubeUrl,
+          familyResourceUrl: famUrl,
+          familyResourceLabel: famLabel,
         }
       : {
           ...base,
@@ -390,6 +505,8 @@ export async function updateKidWeeklyFocusFocusById(
           title: focus.title,
           note: focus.note,
           youtubeUrl: focus.youtubeUrl,
+          familyResourceUrl: famUrl,
+          familyResourceLabel: famLabel,
         };
 
   all[idx] = updated;
@@ -408,6 +525,15 @@ export async function appendKidWeeklyFocus(
   const nowIso = new Date().toISOString();
   const id = newEntryId();
 
+  const famUrl =
+    typeof input.familyResourceUrl === "string" && input.familyResourceUrl.trim()
+      ? input.familyResourceUrl.trim()
+      : undefined;
+  const famLabel =
+    typeof input.familyResourceLabel === "string" && input.familyResourceLabel.trim()
+      ? input.familyResourceLabel.trim()
+      : undefined;
+
   const created: KidWeeklyFocusEntry =
     input.focusType === "template"
       ? {
@@ -421,6 +547,8 @@ export async function appendKidWeeklyFocus(
           title: input.title,
           metadata: input.metadata,
           youtubeUrl: input.youtubeUrl,
+          familyResourceUrl: famUrl,
+          familyResourceLabel: famLabel,
           coachOutcome: input.coachOutcome,
           coachNotes: input.coachNotes,
         }
@@ -434,6 +562,8 @@ export async function appendKidWeeklyFocus(
           title: input.title,
           note: input.note,
           youtubeUrl: input.youtubeUrl,
+          familyResourceUrl: famUrl,
+          familyResourceLabel: famLabel,
           coachOutcome: input.coachOutcome,
           coachNotes: input.coachNotes,
         };

@@ -1,5 +1,5 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -18,7 +18,11 @@ import {
   coachSyncRedeemParentWriter,
 } from "../../../../src/services/coachWeeklySyncApi";
 import { getCoachLinks, setCoachLinks } from "../../../../src/storage/coachShareStore";
-import { getKidsById, setKidsById } from "../../../../src/storage/coachKidStore";
+import {
+  attachSharedAthleteToKid,
+  getKidsById,
+  setKidsById,
+} from "../../../../src/storage/coachKidStore";
 import { setCachedWeeklyForLinkToken } from "../../../../src/storage/coachWeeklySyncCacheStore";
 import type { CoachLink } from "../../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../../src/types/coachKid";
@@ -56,14 +60,20 @@ export default function ParentLinkedAthletesScreen() {
   const [ready, setReady] = useState(false);
   const [link, setLink] = useState<CoachLink | null>(null);
   const [sessionAthletes, setSessionAthletes] = useState<SyncedSharedAthlete[]>([]);
+  const [kidsById, setKidsByIdState] = useState<KidsById>({});
   const [nameDraft, setNameDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [linkingKidId, setLinkingKidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** After a successful `coachSyncFetchSession` this visit; enables stale `sharedAthleteId` relink. */
+  const [sessionAthletesAuthoritative, setSessionAthletesAuthoritative] = useState(false);
   const syncOk = isCoachSyncConfigured();
 
   const refresh = useCallback(async () => {
     setError(null);
     setReady(false);
+    setSessionAthletes([]);
+    setSessionAthletesAuthoritative(false);
     try {
       const links = await getCoachLinks();
       const found = links.find((l) => l.id === id && l.status === "active");
@@ -104,9 +114,12 @@ export default function ParentLinkedAthletesScreen() {
       }
 
       setLink(working);
+      const localKids = await getKidsById();
+      setKidsByIdState(localKids);
       if (syncOk && ws.parentWriterSecret) {
         const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
         setSessionAthletes(session.athletes);
+        setSessionAthletesAuthoritative(true);
         const nowIso = new Date().toISOString();
         await setCachedWeeklyForLinkToken(ws.linkToken, session.weekly, nowIso);
       }
@@ -123,11 +136,78 @@ export default function ParentLinkedAthletesScreen() {
     }
   }, [id, syncOk]);
 
+  const sessionAthleteIds = useMemo(
+    () => new Set(sessionAthletes.map((a) => (typeof a.id === "string" ? a.id.trim() : "")).filter(Boolean)),
+    [sessionAthletes],
+  );
+
+  /**
+   * Profiles that can be tied to this invite without creating a duplicate roster row:
+   * - never linked, or
+   * - linked id is not on this session anymore (reconnect / server removed athlete) when the session
+   *   fetch succeeded — local `sharedAthleteId` can be stale if the parent unlinked on the server but
+   *   storage was not cleared, or they removed the phone link before “Remove from coach”.
+   * Omit kids already present on this session for this invite.
+   */
+  const relinkCandidateKids = useMemo(() => {
+    return Object.values(kidsById)
+      .filter((k) => {
+        const sid = (k.sharedAthleteId ?? "").trim();
+        if (!sid) return true;
+        if (!sessionAthletesAuthoritative) return false;
+        return !sessionAthleteIds.has(sid);
+      })
+      .sort((a, b) => {
+        const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        if (byName !== 0) return byName;
+        return b.updatedAt.localeCompare(a.updatedAt);
+      });
+  }, [kidsById, sessionAthletesAuthoritative, sessionAthleteIds]);
+
   useFocusEffect(
     useCallback(() => {
       if (!id) return;
       void refresh();
     }, [id, refresh]),
+  );
+
+  const onRelinkExistingKid = useCallback(
+    async (kid: Kid) => {
+      const name = kid.name.trim();
+      if (!name || !link?.weeklySync?.linkToken || !link.weeklySync.parentWriterSecret) {
+        return;
+      }
+      setLinkingKidId(kid.id);
+      setError(null);
+      try {
+        const { athlete } = await coachSyncCreateSessionAthlete(
+          link.weeklySync.linkToken,
+          link.weeklySync.parentWriterSecret,
+          { name },
+          link.weeklySync.apiBaseUrl,
+        );
+
+        const updated = await attachSharedAthleteToKid(kid.id, athlete);
+        if (!updated) {
+          setError("Could not update that child profile.");
+          return;
+        }
+
+        setKidsByIdState((prev) => ({ ...prev, [kid.id]: updated }));
+        setSessionAthletes((prev) => [...prev, athlete]);
+      } catch (e) {
+        const msg =
+          e instanceof CoachWeeklySyncApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Could not link athlete.";
+        setError(msg);
+      } finally {
+        setLinkingKidId(null);
+      }
+    },
+    [link],
   );
 
   const onAddAthlete = useCallback(async () => {
@@ -158,6 +238,7 @@ export default function ParentLinkedAthletesScreen() {
       const nextKids: KidsById = { ...existing, [localId]: created };
       await setKidsById(nextKids);
 
+      setKidsByIdState(nextKids);
       setNameDraft("");
       setSessionAthletes((prev) => [...prev, athlete]);
     } catch (e) {
@@ -189,7 +270,7 @@ export default function ParentLinkedAthletesScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Add athletes" }} />
+      <Stack.Screen options={{ title: "Link athletes" }} />
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -205,11 +286,11 @@ export default function ParentLinkedAthletesScreen() {
             marginBottom: 8,
           }}
         >
-          Name your athlete(s)
+          Link athletes to this invite
         </Text>
         <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 16 }}>
-          Your coach can see these names on their pilot roster for this invite. You can add more later from
-          This week together.
+          If you shared this invite before, link the same child profile first — that keeps one roster row for
+          your coach. Add someone new only when you truly need another athlete on this channel.
         </Text>
 
         {!ready ? (
@@ -218,6 +299,61 @@ export default function ParentLinkedAthletesScreen() {
           <Text style={{ color: UI.textSecondary }}>This link is no longer available.</Text>
         ) : (
           <>
+            {relinkCandidateKids.length > 0 ? (
+              <View style={{ marginBottom: 20, gap: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary }}>
+                  EXISTING CHILD PROFILES
+                </Text>
+                <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+                  Primary: link an athlete you already set up on this phone (same profile for your coach — no
+                  duplicate). Use this after reconnecting or if they no longer appear under “On this invite”.
+                </Text>
+                {relinkCandidateKids.map((k) => {
+                  const household = (k.householdLabel ?? "").trim();
+                  const isLinking = linkingKidId === k.id;
+                  const disableRow =
+                    isLinking ||
+                    busy ||
+                    !link.weeklySync?.parentWriterSecret ||
+                    !k.name.trim();
+                  return (
+                    <Pressable
+                      key={k.id}
+                      disabled={disableRow}
+                      onPress={() => void onRelinkExistingKid(k)}
+                      style={({ pressed }) => ({
+                        paddingVertical: 14,
+                        paddingHorizontal: 14,
+                        borderRadius: CARD_RADIUS,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        backgroundColor: pressed ? "#f9fafb" : UI.bgCard,
+                        opacity: disableRow ? 0.55 : 1,
+                      })}
+                    >
+                      {isLinking ? (
+                        <ActivityIndicator color={UI.primaryFill} />
+                      ) : (
+                        <>
+                          <Text style={{ fontSize: 16, fontWeight: "600", color: UI.textPrimary }}>
+                            {k.name}
+                          </Text>
+                          {household ? (
+                            <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 4 }}>
+                              {household}
+                            </Text>
+                          ) : null}
+                          <Text style={{ fontSize: 12, color: UI.primaryFill, marginTop: 8, fontWeight: "700" }}>
+                            Link to this invite
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+
             {sessionAthletes.length > 0 ? (
               <View
                 style={{
@@ -238,8 +374,19 @@ export default function ParentLinkedAthletesScreen() {
                     {a.name}
                   </Text>
                 ))}
+                <Text style={{ marginTop: 8, fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                  To stop sharing someone with your coach later, open This week together → Competition →
+                  Remove from coach.
+                </Text>
               </View>
             ) : null}
+
+            <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary, marginBottom: 8 }}>
+              ADD NEW ATHLETE
+            </Text>
+            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18, marginBottom: 12 }}>
+              Secondary: use only when this child is not already in your roster above.
+            </Text>
 
             <TextInput
               value={nameDraft}
@@ -250,7 +397,7 @@ export default function ParentLinkedAthletesScreen() {
               placeholder="Athlete name"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="words"
-              editable={!busy && Boolean(link.weeklySync?.parentWriterSecret)}
+              editable={!busy && linkingKidId === null && Boolean(link.weeklySync?.parentWriterSecret)}
               style={{
                 paddingVertical: 12,
                 paddingHorizontal: 12,
@@ -268,7 +415,12 @@ export default function ParentLinkedAthletesScreen() {
             ) : null}
 
             <Pressable
-              disabled={busy || !link.weeklySync?.parentWriterSecret || !nameDraft.trim()}
+              disabled={
+                busy ||
+                linkingKidId !== null ||
+                !link.weeklySync?.parentWriterSecret ||
+                !nameDraft.trim()
+              }
               onPress={() => void onAddAthlete()}
               style={({ pressed }) => ({
                 paddingVertical: 14,
@@ -276,13 +428,18 @@ export default function ParentLinkedAthletesScreen() {
                 backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
                 alignItems: "center",
                 opacity:
-                  busy || !link.weeklySync?.parentWriterSecret || !nameDraft.trim() ? 0.55 : 1,
+                  busy ||
+                  linkingKidId !== null ||
+                  !link.weeklySync?.parentWriterSecret ||
+                  !nameDraft.trim()
+                    ? 0.55
+                    : 1,
               })}
             >
               {busy ? (
                 <ActivityIndicator color="#ffffff" />
               ) : (
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Add athlete</Text>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Add new athlete</Text>
               )}
             </Pressable>
 

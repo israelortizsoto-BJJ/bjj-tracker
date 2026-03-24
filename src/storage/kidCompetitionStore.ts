@@ -191,6 +191,27 @@ export async function getKidCompetitionEntriesForKid(
 }
 
 /**
+ * After parent unlinks from coach sync: keep tournament rows but drop worker linkage so entries
+ * behave as local-only (swipe delete / edit). Regenerates ids for `shared-comp-*` rows.
+ */
+export async function stripWorkerSyncLinkageForKid(kidId: KidId): Promise<void> {
+  const all = await getRaw();
+  const nowIso = new Date().toISOString();
+  const next = all.map((e) => {
+    if (e.kidId !== kidId) return e;
+    const { sharedAthleteId: _a, sharedCompetitionId: _c, ...rest } = e;
+    const id =
+      rest.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX) ? newEntryId() : rest.id;
+    return normalizeKidCompetitionEntry({
+      ...rest,
+      id,
+      updatedAt: nowIso,
+    });
+  });
+  await setRaw(capCompetitionsByKid(next));
+}
+
+/**
  * Merge shared worker competitions into one kid's local list.
  * Dedupe key is strictly `sharedCompetitionId` (no name/date heuristics).
  * Keeps local-only rows untouched and prunes only stale shared rows for this athlete.
@@ -212,6 +233,7 @@ export async function upsertSharedCompetitionsForKid(
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({
       id: r.id,
+      kidId: r.kidId,
       sharedCompetitionId: r.sharedCompetitionId ?? null,
       sharedAthleteId: r.sharedAthleteId ?? null,
       tournamentName: r.tournamentName,
@@ -226,32 +248,24 @@ export async function upsertSharedCompetitionsForKid(
     for (const row of targetKid) {
       if (!row.sharedCompetitionId) continue;
       const rowAthlete = row.sharedAthleteId ?? "";
-      const skippedOtherAthlete = Boolean(rowAthlete) && rowAthlete !== sharedAthleteId;
-      if (skippedOtherAthlete) {
-        console.log(devLogTag, "local shared row skipped (other athlete)", summarize(row));
-        continue;
-      }
-      const athleteMissing = !rowAthlete;
       const absentFromRemote = !remoteIdSet.has(row.sharedCompetitionId);
       console.log(devLogTag, "local shared row (reconcile scope)", {
         ...summarize(row),
-        athleteMissingOnLocalRow: athleteMissing,
+        athleteMissingOnLocalRow: !rowAthlete,
+        athleteMismatchVsCurrentKid: Boolean(rowAthlete) && rowAthlete !== sharedAthleteId,
         absentFromRemote,
       });
     }
   }
 
   const keptTarget: KidCompetitionEntry[] = [];
+  const droppedStaleShared: KidCompetitionEntry[] = [];
 
-  // Keep local-only rows; remove stale shared rows for this athlete only.
+  // Keep local-only rows; remove stale shared rows for this kid (one roster row ↔ one
+  // `sharedAthleteId`). Rows tagged with a different athlete id are orphaned linkage after relink
+  // or legacy bugs — still drop when absent from remote (exact id match only).
   for (const row of targetKid) {
     if (!row.sharedCompetitionId) {
-      keptTarget.push(row);
-      continue;
-    }
-    const rowAthlete = row.sharedAthleteId ?? "";
-    // Explicit tag for another shared athlete: leave untouched (no fuzzy match).
-    if (rowAthlete && rowAthlete !== sharedAthleteId) {
       keptTarget.push(row);
       continue;
     }
@@ -259,8 +273,20 @@ export async function upsertSharedCompetitionsForKid(
       keptTarget.push(row);
       continue;
     }
-    // Absent from remote: drop this shared row. Reconcile uses exact `sharedCompetitionId` ↔ worker
-    // competition id only (no fuzzy match). Local-only coach rows have no `sharedCompetitionId`.
+    droppedStaleShared.push(row);
+    // Absent from remote: drop. Local-only coach rows have no `sharedCompetitionId`.
+  }
+
+  if (__DEV__ && droppedStaleShared.length > 0) {
+    for (const row of droppedStaleShared) {
+      console.log(devLogTag, "dropped stale shared row (absent from remote)", {
+        id: row.id,
+        kidId: row.kidId,
+        tournamentName: row.tournamentName,
+        sharedCompetitionId: row.sharedCompetitionId ?? null,
+        sharedAthleteId: row.sharedAthleteId ?? null,
+      });
+    }
   }
 
   const bySharedId = new Map(
@@ -299,23 +325,16 @@ export async function upsertSharedCompetitionsForKid(
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({
       id: r.id,
+      kidId: r.kidId,
       sharedCompetitionId: r.sharedCompetitionId ?? null,
       sharedAthleteId: r.sharedAthleteId ?? null,
       tournamentName: r.tournamentName,
     });
-    const inScopeBefore = targetKid.filter((row) => {
-      if (!row.sharedCompetitionId) return false;
-      const rowAthlete = row.sharedAthleteId ?? "";
-      return !rowAthlete || rowAthlete === sharedAthleteId;
-    });
+    const inScopeBefore = targetKid.filter((row) => Boolean(row.sharedCompetitionId));
     const sharedIdsBefore = new Set(
       inScopeBefore.map((r) => r.sharedCompetitionId as string),
     );
-    const inScopeAfterKept = keptTarget.filter((row) => {
-      if (!row.sharedCompetitionId) return false;
-      const rowAthlete = row.sharedAthleteId ?? "";
-      return !rowAthlete || rowAthlete === sharedAthleteId;
-    });
+    const inScopeAfterKept = keptTarget.filter((row) => Boolean(row.sharedCompetitionId));
     const sharedIdsAfterKept = new Set(
       inScopeAfterKept.map((r) => r.sharedCompetitionId as string),
     );
@@ -348,17 +367,15 @@ export async function upsertSharedCompetitionsForKid(
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({
       id: r.id,
+      kidId: r.kidId,
       sharedCompetitionId: r.sharedCompetitionId ?? null,
       sharedAthleteId: r.sharedAthleteId ?? null,
       tournamentName: r.tournamentName,
     });
-    const inScopeReturned = returnedForKid.filter((row) => {
-      if (!row.sharedCompetitionId) return false;
-      const rowAthlete = row.sharedAthleteId ?? "";
-      return !rowAthlete || rowAthlete === sharedAthleteId;
-    });
     const sharedIdsAfterCap = new Set(
-      inScopeReturned.map((r) => r.sharedCompetitionId as string),
+      returnedForKid
+        .filter((row) => Boolean(row.sharedCompetitionId))
+        .map((r) => r.sharedCompetitionId as string),
     );
     console.log(devLogTag, "after reconcile (post-cap, returned for kid)", {
       kidId,
@@ -374,11 +391,7 @@ export async function upsertSharedCompetitionsForKid(
     }
     const inScopeBeforeIds = new Set(
       targetKid
-        .filter((row) => {
-          if (!row.sharedCompetitionId) return false;
-          const rowAthlete = row.sharedAthleteId ?? "";
-          return !rowAthlete || rowAthlete === sharedAthleteId;
-        })
+        .filter((row) => Boolean(row.sharedCompetitionId))
         .map((r) => r.sharedCompetitionId as string),
     );
     for (const sid of inScopeBeforeIds) {

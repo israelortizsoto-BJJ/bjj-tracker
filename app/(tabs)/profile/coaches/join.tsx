@@ -183,8 +183,9 @@ export default function CoachJoinScreen() {
           }}
         >
           Paste the invite code from your coach. This subscribes this phone to your coach’s published weekly
-          family note, then asks you to name any athletes so your coach can see them on their roster for this
-          invite. Competition, Training logs, and other data stay on this device unless we add more sync later.
+          family note, then opens a screen where you should link any existing child profiles first (reconnect
+          after unlink), and only then add a brand-new athlete if needed. Competition, Training logs, and other
+          data stay on this device unless we add more sync later.
         </Text>
 
         {!ready ? (

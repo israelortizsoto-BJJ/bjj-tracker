@@ -219,6 +219,35 @@ export async function coachSyncCreateSessionAthlete(
   return payload as CoachWeeklySyncCreateAthleteResponse;
 }
 
+export async function coachSyncDeleteSessionAthlete(
+  linkToken: string,
+  athleteId: string,
+  parentWriterSecret: string,
+  apiBaseUrlOverride?: string | null,
+): Promise<void> {
+  const base = resolveBase(apiBaseUrlOverride);
+  const enc = encodeURIComponent(linkToken);
+  const athleteEnc = encodeURIComponent(athleteId);
+  const res = await fetch(joinUrl(base, `/v1/sessions/${enc}/athletes/${athleteEnc}`), {
+    method: "DELETE",
+    headers: {
+      Accept: "application/json",
+      Authorization: `Bearer ${parentWriterSecret}`,
+    },
+  });
+  const payload = await parseJsonOrText(res);
+  if (res.status === 404) {
+    return;
+  }
+  if (!res.ok) {
+    const msg =
+      typeof payload === "object" && payload && "error" in payload
+        ? String((payload as { error: unknown }).error)
+        : `HTTP ${res.status}`;
+    throw new CoachWeeklySyncApiError(msg, res.status);
+  }
+}
+
 export async function coachSyncPublishWeekly(
   linkToken: string,
   writerSecret: string,

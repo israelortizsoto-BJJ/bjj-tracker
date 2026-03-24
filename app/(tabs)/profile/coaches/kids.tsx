@@ -39,6 +39,41 @@ import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare"
 import type { Kid, KidsById } from "../../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../../src/types/coachWeeklySync";
 
+function linkTokenLookupKey(raw: string): string {
+  return raw.trim().toLowerCase();
+}
+
+type InviteSessionAthletesState = { names: string[]; fetchFailed: boolean };
+
+function formatInviteLinkedAthletesLine(info: InviteSessionAthletesState | undefined): string | null {
+  if (!info) return null;
+  if (info.fetchFailed) return "Couldn’t load linked athletes";
+  if (info.names.length === 0) return "No athletes linked yet";
+  return `Linked: ${info.names.join(", ")}`;
+}
+
+/** One UI row per invite token — duplicate persisted links collapse to the newest record. */
+function dedupeActiveCoachWriterLinks(links: CoachLink[]): CoachLink[] {
+  const m = new Map<string, CoachLink>();
+  for (const l of links) {
+    if (l.status !== "active" || l.revokedAt) continue;
+    const ws = l.weeklySync;
+    const secret = typeof ws?.writerSecret === "string" ? ws.writerSecret.trim() : "";
+    const tokenRaw = typeof ws?.linkToken === "string" ? ws.linkToken.trim() : "";
+    if (!ws || !secret || !tokenRaw) continue;
+    const token = tokenRaw.toLowerCase();
+    const cur = m.get(token);
+    if (
+      !cur ||
+      l.updatedAt.localeCompare(cur.updatedAt) > 0 ||
+      (l.updatedAt === cur.updatedAt && l.createdAt.localeCompare(cur.createdAt) > 0)
+    ) {
+      m.set(token, l);
+    }
+  }
+  return [...m.values()];
+}
+
 const UI = {
   screenBg: "#f3f4f6",
   bgCard: "#ffffff",
@@ -97,6 +132,9 @@ export default function KidsRosterScreen() {
   const [academyDraft, setAcademyDraft] = useState("");
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [moreInvitesExpanded, setMoreInvitesExpanded] = useState(false);
+  const [inviteSessionAthletesByToken, setInviteSessionAthletesByToken] = useState<
+    Record<string, InviteSessionAthletesState>
+  >({});
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const syncConfigured = isCoachSyncConfigured();
@@ -105,23 +143,40 @@ export default function KidsRosterScreen() {
     setReady(false);
     try {
       const links = await getCoachLinks();
-      const writers = links.filter((l) => l.status === "active" && l.weeklySync?.writerSecret);
+      const writers = dedupeActiveCoachWriterLinks(links);
       setWriterLinks(writers);
 
       const merged: SyncedSharedAthlete[] = [];
+      let sessionFetchFailures = 0;
+      const athletesByToken: Record<string, InviteSessionAthletesState> = {};
       if (syncConfigured) {
         for (const l of writers) {
           const ws = l.weeklySync!;
+          const tokenKey = linkTokenLookupKey(ws.linkToken);
           try {
             const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
             merged.push(...session.athletes);
+            const names = session.athletes
+              .map((a) => (typeof a.name === "string" ? a.name.trim() : ""))
+              .filter(Boolean);
+            names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+            athletesByToken[tokenKey] = { names, fetchFailed: false };
           } catch {
+            sessionFetchFailures += 1;
+            athletesByToken[tokenKey] = { names: [], fetchFailed: true };
             // Best-effort: keep local roster if sync is unreachable.
           }
         }
       }
-      if (merged.length > 0) {
-        await mergeRemoteSharedAthletesIntoKids(merged);
+      setInviteSessionAthletesByToken(athletesByToken);
+      if (writers.length > 0 && syncConfigured) {
+        const allSessionsFetched = sessionFetchFailures === 0;
+        const shouldMerge = merged.length > 0 || allSessionsFetched;
+        if (shouldMerge) {
+          await mergeRemoteSharedAthletesIntoKids(merged, {
+            pruneOrphansWhenAuthoritative: allSessionsFetched,
+          });
+        }
       }
 
       const kids = await getKidsById();
@@ -465,6 +520,18 @@ export default function KidsRosterScreen() {
                   >
                     {primaryWriterLink.weeklySync!.linkToken}
                   </Text>
+                  {(() => {
+                    const line = formatInviteLinkedAthletesLine(
+                      inviteSessionAthletesByToken[
+                        linkTokenLookupKey(primaryWriterLink.weeklySync!.linkToken)
+                      ],
+                    );
+                    return line ? (
+                      <Text style={{ fontSize: 12, color: UI.textSecondary, marginTop: 8, lineHeight: 17 }}>
+                        {line}
+                      </Text>
+                    ) : null;
+                  })()}
                   <Pressable
                     onPress={() => requestArchiveWriterLink(primaryWriterLink)}
                     style={({ pressed }) => ({
@@ -506,46 +573,58 @@ export default function KidsRosterScreen() {
 
                     {moreInvitesExpanded ? (
                       <View style={{ gap: 10 }}>
-                        {extraWriterLinks.map((l, idx) => (
-                          <View
-                            key={l.id}
-                            style={{
-                              padding: 12,
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: UI.border,
-                              backgroundColor: UI.bgCard,
-                            }}
-                          >
-                            <Text style={{ fontSize: 11, color: UI.textSecondary, marginBottom: 6 }}>
-                              Older invite {idx + 1} of {extraWriterLinks.length}
-                            </Text>
-                            <Text
-                              selectable
+                        {extraWriterLinks.map((l, idx) => {
+                          const linkedLine = formatInviteLinkedAthletesLine(
+                            inviteSessionAthletesByToken[linkTokenLookupKey(l.weeklySync!.linkToken)],
+                          );
+                          return (
+                            <View
+                              key={l.id}
                               style={{
-                                fontSize: 13,
-                                color: UI.textPrimary,
-                                fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+                                padding: 12,
+                                borderRadius: 12,
+                                borderWidth: 1,
+                                borderColor: UI.border,
+                                backgroundColor: UI.bgCard,
                               }}
                             >
-                              {l.weeklySync!.linkToken}
-                            </Text>
-                            <Pressable
-                              onPress={() => requestArchiveWriterLink(l)}
-                              style={({ pressed }) => ({
-                                marginTop: 10,
-                                alignSelf: "flex-start",
-                                paddingVertical: 6,
-                                paddingHorizontal: 2,
-                                opacity: pressed ? 0.65 : 1,
-                              })}
-                            >
-                              <Text style={{ fontSize: 12, fontWeight: "700", color: "#b45309" }}>
-                                Archive invite
+                              <Text style={{ fontSize: 11, color: UI.textSecondary, marginBottom: 6 }}>
+                                Older invite {idx + 1} of {extraWriterLinks.length}
                               </Text>
-                            </Pressable>
-                          </View>
-                        ))}
+                              <Text
+                                selectable
+                                style={{
+                                  fontSize: 13,
+                                  color: UI.textPrimary,
+                                  fontFamily: Platform.select({ ios: "Menlo", default: "monospace" }),
+                                }}
+                              >
+                                {l.weeklySync!.linkToken}
+                              </Text>
+                              {linkedLine ? (
+                                <Text
+                                  style={{ fontSize: 12, color: UI.textSecondary, marginTop: 8, lineHeight: 17 }}
+                                >
+                                  {linkedLine}
+                                </Text>
+                              ) : null}
+                              <Pressable
+                                onPress={() => requestArchiveWriterLink(l)}
+                                style={({ pressed }) => ({
+                                  marginTop: 10,
+                                  alignSelf: "flex-start",
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 2,
+                                  opacity: pressed ? 0.65 : 1,
+                                })}
+                              >
+                                <Text style={{ fontSize: 12, fontWeight: "700", color: "#b45309" }}>
+                                  Archive invite
+                                </Text>
+                              </Pressable>
+                            </View>
+                          );
+                        })}
                       </View>
                     ) : null}
                   </View>

@@ -12,6 +12,9 @@ export type SyncedWeeklyMessagePayload = {
   classLine?: string;
   /** Optional line for Read together “program” step */
   programLine?: string;
+  /** Optional family-facing link from the coach (publish lane only). */
+  familyResourceUrl?: string;
+  familyResourceLabel?: string;
   updatedAt: string;
 };
 
@@ -70,6 +73,8 @@ export type CoachWeeklySyncPublishBody = {
   body: string;
   classLine?: string;
   programLine?: string;
+  familyResourceUrl?: string;
+  familyResourceLabel?: string;
 };
 
 export type CoachWeeklySyncRedeemParentWriterResponse = {
