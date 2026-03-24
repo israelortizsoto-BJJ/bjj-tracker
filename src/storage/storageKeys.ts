@@ -28,4 +28,7 @@ export const StorageKeys = {
 
   /** Last fetched weekly sync payload per link token (parent read cache). */
   coachWeeklySyncCacheByToken: "mm:v1:coachWeeklySyncCacheByToken",
+
+  /** Pilot: who this install is for — local only, not server RBAC. */
+  deviceRole: "mm:v1:deviceRole",
 } as const;

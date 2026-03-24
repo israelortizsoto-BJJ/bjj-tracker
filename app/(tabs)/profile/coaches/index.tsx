@@ -1,5 +1,6 @@
 import { Stack, router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Alert,
   Linking,
@@ -57,6 +58,7 @@ import {
   shouldShowFamilyCompetitionResult,
   sortedKidsForFamilyCompetitionChips,
 } from "../../../../src/family/coachShareCompetitionBuckets";
+import { useDeviceRole } from "../../../../src/deviceRole/DeviceRoleProvider";
 import {
   clearFamilyCompetitionSelectedKidId,
   getFamilyCompetitionSelectedKidId,
@@ -64,10 +66,12 @@ import {
   setFamilyCompetitionSelectedKidId,
   todayYMD,
 } from "../../../../src/storage/coachKidStore";
+import { StorageKeys } from "../../../../src/storage/storageKeys";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntriesForKid,
 } from "../../../../src/storage/kidCompetitionStore";
+import type { Session } from "../../../../src/types";
 import type { KidCompetitionEntry } from "../../../../src/types/coachKid";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
@@ -173,6 +177,11 @@ type FamilyCompetitionLoadState = {
   recent: KidCompetitionEntry[];
 };
 
+type ParentWeeklyPracticeSummary = {
+  sessionCountThisWeek: number;
+  latestSession: Session | null;
+};
+
 const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
   todayYMD: "",
   kidId: null,
@@ -183,9 +192,45 @@ const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
   recent: [],
 };
 
+const INITIAL_PRACTICE_SUMMARY: ParentWeeklyPracticeSummary = {
+  sessionCountThisWeek: 0,
+  latestSession: null,
+};
+
+function startOfWeekMondayYMD(ymd: string): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  const day = date.getDay();
+  const diffToMonday = (day + 6) % 7;
+  date.setDate(date.getDate() - diffToMonday);
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function readSessionsSafe(raw: string | null): Session[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as Session[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function sessionSummaryTitle(session: Session): string {
+  const system = (session.system ?? "").trim();
+  const technique = (session.technique ?? "").trim();
+  if (system && technique) return `${system} · ${technique}`;
+  return technique || system || "Practice session";
+}
+
 export default function CoachesScreen() {
+  const { role } = useDeviceRole();
   const insets = useSafeAreaInsets();
   const [ready, setReady] = useState(false);
+  /** Dev-only: raw AsyncStorage row counts (long-press title). */
   const [showDebugData, setShowDebugData] = useState(false);
   const [weeklyStoryOpen, setWeeklyStoryOpen] = useState(false);
   const [weeklyStoryStep, setWeeklyStoryStep] = useState(0);
@@ -206,6 +251,9 @@ export default function CoachesScreen() {
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
   const [weeklySyncFromCache, setWeeklySyncFromCache] = useState(false);
   const [weeklySyncNetworkOk, setWeeklySyncNetworkOk] = useState(false);
+  const [practiceSummary, setPracticeSummary] = useState<ParentWeeklyPracticeSummary>(
+    INITIAL_PRACTICE_SUMMARY,
+  );
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
 
@@ -337,11 +385,37 @@ export default function CoachesScreen() {
         recent: part.recent,
       };
     }
+    const rawSessions = await AsyncStorage.getItem(StorageKeys.sessions);
+    const allSessions = readSessionsSafe(rawSessions).map((s) => ({
+      ...s,
+      date: s.date || today,
+    }));
+    const scopedSessions = nextFamily.kidId
+      ? allSessions.filter((s) => (s.kidId ?? "").trim() === nextFamily.kidId)
+      : allSessions.filter((s) => !(s.kidId ?? "").trim());
+    const weekStart = startOfWeekMondayYMD(today);
+    const thisWeekSessions = scopedSessions
+      .filter((s) => s.date >= weekStart && s.date <= today)
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    const latestSessionOverall = scopedSessions
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      )[0] ?? null;
+    const nextPracticeSummary: ParentWeeklyPracticeSummary = {
+      sessionCountThisWeek: thisWeekSessions.length,
+      latestSession: latestSessionOverall,
+    };
 
     setFamilyCompetition((prev) => {
       if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
       return nextFamily;
     });
+    setPracticeSummary(nextPracticeSummary);
 
     setCoachLinks(loadedCoachLinks);
     setCoachesById(loadedCoachesById);
@@ -708,7 +782,8 @@ export default function CoachesScreen() {
           ? "Marked done at home (saved on this phone)"
           : null);
 
-  const showCoachPilotUi = __DEV__ && showDebugData;
+  const showCoachOperationalTools = role === "coach";
+  const showDebugStoragePanel = __DEV__ && showDebugData;
 
   const familyCompetitionGlobalEmpty =
     familyCompetition.upcoming.length === 0 &&
@@ -796,7 +871,7 @@ export default function CoachesScreen() {
     isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
       ? "When you’re ready, use Log practice for this week on the screen behind this."
       : useWeeklySyncHero
-        ? "When you’re ready, use Refresh this week’s update on the screen behind this."
+        ? "When you’re ready, use Refresh this week’s update or open This week’s practice (Training tab) on the screen behind this."
         : !isLinked
           ? "When you’re ready, use Connect with your coach on the screen behind this."
           : "When you’re ready, use Refresh this week’s update on the screen behind this.";
@@ -834,6 +909,13 @@ export default function CoachesScreen() {
           .filter(Boolean)
           .join("\n\n")
       : "No extra class or program line on this note right now — that’s okay.";
+
+  const activeAthleteLabel = familyCompetition.kidName
+    ? familyCompetition.kidName
+    : familyCompetition.kidId
+      ? "Selected athlete"
+      : "No athlete selected";
+  const focusHeadingWithAthlete = `This week's focus · ${activeAthleteLabel}`;
 
   return (
     <>
@@ -1171,7 +1253,7 @@ export default function CoachesScreen() {
         </Text>
         {__DEV__ ? (
           <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
-            Dev: long-press the title to show coach pilot tools.
+            Dev: long-press the title for local storage debug counts.
           </Text>
         ) : (
           <View style={{ height: 14 }} />
@@ -1228,7 +1310,7 @@ export default function CoachesScreen() {
               </View>
 
               <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#6d28d9" }]}>
-                THIS WEEK&apos;S FOCUS
+                {focusHeadingWithAthlete.toUpperCase()}
               </Text>
               <Text style={{ fontSize: 20, fontWeight: "700", color: UI.textPrimary, lineHeight: 28 }}>
                 {focusTitle}
@@ -1394,7 +1476,7 @@ export default function CoachesScreen() {
                 <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
                   <Pressable onPress={() => router.push("/profile/coaches/manage")}>
                     <Text style={{ fontSize: 14, fontWeight: "600", color: UI.primaryFill }}>
-                      Manage coach link
+                      Weekly note links
                     </Text>
                   </Pressable>
                   {currentAssignment?.status === "assigned" ? (
@@ -1407,6 +1489,138 @@ export default function CoachesScreen() {
                 </View>
               ) : null}
             </View>
+
+            {role === "parent" && ready ? (
+              <Section title="This week's practice (Training)" tone="family">
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: UI.textSecondary,
+                    lineHeight: 23,
+                    marginBottom: 12,
+                  }}
+                >
+                  Log in Training, then come right back here to confirm what was recorded for this athlete.
+                  Everything stays on this phone and lines up with this week’s note above.
+                </Text>
+                <View
+                  style={{
+                    marginBottom: 12,
+                    padding: 12,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: UI.addCompetitionBorder,
+                    backgroundColor: "#f5f3ff",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+                    This week for{" "}
+                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
+                      {activeAthleteLabel}
+                    </Text>
+                    :{" "}
+                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
+                      {practiceSummary.sessionCountThisWeek}
+                    </Text>{" "}
+                    {practiceSummary.sessionCountThisWeek === 1 ? "session" : "sessions"} logged
+                  </Text>
+                  {practiceSummary.latestSession ? (
+                    <Text
+                      style={{
+                        marginTop: 6,
+                        fontSize: 13,
+                        color: UI.textSecondary,
+                        lineHeight: 19,
+                      }}
+                    >
+                      Latest:{" "}
+                      <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
+                        {sessionSummaryTitle(practiceSummary.latestSession)}
+                      </Text>
+                      {" · "}
+                      {new Date(
+                        practiceSummary.latestSession.createdAt,
+                      ).toLocaleDateString()}
+                    </Text>
+                  ) : null}
+                </View>
+                {familyCompetition.kidId && familyCompetition.kidName ? (
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: UI.textSecondary,
+                      lineHeight: 19,
+                      marginBottom: 12,
+                    }}
+                  >
+                    Opens the log for{" "}
+                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
+                      {familyCompetition.kidName}
+                    </Text>
+                    . Use the athlete chips in Competition below if you need someone else on this phone.
+                  </Text>
+                ) : familyCompetition.kidId ? (
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: UI.textSecondary,
+                      lineHeight: 19,
+                      marginBottom: 12,
+                    }}
+                  >
+                    Opens the log for the athlete currently selected for family competition on this device.
+                  </Text>
+                ) : (
+                  <Text
+                    style={{
+                      fontSize: 13,
+                      color: UI.textSecondary,
+                      lineHeight: 19,
+                      marginBottom: 12,
+                    }}
+                  >
+                    No athlete selected for competitions yet — Training opens your usual log. When your coach’s
+                    roster exists on this phone, pick an athlete under Competition to scope sessions.
+                  </Text>
+                )}
+                <Pressable
+                  onPress={() => {
+                    const d = todayYMD();
+                    const k = familyCompetition.kidId;
+                    router.push(
+                      k
+                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}`
+                        : `/training?date=${encodeURIComponent(d)}`,
+                    );
+                  }}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                    borderRadius: CARD_RADIUS,
+                    borderWidth: 1,
+                    borderColor: UI.addCompetitionBorder,
+                    backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: "700", color: UI.primaryFill }}>
+                    Open Training log
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: 13,
+                      color: UI.textSecondary,
+                      textAlign: "center",
+                      lineHeight: 19,
+                    }}
+                  >
+                    Today’s date is pre-selected; change the day in Training if you need to backfill.
+                  </Text>
+                </Pressable>
+              </Section>
+            ) : null}
 
             <Section title="Competition" tone="family">
                 <Text
@@ -2042,11 +2256,11 @@ export default function CoachesScreen() {
               </Section>
             ) : null}
 
-            {showCoachPilotUi ? (
+            {showCoachOperationalTools ? (
               <>
                 <Section title="Coach Tools (pilot)">
                   <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                    Internal pilot (coach-side). Hidden from families unless dev debug is on.
+                    Coach-side pilot on this device — use Profile → Switch role if this phone is for a parent.
                   </Text>
                   <Pressable
                     onPress={() => router.push("/profile/coaches/kids")}
@@ -2232,29 +2446,31 @@ export default function CoachesScreen() {
                     </Text>
                   </Section>
                 )}
-
-                <Section title="Debug Data">
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>Links: {coachLinks.length}</Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Coaches: {Object.keys(coachesById).length}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Packs: {Object.keys(packsById).length}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Enrollments: {packEnrollments.length}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Assignments: {Object.keys(assignmentsById).length}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Receipt queue: {completionReceiptsQueue.length}
-                  </Text>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Pilot preview items: {pilotPreviewItems.length}
-                  </Text>
-                </Section>
               </>
+            ) : null}
+
+            {showDebugStoragePanel ? (
+              <Section title="Debug Data">
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>Links: {coachLinks.length}</Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Coaches: {Object.keys(coachesById).length}
+                </Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Packs: {Object.keys(packsById).length}
+                </Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Enrollments: {packEnrollments.length}
+                </Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Assignments: {Object.keys(assignmentsById).length}
+                </Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Receipt queue: {completionReceiptsQueue.length}
+                </Text>
+                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
+                  Pilot preview items: {pilotPreviewItems.length}
+                </Text>
+              </Section>
             ) : null}
           </>
         )}

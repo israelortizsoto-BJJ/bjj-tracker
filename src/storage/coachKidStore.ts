@@ -12,6 +12,7 @@ import type {
   KidWeeklyFocusEntryTemplate,
   KidsById,
 } from "../types/coachKid";
+import type { SyncedSharedAthlete } from "../types/coachWeeklySync";
 import type { Session } from "../types";
 
 type KidWeeklyFocusAppendInput =
@@ -133,6 +134,55 @@ export async function setKidsById(kidsById: KidsById): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.coachKidsById, JSON.stringify(kidsById));
 }
 
+/**
+ * Upsert roster rows for athletes returned from linked sync sessions (coach read path).
+ * Does not remove local-only kids or rows already mapped by sharedAthleteId.
+ */
+export async function mergeRemoteSharedAthletesIntoKids(
+  remote: SyncedSharedAthlete[],
+): Promise<KidsById> {
+  const kids = await getKidsById();
+  const next: KidsById = { ...kids };
+  const nowIso = new Date().toISOString();
+
+  const byShared = new Map(
+    Object.values(next)
+      .filter((k) => Boolean(k.sharedAthleteId))
+      .map((k) => [k.sharedAthleteId as string, k] as const),
+  );
+
+  for (const a of remote) {
+    const existing = byShared.get(a.id);
+    if (existing) {
+      if (existing.name !== a.name) {
+        const updated: Kid = {
+          ...existing,
+          name: a.name,
+          updatedAt: nowIso,
+        };
+        next[existing.id] = updated;
+        byShared.set(a.id, updated);
+      }
+      continue;
+    }
+
+    const localId = `kid_shared_${a.id}` as KidId;
+    if (next[localId]) continue;
+
+    next[localId] = {
+      id: localId,
+      name: a.name,
+      sharedAthleteId: a.id,
+      createdAt: a.createdAt,
+      updatedAt: nowIso,
+    };
+    byShared.set(a.id, next[localId]);
+  }
+
+  await setKidsById(next);
+  return next;
+}
+
 /** Collapse whitespace; trim. Used for roster grouping labels. */
 export function normalizeKidHouseholdLabel(raw: string): string {
   return raw.replace(/\s+/g, " ").trim();
@@ -154,6 +204,9 @@ export async function updateKidHouseholdLabel(
   const normalized = normalizeKidHouseholdLabel(householdLabelRaw);
   const nowIso = new Date().toISOString();
 
+  const shared = existing.sharedAthleteId
+    ? { sharedAthleteId: existing.sharedAthleteId }
+    : {};
   const next: Kid = normalized
     ? {
         id: existing.id,
@@ -161,12 +214,14 @@ export async function updateKidHouseholdLabel(
         createdAt: existing.createdAt,
         updatedAt: nowIso,
         householdLabel: normalized,
+        ...shared,
       }
     : {
         id: existing.id,
         name: existing.name,
         createdAt: existing.createdAt,
         updatedAt: nowIso,
+        ...shared,
       };
 
   await setKidsById({ ...kids, [kidId]: next });

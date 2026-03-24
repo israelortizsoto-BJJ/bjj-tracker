@@ -72,10 +72,10 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-22  
-**Status:** Build 12 remains the **last documented** coach-testing build in TestFlight until a new upload is explicitly recorded here. Local `dev` is **ahead of `origin/dev` by 22 commits** (unpushed as of this handoff). The repo also has a **dirty working tree**: **weekly two-device sync** code (worker + app wiring) is **not yet committed** — confirm with `git status -sb` and `git diff` before assuming what another machine or remote contains.
+**Date:** 2026-03-23  
+**Status:** MatMind Dev was recovered and validated in a real two-device Dev lane. Build 18 in TestFlight remains older reality; today’s shared-athlete and role-split work is Dev-validated and should not be assumed broadly shipped in TestFlight unless explicitly recorded.
 
-On `dev`, the **coach kid profile** stays **guidance-first**. **Family Competition** is now a **meaningful parent-owned local lane** on the weekly Coach Share surface (add/edit/delete, format, month grouping, multi-kid chips, palette). **Coach roster** supports **household** label on create, **grouping by household**, and **household editing** on kid detail. **AI Drafting Slice 1** on **What matters next** remains **mock/on-device only**. **Two-device weekly sync** is **coded in the working tree** (invite session, coach publish, parent read, worker-backed weekly document) but is **not deployed**, **not committed**, and **not live-smoke-tested**; **competition and training data remain local-only** across devices for this milestone (sync targets the **narrow weekly message**, not full pilot replication). Same beta reality: **do not** treat any of this as broad TestFlight availability until a build ships and is called out here. Coach Share + kid pilot remain **pilot-scoped** (Profile → Coach Share → Kids).
+On `dev`, the Coach Share lane now includes a role split (**Coach** and **Parent**) with a role picker and role-specific profile entry behavior. Worker-backed sync is deployed and active for invite/redeem + shared athlete linking + weekly note/shared-athlete visibility. Two-device smoke succeeded in Dev: coach creates invite, parent accepts invite, parent adds athlete, and coach sees the athlete as linked. Current limitation remains unchanged for deeper data: parent-entered **training logs** and **competition data** still do **not** sync back to coach and remain local-only on the parent side.
 
 ## Git checkpoint
 
@@ -119,12 +119,13 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 ### 2026-03-22 — Coach add-kid form keyboard (**committed:** `f7873a3`)
 - **Keyboard visibility** issue on the coach **add-kid** form addressed (layout / scroll behavior as implemented in `kids.tsx`).
 
-### 2026-03-22 — Weekly two-device sync loop (**coded in working tree only** — **not committed** at handoff; **not** live-validated)
-- **Intent:** narrow **weekly message** sync — **not** competition rows, **not** training sessions, **not** full coach pilot state.
-- **Coach path:** create/link session (tokens + writer secret), publish weekly focus-shaped payload (`src/coach/weeklyFocusPublish.ts` mapping from `KidWeeklyFocusEntry`), HTTP client `src/services/coachWeeklySyncApi.ts`, config `src/config/coachSync.ts` + `app.config.ts` `extra.coachSyncBaseUrl` / `EXPO_PUBLIC_COACH_SYNC_BASE_URL`.
-- **Parent path:** join / fetch session + weekly doc, local cache `src/storage/coachWeeklySyncCacheStore.ts`, types `src/types/coachWeeklySync.ts`; UI wiring lives in the **modified** Coach Share files (see `git diff`).
-- **Worker:** `coach-sync-worker/` — Cloudflare Worker + KV; `wrangler.toml` still shows **placeholder** KV id — **not** production-deployed from this handoff.
-- **Honest status:** **no end-to-end smoke test** yet; needs **deployed worker**, **real base URL**, **two app builds** that include this code, and awareness that **another household device** may still be on an **older build without these changes**.
+### 2026-03-23 — Weekly sync + shared-athlete dev smoke (**deployed + validated in Dev**)
+- **Intent in this slice:** worker-backed invite/redeem + shared athlete link + weekly note/shared-athlete visibility, not full parent data replication.
+- **Coach path:** create/link session (tokens + writer secret), publish weekly payload (`src/coach/weeklyFocusPublish.ts`), and consume worker APIs through `src/services/coachWeeklySyncApi.ts`.
+- **Parent path:** join/redeem invite, parent-side athlete add, weekly document fetch and cache (`src/storage/coachWeeklySyncCacheStore.ts` and related Coach Share UI files).
+- **Worker:** `coach-sync-worker/` is now deployed; invite flow and shared-athlete link worked after redeploy.
+- **Validated in Dev (two-device):** coach invite -> parent accept -> parent adds athlete -> coach sees linked athlete.
+- **Current sync boundary:** parent-entered competition/training rows remain local-only; these do not yet sync back to coach.
 
 ### 0) Family Coach Share weekly surface + join + weekly story (`624a50e` → `ec7c8f5`)
 - **Profile** entry line: **“This week with your coach”** (`app/(tabs)/profile.tsx`).
@@ -184,10 +185,11 @@ Validated:
 
 ### Product / release validation
 Validated:
-- Build 12 is the **last documented** coach-testing build in TestFlight (update when a new build ships)
+- Build 18 is still the latest documented TestFlight reality for broader testers, and is older than the newest Dev-validated shared-athlete role-split slice
 - **2026-03-21 batch** (family weekly Coach Share surface, competition structured fields + form polish, mock **What matters next** drafting): treat as **Dev / local** until a new TestFlight is explicitly validated and noted here—not assumed for **broad** TestFlight testers
 - **2026-03-22 batch** (**Family Competition** lane, **household** roster/editing, **keyboard** fix, palette): **working in local dev** on commits through **`83588d7`** — **not** claimed for TestFlight or broad testers
-- **Weekly two-device sync:** **not** validated end-to-end; **do not** conflate with “data syncs across devices” for competition/training — only the **narrow weekly document path** is in scope for this experiment
+- **Weekly two-device sync + shared athletes:** validated in Dev on a two-device setup; worker-backed invite/redeem and athlete linking are working in that lane
+- **Competition/training cross-device sync:** still not implemented for parent -> coach; treat those entries as local-only on parent device for now
 - **Kid roster / standing guidance / weekly focus / check-ins / kid-linked training / competition + swipe row deletes:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
 - Coach Share pilot remains intentionally contained/hidden for general testers
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
@@ -231,8 +233,14 @@ Validated:
 - **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
-- **Likely next-session blocker / risk (weekly sync):** **Worker deployment** (real KV namespace in `wrangler.toml`), **`EXPO_PUBLIC_COACH_SYNC_BASE_URL` / `extra.coachSyncBaseUrl` parity** across builds, **committing** the sync working tree, and **two-device build parity** — an **older external tester build** (e.g. spouse device) may **not include** sync UI/API code until a fresh install/build. Do **not** start “smoke test” before those align.
-- **Weekly sync E2E (after the above):** coach **create session / share link** → parent **join or fetch** → coach **publish weekly** → parent **sees updated weekly doc** — still **narrow weekly payload only**; competition/training remain local-only.
+- **Dev operational rule:** once MatMind Dev is installed, open the installed app directly. Do not rely on QR relaunch behavior after install.
+- **Dev startup command (current reliable lane):**
+  - `cd "/Users/ods/Repos/bjj-tracker"`
+  - `export EXPO_PUBLIC_COACH_SYNC_BASE_URL="https://matmind-coach-sync.ortizdigitalstudio.workers.dev"`
+  - `npx expo start --dev-client -c --tunnel`
+- **Two-device setup risk:** second device must be in Apple/EAS dev provisioning profile. Wife's phone required explicit registration before install succeeded.
+- **Still-open product loop:** parent-entered competition/training updates do not yet sync to coach.
+- **UX loop:** weekly hero / "Read together" still has repetition/confusion that needs cleanup.
 - Kyle internal testing: run the **full kid pilot path** including **What matters next** (**Help me phrase** → review → **apply or discard**; confirm drafts do not save until apply), **edit this week’s focus** (existing row), **History** editor routing, **check-ins** (save + **swipe delete**), **log training** + **swipe delete session**, **competition** (new optional fields + notes scroll + save/delete in scroll + optional video + **swipe delete**), and **roster delete** — confirm UX + cascade cleanup (incl. standing guidance + kid-linked sessions).
 - **Family Competition + households (local dev):** exercise **child chips** with **multiple kids**, **month chevrons**, **family competition editor** add/edit/delete, **household** create + grouped roster + **kid detail household edit**.
 - **Family Coach Share path (device QA):** Profile → **This week with your coach** → weekly surface (**This week together**), **join** flow, **weekly story** (**Read together** steps + **early exit**).
@@ -243,12 +251,10 @@ Validated:
 
 ## Best next-session recommendation
 Next likely moves:
-1. **Weekly sync prep (before any two-device smoke):** finish **worker** setup (KV id + deploy), wire **base URL** for both coach and parent builds, **gate** the full tree (`tsc`, `eslint`), **commit** sync files + screen changes, and confirm **both phones** run builds that **include** that commit — especially if one device has an **older TestFlight or ad-hoc** build.
-2. **Then** run a minimal **E2E smoke:** create session → parent consumes link → publish weekly → parent read/refresh — document pass/fail honestly.
-3. **Push** when ready: local `dev` is **22 commits** ahead of `origin/dev`; push only after the sync bundle is committed and gated unless intentionally pushing the pre-sync batch first.
-4. Dev QA (ongoing): **Kids (Pilot)** path as before; add **Family Competition** + **household** flows; **Family lane QA:** weekly story + join + Profile entry copy (see Open loops).
-5. Keep Coach Share **pilot-hidden** for broad testers; do **not** assume TestFlight testers see new work until a build is shipped and recorded.
-6. Resume external feedback triage only when we’re ready to act on it
+1. **Next architecture slice:** implement parent-owned **competition sync** to coach first, then decide the right shape for training sync.
+2. Keep two-device Dev smoke in the loop on every sync slice (Coach phone + Parent phone) using the tunnel startup command above.
+3. Preserve release honesty: continue separating **Dev-validated truth** from **TestFlight-shipped truth** in docs and QA notes.
+4. Keep Coach Share pilot-scoped for broader testers until explicit release callout.
 
 ## Suggested restart commands for next session
 - `git status -sb`

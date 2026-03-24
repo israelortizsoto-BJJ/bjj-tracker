@@ -12,11 +12,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
 import { StorageKeys } from "../../src/storage/storageKeys";
 
-import { isCoachShareProfileEntryVisible, isDev } from "../../src/config/runtime";
-import { loadDevFlags } from "../../src/config/devFlagsStore";
-import { DEFAULT_DEV_FLAGS } from "../../src/config/flags";
+import { isDev } from "../../src/config/runtime";
+import type { DeviceRole } from "../../src/storage/deviceRoleStore";
 
 const DEFAULT_PROFILE: Profile = {
   belt: "White",
@@ -135,15 +135,7 @@ const styles = StyleSheet.create({
 });
 
 export default function ProfileScreen() {
-  const [devFlags, setDevFlags] = useState(DEFAULT_DEV_FLAGS);
-
-  useEffect(() => {
-    (async () => {
-      if (!isDev()) return;
-      const flags = await loadDevFlags();
-      setDevFlags(flags);
-    })();
-  }, []);
+  const { role, setRole } = useDeviceRole();
 
   const [loading, setLoading] = useState(true);
   const [belt, setBelt] = useState("White");
@@ -344,24 +336,107 @@ export default function ProfileScreen() {
       </Text>
       <View style={{ height: 20 }} />
 
-      <Pressable
-        onPress={() => router.push("/profile/coaches")}
-        style={({ pressed }) => ({
-          paddingVertical: 14,
-          paddingHorizontal: 18,
-          borderRadius: CARD_RADIUS,
-          borderWidth: 1,
-          borderColor: UI.border,
-          backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-        })}
-      >
-        <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
-          This week with your coach
-        </Text>
-        <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-          Weekly focus and practice notes from your academy
-        </Text>
-      </Pressable>
+      {role === "parent" ? (
+        <Pressable
+          onPress={() => router.push("/profile/coaches")}
+          style={({ pressed }) => ({
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+          })}
+        >
+          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
+            This week with your coach
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
+            Weekly focus, read together, connect with your coach, and family competition
+          </Text>
+        </Pressable>
+      ) : role === "coach" ? (
+        <Pressable
+          onPress={() => router.push("/profile/coaches/kids")}
+          style={({ pressed }) => ({
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+          })}
+        >
+          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
+            Coach tools
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
+            Kids roster, family invites, weekly notes, and pilot templates
+          </Text>
+        </Pressable>
+      ) : null}
+
+      <View style={{ height: 16 }} />
+
+      {role === "coach" || role === "parent" ? (
+        <View
+          style={{
+            paddingVertical: 14,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: "#fafafa",
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary, letterSpacing: 0.6 }}>
+            PILOT TESTING
+          </Text>
+          <Text style={{ marginTop: 6, fontSize: 14, color: UI.textPrimary, fontWeight: "600" }}>
+            Device role: {role === "coach" ? "Coach" : "Parent"}
+          </Text>
+          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
+            Switch to preview the other lane. Your data stays on this phone.
+          </Text>
+          <Pressable
+            onPress={() => {
+              const next: DeviceRole = role === "coach" ? "parent" : "coach";
+              Alert.alert(
+                "Switch pilot role?",
+                next === "coach"
+                  ? "You’ll see coach tools and roster flows. Nothing stored on this phone is deleted."
+                  : "You’ll see the family weekly screen and parent flows. Nothing stored on this phone is deleted.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Switch",
+                    onPress: () => {
+                      void (async () => {
+                        await setRole(next);
+                        router.replace("/profile");
+                      })();
+                    },
+                  },
+                ],
+              );
+            }}
+            style={({ pressed }) => ({
+              marginTop: 12,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+              alignItems: "center",
+            })}
+          >
+            <Text style={{ fontSize: 15, fontWeight: "700", color: UI.textPrimary }}>
+              {role === "coach" ? "Switch to parent role" : "Switch to coach role"}
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {isDev() ? (
         <Pressable
@@ -379,30 +454,6 @@ export default function ProfileScreen() {
           <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>Developer Settings</Text>
           <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
             Dev-only feature flags
-          </Text>
-        </Pressable>
-      ) : null}
-
-      {isDev() &&
-      devFlags.enableCoachShareScaffold &&
-      !isCoachShareProfileEntryVisible() ? (
-        <Pressable
-          onPress={() => router.push("/profile/coaches")}
-          style={({ pressed }) => ({
-            marginTop: 12,
-            paddingVertical: 14,
-            paddingHorizontal: 18,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-          })}
-        >
-          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
-            Coaches & Programs
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-            Coach Share scaffold (dev only)
           </Text>
         </Pressable>
       ) : null}

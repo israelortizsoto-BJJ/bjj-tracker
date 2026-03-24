@@ -14,6 +14,7 @@ import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/c
 import {
   CoachWeeklySyncApiError,
   coachSyncFetchSession,
+  coachSyncRedeemParentWriter,
 } from "../../../../src/services/coachWeeklySyncApi";
 import {
   getCoachLinks,
@@ -85,6 +86,10 @@ export default function CoachJoinScreen() {
     setBusy(true);
     try {
       const session = await coachSyncFetchSession(token);
+      const { parentWriterSecret } = await coachSyncRedeemParentWriter(
+        token,
+        getCoachSyncApiBaseUrl(),
+      );
       const parentProfileId = await getOrCreateLocalParentProfileId();
       const nowIso = new Date().toISOString();
 
@@ -114,6 +119,7 @@ export default function CoachJoinScreen() {
         weeklySync: {
           apiBaseUrl: getCoachSyncApiBaseUrl()!,
           linkToken: token,
+          parentWriterSecret,
         },
       };
 
@@ -131,7 +137,10 @@ export default function CoachJoinScreen() {
       await setCoachLinks([...withoutDup, newLink]);
       await setCachedWeeklyForLinkToken(token, session.weekly, nowIso);
 
-      router.replace("/profile/coaches");
+      router.replace({
+        pathname: "/profile/coaches/parent-athletes",
+        params: { linkId: newLink.id },
+      });
     } catch (e) {
       const msg =
         e instanceof CoachWeeklySyncApiError
@@ -173,8 +182,9 @@ export default function CoachJoinScreen() {
             marginBottom: 18,
           }}
         >
-          Paste the invite code from your coach. This links this phone to their weekly family note
-          — competition and practice stay on this device unless we add more sync later.
+          Paste the invite code from your coach. This subscribes this phone to your coach’s published weekly
+          family note, then asks you to name any athletes so your coach can see them on their roster for this
+          invite. Competition, Training logs, and other data stay on this device unless we add more sync later.
         </Text>
 
         {!ready ? (
@@ -240,12 +250,13 @@ export default function CoachJoinScreen() {
 
               {isLinked ? (
                 <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 23 }}>
-                  You can add another academy link below, or return to This week together.
+                  You can paste another invite only if you intentionally want a second weekly note channel on
+                  this phone — most families use one. Or return to This week together.
                 </Text>
               ) : (
                 <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 23, marginBottom: 12 }}>
-                  Only the weekly title and family-facing text your coach publishes are shared — not their
-                  private check-in notes.
+                  Only the weekly title and family-facing text your coach publishes for that shared channel are
+                  synced — not private check-in notes, and not a separate link per athlete yet.
                 </Text>
               )}
 

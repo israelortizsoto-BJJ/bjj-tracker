@@ -16,6 +16,7 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - app/index.tsx
 - app/_layout.tsx
 - app/(tabs)/_layout.tsx
+- app/role-picker.tsx
 
 ## Core App Surfaces
 - app/(tabs)/welcome.tsx
@@ -27,20 +28,27 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 
 ## Coach Share current lane
 - app/(tabs)/profile/coaches/index.tsx
+- app/(tabs)/profile/coaches/_layout.tsx
 - app/(tabs)/profile/coaches/join.tsx
 - app/(tabs)/profile/coaches/manage.tsx
 - app/(tabs)/profile/coaches/create-pack.tsx
+- app/(tabs)/profile/coaches/parent-athletes.tsx
 - app/(tabs)/profile/coaches/templates.tsx
 - app/(tabs)/profile/coaches/template-preview.tsx
 - app/(tabs)/profile/coaches/template-selected.tsx
+
+## Device role split (Coach/Parent)
+- src/storage/deviceRoleStore.ts
+- src/deviceRole/DeviceRoleProvider.tsx
+- src/deviceRole/coachRouteGate.ts
 
 ## Family Competition (parent-facing lane on Coach Share weekly surface)
 - app/(tabs)/profile/coaches/family-competition/edit.tsx
 - src/family/coachShareCompetitionBuckets.ts
 - (routing) app/(tabs)/_layout.tsx — hidden tab screen for `family-competition/edit`
 
-## Coach weekly sync — two-device weekly message (narrow scope; verify git status)
-These files implement an **invite/link session**, **coach publish** of a weekly focus-shaped payload, and **parent read** via a **Cloudflare Worker** + local cache. **Competition and training stay local-only**; this path does **not** sync full pilot data. As of 2026-03-22 handoff notes, this stack may still be **uncommitted** — check `git status` before assuming it is on `origin/dev`.
+## Coach weekly sync — two-device worker-backed session
+These files implement invite/redeem session flow, coach publish of weekly payload, and parent read/shared-athlete linkage via Cloudflare Worker + local cache. Current scope includes **weekly note + shared athletes**. Parent-entered **competition/training** data still behaves as local-only and does not sync back to coach yet.
 - coach-sync-worker/ (Wrangler: `wrangler.toml`, `src/index.ts`, `package.json`)
 - src/config/coachSync.ts
 - src/types/coachWeeklySync.ts

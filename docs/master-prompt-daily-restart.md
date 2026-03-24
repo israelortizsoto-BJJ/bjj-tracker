@@ -10,6 +10,10 @@
 ## Operating note
 Use terminal-first updates for prompt, template, and config files when practical.
 Cursor is the primary coding environment; VS Code is fallback only.
+Current Dev sync startup command (known-good):
+- `cd "/Users/ods/Repos/bjj-tracker"`
+- `export EXPO_PUBLIC_COACH_SYNC_BASE_URL="https://matmind-coach-sync.ortizdigitalstudio.workers.dev"`
+- `npx expo start --dev-client -c --tunnel`
 Why:
 - reduces human error
 - increases speed

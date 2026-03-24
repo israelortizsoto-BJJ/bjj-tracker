@@ -21,9 +21,36 @@ export type CoachWeeklySyncCoachSummary = {
   academyName?: string;
 };
 
+/** Stable id from sync worker; links parent-created athletes to coach roster hydration. */
+export type SharedAthleteId = string;
+
+export type SyncedSharedAthlete = {
+  id: SharedAthleteId;
+  name: string;
+  createdAt: string;
+};
+
+export type SharedCompetitionId = string;
+
+export type SyncedSharedCompetition = {
+  id: SharedCompetitionId;
+  sharedAthleteId: SharedAthleteId;
+  tournamentName: string;
+  eventDate: string;
+  result?: "gold" | "silver" | "bronze" | "participated" | "dnf" | "other";
+  eventStatus?: "upcoming" | "completed" | "cancelled" | "unknown";
+  format?: "gi" | "nogi" | "both";
+  organizationOrPromoter?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type CoachWeeklySyncSessionResponse = {
+  schemaVersion?: number;
   coach: CoachWeeklySyncCoachSummary;
   weekly: SyncedWeeklyMessagePayload | null;
+  athletes: SyncedSharedAthlete[];
+  competitions: SyncedSharedCompetition[];
 };
 
 export type CoachWeeklySyncCreateSessionBody = {
@@ -44,3 +71,33 @@ export type CoachWeeklySyncPublishBody = {
   classLine?: string;
   programLine?: string;
 };
+
+export type CoachWeeklySyncRedeemParentWriterResponse = {
+  parentWriterSecret: string;
+};
+
+export type CoachWeeklySyncCreateAthleteBody = {
+  name: string;
+};
+
+export type CoachWeeklySyncCreateAthleteResponse = {
+  athlete: SyncedSharedAthlete;
+};
+
+export type CoachWeeklySyncCreateCompetitionBody = {
+  sharedAthleteId: SharedAthleteId;
+  tournamentName: string;
+  eventDate: string;
+  result?: SyncedSharedCompetition["result"];
+  eventStatus?: SyncedSharedCompetition["eventStatus"];
+  format?: SyncedSharedCompetition["format"];
+  organizationOrPromoter?: string;
+};
+
+export type CoachWeeklySyncCreateCompetitionResponse = {
+  competition: SyncedSharedCompetition;
+};
+
+export type CoachWeeklySyncUpdateCompetitionBody = Partial<
+  Omit<CoachWeeklySyncCreateCompetitionBody, "sharedAthleteId">
+>;

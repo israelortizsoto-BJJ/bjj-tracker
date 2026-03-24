@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { DeviceRoleProvider } from "../src/deviceRole/DeviceRoleProvider";
 import { ensureStorageUpToDate } from "../src/storage/migrations";
 
 export default function RootLayout() {
@@ -31,9 +32,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-        </Stack>
+        <DeviceRoleProvider>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+          </Stack>
+        </DeviceRoleProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

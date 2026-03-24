@@ -6,11 +6,20 @@ import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { todayYMD } from "../../../../../src/storage/coachKidStore";
+import {
+  CoachWeeklySyncApiError,
+  coachSyncCreateSessionCompetition,
+  coachSyncDeleteSessionCompetition,
+  coachSyncFetchSession,
+  coachSyncUpdateSessionCompetition,
+} from "../../../../../src/services/coachWeeklySyncApi";
+import { getCoachLinks } from "../../../../../src/storage/coachShareStore";
+import { getKidsById, todayYMD } from "../../../../../src/storage/coachKidStore";
 import {
   createKidCompetitionEntry,
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
+  getWorkerCompetitionIdForEntry,
   updateKidCompetitionEntry,
 } from "../../../../../src/storage/kidCompetitionStore";
 import type {
@@ -18,6 +27,7 @@ import type {
   KidCompetitionFormat,
   KidCompetitionResult,
 } from "../../../../../src/types/coachKid";
+import type { CoachLink } from "../../../../../src/types/coachShare";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -100,6 +110,18 @@ function searchParamOne(v: string | string[] | undefined): string {
   return Array.isArray(v) ? String(v[0] ?? "") : String(v);
 }
 
+type LinkedSyncTarget = {
+  linkToken: string;
+  apiBaseUrl: string;
+  parentWriterSecret: string;
+};
+
+function toOpErrorMessage(e: unknown): string {
+  if (e instanceof CoachWeeklySyncApiError) return e.message;
+  if (e instanceof Error) return e.message;
+  return "Try again shortly.";
+}
+
 export default function FamilyCompetitionEditScreen() {
   const params = useLocalSearchParams<{
     kidId?: string | string[];
@@ -141,6 +163,82 @@ export default function FamilyCompetitionEditScreen() {
   const lastProcessedOpenNonceRef = useRef<string | null>(null);
   const familyNewFormBootstrapKidRef = useRef<string | null>(null);
 
+  const resolveLinkedTarget = useCallback(
+    async (
+      sharedAthleteId: string,
+      existingSharedCompetitionId?: string,
+    ): Promise<LinkedSyncTarget | null> => {
+      const trimmedAthleteId = sharedAthleteId.trim();
+      if (!trimmedAthleteId) return null;
+      const links = await getCoachLinks();
+      const activeParentLinks = links
+        .filter((l): l is CoachLink & { weeklySync: NonNullable<CoachLink["weeklySync"]> } =>
+          l.status === "active" && Boolean(l.weeklySync?.parentWriterSecret),
+        )
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      if (!activeParentLinks.length) return null;
+
+      /** When we already know the worker competition id (create/save/delete), use any link whose session lists that athlete. Requiring the competition in GET is too strict: the session payload can omit or filter a row briefly after POST, which blocked parent DELETE entirely. */
+      let athleteOnlyFallback: LinkedSyncTarget | null = null;
+
+      for (const l of activeParentLinks) {
+        try {
+          const ws = l.weeklySync;
+          const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+          const athleteOk = session.athletes.some((a) => a.id === trimmedAthleteId);
+          if (__DEV__) {
+            const compOk = existingSharedCompetitionId
+              ? session.competitions.some((c) => c.id === existingSharedCompetitionId)
+              : null;
+            console.log("[bjj-sync-debug] resolveLinkedTarget try", {
+              linkId: l.id,
+              linkToken: ws.linkToken,
+              apiBaseUrl: ws.apiBaseUrl,
+              hasParentWriterSecret: Boolean(ws.parentWriterSecret?.trim()),
+              sharedAthleteId: trimmedAthleteId,
+              athleteOk,
+              existingSharedCompetitionId: existingSharedCompetitionId ?? null,
+              compListedInSession: compOk,
+              athleteIdsSample: session.athletes.map((a) => a.id).slice(0, 5),
+            });
+          }
+          if (!athleteOk) continue;
+          const target: LinkedSyncTarget = {
+            linkToken: ws.linkToken,
+            apiBaseUrl: ws.apiBaseUrl,
+            parentWriterSecret: ws.parentWriterSecret!,
+          };
+          if (!existingSharedCompetitionId) {
+            return target;
+          }
+          if (session.competitions.some((c) => c.id === existingSharedCompetitionId)) {
+            return target;
+          }
+          if (!athleteOnlyFallback) athleteOnlyFallback = target;
+        } catch {
+          // Keep trying other links.
+        }
+      }
+      if (existingSharedCompetitionId && athleteOnlyFallback) {
+        if (__DEV__) {
+          console.log("[bjj-sync-debug] resolveLinkedTarget using athlete-only fallback", {
+            sharedAthleteId: trimmedAthleteId,
+            existingSharedCompetitionId,
+          });
+        }
+        return athleteOnlyFallback;
+      }
+      if (__DEV__) {
+        console.log("[bjj-sync-debug] resolveLinkedTarget miss", {
+          sharedAthleteId: trimmedAthleteId,
+          existingSharedCompetitionId: existingSharedCompetitionId ?? null,
+        });
+      }
+      return null;
+    },
+    [],
+  );
+
   const loadExisting = useCallback(async () => {
     if (!entryId) return;
     setLoading(true);
@@ -150,6 +248,18 @@ export default function FamilyCompetitionEditScreen() {
         Alert.alert("Not found", "This competition is missing or belongs to another athlete.");
         router.replace("/profile/coaches");
         return;
+      }
+      if (__DEV__) {
+        console.log("[bjj-sync-debug] family-competition edit loadExisting row", {
+          entryId,
+          id: found.id,
+          kidId: found.kidId,
+          tournamentName: found.tournamentName,
+          sharedCompetitionId: found.sharedCompetitionId ?? null,
+          sharedAthleteId: found.sharedAthleteId ?? null,
+          resolvedWorkerCompetitionId:
+            getWorkerCompetitionIdForEntry(found) || null,
+        });
       }
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
@@ -227,20 +337,110 @@ export default function FamilyCompetitionEditScreen() {
 
     setSaving(true);
     try {
+      const kids = await getKidsById();
+      const kid = kids[kidId];
+      const linkedAthleteId = kid?.sharedAthleteId?.trim();
+
       if (isNew) {
-        await createKidCompetitionEntry({
-          kidId,
-          tournamentName: name,
-          eventDate,
-          ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
-          eventStatus: eventStatusDraft,
-          organizationOrPromoter: promoterDraft.trim()
-            ? promoterDraft.trim()
-            : undefined,
-          format: formatDraft,
-        });
+        if (linkedAthleteId && kid) {
+          const target = await resolveLinkedTarget(linkedAthleteId);
+          if (!target) {
+            Alert.alert(
+              "Could not sync",
+              "This athlete is linked, but this phone cannot find a writable link right now.",
+            );
+            return;
+          }
+          try {
+            const remote = await coachSyncCreateSessionCompetition(
+              target.linkToken,
+              target.parentWriterSecret,
+              {
+                sharedAthleteId: linkedAthleteId,
+                tournamentName: name,
+                eventDate,
+                ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+                eventStatus: eventStatusDraft,
+                organizationOrPromoter: promoterDraft.trim()
+                  ? promoterDraft.trim()
+                  : undefined,
+                format: formatDraft,
+              },
+              target.apiBaseUrl,
+            );
+            await createKidCompetitionEntry({
+              kidId,
+              sharedAthleteId: linkedAthleteId,
+              sharedCompetitionId: remote.competition.id,
+              tournamentName: name,
+              eventDate,
+              ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+              eventStatus: eventStatusDraft,
+              organizationOrPromoter: promoterDraft.trim()
+                ? promoterDraft.trim()
+                : undefined,
+              format: formatDraft,
+            });
+          } catch (e) {
+            Alert.alert("Could not sync", toOpErrorMessage(e) || "Try again shortly.");
+            return;
+          }
+        } else {
+          await createKidCompetitionEntry({
+            kidId,
+            tournamentName: name,
+            eventDate,
+            ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+            eventStatus: eventStatusDraft,
+            organizationOrPromoter: promoterDraft.trim()
+              ? promoterDraft.trim()
+              : undefined,
+            format: formatDraft,
+          });
+        }
       } else {
+        const existing = await getKidCompetitionEntryById(entryId);
+        const workerCompetitionId = existing
+          ? getWorkerCompetitionIdForEntry(existing)
+          : "";
+        const athleteForRemote = (existing?.sharedAthleteId ?? kid?.sharedAthleteId)?.trim();
+        if (athleteForRemote && workerCompetitionId) {
+          const target = await resolveLinkedTarget(
+            athleteForRemote,
+            workerCompetitionId,
+          );
+          if (!target) {
+            Alert.alert(
+              "Could not sync",
+              "This linked competition could not be matched to a writable link on this phone.",
+            );
+            return;
+          }
+          try {
+            await coachSyncUpdateSessionCompetition(
+              target.linkToken,
+              workerCompetitionId,
+              target.parentWriterSecret,
+              {
+                tournamentName: name,
+                eventDate,
+                result: resultDraft,
+                eventStatus: eventStatusDraft,
+                organizationOrPromoter: promoterDraft.trim()
+                  ? promoterDraft.trim()
+                  : undefined,
+                format: formatDraft,
+              },
+              target.apiBaseUrl,
+            );
+          } catch (e) {
+            Alert.alert("Could not sync", toOpErrorMessage(e) || "Try again shortly.");
+            return;
+          }
+        }
         await updateKidCompetitionEntry(entryId, {
+          ...(athleteForRemote ? { sharedAthleteId: athleteForRemote } : {}),
+          ...(workerCompetitionId ? { sharedCompetitionId: workerCompetitionId } : {}),
           tournamentName: name,
           eventDate,
           result: resultDraft,
@@ -274,6 +474,138 @@ export default function FamilyCompetitionEditScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
+            const kids = await getKidsById();
+            const kid = kids[kidId];
+            const existing = await getKidCompetitionEntryById(entryId);
+            const kidSharedAthleteId = kid?.sharedAthleteId?.trim();
+            const rowSharedAthleteId = existing?.sharedAthleteId?.trim();
+            const athleteForRemote =
+              (existing?.sharedAthleteId ?? kid?.sharedAthleteId)?.trim() ?? "";
+            const workerCompetitionId = existing
+              ? getWorkerCompetitionIdForEntry(existing)
+              : "";
+            const rowSnapshot = existing
+              ? {
+                  id: existing.id,
+                  kidId: existing.kidId,
+                  tournamentName: existing.tournamentName,
+                  sharedCompetitionId: existing.sharedCompetitionId ?? null,
+                  sharedAthleteId: existing.sharedAthleteId ?? null,
+                }
+              : null;
+
+            let deletePath: "linked-remote" | "local-only" | "early-exit" = "local-only";
+            let notLinkedRemoteReason: string | null = null;
+
+            if (!existing) {
+              deletePath = "early-exit";
+              notLinkedRemoteReason =
+                "getKidCompetitionEntryById returned null (stale entryId or row removed)";
+            } else if (!workerCompetitionId) {
+              deletePath = "local-only";
+              notLinkedRemoteReason =
+                "no worker competition id (missing sharedCompetitionId and id is not shared-comp-<workerId>)";
+            } else if (!athleteForRemote) {
+              deletePath = "local-only";
+              notLinkedRemoteReason =
+                "no sharedAthleteId on row or kid roster (cannot target remote athlete)";
+            } else {
+              deletePath = "linked-remote";
+            }
+
+            if (__DEV__) {
+              console.log("[bjj-sync-debug] parent delete path", {
+                entryId,
+                rowSnapshot,
+                deletePath,
+                notLinkedRemoteReason:
+                  deletePath === "linked-remote" ? null : notLinkedRemoteReason,
+                kidSharedAthleteId: kidSharedAthleteId || null,
+                rowSharedAthleteId: rowSharedAthleteId || null,
+                resolvedAthleteForRemote: athleteForRemote || null,
+                resolvedWorkerCompetitionId: workerCompetitionId || null,
+              });
+            }
+
+            if (deletePath === "early-exit") {
+              await deleteKidCompetitionEntry(entryId);
+              router.replace("/profile/coaches");
+              return;
+            }
+
+            if (deletePath === "linked-remote") {
+              if (!workerCompetitionId || !athleteForRemote) {
+                if (__DEV__) {
+                  console.log("[bjj-sync-debug] parent delete early-exit", {
+                    entryId,
+                    reason: "linked-remote path missing ids after classification (unexpected)",
+                  });
+                }
+                await deleteKidCompetitionEntry(entryId);
+                router.replace("/profile/coaches");
+                return;
+              }
+              const target = await resolveLinkedTarget(
+                athleteForRemote,
+                workerCompetitionId,
+              );
+              if (__DEV__) {
+                console.log("[bjj-sync-debug] parent delete resolveLinkedTarget result", {
+                  entryId,
+                  hit: Boolean(target),
+                  linkTokenTail: target?.linkToken
+                    ? target.linkToken.slice(-8)
+                    : null,
+                  hasParentWriterSecret: Boolean(target?.parentWriterSecret?.trim()),
+                });
+              }
+              if (!target) {
+                if (__DEV__) {
+                  console.log("[bjj-sync-debug] parent delete early-exit", {
+                    entryId,
+                    reason:
+                      "resolveLinkedTarget returned null (no writable link with this athlete)",
+                  });
+                }
+                Alert.alert(
+                  "Could not sync",
+                  "This linked competition could not be matched to a writable link on this phone.",
+                );
+                return;
+              }
+              try {
+                if (__DEV__) {
+                  console.log(
+                    "[bjj-sync-debug] parent delete calling coachSyncDeleteSessionCompetition",
+                    {
+                      entryId,
+                      workerCompetitionId,
+                      linkTokenTail: target.linkToken.slice(-8),
+                    },
+                  );
+                }
+                await coachSyncDeleteSessionCompetition(
+                  target.linkToken,
+                  workerCompetitionId,
+                  target.parentWriterSecret,
+                  target.apiBaseUrl,
+                );
+                if (__DEV__) {
+                  console.log("[bjj-sync-debug] parent delete API helper returned OK", {
+                    entryId,
+                  });
+                }
+              } catch (e) {
+                Alert.alert("Could not sync", toOpErrorMessage(e) || "Try again shortly.");
+                return;
+              }
+            } else if (__DEV__) {
+              console.log("[bjj-sync-debug] parent delete local-only (no worker DELETE)", {
+                entryId,
+                notLinkedRemoteReason,
+              });
+            }
+
             await deleteKidCompetitionEntry(entryId);
             router.replace("/profile/coaches");
           },

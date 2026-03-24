@@ -28,6 +28,8 @@ export type CoachLinkWeeklySync = {
   linkToken: string;
   /** Present only on the coach device that created the invite; never sent to parents. */
   writerSecret?: string;
+  /** Issued on the parent device after redeem; allows adding athletes to the shared session only. */
+  parentWriterSecret?: string;
 };
 
 export interface CoachLink {

@@ -33,7 +33,7 @@ export default function CreateProgramPackScreen() {
       <Stack.Screen options={{ title: "Choose Weekly Focus" }} />
       <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 16 }}>
         <Pressable
-          onPress={() => router.push("/profile/coaches")}
+          onPress={() => router.replace("/profile/coaches/kids")}
           style={{
             marginBottom: 10,
             paddingVertical: 10,
@@ -45,7 +45,7 @@ export default function CreateProgramPackScreen() {
             alignSelf: "flex-start",
           }}
         >
-          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Coach Share</Text>
+          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Kids roster</Text>
         </Pressable>
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
           Coach Share · Coach Pilot

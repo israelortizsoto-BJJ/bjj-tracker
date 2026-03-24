@@ -36,6 +36,8 @@ export type Kid = {
   id: KidId;
   name: string;
   householdLabel?: string;
+  /** When set, this roster row is tied to a parent-created athlete on the linked sync session. */
+  sharedAthleteId?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -82,8 +84,17 @@ export type KidCompetitionOutcomeKind =
 export type KidCompetitionFormat = "gi" | "nogi" | "both";
 
 export type KidCompetitionEntry = {
+  /**
+   * Local primary key. Rows hydrated from the worker may use `shared-comp-<workerCompetitionId>`
+   * when no prior client id exists; `sharedCompetitionId` should match that suffix but may be
+   * absent on legacy JSON — readers recover the worker id from this prefix when needed.
+   */
   id: string;
   kidId: KidId;
+  /** Present when this local row is linked to a shared athlete on a sync session. */
+  sharedAthleteId?: string;
+  /** Present when this row mirrors a competition stored on the sync worker. */
+  sharedCompetitionId?: string;
   tournamentName: string;
   /** YYYY-MM-DD */
   eventDate: string;

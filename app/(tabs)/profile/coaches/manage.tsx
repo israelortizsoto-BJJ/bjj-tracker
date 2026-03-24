@@ -71,13 +71,17 @@ export default function CoachManageScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Manage Coach Link" }} />
+      <Stack.Screen options={{ title: "Weekly note links" }} />
       <View style={{ flex: 1, padding: 16, backgroundColor: UI.screenBg }}>
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
-          Manage coach link
+          Weekly note links on this phone
+        </Text>
+        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20, marginBottom: 10 }}>
+          Each entry below is a coach-level weekly family note channel (what you see on This week together).
+          Invites are not tied to a specific kid in this pilot — one parent phone usually needs one link.
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20, marginBottom: 16 }}>
-          Remove a link if you no longer want this phone to load that coach’s published weekly note.
+          Remove a link to stop loading that channel on this device. Nothing is deleted on your coach’s phone.
         </Text>
 
         <Pressable
@@ -107,13 +111,32 @@ export default function CoachManageScreen() {
             }}
           >
             <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
-              No weekly-sync coach links on this phone yet. Use Connect with your coach to add an invite
-              code.
+              No weekly note links saved here yet. Use Connect with your coach on This week together and
+              paste the invite code your coach shared.
             </Text>
           </View>
         ) : (
           <View style={{ gap: 12 }}>
-            {syncLinks.map((link) => (
+            {syncLinks.length > 1 ? (
+              <View
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#c4b5fd",
+                  backgroundColor: "#f5f3ff",
+                }}
+              >
+                <Text style={{ fontSize: 13, color: UI.textPrimary, lineHeight: 19, fontWeight: "600" }}>
+                  You have {syncLinks.length} weekly channels on this phone
+                </Text>
+                <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 18, marginTop: 6 }}>
+                  Usually you only need one. Extra rows mean this device subscribed more than once — remove
+                  any you do not use so it is obvious which channel is active.
+                </Text>
+              </View>
+            ) : null}
+            {syncLinks.map((link, idx) => (
               <View
                 key={link.id}
                 style={{
@@ -133,18 +156,41 @@ export default function CoachManageScreen() {
                     fontWeight: "700",
                   }}
                 >
-                  WEEKLY NOTE SYNC
+                  WEEKLY FAMILY NOTE · CHANNEL {idx + 1} OF {syncLinks.length}
                 </Text>
                 <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
-                  Invite ends with{" "}
+                  Same coach-level weekly sync for the whole family view — not a per-kid link. Code ends with{" "}
                   <Text style={{ fontWeight: "800", color: UI.textPrimary }}>
                     …{link.weeklySync!.linkToken.slice(-8)}
                   </Text>
-                  . Full code is on the coach’s device (Kids pilot).
+                  .
                 </Text>
                 <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 18 }} selectable>
                   {link.weeklySync!.linkToken}
                 </Text>
+                {!link.weeklySync!.writerSecret ? (
+                  <Pressable
+                    onPress={() =>
+                      router.push({
+                        pathname: "/profile/coaches/parent-athletes",
+                        params: { linkId: link.id },
+                      })
+                    }
+                    style={{
+                      paddingVertical: 10,
+                      paddingHorizontal: 14,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: "#93c5fd",
+                      backgroundColor: "#eff6ff",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: "700", color: "#1d4ed8" }}>
+                      Add athletes for this invite
+                    </Text>
+                  </Pressable>
+                ) : null}
                 <Pressable
                   onPress={() => revokeLink(link)}
                   style={{
