@@ -3,8 +3,9 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ResizeMode, Video } from "expo-av";
 import * as MediaLibrary from "expo-media-library";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Dimensions,
   Image,
@@ -18,7 +19,7 @@ import {
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Swipeable } from "react-native-gesture-handler";
 
@@ -29,6 +30,7 @@ import {
   coachSyncPublishWeekly,
 } from "../../../../../src/services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../../../../src/storage/coachShareStore";
+import type { CoachLink } from "../../../../../src/types/coachShare";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
@@ -70,10 +72,19 @@ const UI = {
   textSecondary: "#4b5563",
   danger: "#dc2626",
   rowMutedBg: "#f9fafb",
+  coachLaneBg: "#f4f4f5",
+  coachLaneBorder: "#d1d5db",
+  familyLaneBg: "#ecfdf5",
+  familyLaneBorder: "#6ee7b7",
+  publishAccent: "#059669",
+  publishAccentPressed: "#047857",
 };
 
 const CARD_RADIUS = 16;
 const SCREEN_W = Dimensions.get("window").width;
+
+/** Keeps header refresh spinner from flashing off too fast when sync completes quickly. */
+const COACH_KID_HEADER_REFRESH_MIN_VISIBLE_MS = 420;
 
 // System id -> label (for lightweight display)
 const SYSTEM_LABEL_BY_ID = new Map<string, string>([
@@ -223,6 +234,37 @@ function competitionFormatLabel(f: KidCompetitionFormat | undefined): string | n
 
 const COACH_COMP_YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** Matches kids roster invite list: one entry per link token, excludes revoked / empty secrets. */
+function dedupeActiveCoachWriterLinks(links: CoachLink[]): CoachLink[] {
+  const m = new Map<string, CoachLink>();
+  for (const l of links) {
+    if (l.status !== "active" || l.revokedAt) continue;
+    const ws = l.weeklySync;
+    const secret = typeof ws?.writerSecret === "string" ? ws.writerSecret.trim() : "";
+    const tokenRaw = typeof ws?.linkToken === "string" ? ws.linkToken.trim() : "";
+    if (!ws || !secret || !tokenRaw) continue;
+    const token = tokenRaw.toLowerCase();
+    const cur = m.get(token);
+    if (
+      !cur ||
+      l.updatedAt.localeCompare(cur.updatedAt) > 0 ||
+      (l.updatedAt === cur.updatedAt && l.createdAt.localeCompare(cur.createdAt) > 0)
+    ) {
+      m.set(token, l);
+    }
+  }
+  return [...m.values()];
+}
+
+/** Newest invite first — same ordering as kids roster primary row; used to pick one canonical session per athlete. */
+function sortCoachWriterLinksNewestFirst(links: CoachLink[]): CoachLink[] {
+  return [...links].sort((a, b) => {
+    const u = b.updatedAt.localeCompare(a.updatedAt);
+    if (u !== 0) return u;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+}
+
 function compareCoachCompYMD(a: string, b: string): number {
   return a.localeCompare(b);
 }
@@ -268,6 +310,20 @@ function formatMonthHeading(monthKey: string) {
   return d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
 }
 
+function formatCoachKidDetailRefreshLabel(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  const time = d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (sameDay) return `Last updated today, ${time}`;
+  return `Last updated ${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${time}`;
+}
+
 function groupCompetitionsByMonth(entries: KidCompetitionEntry[]): {
   monthKey: string;
   entries: KidCompetitionEntry[];
@@ -289,6 +345,38 @@ function groupCompetitionsByMonth(entries: KidCompetitionEntry[]): {
         b.createdAt.localeCompare(a.createdAt),
     ),
   }));
+}
+
+function normalizeOpenableHttpUrl(raw?: string): string | null {
+  const t = (raw ?? "").trim();
+  if (!t) return null;
+  const candidate =
+    t.startsWith("http://") || t.startsWith("https://") ? t : `https://${t}`;
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
+async function openHttpsUrl(rawUrl: string | undefined) {
+  const normalized = normalizeOpenableHttpUrl(rawUrl);
+  if (!normalized) return;
+  try {
+    const canOpen = await Linking.canOpenURL(normalized);
+    if (!canOpen) {
+      Alert.alert(
+        "Unable to open link",
+        "This link cannot be opened on this device.",
+      );
+      return;
+    }
+    await Linking.openURL(normalized);
+  } catch {
+    Alert.alert("Unable to open link", "Something went wrong opening this link.");
+  }
 }
 
 async function openYoutubeUrl(rawUrl: string | undefined) {
@@ -344,12 +432,18 @@ export default function KidDetailScreen() {
   const [standingGuidance, setStandingGuidance] = useState<KidStandingGuidance | null>(null);
   const [progressNotesInputKey, setProgressNotesInputKey] = useState(0);
   const [publishingWeekly, setPublishingWeekly] = useState(false);
+  const [headerRefreshing, setHeaderRefreshing] = useState(false);
+  /** Set when a header refresh completes successfully (ISO timestamp for display). */
+  const [lastHeaderRefreshAtIso, setLastHeaderRefreshAtIso] = useState<string | null>(null);
 
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
-  /** Dev: correlates competition sync logs within one `load()` and across focus replays. */
-  const coachCompDetailLoadSeqRef = useRef(0);
+  /** Monotonic per screen mount: correlates logs and drops stale async `load()` completions. */
+  const coachKidDetailLoadGenRef = useRef(0);
+  /** Synchronous guard so rapid header taps cannot start overlapping refresh loads before state re-renders. */
+  const coachKidHeaderRefreshInFlightRef = useRef(false);
 
   const bumpScrollToFocusedInput = useCallback(() => {
     const run = () => {
@@ -369,12 +463,17 @@ export default function KidDetailScreen() {
     return () => sub.remove();
   }, [bumpScrollToFocusedInput]);
 
-  const load = useCallback(async (opts?: { prefillProgressInputs?: boolean }) => {
-    if (!kidId || !weekStartYMD) return;
+  const load = useCallback(async (opts?: { prefillProgressInputs?: boolean; keepPreviousUiReady?: boolean }) => {
+    if (!kidId || !weekStartYMD) return false;
+    const loadGen = ++coachKidDetailLoadGenRef.current;
     const prefillProgressInputs = opts?.prefillProgressInputs ?? true;
-    setReady(false);
+    const keepPreviousUiReady = opts?.keepPreviousUiReady ?? false;
+    if (!keepPreviousUiReady) {
+      setReady(false);
+    }
     try {
       const kids = await getKidsById();
+      if (loadGen !== coachKidDetailLoadGenRef.current) return false;
       const kid = kids[kidId];
       setKidName(kid?.name ?? "—");
       setHouseholdDraft(kid?.householdLabel ?? "");
@@ -404,27 +503,36 @@ export default function KidDetailScreen() {
       setThisWeekReflections(weekReflections);
 
       let compRows = await getKidCompetitionEntriesForKid(kidId);
+      if (loadGen !== coachKidDetailLoadGenRef.current) return false;
       const sharedAthleteId = kid?.sharedAthleteId?.trim() ?? "";
-      coachCompDetailLoadSeqRef.current += 1;
-      const coachCompLoadSeq = coachCompDetailLoadSeqRef.current;
 
       if (__DEV__) {
         const linksForLog = await getCoachLinks();
-        const syncLinksForLog = linksForLog.filter(
-          (l) => l.status === "active" && l.weeklySync,
+        const syncLinksForLog = sortCoachWriterLinksNewestFirst(
+          dedupeActiveCoachWriterLinks(linksForLog).filter((l) => l.weeklySync),
         );
         console.log("[bjj-coach-kid-detail] focus/load", {
-          loadSeq: coachCompLoadSeq,
+          loadGen,
           kidId,
           sharedAthleteId: sharedAthleteId || null,
           activeSyncLinkCount: syncLinksForLog.length,
+          activeSyncLinkTokenTails: syncLinksForLog.map((l) => {
+            const t = (l.weeklySync?.linkToken ?? "").trim();
+            return t.length > 8 ? t.slice(-8) : t;
+          }),
         });
       }
 
       if (sharedAthleteId) {
+        if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+
         const links = await getCoachLinks();
-        const syncLinks = links.filter((l) => l.status === "active" && l.weeklySync);
-        const remoteForKid: SyncedSharedCompetition[] = [];
+        const syncLinks = sortCoachWriterLinksNewestFirst(
+          dedupeActiveCoachWriterLinks(links).filter((l) => l.weeklySync),
+        );
+        let remoteForKid: SyncedSharedCompetition[] = [];
+        /** Which writer session we treat as canonical for this kid (newest link that contains the athlete). */
+        let canonicalTokenTail: string | null = null;
         let sessionFetchFailures = 0;
         let sessionIndex = 0;
         for (const l of syncLinks) {
@@ -434,27 +542,38 @@ export default function KidDetailScreen() {
           const linkTokenTail = token.length > 8 ? token.slice(-8) : token;
           try {
             const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+            if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+
+            const athleteIdsInSession = session.athletes.map((a) => a.id);
+            const athleteInSession = session.athletes.some((a) => a.id === sharedAthleteId);
             const totalRemote = session.competitions.length;
-            const matching = session.competitions.filter(
-              (c) => c.sharedAthleteId === sharedAthleteId,
-            );
+            const matching = athleteInSession
+              ? session.competitions.filter((c) => c.sharedAthleteId === sharedAthleteId)
+              : [];
             if (__DEV__) {
               console.log("[bjj-coach-kid-detail] session fetch", {
-                loadSeq: coachCompLoadSeq,
+                loadGen,
                 sessionIndex,
                 totalSessionsInLoop: syncLinks.length,
                 linkTokenTail,
+                athleteIdsInSession,
                 remoteCompetitionsTotal: totalRemote,
+                competitionIdsForSharedAthlete: matching.map((c) => c.id),
+                athleteInSession,
                 matchingSharedAthleteCount: matching.length,
-                matchingSharedAthleteIds: matching.map((c) => c.id),
               });
             }
-            remoteForKid.push(...matching);
+            // One session per athlete: merging every link’s competitions lets abandoned/stale sessions
+            // resurrect ids the parent already deleted on their active invite.
+            if (athleteInSession && canonicalTokenTail === null) {
+              canonicalTokenTail = linkTokenTail;
+              remoteForKid = matching;
+            }
           } catch {
             sessionFetchFailures += 1;
             if (__DEV__) {
               console.log("[bjj-coach-kid-detail] session fetch failed", {
-                loadSeq: coachCompLoadSeq,
+                loadGen,
                 sessionIndex,
                 totalSessionsInLoop: syncLinks.length,
                 linkTokenTail,
@@ -464,18 +583,11 @@ export default function KidDetailScreen() {
           }
         }
         if (__DEV__) {
-          const idCounts = new Map<string, number>();
-          for (const c of remoteForKid) {
-            idCounts.set(c.id, (idCounts.get(c.id) ?? 0) + 1);
-          }
-          const duplicateRemoteIds = [...idCounts.entries()]
-            .filter(([, n]) => n > 1)
-            .map(([id, n]) => ({ id, count: n }));
-          console.log("[bjj-coach-kid-detail] merged remote for athlete", {
-            loadSeq: coachCompLoadSeq,
+          console.log("[bjj-coach-kid-detail] canonical remote for athlete", {
+            loadGen,
+            canonicalTokenTail,
             mergedRemoteCount: remoteForKid.length,
             mergedRemoteIds: remoteForKid.map((c) => c.id),
-            duplicateRemoteIds,
             sessionFetchFailures,
           });
         }
@@ -486,7 +598,7 @@ export default function KidDetailScreen() {
         const shouldReconcileSharedComps = haveAuthoritativeRemote;
         if (__DEV__) {
           console.log("[bjj-coach-kid-detail] reconcile gate", {
-            loadSeq: coachCompLoadSeq,
+            loadGen,
             haveAuthoritativeRemote,
             shouldReconcileSharedComps,
             syncLinkCount: syncLinks.length,
@@ -494,31 +606,52 @@ export default function KidDetailScreen() {
           });
         }
         if (shouldReconcileSharedComps) {
+          if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+
           if (__DEV__) {
-            console.log("[bjj-coach-kid-detail] before upsert (reconcile runs before setState)", {
-              loadSeq: coachCompLoadSeq,
+            console.log("[bjj-coach-kid-detail] local competitions before reconcile", {
+              loadGen,
               kidId,
               sharedAthleteId,
+              rowCount: compRows.length,
+              rows: compRows.map((r) => ({
+                id: r.id,
+                sharedCompetitionId: r.sharedCompetitionId ?? null,
+                sharedAthleteId: r.sharedAthleteId ?? null,
+                tournamentName: r.tournamentName,
+              })),
             });
           }
           compRows = await upsertSharedCompetitionsForKid(kidId, sharedAthleteId, remoteForKid);
+          if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+
+          setCompetitions(compRows);
+
           if (__DEV__) {
-            console.log("[bjj-coach-kid-detail] after upsert, before setCompetitions", {
-              loadSeq: coachCompLoadSeq,
-              compRowCount: compRows.length,
+            console.log("[bjj-coach-kid-detail] local competitions after reconcile (pre setState)", {
+              loadGen,
+              kidId,
+              rowCount: compRows.length,
+              rowIds: compRows.map((r) => r.id),
+              sharedCompetitionIds: compRows
+                .map((r) => r.sharedCompetitionId)
+                .filter(Boolean),
             });
           }
         } else if (__DEV__) {
           console.log("[bjj-coach-kid-detail] reconcile skipped (no upsert)", {
-            loadSeq: coachCompLoadSeq,
+            loadGen,
           });
         }
       }
+      if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+
       if (__DEV__) {
         console.log("[bjj-coach-kid-detail] setCompetitions", {
-          loadSeq: coachCompLoadSeq,
+          loadGen,
           kidId,
           compRowCount: compRows.length,
+          competitionIdsForRender: compRows.map((r) => r.id),
         });
       }
       setCompetitions(compRows);
@@ -551,14 +684,101 @@ export default function KidDetailScreen() {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         );
       setKidWeekSessions(kidWeek);
+      return loadGen === coachKidDetailLoadGenRef.current;
     } finally {
-      setReady(true);
+      if (loadGen === coachKidDetailLoadGenRef.current) {
+        setReady(true);
+      }
     }
   }, [kidId, weekStartYMD]);
+
+  const onRefreshFromHeader = useCallback(async () => {
+    if (!kidId) return;
+    if (coachKidHeaderRefreshInFlightRef.current) return;
+    coachKidHeaderRefreshInFlightRef.current = true;
+    const refreshStartedAt = Date.now();
+    setHeaderRefreshing(true);
+    try {
+      const applied = await load({ prefillProgressInputs: true, keepPreviousUiReady: true });
+      if (applied) {
+        setLastHeaderRefreshAtIso(new Date().toISOString());
+      }
+    } finally {
+      const elapsed = Date.now() - refreshStartedAt;
+      const remainder = COACH_KID_HEADER_REFRESH_MIN_VISIBLE_MS - elapsed;
+      if (remainder > 0) {
+        await new Promise<void>((resolve) => setTimeout(resolve, remainder));
+      }
+      coachKidHeaderRefreshInFlightRef.current = false;
+      setHeaderRefreshing(false);
+    }
+  }, [kidId, load]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          onPress={() => void onRefreshFromHeader()}
+          disabled={headerRefreshing || !kidId}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Refresh from parent sync"
+          accessibilityState={{ busy: headerRefreshing }}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: headerRefreshing ? 6 : 0,
+            }}
+          >
+            {headerRefreshing ? (
+              <ActivityIndicator size="small" color="#1d4ed8" />
+            ) : null}
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: "600",
+                color: headerRefreshing || !kidId ? "#93c5fd" : "#1d4ed8",
+                includeFontPadding: false,
+                textAlignVertical: "center",
+              }}
+            >
+              {headerRefreshing ? "Refreshing…" : "Refresh"}
+            </Text>
+          </View>
+        </Pressable>
+      ),
+    });
+  }, [navigation, headerRefreshing, kidId, onRefreshFromHeader]);
+
+  useEffect(() => {
+    if (!__DEV__ || !kidId) return;
+    console.log("[bjj-coach-kid-detail] final rendered competition ids (state)", {
+      kidId,
+      loadGenCurrent: coachKidDetailLoadGenRef.current,
+      competitionRowIds: competitions.map((r) => r.id),
+      sharedCompetitionIds: competitions
+        .map((r) => r.sharedCompetitionId)
+        .filter(Boolean),
+    });
+  }, [competitions, kidId]);
 
   const monthGroups = useMemo(
     () => groupCompetitionsByMonth(competitions),
     [competitions],
+  );
+
+  const competitionHeaderRefreshLabel = useMemo(
+    () => formatCoachKidDetailRefreshLabel(lastHeaderRefreshAtIso),
+    [lastHeaderRefreshAtIso],
   );
 
   useEffect(() => {
@@ -665,6 +885,8 @@ export default function KidDetailScreen() {
           title: currentWeekEntry.title,
           metadata: currentWeekEntry.metadata,
           youtubeUrl: currentWeekEntry.youtubeUrl,
+          familyResourceUrl: currentWeekEntry.familyResourceUrl,
+          familyResourceLabel: currentWeekEntry.familyResourceLabel,
           coachOutcome: outcomeDraft,
           coachNotes: trimmedNotes ? trimmedNotes : undefined,
         });
@@ -676,6 +898,8 @@ export default function KidDetailScreen() {
           title: currentWeekEntry.title,
           note: currentWeekEntry.note,
           youtubeUrl: currentWeekEntry.youtubeUrl,
+          familyResourceUrl: currentWeekEntry.familyResourceUrl,
+          familyResourceLabel: currentWeekEntry.familyResourceLabel,
           coachOutcome: outcomeDraft,
           coachNotes: trimmedNotes ? trimmedNotes : undefined,
         });
@@ -728,13 +952,25 @@ export default function KidDetailScreen() {
   );
 
   const onPublishWeeklyToFamilies = useCallback(async () => {
-    if (!currentWeekEntry || !weekStartYMD) {
+    if (!kidId || !weekStartYMD) {
       Alert.alert("Set focus first", "Save this week’s focus before publishing to families.");
       return;
     }
+    const latestEntry = await getLatestKidWeeklyFocusForWeek(kidId, weekStartYMD);
+    if (!latestEntry) {
+      Alert.alert("Set focus first", "Save this week’s focus before publishing to families.");
+      return;
+    }
+    if (__DEV__) {
+      console.log("[bjj-coach-publish-latest-entry]", {
+        entryId: latestEntry.id,
+        familyResourceUrl: (latestEntry.familyResourceUrl ?? "").trim() || null,
+        familyResourceLabel: (latestEntry.familyResourceLabel ?? "").trim() || null,
+      });
+    }
     const links = await getCoachLinks();
-    const cred = links
-      .filter((l) => l.status === "active" && l.weeklySync?.writerSecret)
+    const cred = dedupeActiveCoachWriterLinks(links)
+      .filter((l) => l.weeklySync?.writerSecret?.trim())
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     if (!cred?.weeklySync?.writerSecret) {
       Alert.alert(
@@ -743,7 +979,7 @@ export default function KidDetailScreen() {
       );
       return;
     }
-    const payload = kidWeeklyFocusToPublishPayload(currentWeekEntry, weekStartYMD);
+    const payload = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD);
     setPublishingWeekly(true);
     try {
       await coachSyncPublishWeekly(
@@ -753,8 +989,8 @@ export default function KidDetailScreen() {
         cred.weeklySync.apiBaseUrl,
       );
       Alert.alert(
-        "Published",
-        "Linked parent phones will see this note after they refresh This week together.",
+        "Published to families",
+        "Parents see this week’s title, family note, and any family link you added — not check-ins or your private reference video. They need to open This week together (or Refresh) on their linked phone.",
       );
     } catch (e) {
       const msg =
@@ -767,7 +1003,7 @@ export default function KidDetailScreen() {
     } finally {
       setPublishingWeekly(false);
     }
-  }, [currentWeekEntry, weekStartYMD]);
+  }, [kidId, weekStartYMD]);
 
   const requestDeleteSession = useCallback(
     (sessionId: string) => {
@@ -826,7 +1062,7 @@ export default function KidDetailScreen() {
           {kidName}
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          Kid-specific weekly focus tracking (internal pilot).
+          Coach-only notes stay here. The green section is what you can publish to linked parent phones.
         </Text>
 
         <View style={{ height: 12 }} />
@@ -907,17 +1143,43 @@ export default function KidDetailScreen() {
 
         <View
           style={{
-            padding: 16,
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: UI.bgCard,
-            gap: 10,
+            borderColor: UI.coachLaneBorder,
+            backgroundColor: UI.coachLaneBg,
+            padding: 12,
+            gap: 14,
           }}
         >
-          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            What matters next
-          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: "#e5e7eb",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#1f2937" }}>COACH ONLY</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: UI.textSecondary, flex: 1, minWidth: 140, lineHeight: 17 }}>
+              Not shared with families. Direction, check-ins, your training log, and competitions stay on this phone.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              gap: 10,
+            }}
+          >
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+              What matters next
+            </Text>
           {standingIsActive ? (
             <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary }}>
               {standingPrimary}
@@ -961,113 +1223,6 @@ export default function KidDetailScreen() {
             <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
               {standingIsActive ? "Edit direction" : "Add note"}
             </Text>
-          </Pressable>
-        </View>
-
-        <View style={{ height: 14 }} />
-
-        <View
-          style={{
-            padding: 16,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: UI.bgCard,
-            gap: 8,
-          }}
-        >
-          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-            {"This week's focus"}
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
-              {focusTitle ?? "No focus saved yet"}
-            </Text>
-            {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry.youtubeUrl) ? (
-              <Pressable
-                onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
-                style={({ pressed }) => ({
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                })}
-              >
-                <Text style={{ fontSize: 11, fontWeight: "700", color: UI.textPrimary }}>
-                  YT
-                </Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          {focusTitle ? (
-            <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-              Week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
-            </Text>
-          ) : (
-            <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-              Pick a focus to build history over time.
-            </Text>
-          )}
-
-          <Pressable
-            onPress={() =>
-              currentWeekEntry
-                ? router.push(
-                    `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
-                  )
-                : router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)
-            }
-            style={({ pressed }) => ({
-              marginTop: 6,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: "#1d4ed8",
-              backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
-              alignSelf: "stretch",
-            })}
-          >
-            <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
-              {currentWeekEntry ? "Edit this week's focus" : "Set this week's focus"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            disabled={!currentWeekEntry || publishingWeekly}
-            onPress={() => void onPublishWeeklyToFamilies()}
-            style={({ pressed }) => ({
-              marginTop: 10,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: pressed ? "#f9fafb" : UI.rowMutedBg,
-              alignSelf: "stretch",
-              opacity: !currentWeekEntry || publishingWeekly ? 0.55 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800", textAlign: "center" }}>
-              {publishingWeekly ? "Publishing…" : "Publish weekly note to family devices"}
-            </Text>
-            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, textAlign: "center" }}>
-              Shares title + family text only (not check-ins or video links). Parents need your invite code.
-            </Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
-            style={({ pressed }) => ({
-              paddingVertical: 4,
-              alignSelf: "flex-start",
-              opacity: pressed ? 0.65 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>History</Text>
           </Pressable>
         </View>
 
@@ -1470,6 +1625,19 @@ export default function KidDetailScreen() {
           <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
             Local tournament log · grouped by month.
           </Text>
+          {headerRefreshing ? (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <ActivityIndicator size="small" color={UI.textSecondary} />
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16, flex: 1 }}>
+                Syncing shared entries from the parent invite (this can take a few seconds).
+              </Text>
+            </View>
+          ) : null}
+          {competitionHeaderRefreshLabel && !headerRefreshing ? (
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16, opacity: 0.92 }}>
+              {competitionHeaderRefreshLabel}
+            </Text>
+          ) : null}
 
           <Pressable
             onPress={() => router.push(`/profile/coaches/kid/${kidId}/competition/edit`)}
@@ -1669,6 +1837,175 @@ export default function KidDetailScreen() {
               })}
             </View>
           ) : null}
+        </View>
+        </View>
+
+        <View style={{ height: 16 }} />
+
+        <View
+          style={{
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.familyLaneBorder,
+            backgroundColor: UI.familyLaneBg,
+            padding: 12,
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: "#a7f3d0",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#065f46" }}>FAMILY / PUBLISH</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: "#047857", flex: 1, minWidth: 140, lineHeight: 17 }}>
+              Linked parents see this only after you publish. Set the weekly focus, then use the green button.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+              {"This week's focus (published title + family note)"}
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Parents get the title, the family-facing note from the editor, and an optional family link — not your
+              check-ins or the reference video field below.
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
+                {focusTitle ?? "No focus saved yet"}
+              </Text>
+              {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry.youtubeUrl) ? (
+                <Pressable
+                  onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                  })}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: UI.textPrimary }}>
+                    YT video
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {focusTitle && currentWeekEntry?.youtubeUrl?.trim() ? (
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+                Reference video / IG — coach device only, not sent to parents.
+              </Text>
+            ) : null}
+
+            {focusTitle && currentWeekEntry?.familyResourceUrl?.trim() ? (
+              <Pressable
+                onPress={() => void openHttpsUrl(currentWeekEntry!.familyResourceUrl)}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: UI.familyLaneBorder,
+                  backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
+                  {(currentWeekEntry.familyResourceLabel ?? "").trim() || "Family link"} · open
+                </Text>
+                <Text
+                  style={{ marginTop: 2, fontSize: 11, color: UI.textSecondary }}
+                  numberOfLines={1}
+                >
+                  {currentWeekEntry.familyResourceUrl.trim()}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {focusTitle ? (
+              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                Week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                Pick a focus, add a family link if you want, then publish.
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() =>
+                currentWeekEntry
+                  ? router.push(
+                      `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
+                    )
+                  : router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)
+              }
+              style={({ pressed }) => ({
+                marginTop: 6,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#1d4ed8",
+                backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
+                alignSelf: "stretch",
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
+                {currentWeekEntry ? "Edit weekly focus & family link" : "Set this week's focus"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={!currentWeekEntry || publishingWeekly}
+              onPress={() => void onPublishWeeklyToFamilies()}
+              style={({ pressed }) => ({
+                marginTop: 10,
+                paddingVertical: 14,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: UI.publishAccent,
+                backgroundColor: pressed ? UI.publishAccentPressed : UI.publishAccent,
+                alignSelf: "stretch",
+                opacity: !currentWeekEntry || publishingWeekly ? 0.55 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "900", textAlign: "center" }}>
+                {publishingWeekly ? "Publishing…" : "Publish to family phones"}
+              </Text>
+              <Text style={{ marginTop: 6, fontSize: 12, color: "#ecfdf5", textAlign: "center", lineHeight: 17 }}>
+                {"Required for parents to see this week's note. Sends title, family note, and family link only."}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+              style={({ pressed }) => ({
+                paddingVertical: 4,
+                alignSelf: "flex-start",
+                opacity: pressed ? 0.65 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>History</Text>
+            </Pressable>
+          </View>
         </View>
 
         {!ready ? (

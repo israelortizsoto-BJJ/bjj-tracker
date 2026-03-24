@@ -34,7 +34,11 @@ import {
   getCachedWeeklyForLinkToken,
   setCachedWeeklyForLinkToken,
 } from "../../../../src/storage/coachWeeklySyncCacheStore";
-import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
+import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
+import {
+  CoachWeeklySyncApiError,
+  coachSyncFetchSession,
+} from "../../../../src/services/coachWeeklySyncApi";
 import type { SyncedWeeklyMessagePayload } from "../../../../src/types/coachWeeklySync";
 import type { CoachPilotPreviewItem } from "../../../../src/storage/coachShareStore";
 import type {
@@ -65,14 +69,16 @@ import {
   getKidsById,
   setFamilyCompetitionSelectedKidId,
   todayYMD,
+  unlinkParentAthleteFromCoachSession,
 } from "../../../../src/storage/coachKidStore";
 import { StorageKeys } from "../../../../src/storage/storageKeys";
-import {
-  deleteKidCompetitionEntry,
-  getKidCompetitionEntriesForKid,
-} from "../../../../src/storage/kidCompetitionStore";
+import { deleteParentKidCompetitionEntry } from "../../../../src/family/parentKidCompetitionDelete";
+import { getKidCompetitionEntriesForKid } from "../../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../../src/types";
-import type { KidCompetitionEntry } from "../../../../src/types/coachKid";
+import {
+  kidCompetitionEntryIsSyncedFromWorker,
+  type KidCompetitionEntry,
+} from "../../../../src/types/coachKid";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
 const UI = {
@@ -246,6 +252,10 @@ export default function CoachesScreen() {
   const [familyCompetition, setFamilyCompetition] = useState<FamilyCompetitionLoadState>(
     INITIAL_FAMILY_COMPETITION,
   );
+  const [parentLinkedCoachAthletes, setParentLinkedCoachAthletes] = useState<
+    { kidId: string; displayName: string }[]
+  >([]);
+  const [unlinkingKidId, setUnlinkingKidId] = useState<string | null>(null);
   const [weeklySyncDoc, setWeeklySyncDoc] = useState<SyncedWeeklyMessagePayload | null>(null);
   const [weeklySyncFetchFailed, setWeeklySyncFetchFailed] = useState(false);
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
@@ -299,6 +309,12 @@ export default function CoachesScreen() {
           activeWeeklySyncLink.weeklySync.linkToken,
           activeWeeklySyncLink.weeklySync.apiBaseUrl,
         );
+        if (__DEV__) {
+          console.log("[bjj-parent-weekly-sync-doc]", {
+            familyResourceUrl: (session.weekly?.familyResourceUrl ?? "").trim() || null,
+            familyResourceLabel: (session.weekly?.familyResourceLabel ?? "").trim() || null,
+          });
+        }
         nextWeeklyDoc = session.weekly;
         nextWeeklyFetchFailed = false;
         nextWeeklyFromCache = false;
@@ -417,6 +433,15 @@ export default function CoachesScreen() {
     });
     setPracticeSummary(nextPracticeSummary);
 
+    const linkedCoachAthletes = Object.values(loadedKidsById)
+      .filter((k) => Boolean((k.sharedAthleteId ?? "").trim()))
+      .map((k) => ({
+        kidId: k.id,
+        displayName: (k.name ?? "").trim() || "Athlete",
+      }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+    setParentLinkedCoachAthletes(linkedCoachAthletes);
+
     setCoachLinks(loadedCoachLinks);
     setCoachesById(loadedCoachesById);
     setPacksById(loadedPacksById);
@@ -461,6 +486,68 @@ export default function CoachesScreen() {
     useCallback(() => {
       void loadCoachShareData();
     }, [loadCoachShareData]),
+  );
+
+  const requestUnlinkKidFromCoach = useCallback(
+    (kidId: string, displayName: string) => {
+      const active = coachLinks.filter((l) => l.status === "active");
+      const wsLink = active.find((l) => l.weeklySync);
+      const ws = wsLink?.weeklySync;
+      if (!ws?.linkToken || !ws.parentWriterSecret?.trim()) {
+        Alert.alert(
+          "Not available",
+          "Finish linking on this phone first (open your invite), then try again.",
+        );
+        return;
+      }
+      if (!isCoachSyncConfigured()) {
+        Alert.alert(
+          "Sync unavailable",
+          "Coach sync is not configured in this build, so this action cannot reach the server.",
+        );
+        return;
+      }
+      Alert.alert(
+        `Remove “${displayName}” from this coach?`,
+        "Your coach will no longer see this athlete on their pilot roster or shared competitions. This phone keeps the athlete; synced competitions become local-only entries you can edit or delete.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove from coach",
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                setUnlinkingKidId(kidId);
+                try {
+                  await unlinkParentAthleteFromCoachSession({
+                    kidId,
+                    linkToken: ws.linkToken,
+                    parentWriterSecret: ws.parentWriterSecret!,
+                    apiBaseUrl: ws.apiBaseUrl,
+                  });
+                  const selected = await getFamilyCompetitionSelectedKidId();
+                  if (selected === kidId) {
+                    await clearFamilyCompetitionSelectedKidId();
+                  }
+                  await loadCoachShareData();
+                } catch (e) {
+                  const msg =
+                    e instanceof CoachWeeklySyncApiError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "Something went wrong.";
+                  Alert.alert("Could not remove", msg);
+                } finally {
+                  setUnlinkingKidId(null);
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [coachLinks, loadCoachShareData],
   );
 
   const familyUpcomingMonthGroups = useMemo(
@@ -730,6 +817,36 @@ export default function CoachesScreen() {
     }
   }, []);
 
+  const openPublishedWebUrl = useCallback(async (rawUrl: string | undefined) => {
+    const trimmed = (rawUrl ?? "").trim();
+    if (!trimmed) return;
+    const candidate =
+      trimmed.startsWith("http://") || trimmed.startsWith("https://")
+        ? trimmed
+        : `https://${trimmed}`;
+    let normalized: string;
+    try {
+      const u = new URL(candidate);
+      if (u.protocol !== "http:" && u.protocol !== "https:") return;
+      normalized = u.toString();
+    } catch {
+      return;
+    }
+    try {
+      const canOpen = await Linking.canOpenURL(normalized);
+      if (!canOpen) {
+        Alert.alert(
+          "Unable to open link",
+          "This link cannot be opened on this device.",
+        );
+        return;
+      }
+      await Linking.openURL(normalized);
+    } catch {
+      Alert.alert("Unable to open link", "Something went wrong opening this link.");
+    }
+  }, []);
+
   const hasCoachPilotPreviewOnDevice = pilotPreviewItems.length > 0;
   const hasSeededOrLocalShareData =
     !isLinked &&
@@ -790,16 +907,22 @@ export default function CoachesScreen() {
     familyCompetition.recent.length === 0;
 
   const onConfirmDeleteFamilyCompetitionEntry = useCallback(
-    async (entryId: string) => {
-      const ok = await deleteKidCompetitionEntry(entryId);
-      if (ok) {
-        applyFamilyCompGenRef.current += 1;
-        setFamilyCompetition((prev) => ({
-          ...prev,
-          upcoming: prev.upcoming.filter((e) => e.id !== entryId),
-          recent: prev.recent.filter((e) => e.id !== entryId),
-        }));
+    async (entry: KidCompetitionEntry) => {
+      const outcome = await deleteParentKidCompetitionEntry(
+        entry.id,
+        entry.kidId,
+        getKidsById,
+      );
+      if (!outcome.ok) {
+        Alert.alert(outcome.alertTitle, outcome.alertMessage);
+        return;
       }
+      applyFamilyCompGenRef.current += 1;
+      setFamilyCompetition((prev) => ({
+        ...prev,
+        upcoming: prev.upcoming.filter((e) => e.id !== entry.id),
+        recent: prev.recent.filter((e) => e.id !== entry.id),
+      }));
     },
     [],
   );
@@ -815,7 +938,7 @@ export default function CoachesScreen() {
           {
             text: "Delete",
             style: "destructive",
-            onPress: () => void onConfirmDeleteFamilyCompetitionEntry(entry.id),
+            onPress: () => void onConfirmDeleteFamilyCompetitionEntry(entry),
           },
         ],
       );
@@ -886,13 +1009,13 @@ export default function CoachesScreen() {
     setWeeklyStoryOpen(true);
   }, []);
 
-  const weeklyStoryClassBody = useWeeklySyncHero
-    ? weeklySyncDoc
-      ? [weeklySyncDoc.classLine, weeklySyncDoc.programLine].filter(Boolean).join("\n\n") ||
-        "No separate class or program line came with this published note — the focus step is the full shared message."
-      : weeklySyncNetworkOk
-        ? "Your coach has not added extra class or program lines for this week — the focus step is what they published for families."
-        : "We could not load the latest note — go back and refresh when you are online."
+  /** Step 3 of Read together: distinct from hero copy — prompts, class/pack lines, or coach link (no duplicate weekly body). */
+  const weeklyStoryPracticeBody = useWeeklySyncHero
+    ? !weeklySyncNetworkOk && !weeklySyncDoc
+      ? "We could not load the latest note — go back and check your connection, then refresh when you are online."
+      : weeklySyncDoc?.familyResourceUrl?.trim()
+        ? "Your coach shared a link for families. Open it when you are together — you already read the written note on the previous step, so this screen is only about the link and what to try at home."
+        : "You already read your coach’s written note. This step is for trying things together — not repeating the same words:\n\n• Ask what felt easiest and what felt trickiest this week.\n• Pick one idea from the coach’s title and look for it after class next time.\n• Celebrate showing up, even on a tired day."
     : currentModule?.title || (isLinked && currentPack?.title)
       ? [
           currentModule?.title
@@ -908,7 +1031,11 @@ export default function CoachesScreen() {
         ]
           .filter(Boolean)
           .join("\n\n")
-      : "No extra class or program line on this note right now — that’s okay.";
+      : "No separate class or program line on this note right now — that’s okay.";
+
+  const weeklyStoryPracticeStepTitle = useWeeklySyncHero
+    ? "Practice and notice together"
+    : "Class and program";
 
   const activeAthleteLabel = familyCompetition.kidName
     ? familyCompetition.kidName
@@ -1146,11 +1273,31 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  Class and program
+                  {weeklyStoryPracticeStepTitle}
                 </Text>
                 <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  {weeklyStoryClassBody}
+                  {weeklyStoryPracticeBody}
                 </Text>
+                {useWeeklySyncHero && weeklySyncDoc?.familyResourceUrl?.trim() ? (
+                  <Pressable
+                    onPress={() => void openPublishedWebUrl(weeklySyncDoc.familyResourceUrl)}
+                    style={({ pressed }) => ({
+                      marginTop: 18,
+                      paddingVertical: 14,
+                      paddingHorizontal: 16,
+                      borderRadius: CARD_RADIUS,
+                      borderWidth: 1,
+                      borderColor: UI.addCompetitionBorder,
+                      backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
+                      alignSelf: "stretch",
+                      alignItems: "center",
+                    })}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
+                      {(weeklySyncDoc.familyResourceLabel ?? "").trim() || "Open coach’s link"}
+                    </Text>
+                  </Pressable>
+                ) : null}
               </>
             ) : null}
 
@@ -1321,8 +1468,8 @@ export default function CoachesScreen() {
 
               {useWeeklySyncHero ? (
                 <Text style={{ marginTop: 12, fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
-                  Families only see the published weekly title and text (and any class/program lines your coach
-                  adds there) — not coach-only check-ins or private notes.
+                  With weekly sync, families only see what your coach publishes: this title, this note, and an
+                  optional family link — not coach-only check-ins or private reference videos.
                 </Text>
               ) : null}
 
@@ -1348,18 +1495,27 @@ export default function CoachesScreen() {
                 </Text>
               ) : null}
 
-              {useWeeklySyncHero && weeklySyncDoc?.classLine ? (
-                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.heroBorder }}>
-                  <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
-                    {weeklySyncDoc.classLine}
+              {useWeeklySyncHero && weeklySyncDoc?.familyResourceUrl?.trim() ? (
+                <Pressable
+                  onPress={() => void openPublishedWebUrl(weeklySyncDoc.familyResourceUrl)}
+                  style={({ pressed }) => ({
+                    marginTop: 14,
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderRadius: CARD_RADIUS,
+                    borderWidth: 1,
+                    borderColor: UI.addCompetitionBorder,
+                    backgroundColor: pressed ? UI.addCompetitionBgPressed : "#f5f3ff",
+                    alignSelf: "stretch",
+                  })}
+                >
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#5b21b6", marginBottom: 4 }}>
+                    Coach link for families
                   </Text>
-                </View>
-              ) : null}
-
-              {useWeeklySyncHero && weeklySyncDoc?.programLine ? (
-                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
-                  {weeklySyncDoc.programLine}
-                </Text>
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
+                    {(weeklySyncDoc.familyResourceLabel ?? "").trim() || "Open link"}
+                  </Text>
+                </Pressable>
               ) : null}
 
               {!useWeeklySyncHero && currentModule?.title ? (
@@ -1415,7 +1571,8 @@ export default function CoachesScreen() {
                   Read together
                 </Text>
                 <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, textAlign: "center" }}>
-                  Sit together and read the same note one short screen at a time — same words from your coach, just a little easier to share.
+                  Short guided flow: connection check, your coach’s note once, then at-home prompts (or their
+                  link) — without repeating the same paragraph in three places.
                 </Text>
               </Pressable>
 
@@ -1500,8 +1657,8 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  Log in Training, then come right back here to confirm what was recorded for this athlete.
-                  Everything stays on this phone and lines up with this week’s note above.
+                  Log sessions in Training so you have a record for this athlete. Everything stays on this phone;
+                  use athlete chips in Competition below if you need to switch kids.
                 </Text>
                 <View
                   style={{
@@ -1679,6 +1836,61 @@ export default function CoachesScreen() {
                       );
                     })}
                   </ScrollView>
+                ) : null}
+
+                {role === "parent" &&
+                useWeeklySyncHero &&
+                isCoachSyncConfigured() &&
+                Boolean(weeklySyncLink?.weeklySync?.parentWriterSecret?.trim()) &&
+                parentLinkedCoachAthletes.length > 0 ? (
+                  <View
+                    style={{
+                      marginBottom: 14,
+                      padding: 14,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: UI.monthGroupBorder,
+                      backgroundColor: UI.monthListWellBg,
+                      gap: 10,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        letterSpacing: 0.9,
+                        color: "#5b21b6",
+                        fontWeight: "700",
+                      }}
+                    >
+                      Coach roster on this invite
+                    </Text>
+                    <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
+                      Unlink an athlete if they should leave this coach’s pilot roster. This phone keeps
+                      their name and calendar; shared competition rows become normal local entries.
+                    </Text>
+                    {parentLinkedCoachAthletes.map(({ kidId, displayName }) => (
+                      <Pressable
+                        key={kidId}
+                        disabled={unlinkingKidId !== null}
+                        onPress={() => requestUnlinkKidFromCoach(kidId, displayName)}
+                        style={({ pressed }) => ({
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                          opacity: unlinkingKidId !== null ? 0.55 : 1,
+                        })}
+                      >
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: UI.textPrimary }}>
+                          {unlinkingKidId === kidId
+                            ? "Removing…"
+                            : `Remove “${displayName}” from coach`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
                 ) : null}
 
                 <Text
@@ -1887,7 +2099,10 @@ export default function CoachesScreen() {
                                       <Swipeable
                                         key={entry.id}
                                         overshootRight={false}
-                                        enabled={Boolean(familyCompetition.kidId)}
+                                        enabled={
+                                          Boolean(familyCompetition.kidId) &&
+                                          !kidCompetitionEntryIsSyncedFromWorker(entry)
+                                        }
                                         renderRightActions={() =>
                                           familyCompetitionSwipeDeleteAction(entry)
                                         }
@@ -2110,7 +2325,10 @@ export default function CoachesScreen() {
                                       <Swipeable
                                         key={entry.id}
                                         overshootRight={false}
-                                        enabled={Boolean(familyCompetition.kidId)}
+                                        enabled={
+                                          Boolean(familyCompetition.kidId) &&
+                                          !kidCompetitionEntryIsSyncedFromWorker(entry)
+                                        }
                                         renderRightActions={() =>
                                           familyCompetitionSwipeDeleteAction(entry)
                                         }

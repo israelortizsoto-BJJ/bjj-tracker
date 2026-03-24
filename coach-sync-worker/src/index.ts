@@ -14,6 +14,8 @@ type WeeklyDoc = {
   body: string;
   classLine?: string;
   programLine?: string;
+  familyResourceUrl?: string;
+  familyResourceLabel?: string;
   updatedAt: string;
 };
 
@@ -341,6 +343,38 @@ export default {
         return json({ athlete }, 201);
       }
 
+      const athletesDelete = path.match(/^\/v1\/sessions\/([^/]+)\/athletes\/([^/]+)$/);
+      if (athletesDelete && request.method === "DELETE") {
+        const token = decodeURIComponent(athletesDelete[1] ?? "").trim().toLowerCase();
+        const athleteId = decodeURIComponent(athletesDelete[2] ?? "").trim();
+        if (!TOKEN_RE.test(token) || !athleteId) {
+          return error("Invalid token", 400);
+        }
+        const auth = request.headers.get("Authorization") ?? "";
+        const m = /^Bearer\s+(.+)$/.exec(auth.trim());
+        const secret = m?.[1]?.trim() ?? "";
+        if (!secret) {
+          return error("Unauthorized", 401);
+        }
+
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec || rec.parentWriterSecret !== secret) {
+          return error("Unauthorized", 401);
+        }
+        const hadAthlete = rec.athletes.some((a) => a.id === athleteId);
+        if (!hadAthlete) {
+          return error("Not found", 404);
+        }
+
+        const next: SessionRecord = {
+          ...rec,
+          athletes: rec.athletes.filter((a) => a.id !== athleteId),
+          competitions: rec.competitions.filter((c) => c.sharedAthleteId !== athleteId),
+        };
+        await writeSession(env.SESSIONS, token, next);
+        return json({ ok: true }, 200);
+      }
+
       const weeklyPut = path.match(/^\/v1\/sessions\/([^/]+)\/weekly$/);
       if (weeklyPut && request.method === "PUT") {
         const token = decodeURIComponent(weeklyPut[1] ?? "").trim().toLowerCase();
@@ -370,6 +404,35 @@ export default {
           typeof b.programLine === "string" && b.programLine.trim()
             ? b.programLine.trim().slice(0, 500)
             : undefined;
+        const familyResourceUrlRaw =
+          typeof b.familyResourceUrl === "string" ? b.familyResourceUrl.trim().slice(0, 500) : "";
+        let familyResourceUrl: string | undefined;
+        if (familyResourceUrlRaw) {
+          const withScheme =
+            familyResourceUrlRaw.startsWith("http://") || familyResourceUrlRaw.startsWith("https://")
+              ? familyResourceUrlRaw
+              : `https://${familyResourceUrlRaw}`;
+          try {
+            const u = new URL(withScheme);
+            if (u.protocol === "http:" || u.protocol === "https:") {
+              familyResourceUrl = u.toString().slice(0, 500);
+            }
+          } catch {
+            const head = withScheme.slice(0, 24).toLowerCase();
+            if (
+              !head.startsWith("javascript:") &&
+              !head.startsWith("data:") &&
+              /^https?:\/\//i.test(withScheme) &&
+              !/\s/.test(withScheme)
+            ) {
+              familyResourceUrl = withScheme.slice(0, 500);
+            }
+          }
+        }
+        const familyResourceLabel =
+          typeof b.familyResourceLabel === "string" && b.familyResourceLabel.trim()
+            ? b.familyResourceLabel.trim().slice(0, 120)
+            : undefined;
 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStartYMD)) {
           return error("weekStartYMD must be YYYY-MM-DD", 400);
@@ -393,6 +456,7 @@ export default {
           body: bodyText,
           ...(classLine ? { classLine } : {}),
           ...(programLine ? { programLine } : {}),
+          ...(familyResourceUrl ? { familyResourceUrl, ...(familyResourceLabel ? { familyResourceLabel } : {}) } : {}),
           updatedAt: now,
         };
         const next: SessionRecord = { ...rec, weekly };
