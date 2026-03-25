@@ -7,6 +7,7 @@ import {
   Alert,
   Platform,
   Pressable,
+  RefreshControl,
   Text,
   TextInput,
   View,
@@ -15,6 +16,13 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  activeCoachWriterInviteTokenNorms,
+  coachKidShowsFamilyChannelLinkedBadge,
+  dedupeActiveCoachWriterLinks,
+  kidVisibleOnCoachRoster,
+} from "../../../../src/coachShare/coachLinkBinding";
+import { normalizeInviteLinkToken } from "../../../../src/coachShare/inviteLinkToken";
 import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/config/coachSync";
 import {
   CoachWeeklySyncApiError,
@@ -29,19 +37,16 @@ import {
   setCoachesById,
 } from "../../../../src/storage/coachShareStore";
 import {
+  clearLocalCoachSharingBindingsForInviteToken,
   deleteKidPilot,
   getKidsById,
-  mergeRemoteSharedAthletesIntoKids,
   normalizeKidHouseholdLabel,
+  reconcileCoachKidRosterFromWriterSessions,
   setKidsById,
 } from "../../../../src/storage/coachKidStore";
 import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../../src/types/coachWeeklySync";
-
-function linkTokenLookupKey(raw: string): string {
-  return raw.trim().toLowerCase();
-}
 
 type InviteSessionAthletesState = { names: string[]; fetchFailed: boolean };
 
@@ -50,28 +55,6 @@ function formatInviteLinkedAthletesLine(info: InviteSessionAthletesState | undef
   if (info.fetchFailed) return "Couldn’t load linked athletes";
   if (info.names.length === 0) return "No athletes linked yet";
   return `Linked: ${info.names.join(", ")}`;
-}
-
-/** One UI row per invite token — duplicate persisted links collapse to the newest record. */
-function dedupeActiveCoachWriterLinks(links: CoachLink[]): CoachLink[] {
-  const m = new Map<string, CoachLink>();
-  for (const l of links) {
-    if (l.status !== "active" || l.revokedAt) continue;
-    const ws = l.weeklySync;
-    const secret = typeof ws?.writerSecret === "string" ? ws.writerSecret.trim() : "";
-    const tokenRaw = typeof ws?.linkToken === "string" ? ws.linkToken.trim() : "";
-    if (!ws || !secret || !tokenRaw) continue;
-    const token = tokenRaw.toLowerCase();
-    const cur = m.get(token);
-    if (
-      !cur ||
-      l.updatedAt.localeCompare(cur.updatedAt) > 0 ||
-      (l.updatedAt === cur.updatedAt && l.createdAt.localeCompare(cur.createdAt) > 0)
-    ) {
-      m.set(token, l);
-    }
-  }
-  return [...m.values()];
 }
 
 const UI = {
@@ -135,48 +118,49 @@ export default function KidsRosterScreen() {
   const [inviteSessionAthletesByToken, setInviteSessionAthletesByToken] = useState<
     Record<string, InviteSessionAthletesState>
   >({});
+  const [rosterRefreshing, setRosterRefreshing] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const syncConfigured = isCoachSyncConfigured();
 
-  const loadKids = useCallback(async () => {
-    setReady(false);
+  const loadKids = useCallback(async (opts?: { skipReadyReset?: boolean }) => {
+    if (!opts?.skipReadyReset) {
+      setReady(false);
+    }
     try {
       const links = await getCoachLinks();
       const writers = dedupeActiveCoachWriterLinks(links);
       setWriterLinks(writers);
 
-      const merged: SyncedSharedAthlete[] = [];
-      let sessionFetchFailures = 0;
+      const successfulSnapshots: {
+        linkTokenNorm: string;
+        athletes: SyncedSharedAthlete[];
+      }[] = [];
       const athletesByToken: Record<string, InviteSessionAthletesState> = {};
       if (syncConfigured) {
         for (const l of writers) {
           const ws = l.weeklySync!;
-          const tokenKey = linkTokenLookupKey(ws.linkToken);
+          const tokenKey = normalizeInviteLinkToken(ws.linkToken);
           try {
             const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
-            merged.push(...session.athletes);
+            successfulSnapshots.push({ linkTokenNorm: tokenKey, athletes: session.athletes });
             const names = session.athletes
               .map((a) => (typeof a.name === "string" ? a.name.trim() : ""))
               .filter(Boolean);
             names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
             athletesByToken[tokenKey] = { names, fetchFailed: false };
           } catch {
-            sessionFetchFailures += 1;
             athletesByToken[tokenKey] = { names: [], fetchFailed: true };
             // Best-effort: keep local roster if sync is unreachable.
           }
         }
       }
       setInviteSessionAthletesByToken(athletesByToken);
-      if (writers.length > 0 && syncConfigured) {
-        const allSessionsFetched = sessionFetchFailures === 0;
-        const shouldMerge = merged.length > 0 || allSessionsFetched;
-        if (shouldMerge) {
-          await mergeRemoteSharedAthletesIntoKids(merged, {
-            pruneOrphansWhenAuthoritative: allSessionsFetched,
-          });
-        }
+      if (writers.length > 0 && syncConfigured && successfulSnapshots.length > 0) {
+        await reconcileCoachKidRosterFromWriterSessions({
+          successfulSnapshots,
+          totalActiveWriterCount: writers.length,
+        });
       }
 
       const kids = await getKidsById();
@@ -186,6 +170,22 @@ export default function KidsRosterScreen() {
     }
   }, [syncConfigured]);
 
+  const activeWriterTokenNorms = useMemo(
+    () => activeCoachWriterInviteTokenNorms(writerLinks),
+    [writerLinks],
+  );
+
+  const onRosterRefresh = useCallback(() => {
+    setRosterRefreshing(true);
+    void (async () => {
+      try {
+        await loadKids({ skipReadyReset: true });
+      } finally {
+        setRosterRefreshing(false);
+      }
+    })();
+  }, [loadKids]);
+
   useFocusEffect(
     useCallback(() => {
       void loadKids();
@@ -193,11 +193,12 @@ export default function KidsRosterScreen() {
   );
 
   const { kids, householdSections } = useMemo(() => {
-    const sorted = Object.values(kidsById).sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt),
+    const visible = Object.values(kidsById).filter((k) =>
+      kidVisibleOnCoachRoster(k, activeWriterTokenNorms),
     );
+    const sorted = visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return { kids: sorted, householdSections: buildHouseholdSections(sorted) };
-  }, [kidsById]);
+  }, [kidsById, activeWriterTokenNorms]);
 
   /** Newest invite first — shown as the primary row; older codes live under “More invites”. */
   const sortedWriterLinks = useMemo(
@@ -229,7 +230,7 @@ export default function KidsRosterScreen() {
     (kid: Kid) => {
       Alert.alert(
         "Delete kid?",
-        `Remove ${kid.name} from the pilot roster? This cannot be undone.`,
+        `Remove ${kid.name} from the roster? This cannot be undone.`,
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -264,6 +265,10 @@ export default function KidsRosterScreen() {
                   : l,
               );
               await setCoachLinks(next);
+              const tokenRaw = link.weeklySync?.linkToken;
+              if (tokenRaw) {
+                await clearLocalCoachSharingBindingsForInviteToken(tokenRaw);
+              }
               setMoreInvitesExpanded(false);
               await loadKids();
             },
@@ -317,6 +322,18 @@ export default function KidsRosterScreen() {
         },
       };
 
+      if (__DEV__) {
+        console.log("[bjj-sync-debug] coach create invite wrote writer link row", {
+          linkId: newLink.id,
+          linkTokenTail: newLink.weeklySync?.linkToken?.length
+            ? newLink.weeklySync.linkToken.slice(-8)
+            : null,
+          hasWriterSecret: Boolean(newLink.weeklySync?.writerSecret?.trim()),
+          hasParentWriterSecret: Boolean(newLink.weeklySync?.parentWriterSecret?.trim()),
+          parentProfileId: newLink.parentProfileId,
+        });
+      }
+
       const existingCoaches = await getCoachesById();
       const existingLinks = await getCoachLinks();
       await setCoachesById({ ...existingCoaches, [coach.id]: coach });
@@ -342,7 +359,7 @@ export default function KidsRosterScreen() {
   const onAddKid = useCallback(async () => {
     const trimmed = kidName.trim();
     if (!trimmed) {
-      Alert.alert("Kid name required", "Add a kid name to create this pilot roster entry.");
+      Alert.alert("Kid name required", "Add a kid name to create this roster entry.");
       return;
     }
 
@@ -375,7 +392,7 @@ export default function KidsRosterScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Kids (Pilot)" }} />
+      <Stack.Screen options={{ title: "Kids roster" }} />
       <View style={{ flex: 1, backgroundColor: UI.screenBg }}>
         <KeyboardAwareScrollView
           enableOnAndroid
@@ -392,6 +409,14 @@ export default function KidsRosterScreen() {
             padding: 20,
             paddingBottom: Math.max(24, insets.bottom + 20),
           }}
+          refreshControl={
+            <RefreshControl
+              refreshing={rosterRefreshing}
+              onRefresh={onRosterRefresh}
+              tintColor="#1d4ed8"
+              colors={["#1d4ed8"]}
+            />
+          }
         >
         <Pressable
           onPress={() => router.replace("/profile")}
@@ -410,10 +435,10 @@ export default function KidsRosterScreen() {
         </Pressable>
 
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
-          Kids (Pilot)
+          Kids roster
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          Internal pilot roster. Choose a kid to set weekly focus and view kid history.
+          Pull down to refresh from the family invite sync. Choose a kid for weekly focus and history.
         </Text>
 
         <View style={{ height: 14 }} />
@@ -523,7 +548,7 @@ export default function KidsRosterScreen() {
                   {(() => {
                     const line = formatInviteLinkedAthletesLine(
                       inviteSessionAthletesByToken[
-                        linkTokenLookupKey(primaryWriterLink.weeklySync!.linkToken)
+                        normalizeInviteLinkToken(primaryWriterLink.weeklySync!.linkToken)
                       ],
                     );
                     return line ? (
@@ -575,7 +600,7 @@ export default function KidsRosterScreen() {
                       <View style={{ gap: 10 }}>
                         {extraWriterLinks.map((l, idx) => {
                           const linkedLine = formatInviteLinkedAthletesLine(
-                            inviteSessionAthletesByToken[linkTokenLookupKey(l.weeklySync!.linkToken)],
+                            inviteSessionAthletesByToken[normalizeInviteLinkToken(l.weeklySync!.linkToken)],
                           );
                           return (
                             <View
@@ -727,7 +752,7 @@ export default function KidsRosterScreen() {
                       >
                         <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
                           {kid.name}
-                          {kid.sharedAthleteId ? (
+                          {coachKidShowsFamilyChannelLinkedBadge(kid, activeWriterTokenNorms) ? (
                             <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
                               {" "}
                               · linked
@@ -757,7 +782,7 @@ export default function KidsRosterScreen() {
           }}
         >
           <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "600", color: UI.textSecondary }}>
-            ADD KID (PILOT)
+            ADD KID
           </Text>
           <TextInput
             value={kidName}
@@ -810,7 +835,7 @@ export default function KidsRosterScreen() {
             </Text>
           </Pressable>
           <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-            Internal pilot (coach-side).
+            Coach-side roster.
             {syncConfigured
               ? " Weekly note sharing uses the blue Family weekly note card above."
               : " Weekly note sharing is off until the sync URL is configured."}

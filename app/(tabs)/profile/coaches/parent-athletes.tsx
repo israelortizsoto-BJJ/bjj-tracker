@@ -10,6 +10,14 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useFocusEffect } from "@react-navigation/native";
 
+import {
+  parentKidCoherentlyLinkedToInviteToken,
+  parentStrictWeeklyLinkedCoachLinksForUi,
+} from "../../../../src/coachShare/coachLinkBinding";
+import {
+  inviteLinkTokenTail,
+  normalizeInviteLinkToken,
+} from "../../../../src/coachShare/inviteLinkToken";
 import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
 import {
   CoachWeeklySyncApiError,
@@ -59,6 +67,7 @@ export default function ParentLinkedAthletesScreen() {
 
   const [ready, setReady] = useState(false);
   const [link, setLink] = useState<CoachLink | null>(null);
+  const [allActiveCoachLinks, setAllActiveCoachLinks] = useState<CoachLink[]>([]);
   const [sessionAthletes, setSessionAthletes] = useState<SyncedSharedAthlete[]>([]);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
   const [nameDraft, setNameDraft] = useState("");
@@ -76,16 +85,17 @@ export default function ParentLinkedAthletesScreen() {
     setSessionAthletesAuthoritative(false);
     try {
       const links = await getCoachLinks();
+      setAllActiveCoachLinks(parentStrictWeeklyLinkedCoachLinksForUi(links));
       const found = links.find((l) => l.id === id && l.status === "active");
       const foundSync = found?.weeklySync;
-      if (!found || !foundSync?.linkToken || foundSync.writerSecret) {
+      if (!found || !foundSync?.linkToken) {
         setLink(null);
         return;
       }
 
       let working = found;
 
-      if (!foundSync.parentWriterSecret && syncOk) {
+      if (!foundSync.parentWriterSecret?.trim() && syncOk) {
         try {
           const { parentWriterSecret } = await coachSyncRedeemParentWriter(
             foundSync.linkToken,
@@ -93,7 +103,13 @@ export default function ParentLinkedAthletesScreen() {
           );
           const nextLinks = patchLinkParentSecret(links, working.id, parentWriterSecret);
           await setCoachLinks(nextLinks);
-          working = nextLinks.find((l) => l.id === id)!;
+          const updated = nextLinks.find((l) => l.id === id);
+          if (!updated?.weeklySync?.parentWriterSecret?.trim()) {
+            setError("Could not update link.");
+            setLink(null);
+            return;
+          }
+          working = updated;
         } catch (e) {
           const msg =
             e instanceof CoachWeeklySyncApiError
@@ -108,9 +124,19 @@ export default function ParentLinkedAthletesScreen() {
       }
 
       const ws = working.weeklySync;
-      if (!ws) {
+      if (!ws?.parentWriterSecret?.trim()) {
         setLink(null);
         return;
+      }
+
+      if (__DEV__) {
+        console.log("[bjj-sync-debug] parent-athletes refresh loaded link", {
+          linkId: working.id,
+          linkTokenTail: inviteLinkTokenTail(ws.linkToken ?? ""),
+          hasWriterSecret: Boolean(ws.writerSecret?.trim()),
+          hasParentWriterSecret: Boolean(ws.parentWriterSecret?.trim()),
+          apiBaseUrl: (ws.apiBaseUrl ?? "").trim() ? "set" : "empty",
+        });
       }
 
       setLink(working);
@@ -141,13 +167,19 @@ export default function ParentLinkedAthletesScreen() {
     [sessionAthletes],
   );
 
+  const currentInviteTokenNorm = useMemo(
+    () => normalizeInviteLinkToken(link?.weeklySync?.linkToken ?? ""),
+    [link?.weeklySync?.linkToken],
+  );
+
   /**
    * Profiles that can be tied to this invite without creating a duplicate roster row:
    * - never linked, or
    * - linked id is not on this session anymore (reconnect / server removed athlete) when the session
    *   fetch succeeded — local `sharedAthleteId` can be stale if the parent unlinked on the server but
    *   storage was not cleared, or they removed the phone link before “Remove from coach”.
-   * Omit kids already present on this session for this invite.
+   * Omit kids already on this session **and** coherently bound to this invite on this phone (active link
+   * + parent writer secret + matching token norm).
    */
   const relinkCandidateKids = useMemo(() => {
     return Object.values(kidsById)
@@ -155,14 +187,25 @@ export default function ParentLinkedAthletesScreen() {
         const sid = (k.sharedAthleteId ?? "").trim();
         if (!sid) return true;
         if (!sessionAthletesAuthoritative) return false;
-        return !sessionAthleteIds.has(sid);
+        const onSession = sessionAthleteIds.has(sid);
+        const coherent =
+          Boolean(currentInviteTokenNorm) &&
+          parentKidCoherentlyLinkedToInviteToken(k, currentInviteTokenNorm, allActiveCoachLinks);
+        if (onSession && coherent) return false;
+        return true;
       })
       .sort((a, b) => {
         const byName = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
         if (byName !== 0) return byName;
         return b.updatedAt.localeCompare(a.updatedAt);
       });
-  }, [kidsById, sessionAthletesAuthoritative, sessionAthleteIds]);
+  }, [
+    allActiveCoachLinks,
+    currentInviteTokenNorm,
+    kidsById,
+    sessionAthleteIds,
+    sessionAthletesAuthoritative,
+  ]);
 
   useFocusEffect(
     useCallback(() => {
@@ -187,7 +230,23 @@ export default function ParentLinkedAthletesScreen() {
           link.weeklySync.apiBaseUrl,
         );
 
-        const updated = await attachSharedAthleteToKid(kid.id, athlete);
+        if (__DEV__) {
+          const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
+          console.log("[bjj-sync-debug] parent-athletes relink existing kid", {
+            kidLocalId: kid.id,
+            kidName: name,
+            linkedAthleteId: athlete.id,
+            tokenNorm,
+            tokenTail: inviteLinkTokenTail(tokenNorm),
+            linkId: link.id,
+          });
+        }
+
+        const updated = await attachSharedAthleteToKid(
+          kid.id,
+          athlete,
+          normalizeInviteLinkToken(link.weeklySync.linkToken),
+        );
         if (!updated) {
           setError("Could not update that child profile.");
           return;
@@ -227,14 +286,29 @@ export default function ParentLinkedAthletesScreen() {
 
       const nowIso = new Date().toISOString();
       const localId = `kid_${Date.now()}`;
+      const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
       const existing = await getKidsById();
       const created: Kid = {
         id: localId,
         name: athlete.name,
         sharedAthleteId: athlete.id,
+        sharedFromInviteTokenNorm: tokenNorm,
+        isParentManagedChildProfile: true,
         createdAt: nowIso,
         updatedAt: nowIso,
       };
+
+      if (__DEV__) {
+        console.log("[bjj-sync-debug] parent-athletes add new kid", {
+          kidLocalId: localId,
+          linkedAthleteId: athlete.id,
+          tokenNorm,
+          tokenTail: inviteLinkTokenTail(tokenNorm),
+          linkId: link.id,
+          hasWriterSecret: Boolean(link.weeklySync?.writerSecret?.trim()),
+        });
+      }
+
       const nextKids: KidsById = { ...existing, [localId]: created };
       await setKidsById(nextKids);
 

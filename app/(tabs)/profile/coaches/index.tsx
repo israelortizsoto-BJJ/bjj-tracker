@@ -33,6 +33,11 @@ import {
   getCachedWeeklyForLinkToken,
   setCachedWeeklyForLinkToken,
 } from "../../../../src/storage/coachWeeklySyncCacheStore";
+import {
+  activeCoachLinksForParentLinkedUi,
+  parentKidPresentedAsLinkedToCoach,
+  parentStrictWeeklyLinkedCoachLinksForUi,
+} from "../../../../src/coachShare/coachLinkBinding";
 import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
 import {
   CoachWeeklySyncApiError,
@@ -71,7 +76,10 @@ import {
   unlinkParentAthleteFromCoachSession,
 } from "../../../../src/storage/coachKidStore";
 import { StorageKeys } from "../../../../src/storage/storageKeys";
-import { deleteParentKidCompetitionEntry } from "../../../../src/family/parentKidCompetitionDelete";
+import {
+  deleteParentKidCompetitionEntry,
+  resolveLinkedTargetForParentWriter,
+} from "../../../../src/family/parentKidCompetitionDelete";
 import { getKidCompetitionEntriesForKid } from "../../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../../src/types";
 import {
@@ -292,9 +300,14 @@ export default function CoachesScreen() {
 
     let loadedCoachesById = loadedCoachesByIdInitial;
 
-    const activeWeeklySyncLink = loadedCoachLinks.find(
-      (l) => l.status === "active" && l.weeklySync,
-    );
+    const linksForParentWeeklyFetch =
+      role === "parent"
+        ? parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks)
+        : loadedCoachLinks.filter((l) => l.status === "active");
+    const activeWeeklySyncLink =
+      role === "parent"
+        ? linksForParentWeeklyFetch[0]
+        : linksForParentWeeklyFetch.find((l) => l.weeklySync);
     let nextWeeklyDoc: SyncedWeeklyMessagePayload | null = null;
     let nextWeeklyFetchFailed = false;
     let nextWeeklyFetchedAt: string | null = null;
@@ -433,8 +446,12 @@ export default function CoachesScreen() {
     });
     setPracticeSummary(nextPracticeSummary);
 
+    const activeLinksForParent =
+      role === "parent"
+        ? parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks)
+        : loadedCoachLinks.filter((l) => l.status === "active");
     const linkedCoachAthletes = Object.values(loadedKidsById)
-      .filter((k) => Boolean((k.sharedAthleteId ?? "").trim()))
+      .filter((k) => parentKidPresentedAsLinkedToCoach(k, activeLinksForParent))
       .map((k) => ({
         kidId: k.id,
         displayName: (k.name ?? "").trim() || "Athlete",
@@ -450,7 +467,7 @@ export default function CoachesScreen() {
     setCompletionReceiptsQueue(loadedCompletionReceiptsQueue);
     setPilotPreviewItemsState(loadedPilotPreviewItems);
     setReady(true);
-  }, []);
+  }, [role]);
 
   const selectFamilyCompetitionKid = useCallback(async (nextKidId: string) => {
     await setFamilyCompetitionSelectedKidId(nextKidId);
@@ -490,16 +507,6 @@ export default function CoachesScreen() {
 
   const requestUnlinkKidFromCoach = useCallback(
     (kidId: string, displayName: string) => {
-      const active = coachLinks.filter((l) => l.status === "active");
-      const wsLink = active.find((l) => l.weeklySync);
-      const ws = wsLink?.weeklySync;
-      if (!ws?.linkToken || !ws.parentWriterSecret?.trim()) {
-        Alert.alert(
-          "Not available",
-          "Finish linking on this phone first (open your invite), then try again.",
-        );
-        return;
-      }
       if (!isCoachSyncConfigured()) {
         Alert.alert(
           "Sync unavailable",
@@ -509,7 +516,7 @@ export default function CoachesScreen() {
       }
       Alert.alert(
         `Remove “${displayName}” from this coach?`,
-        "Your coach will no longer see this athlete on their pilot roster or shared competitions. This phone keeps the athlete; synced competitions become local-only entries you can edit or delete.",
+        "Your coach will no longer see this athlete on their coach roster or shared competitions. This phone keeps the athlete; synced competitions become local-only entries you can edit or delete.",
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -519,11 +526,30 @@ export default function CoachesScreen() {
               void (async () => {
                 setUnlinkingKidId(kidId);
                 try {
+                  const kids = await getKidsById();
+                  const sid = kids[kidId]?.sharedAthleteId?.trim();
+                  if (!sid) {
+                    Alert.alert(
+                      "Not linked",
+                      "This athlete is not on a coach session from this phone.",
+                    );
+                    return;
+                  }
+                  const target = await resolveLinkedTargetForParentWriter(sid, undefined, undefined, {
+                    requireAthleteOnSessionRoster: true,
+                  });
+                  if (!target) {
+                    Alert.alert(
+                      "Could not reach coach session",
+                      "This phone could not open the invite that lists this athlete. Open Coach link & sharing → Athletes on this invite to finish setup or relink, then try again.",
+                    );
+                    return;
+                  }
                   await unlinkParentAthleteFromCoachSession({
                     kidId,
-                    linkToken: ws.linkToken,
-                    parentWriterSecret: ws.parentWriterSecret!,
-                    apiBaseUrl: ws.apiBaseUrl,
+                    linkToken: target.linkToken,
+                    parentWriterSecret: target.parentWriterSecret,
+                    apiBaseUrl: target.apiBaseUrl,
                   });
                   const selected = await getFamilyCompetitionSelectedKidId();
                   if (selected === kidId) {
@@ -547,7 +573,7 @@ export default function CoachesScreen() {
         ],
       );
     },
-    [coachLinks, loadCoachShareData],
+    [loadCoachShareData],
   );
 
   const familyUpcomingMonthGroups = useMemo(
@@ -624,9 +650,15 @@ export default function CoachesScreen() {
   const allPacks = Object.values(packsById);
   const allAssignments = Object.values(assignmentsById);
 
-  const activeCoachLinks = coachLinks.filter((link) => link.status === "active");
+  const activeCoachLinks =
+    role === "parent"
+      ? activeCoachLinksForParentLinkedUi(coachLinks)
+      : coachLinks.filter((link) => link.status === "active");
   const isLinked = activeCoachLinks.length > 0;
-  const weeklySyncLink = activeCoachLinks.find((l) => l.weeklySync);
+  const weeklySyncLink =
+    role === "parent"
+      ? parentStrictWeeklyLinkedCoachLinksForUi(coachLinks)[0]
+      : activeCoachLinks.find((l) => l.weeklySync);
   const useWeeklySyncHero = Boolean(weeklySyncLink);
 
   const firstCoach = allCoaches[0];
@@ -2103,7 +2135,7 @@ export default function CoachesScreen() {
                   }}
                 >
                   Remove or review this phone’s coach invite, refresh the weekly note, or adjust which athletes
-                  stay on the pilot roster.
+                  stay on the coach roster.
                 </Text>
                 <Pressable
                   onPress={() => router.push("/profile/coaches/manage")}
@@ -2213,7 +2245,7 @@ export default function CoachesScreen() {
                     style={({ pressed }) => cardButtonStyle(pressed)}
                   >
                     <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
-                      Kids (Pilot)
+                      Kids roster
                     </Text>
                     <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
                       Roster + kid-specific weekly focus
@@ -2227,7 +2259,7 @@ export default function CoachesScreen() {
                       Template Preview (Coach Pilot)
                     </Text>
                     <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-                      Coach-side preview only; use Kids (Pilot) for kid weekly focus.
+                      Coach-side preview only; use Kids roster for kid weekly focus.
                     </Text>
                   </Pressable>
                 </Section>

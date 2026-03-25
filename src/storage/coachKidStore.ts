@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
 import { CoachWeeklySyncApiError, coachSyncDeleteSessionAthlete } from "../services/coachWeeklySyncApi";
 import {
   deleteAllKidCompetitionEntriesForKid,
@@ -153,7 +154,7 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
   if (!sid) return existing;
 
   const nowIso = new Date().toISOString();
-  const { sharedAthleteId: _omit, ...rest } = existing;
+  const { sharedAthleteId: _omit, sharedFromInviteTokenNorm: _tok, ...rest } = existing;
   const nextKid: Kid = { ...rest, updatedAt: nowIso };
   await setKidsById({ ...kids, [kidId]: nextKid });
   return nextKid;
@@ -163,20 +164,68 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
 export async function attachSharedAthleteToKid(
   kidId: KidId,
   athlete: SyncedSharedAthlete,
+  sharedFromInviteTokenNorm?: string,
 ): Promise<Kid | null> {
   const kids = await getKidsById();
   const existing = kids[kidId];
   if (!existing) return null;
 
   const nowIso = new Date().toISOString();
+  const tokenNormRaw = sharedFromInviteTokenNorm?.trim();
+  const tokenNorm = tokenNormRaw ? normalizeInviteLinkToken(tokenNormRaw) : "";
   const next: Kid = {
     ...existing,
     name: athlete.name,
     sharedAthleteId: athlete.id,
     updatedAt: nowIso,
+    ...(existing.isParentManagedChildProfile ? { isParentManagedChildProfile: true } : {}),
+    ...(tokenNorm ? { sharedFromInviteTokenNorm: tokenNorm } : {}),
   };
   await setKidsById({ ...kids, [kidId]: next });
   return next;
+}
+
+/**
+ * After removing an invite from this device (or coach archives it): clear local athlete/token
+ * binding and worker competition linkage for kids tied to that invite. Always matches on
+ * normalized token; optionally also clears athletes listed on a successfully fetched session
+ * when their stored token is missing or matches the same invite (avoids cross-invite clears).
+ */
+export async function clearLocalCoachSharingBindingsForInviteToken(
+  inviteLinkTokenRaw: string,
+  options?: { sessionAthleteIds?: Set<string> | null },
+): Promise<void> {
+  const norm = normalizeInviteLinkToken(inviteLinkTokenRaw);
+  if (!norm) return;
+
+  const kids = await getKidsById();
+  const sessionSet = options?.sessionAthleteIds ?? null;
+
+  for (const kid of Object.values(kids)) {
+    const kidToken = normalizeInviteLinkToken(kid.sharedFromInviteTokenNorm);
+    const sid = kid.sharedAthleteId?.trim() ?? "";
+
+    const matchByToken = kidToken === norm;
+    const matchBySession =
+      Boolean(sessionSet && sid && sessionSet.has(sid)) && (!kidToken || kidToken === norm);
+
+    if (!matchByToken && !matchBySession) continue;
+
+    if (sid) {
+      await clearKidSharedAthleteLink(kid.id);
+      await stripWorkerSyncLinkageForKid(kid.id);
+      continue;
+    }
+
+    if (matchByToken && kid.sharedFromInviteTokenNorm?.trim()) {
+      const fresh = await getKidsById();
+      const ex = fresh[kid.id];
+      if (!ex) continue;
+      const nowIso = new Date().toISOString();
+      const { sharedFromInviteTokenNorm: _omitTok, ...rest } = ex;
+      await setKidsById({ ...fresh, [kid.id]: { ...rest, updatedAt: nowIso } });
+    }
+  }
 }
 
 /**
@@ -206,6 +255,135 @@ export async function unlinkParentAthleteFromCoachSession(opts: {
 
   await clearKidSharedAthleteLink(kidId);
   await stripWorkerSyncLinkageForKid(kidId);
+}
+
+export type WriterSessionSnapshotOk = {
+  linkTokenNorm: string;
+  athletes: SyncedSharedAthlete[];
+};
+
+/**
+ * Coach roster: merge athletes from each **successful** writer session GET, then prune stale linked rows.
+ * - When every active writer session was fetched successfully, prunes any `sharedAthleteId` not in the
+ *   union of remote athletes (same as legacy merge + `pruneOrphansWhenAuthoritative`).
+ * - When some GETs failed, prunes only rows tagged with `sharedFromInviteTokenNorm` for a session we
+ *   did fetch whose athlete list no longer contains that id — so one dead invite fetch does not block
+ *   pruning another invite’s removed athletes.
+ */
+export async function reconcileCoachKidRosterFromWriterSessions(opts: {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  totalActiveWriterCount: number;
+}): Promise<KidsById> {
+  const { successfulSnapshots, totalActiveWriterCount } = opts;
+  if (successfulSnapshots.length === 0) {
+    return getKidsById();
+  }
+
+  const kids = await getKidsById();
+  const next: KidsById = { ...kids };
+  const nowIso = new Date().toISOString();
+
+  const byShared = new Map(
+    Object.values(next)
+      .filter((k) => Boolean(k.sharedAthleteId?.trim()))
+      .map((k) => [k.sharedAthleteId!.trim(), k] as const),
+  );
+
+  for (const snap of successfulSnapshots) {
+    const token = snap.linkTokenNorm;
+    for (const a of snap.athletes) {
+      const id = typeof a.id === "string" ? a.id.trim() : "";
+      if (!id) continue;
+
+      const existing = byShared.get(id);
+      if (existing) {
+        const existingTok = normalizeInviteLinkToken(existing.sharedFromInviteTokenNorm);
+        const needsToken = !existingTok || existingTok !== token;
+        if (existing.name !== a.name || needsToken) {
+          const updated: Kid = {
+            ...existing,
+            name: a.name,
+            sharedFromInviteTokenNorm: token,
+            updatedAt: nowIso,
+          };
+          next[existing.id] = updated;
+          byShared.set(id, updated);
+        }
+        continue;
+      }
+
+      const localId = `kid_shared_${id}` as KidId;
+      const rowAtId = next[localId];
+      if (rowAtId) {
+        const updated: Kid = {
+          ...rowAtId,
+          name: a.name,
+          sharedAthleteId: id,
+          sharedFromInviteTokenNorm: token,
+          updatedAt: nowIso,
+        };
+        next[localId] = updated;
+        byShared.set(id, updated);
+        continue;
+      }
+
+      next[localId] = {
+        id: localId,
+        name: a.name,
+        sharedAthleteId: id,
+        sharedFromInviteTokenNorm: token,
+        createdAt: a.createdAt,
+        updatedAt: nowIso,
+      };
+      byShared.set(id, next[localId]);
+    }
+  }
+
+  await setKidsById(next);
+
+  const allFetched =
+    totalActiveWriterCount > 0 && successfulSnapshots.length === totalActiveWriterCount;
+
+  const remoteUnionIds = new Set<string>();
+  for (const snap of successfulSnapshots) {
+    for (const a of snap.athletes) {
+      const id = typeof a.id === "string" ? a.id.trim() : "";
+      if (id) remoteUnionIds.add(id);
+    }
+  }
+
+  const current = await getKidsById();
+  const toDelete = new Set<KidId>();
+
+  if (allFetched) {
+    for (const k of Object.values(current)) {
+      const sid = k.sharedAthleteId?.trim();
+      if (!sid || remoteUnionIds.has(sid)) continue;
+      toDelete.add(k.id);
+    }
+  } else {
+    for (const snap of successfulSnapshots) {
+      const idsInSnap = new Set(
+        snap.athletes
+          .map((a) => (typeof a.id === "string" ? a.id.trim() : ""))
+          .filter(Boolean),
+      );
+      for (const k of Object.values(current)) {
+        const sid = k.sharedAthleteId?.trim();
+        if (!sid || idsInSnap.has(sid)) continue;
+        const t = normalizeInviteLinkToken(k.sharedFromInviteTokenNorm);
+        if (t === snap.linkTokenNorm) {
+          toDelete.add(k.id);
+        }
+      }
+    }
+  }
+
+  for (const oid of toDelete) {
+    await deleteKidPilot(oid);
+  }
+
+  return getKidsById();
 }
 
 /**
@@ -306,9 +484,16 @@ export async function updateKidHouseholdLabel(
   const normalized = normalizeKidHouseholdLabel(householdLabelRaw);
   const nowIso = new Date().toISOString();
 
-  const shared = existing.sharedAthleteId
-    ? { sharedAthleteId: existing.sharedAthleteId }
-    : {};
+  const syncFields: Pick<Kid, "sharedAthleteId" | "sharedFromInviteTokenNorm" | "isParentManagedChildProfile"> = {};
+  if (existing.sharedAthleteId?.trim()) {
+    syncFields.sharedAthleteId = existing.sharedAthleteId;
+  }
+  if (existing.sharedFromInviteTokenNorm?.trim()) {
+    syncFields.sharedFromInviteTokenNorm = existing.sharedFromInviteTokenNorm;
+  }
+  if (existing.isParentManagedChildProfile) {
+    syncFields.isParentManagedChildProfile = true;
+  }
   const next: Kid = normalized
     ? {
         id: existing.id,
@@ -316,14 +501,14 @@ export async function updateKidHouseholdLabel(
         createdAt: existing.createdAt,
         updatedAt: nowIso,
         householdLabel: normalized,
-        ...shared,
+        ...syncFields,
       }
     : {
         id: existing.id,
         name: existing.name,
         createdAt: existing.createdAt,
         updatedAt: nowIso,
-        ...shared,
+        ...syncFields,
       };
 
   await setKidsById({ ...kids, [kidId]: next });

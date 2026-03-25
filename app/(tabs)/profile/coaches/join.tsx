@@ -16,6 +16,11 @@ import {
   coachSyncFetchSession,
   coachSyncRedeemParentWriter,
 } from "../../../../src/services/coachWeeklySyncApi";
+import { parentStrictWeeklyLinkedCoachLinksForUi } from "../../../../src/coachShare/coachLinkBinding";
+import {
+  inviteLinkTokenTail,
+  normalizeInviteLinkToken,
+} from "../../../../src/coachShare/inviteLinkToken";
 import {
   getCoachLinks,
   getCoachesById,
@@ -45,10 +50,6 @@ const SECTION_LABEL = {
   fontWeight: "600" as const,
 };
 
-function normalizeInviteToken(raw: string): string {
-  return raw.trim().toLowerCase().replace(/\s+/g, "");
-}
-
 export default function CoachJoinScreen() {
   const [ready, setReady] = useState(false);
   const [isLinked, setIsLinked] = useState(false);
@@ -60,8 +61,7 @@ export default function CoachJoinScreen() {
   const refreshLinks = useCallback(async () => {
     setReady(false);
     const links = await getCoachLinks();
-    const active = links.filter((link) => link.status === "active");
-    setIsLinked(active.length > 0);
+    setIsLinked(parentStrictWeeklyLinkedCoachLinksForUi(links).length > 0);
     setReady(true);
   }, []);
 
@@ -73,7 +73,7 @@ export default function CoachJoinScreen() {
 
   const onConnect = useCallback(async () => {
     setFormError(null);
-    const token = normalizeInviteToken(tokenDraft);
+    const token = normalizeInviteLinkToken(tokenDraft);
     if (!token) {
       setFormError("Paste the invite code your coach shared.");
       return;
@@ -107,39 +107,130 @@ export default function CoachJoinScreen() {
         coach.createdAt = priorCoach.createdAt;
       }
 
-      const newLink: CoachLink = {
-        id: `link_sync_${Date.now()}`,
-        coachId: coach.id,
-        parentProfileId,
-        scope: "household",
-        status: "active",
-        canReceiveCompletionReceipts: false,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-        weeklySync: {
-          apiBaseUrl: getCoachSyncApiBaseUrl()!,
-          linkToken: token,
-          parentWriterSecret,
-        },
-      };
-
+      const apiBaseUrl = getCoachSyncApiBaseUrl()!;
       const existingLinks = await getCoachLinks();
-      const withoutDup = existingLinks.filter(
-        (l) =>
-          !(
-            l.weeklySync &&
-            l.weeklySync.linkToken === token &&
-            l.status === "active"
-          ),
-      );
 
-      await setCoachesById({ ...existingCoaches, [coach.id]: coach });
-      await setCoachLinks([...withoutDup, newLink]);
+      if (__DEV__) {
+        const activeForToken = existingLinks.filter(
+          (l) =>
+            l.status === "active" &&
+            Boolean(l.weeklySync?.linkToken?.trim()) &&
+            normalizeInviteLinkToken(l.weeklySync!.linkToken) === token,
+        );
+        console.log("[bjj-sync-debug] coach join before merge", {
+          tokenNorm: token,
+          tokenTail: inviteLinkTokenTail(token),
+          activeLinksForTokenCount: activeForToken.length,
+          activeLinksForToken: activeForToken.map((l) => ({
+            linkId: l.id,
+            status: l.status,
+            hasWriterSecret: Boolean(l.weeklySync?.writerSecret?.trim()),
+            hasParentWriterSecret: Boolean(l.weeklySync?.parentWriterSecret?.trim()),
+            linkTokenTail: inviteLinkTokenTail(l.weeklySync?.linkToken ?? ""),
+            updatedAt: l.updatedAt,
+          })),
+        });
+      }
+
+      /**
+       * Same phone often runs coach (create invite → writerSecret) then parent (redeem).
+       * Legacy behavior removed every active row for this token, which deleted the publish key.
+       * Merge parentWriterSecret onto the existing writer row and drop redundant parent-only dupes.
+       */
+      const linksForToken = existingLinks.filter(
+        (l) =>
+          l.status === "active" &&
+          Boolean(l.weeklySync?.linkToken?.trim()) &&
+          normalizeInviteLinkToken(l.weeklySync!.linkToken) === token,
+      );
+      const writerForToken = linksForToken.find((l) => Boolean(l.weeklySync?.writerSecret?.trim()));
+      const canonicalForToken = writerForToken ?? linksForToken[0];
+
+      let linkIdForParentAthletes: string;
+
+      if (canonicalForToken?.weeklySync?.linkToken?.trim()) {
+        const ws = canonicalForToken.weeklySync;
+        const mergedLink: CoachLink = {
+          ...canonicalForToken,
+          parentProfileId,
+          updatedAt: nowIso,
+          weeklySync: {
+            ...ws,
+            apiBaseUrl,
+            linkToken: ws.linkToken.trim(),
+            parentWriterSecret,
+          },
+        };
+        const nextLinks = existingLinks
+          .filter((l) => {
+            if (l.status !== "active" || !l.weeklySync?.linkToken) return true;
+            if (normalizeInviteLinkToken(l.weeklySync.linkToken) !== token) return true;
+            return l.id === mergedLink.id;
+          })
+          .map((l) => (l.id === mergedLink.id ? mergedLink : l));
+
+        await setCoachesById({ ...existingCoaches, [coach.id]: coach });
+        await setCoachLinks(nextLinks);
+        linkIdForParentAthletes = mergedLink.id;
+      } else {
+        const newLink: CoachLink = {
+          id: `link_sync_${Date.now()}`,
+          coachId: coach.id,
+          parentProfileId,
+          scope: "household",
+          status: "active",
+          canReceiveCompletionReceipts: false,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          weeklySync: {
+            apiBaseUrl,
+            linkToken: token,
+            parentWriterSecret,
+          },
+        };
+
+        const withoutDup = existingLinks.filter(
+          (l) =>
+            !(
+              l.weeklySync &&
+              normalizeInviteLinkToken(l.weeklySync.linkToken) === token &&
+              l.status === "active"
+            ),
+        );
+
+        await setCoachesById({ ...existingCoaches, [coach.id]: coach });
+        await setCoachLinks([...withoutDup, newLink]);
+        linkIdForParentAthletes = newLink.id;
+      }
+
       await setCachedWeeklyForLinkToken(token, session.weekly, nowIso);
+
+      if (__DEV__) {
+        const after = await getCoachLinks();
+        const activeForTokenAfter = after.filter(
+          (l) =>
+            l.status === "active" &&
+            Boolean(l.weeklySync?.linkToken?.trim()) &&
+            normalizeInviteLinkToken(l.weeklySync!.linkToken) === token,
+        );
+        console.log("[bjj-sync-debug] coach join after merge", {
+          tokenNorm: token,
+          tokenTail: inviteLinkTokenTail(token),
+          activeLinksForTokenCount: activeForTokenAfter.length,
+          activeLinksForToken: activeForTokenAfter.map((l) => ({
+            linkId: l.id,
+            hasWriterSecret: Boolean(l.weeklySync?.writerSecret?.trim()),
+            hasParentWriterSecret: Boolean(l.weeklySync?.parentWriterSecret?.trim()),
+            linkTokenTail: inviteLinkTokenTail(l.weeklySync?.linkToken ?? ""),
+            updatedAt: l.updatedAt,
+          })),
+          chosenLinkIdForAthletes: linkIdForParentAthletes,
+        });
+      }
 
       router.replace({
         pathname: "/profile/coaches/parent-athletes",
-        params: { linkId: newLink.id },
+        params: { linkId: linkIdForParentAthletes },
       });
     } catch (e) {
       const msg =

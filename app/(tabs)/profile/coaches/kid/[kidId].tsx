@@ -24,6 +24,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Swipeable } from "react-native-gesture-handler";
 
 import {
+  dedupeActiveCoachWriterLinks,
+  resolveCoachPublishWriterLink,
+  sortCoachWriterLinksNewestFirst,
+} from "../../../../../src/coachShare/coachLinkBinding";
+import { normalizeInviteLinkToken } from "../../../../../src/coachShare/inviteLinkToken";
+import {
   defaultFamilyLinkButtonLabel,
   familyResourceUrlForLinking,
 } from "../../../../../src/coach/familyResourceUrl";
@@ -39,7 +45,6 @@ import {
   coachSyncPublishWeekly,
 } from "../../../../../src/services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../../../../src/storage/coachShareStore";
-import type { CoachLink } from "../../../../../src/types/coachShare";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
@@ -245,37 +250,6 @@ function competitionFormatLabel(f: KidCompetitionFormat | undefined): string | n
 }
 
 const COACH_COMP_YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Matches kids roster invite list: one entry per link token, excludes revoked / empty secrets. */
-function dedupeActiveCoachWriterLinks(links: CoachLink[]): CoachLink[] {
-  const m = new Map<string, CoachLink>();
-  for (const l of links) {
-    if (l.status !== "active" || l.revokedAt) continue;
-    const ws = l.weeklySync;
-    const secret = typeof ws?.writerSecret === "string" ? ws.writerSecret.trim() : "";
-    const tokenRaw = typeof ws?.linkToken === "string" ? ws.linkToken.trim() : "";
-    if (!ws || !secret || !tokenRaw) continue;
-    const token = tokenRaw.toLowerCase();
-    const cur = m.get(token);
-    if (
-      !cur ||
-      l.updatedAt.localeCompare(cur.updatedAt) > 0 ||
-      (l.updatedAt === cur.updatedAt && l.createdAt.localeCompare(cur.createdAt) > 0)
-    ) {
-      m.set(token, l);
-    }
-  }
-  return [...m.values()];
-}
-
-/** Newest invite first — same ordering as kids roster primary row; used to pick one canonical session per athlete. */
-function sortCoachWriterLinksNewestFirst(links: CoachLink[]): CoachLink[] {
-  return [...links].sort((a, b) => {
-    const u = b.updatedAt.localeCompare(a.updatedAt);
-    if (u !== 0) return u;
-    return b.createdAt.localeCompare(a.createdAt);
-  });
-}
 
 function compareCoachCompYMD(a: string, b: string): number {
   return a.localeCompare(b);
@@ -1111,25 +1085,73 @@ export default function KidDetailScreen() {
       });
     }
     const links = await getCoachLinks();
-    const cred = dedupeActiveCoachWriterLinks(links)
-      .filter((l) => l.weeklySync?.writerSecret?.trim())
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
-    if (!cred?.weeklySync?.writerSecret) {
+    const kidRow = (await getKidsById())[kidId];
+    const kidTokenKey = normalizeInviteLinkToken(kidRow?.sharedFromInviteTokenNorm ?? "");
+    const writers = dedupeActiveCoachWriterLinks(links).filter((l) =>
+      Boolean(l.weeklySync?.writerSecret?.trim()),
+    );
+    if (__DEV__) {
+      console.log("[bjj-sync-debug] coach publish resolve writer cred", {
+        kidId,
+        sharedAthleteId: kidRow?.sharedAthleteId ?? null,
+        sharedFromInviteTokenNorm: kidRow?.sharedFromInviteTokenNorm ?? null,
+        kidTokenKey,
+        writersCount: writers.length,
+        writers: writers.map((l) => ({
+          linkId: l.id,
+          tokenTail: normalizeInviteLinkToken(l.weeklySync?.linkToken ?? ""),
+          updatedAt: l.updatedAt,
+          hasWriterSecret: Boolean(l.weeklySync?.writerSecret?.trim()),
+        })),
+      });
+    }
+
+    const resolved = await resolveCoachPublishWriterLink(kidRow, links);
+    if (__DEV__) {
+      console.log("[bjj-sync-debug] coach publish chosen cred", {
+        kidId,
+        resolvedOk: resolved.ok,
+        resolvedReason: resolved.ok ? null : resolved.reason,
+        chosenLinkId: resolved.ok ? resolved.link.id : null,
+      });
+    }
+
+    if (!resolved.ok) {
+      if (resolved.reason === "ambiguous_session") {
+        Alert.alert(
+          "Multiple invites",
+          "This athlete appears on more than one active invite on this phone. Archive extra invites or relink so only one writable channel contains this athlete, then try again.",
+        );
+        return;
+      }
+      if (resolved.reason === "no_writers") {
+        Alert.alert(
+          "No invite on this device",
+          "No active coach publish keys (writer invites) on this phone. Create a family invite from the Kids roster first.",
+        );
+        return;
+      }
       Alert.alert(
         "No invite on this device",
-        "Create a family invite from Kids (Pilot) on this coach phone first.",
+        "This kid could not be matched to a single writable invite — the stored invite token may be missing or stale, or this athlete is not listed on any active invite session here. Pull to refresh on the Kids roster to reconcile, or relink this athlete on the correct invite.",
+      );
+      return;
+    }
+
+    const chosen = resolved.link;
+    const ws = chosen.weeklySync;
+    const writerSecret = ws?.writerSecret?.trim();
+    if (!ws || !writerSecret) {
+      Alert.alert(
+        "No invite on this device",
+        "No active publish key on the matched invite. Create or restore a writer invite from the Kids roster.",
       );
       return;
     }
     const payload = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD);
     setPublishingWeekly(true);
     try {
-      await coachSyncPublishWeekly(
-        cred.weeklySync.linkToken,
-        cred.weeklySync.writerSecret,
-        payload,
-        cred.weeklySync.apiBaseUrl,
-      );
+      await coachSyncPublishWeekly(ws.linkToken, writerSecret, payload, ws.apiBaseUrl);
       Alert.alert(
         "Published to families",
         "Families see the weekly focus, family note, optional family recap, and optional family link — never private check-ins or coach-only video. Ask them to open Read together on This week together or pull to refresh on their linked phone.",
