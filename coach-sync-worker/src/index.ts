@@ -16,6 +16,7 @@ type WeeklyDoc = {
   programLine?: string;
   familyResourceUrl?: string;
   familyResourceLabel?: string;
+  familyCoachRecapNote?: string;
   updatedAt: string;
 };
 
@@ -261,6 +262,20 @@ export default {
         if (!rec) {
           return error("Not found", 404);
         }
+
+        // Debug clear propagation: see if the stored weekly doc actually drops the recap key.
+        if (rec.weekly) {
+          const recapRaw = rec.weekly.familyCoachRecapNote;
+          const hasRecapKey = Object.prototype.hasOwnProperty.call(rec.weekly, "familyCoachRecapNote");
+          const recapLen = typeof recapRaw === "string" ? recapRaw.length : null;
+          if (!hasRecapKey || recapLen === 0) {
+            console.log("[coach-sync-weekly-get familyCoachRecapNote]", {
+              hasRecapKey,
+              recapLen,
+              weekStartYMD: rec.weekly.weekStartYMD,
+            });
+          }
+        }
         return json(
           {
             schemaVersion: rec.schemaVersion,
@@ -449,6 +464,22 @@ export default {
           return error("Unauthorized", 401);
         }
 
+        const hasFamilyCoachRecapKey = Object.prototype.hasOwnProperty.call(
+          b,
+          "familyCoachRecapNote",
+        );
+        let familyCoachRecapNote: string | undefined;
+        if (hasFamilyCoachRecapKey) {
+          familyCoachRecapNote =
+            typeof b.familyCoachRecapNote === "string" && b.familyCoachRecapNote.trim()
+              ? b.familyCoachRecapNote.trim().slice(0, 2000)
+              : undefined;
+        } else {
+          // If the coach omits this field entirely, treat it as "cleared" for the week.
+          // This aligns with our publish behavior: weekly PUT is a full snapshot for that week.
+          familyCoachRecapNote = undefined;
+        }
+
         const now = new Date().toISOString();
         const weekly: WeeklyDoc = {
           weekStartYMD,
@@ -457,8 +488,28 @@ export default {
           ...(classLine ? { classLine } : {}),
           ...(programLine ? { programLine } : {}),
           ...(familyResourceUrl ? { familyResourceUrl, ...(familyResourceLabel ? { familyResourceLabel } : {}) } : {}),
+          ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
           updatedAt: now,
         };
+
+        // Targeted debug to diagnose "clear doesn't propagate" for Card 2.
+        // Logs only when coach sent empty or omitted the recap field.
+        if (
+          !hasFamilyCoachRecapKey ||
+          (typeof b.familyCoachRecapNote === "string" && !b.familyCoachRecapNote.trim())
+        ) {
+          const prevRecapRaw = rec.weekly?.familyCoachRecapNote;
+          const chosenHasKey = Object.prototype.hasOwnProperty.call(weekly, "familyCoachRecapNote");
+          console.log("[coach-sync-weekly-put familyCoachRecapNote]", {
+            hasFamilyCoachRecapKey,
+            incomingRecapLen:
+              typeof b.familyCoachRecapNote === "string" ? b.familyCoachRecapNote.length : null,
+            prevRecapLen: typeof prevRecapRaw === "string" ? prevRecapRaw.length : null,
+            storedRecapLen: familyCoachRecapNote ? familyCoachRecapNote.length : 0,
+            storedHasKey: chosenHasKey,
+            weekStartYMD,
+          });
+        }
         const next: SessionRecord = { ...rec, weekly };
         await writeSession(env.SESSIONS, token, next);
 

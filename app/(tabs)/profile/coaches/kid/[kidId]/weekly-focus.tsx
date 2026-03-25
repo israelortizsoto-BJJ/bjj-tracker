@@ -55,6 +55,7 @@ export default function KidWeeklyFocusScreen() {
   const [referenceUrl, setReferenceUrl] = useState<string>("");
   const [familyResourceUrl, setFamilyResourceUrl] = useState<string>("");
   const [familyResourceLabel, setFamilyResourceLabel] = useState<string>("");
+  const [familyCoachRecapNote, setFamilyCoachRecapNote] = useState<string>("");
 
   // Custom selection
   const [customTitle, setCustomTitle] = useState<string>("");
@@ -86,6 +87,7 @@ export default function KidWeeklyFocusScreen() {
           setReferenceUrl(existing.youtubeUrl ?? "");
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
+          setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
         } else {
           setTab("custom");
           setCustomTitle(existing.title);
@@ -93,6 +95,7 @@ export default function KidWeeklyFocusScreen() {
           setCustomYoutubeUrl(existing.youtubeUrl ?? "");
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
+          setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
         }
       } else {
         setTab("templates");
@@ -100,6 +103,7 @@ export default function KidWeeklyFocusScreen() {
         setReferenceUrl("");
         setFamilyResourceUrl("");
         setFamilyResourceLabel("");
+        setFamilyCoachRecapNote("");
         setCustomTitle("");
         setCustomNote("");
         setCustomYoutubeUrl("");
@@ -144,6 +148,7 @@ export default function KidWeeklyFocusScreen() {
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
             familyResourceUrl: famUrl ? famUrl : undefined,
             familyResourceLabel: famLabel ? famLabel : undefined,
+            familyCoachRecapNote,
           });
         } else {
           const trimmedTitle = customTitle.trim();
@@ -162,6 +167,7 @@ export default function KidWeeklyFocusScreen() {
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
             familyResourceUrl: famUrl ? famUrl : undefined,
             familyResourceLabel: famLabel ? famLabel : undefined,
+            familyCoachRecapNote,
           });
         }
       } else if (tab === "templates") {
@@ -174,6 +180,7 @@ export default function KidWeeklyFocusScreen() {
         const trimmedUrl = referenceUrl.trim();
         const famUrl = familyResourceUrl.trim();
         const famLabel = familyResourceLabel.trim();
+        const recap = familyCoachRecapNote.trim();
 
         await appendKidWeeklyFocus({
           kidId,
@@ -185,6 +192,7 @@ export default function KidWeeklyFocusScreen() {
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
           familyResourceUrl: famUrl ? famUrl : undefined,
           familyResourceLabel: famLabel ? famLabel : undefined,
+          familyCoachRecapNote: recap ? recap : undefined,
         });
       } else {
         const trimmedTitle = customTitle.trim();
@@ -197,6 +205,7 @@ export default function KidWeeklyFocusScreen() {
         const trimmedUrl = customYoutubeUrl.trim();
         const famUrl = familyResourceUrl.trim();
         const famLabel = familyResourceLabel.trim();
+        const recap = familyCoachRecapNote.trim();
 
         await appendKidWeeklyFocus({
           kidId,
@@ -207,6 +216,7 @@ export default function KidWeeklyFocusScreen() {
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
           familyResourceUrl: famUrl ? famUrl : undefined,
           familyResourceLabel: famLabel ? famLabel : undefined,
+          familyCoachRecapNote: recap ? recap : undefined,
         });
       }
 
@@ -227,6 +237,7 @@ export default function KidWeeklyFocusScreen() {
     customYoutubeUrl,
     familyResourceUrl,
     familyResourceLabel,
+    familyCoachRecapNote,
   ]);
 
   const tabButtonStyle = (active: boolean) => ({
@@ -328,8 +339,11 @@ export default function KidWeeklyFocusScreen() {
               gap: 10,
             }}
           >
-            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-              TEMPLATE FOCUS (PILOT CATALOG)
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+              Mission of the week
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Pilot catalog · title + template detail publish as the family mission card.
             </Text>
 
             <View style={{ gap: 10 }}>
@@ -381,11 +395,36 @@ export default function KidWeeklyFocusScreen() {
                 color: UI.textPrimary,
               }}
             />
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#047857", marginTop: 10 }}>
-              Family link (optional — publishes with weekly note)
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+              What we sharpened with Coach
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Parents can open this after you publish. Use a regular web link (https).
+              Optional · parent-safe recap — not private check-in notes. Publishes with the weekly note.
+            </Text>
+            <TextInput
+              value={familyCoachRecapNote}
+              onChangeText={setFamilyCoachRecapNote}
+              placeholder="e.g. We drilled base and one clean stand-up escape…"
+              placeholderTextColor={UI.textSecondary}
+              multiline
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+                minHeight: 88,
+                textAlignVertical: "top",
+              }}
+            />
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+              Study the move
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Optional family link · https only · publishes after you publish from the kid screen.
             </Text>
             <TextInput
               value={familyResourceUrl}
@@ -435,8 +474,11 @@ export default function KidWeeklyFocusScreen() {
               gap: 10,
             }}
           >
-            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-              CUSTOM FOCUS (PILOT)
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+              Mission of the week
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Title + note publish as the family mission card.
             </Text>
 
             <View>
@@ -460,7 +502,9 @@ export default function KidWeeklyFocusScreen() {
             </View>
 
             <View>
-              <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>NOTE (OPTIONAL)</Text>
+              <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>
+                FAMILY NOTE (OPTIONAL)
+              </Text>
               <TextInput
                 value={customNote}
                 onChangeText={setCustomNote}
@@ -500,11 +544,36 @@ export default function KidWeeklyFocusScreen() {
                 color: UI.textPrimary,
               }}
             />
-            <Text style={{ fontSize: 12, fontWeight: "700", color: "#047857", marginTop: 10 }}>
-              Family link (optional — publishes with weekly note)
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+              What we sharpened with Coach
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Parents can open this after you publish.
+              Optional · parent-safe recap — not private check-in notes. Publishes with the weekly note.
+            </Text>
+            <TextInput
+              value={familyCoachRecapNote}
+              onChangeText={setFamilyCoachRecapNote}
+              placeholder="e.g. We drilled base and one clean stand-up escape…"
+              placeholderTextColor={UI.textSecondary}
+              multiline
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+                minHeight: 88,
+                textAlignVertical: "top",
+              }}
+            />
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+              Study the move
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Optional family link · https only · publishes after you publish from the kid screen.
             </Text>
             <TextInput
               value={familyResourceUrl}

@@ -4,7 +4,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Alert,
   Linking,
-  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -79,6 +78,12 @@ import {
   kidCompetitionEntryIsSyncedFromWorker,
   type KidCompetitionEntry,
 } from "../../../../src/types/coachKid";
+import {
+  defaultFamilyLinkButtonLabel,
+  familyResourceUrlForLinking,
+} from "../../../../src/coach/familyResourceUrl";
+import { buildReadTogetherStoryCards } from "../../../../src/family/readTogetherStoryCards";
+import { ReadTogetherStoryModal } from "../../../../src/family/ReadTogetherStoryModal";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
 const UI = {
@@ -109,11 +114,6 @@ const UI = {
   addCompetitionBgPressed: "#ddd6fe",
   addCompetitionBorder: "#c4b5fd",
 };
-
-/** Full-screen weekly story modal — lavender cream, aligned with hero energy */
-const WEEKLY_STORY_MODAL_BG = "#faf5ff";
-const WEEKLY_STORY_DOT_ACTIVE = "#6366f1";
-const WEEKLY_STORY_DOT_REST = "#e9d5ff";
 
 /** Richer chip fills for competition rows (labels stable from `familyCompetitionChipForEntry`). */
 function familyFacingCompetitionChipStyle(chip: {
@@ -169,8 +169,6 @@ function Section({
     </View>
   );
 }
-
-const WEEKLY_STORY_STEP_COUNT = 5;
 
 type FamilyCompetitionLoadState = {
   todayYMD: string;
@@ -310,9 +308,11 @@ export default function CoachesScreen() {
           activeWeeklySyncLink.weeklySync.apiBaseUrl,
         );
         if (__DEV__) {
+          const recap = (session.weekly?.familyCoachRecapNote ?? "").trim();
           console.log("[bjj-parent-weekly-sync-doc]", {
             familyResourceUrl: (session.weekly?.familyResourceUrl ?? "").trim() || null,
             familyResourceLabel: (session.weekly?.familyResourceLabel ?? "").trim() || null,
+            fetchedFamilyCoachRecapNoteLen: recap.length,
           });
         }
         nextWeeklyDoc = session.weekly;
@@ -818,20 +818,8 @@ export default function CoachesScreen() {
   }, []);
 
   const openPublishedWebUrl = useCallback(async (rawUrl: string | undefined) => {
-    const trimmed = (rawUrl ?? "").trim();
-    if (!trimmed) return;
-    const candidate =
-      trimmed.startsWith("http://") || trimmed.startsWith("https://")
-        ? trimmed
-        : `https://${trimmed}`;
-    let normalized: string;
-    try {
-      const u = new URL(candidate);
-      if (u.protocol !== "http:" && u.protocol !== "https:") return;
-      normalized = u.toString();
-    } catch {
-      return;
-    }
+    const normalized = familyResourceUrlForLinking(rawUrl);
+    if (!normalized) return;
     try {
       const canOpen = await Linking.canOpenURL(normalized);
       if (!canOpen) {
@@ -972,24 +960,6 @@ export default function CoachesScreen() {
     </Pressable>
   );
 
-  const weeklyStoryConnectionLabel = useWeeklySyncHero
-    ? "Linked — weekly note sync"
-    : isLinked
-      ? "Linked to your coach"
-      : isPreviewOnlyOnDevice
-        ? "On this phone only — not linked yet"
-        : "Not linked yet";
-
-  const weeklyStoryConnectionBody = useWeeklySyncHero
-    ? "The focus screens in this story use the same published weekly title and text your coach shared for families — not their private check-in notes."
-    : isLinked
-      ? "Updates you see here come from your coach through this link. If something looks off, you can refresh or adjust the link from the main screen."
-      : isPreviewOnlyOnDevice
-        ? hasCoachPilotPreviewOnDevice
-          ? "Coach pilot previews on this phone are not shared with families until you connect with a real invite."
-          : "Sample or local data on this phone only — connect to use your coach’s real weekly note."
-        : "You’re not linked yet. What you see before connecting stays on this device only.";
-
   const weeklyStoryPrimaryHint =
     isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
       ? "When you’re ready, use Log practice for this week on the screen behind this."
@@ -1009,377 +979,87 @@ export default function CoachesScreen() {
     setWeeklyStoryOpen(true);
   }, []);
 
-  /** Step 3 of Read together: distinct from hero copy — prompts, class/pack lines, or coach link (no duplicate weekly body). */
-  const weeklyStoryPracticeBody = useWeeklySyncHero
-    ? !weeklySyncNetworkOk && !weeklySyncDoc
-      ? "We could not load the latest note — go back and check your connection, then refresh when you are online."
-      : weeklySyncDoc?.familyResourceUrl?.trim()
-        ? "Your coach shared a link for families. Open it when you are together — you already read the written note on the previous step, so this screen is only about the link and what to try at home."
-        : "You already read your coach’s written note. This step is for trying things together — not repeating the same words:\n\n• Ask what felt easiest and what felt trickiest this week.\n• Pick one idea from the coach’s title and look for it after class next time.\n• Celebrate showing up, even on a tired day."
-    : currentModule?.title || (isLinked && currentPack?.title)
-      ? [
-          currentModule?.title
-            ? `In class, look for: ${currentModule.title}${
-                currentModule.summary ? ` — ${currentModule.summary}` : ""
-              }`
-            : null,
-          isLinked && currentPack?.title
-            ? `Program: ${currentPack.title}${
-                currentPack.description ? ` · ${currentPack.description}` : ""
-              }`
-            : null,
-        ]
-          .filter(Boolean)
-          .join("\n\n")
-      : "No separate class or program line on this note right now — that’s okay.";
-
-  const weeklyStoryPracticeStepTitle = useWeeklySyncHero
-    ? "Practice and notice together"
-    : "Class and program";
-
   const activeAthleteLabel = familyCompetition.kidName
     ? familyCompetition.kidName
     : familyCompetition.kidId
       ? "Selected athlete"
       : "No athlete selected";
-  const focusHeadingWithAthlete = `This week's focus · ${activeAthleteLabel}`;
+  /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
+  const weeklyNoteHeroEyebrow = useWeeklySyncHero
+    ? "Coach’s weekly note (family invite)"
+    : "This week’s coach focus";
+
+  const legacyClassProgramBody = useMemo(() => {
+    if (useWeeklySyncHero) return "";
+    const parts = [
+      currentModule?.title
+        ? `In class, look for: ${currentModule.title}${
+            currentModule.summary ? ` — ${currentModule.summary}` : ""
+          }`
+        : null,
+      isLinked && currentPack?.title
+        ? `Program: ${currentPack.title}${
+            currentPack.description ? ` · ${currentPack.description}` : ""
+          }`
+        : null,
+    ].filter(Boolean);
+    return parts.join("\n\n");
+  }, [useWeeklySyncHero, currentModule, currentPack, isLinked]);
+
+  const readTogetherStoryCards = useMemo(
+    () =>
+      buildReadTogetherStoryCards({
+        mode: useWeeklySyncHero ? "weekly_sync" : "legacy_assignment",
+        weekStartYMD: startOfWeekMondayYMD(
+          familyCompetition.todayYMD || todayYMD(),
+        ),
+        weeklySyncDoc,
+        weeklySyncNetworkOk,
+        missionHeadline: focusTitle,
+        missionBody: focusNotes,
+        missionEyebrow: weeklyNoteHeroEyebrow,
+        legacyClassProgramBody,
+        closingNavigationHint: weeklyStoryPrimaryHint,
+        practiceSummary,
+      }),
+    [
+      useWeeklySyncHero,
+      familyCompetition.todayYMD,
+      weeklySyncDoc,
+      weeklySyncNetworkOk,
+      focusTitle,
+      focusNotes,
+      weeklyNoteHeroEyebrow,
+      legacyClassProgramBody,
+      weeklyStoryPrimaryHint,
+      practiceSummary,
+    ],
+  );
 
   return (
     <>
       <Stack.Screen options={{ title: "This week" }} />
-      <Modal
+      <ReadTogetherStoryModal
         visible={weeklyStoryOpen}
-        animationType="fade"
-        presentationStyle="fullScreen"
         onRequestClose={closeWeeklyStory}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: WEEKLY_STORY_MODAL_BG,
-            paddingTop: insets.top + 12,
-            paddingBottom: insets.bottom + 16,
-            paddingHorizontal: 20,
-          }}
-        >
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 12,
-              marginBottom: 8,
-            }}
-          >
-            <Text
-              style={{
-                flex: 1,
-                fontSize: 12,
-                fontWeight: "600",
-                color: "#5b4d7a",
-                letterSpacing: 0.4,
-              }}
-            >
-              Read together · {weeklyStoryStep + 1} of {WEEKLY_STORY_STEP_COUNT}
-            </Text>
-            <Pressable
-              onPress={closeWeeklyStory}
-              accessibilityRole="button"
-              accessibilityLabel="Close story"
-              hitSlop={8}
-              style={({ pressed }) => ({
-                paddingVertical: 6,
-                paddingHorizontal: 4,
-                marginRight: -4,
-                opacity: pressed ? 0.75 : 1,
-              })}
-            >
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: "600",
-                  color: UI.primaryFill,
-                }}
-              >
-                Close
-              </Text>
-            </Pressable>
-          </View>
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "center",
-              alignItems: "center",
-              gap: 7,
-              marginBottom: 14,
-            }}
-            accessibilityRole="none"
-            importantForAccessibility="no-hide-descendants"
-          >
-            {Array.from({ length: WEEKLY_STORY_STEP_COUNT }, (_, i) => (
-              <View
-                key={i}
-                style={{
-                  width: i === weeklyStoryStep ? 7 : 6,
-                  height: i === weeklyStoryStep ? 7 : 6,
-                  borderRadius: 999,
-                  backgroundColor:
-                    i === weeklyStoryStep ? WEEKLY_STORY_DOT_ACTIVE : WEEKLY_STORY_DOT_REST,
-                }}
-                accessibilityElementsHidden
-                importantForAccessibility="no"
-              />
-            ))}
-          </View>
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 24 }}
-            keyboardShouldPersistTaps="handled"
-          >
-            {weeklyStoryStep === 0 ? (
-              <>
-                <Text
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "700",
-                    color: UI.textPrimary,
-                    lineHeight: 32,
-                    marginBottom: 12,
-                  }}
-                >
-                  Read this week together
-                </Text>
-                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  This is the same weekly note as on the screen behind you — split into short steps so you can share it side by side at an easy pace. Tap Next when everyone is ready; tap Back anytime.
-                </Text>
-              </>
-            ) : null}
-
-            {weeklyStoryStep === 1 ? (
-              <>
-                <Text
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "700",
-                    color: UI.textPrimary,
-                    lineHeight: 32,
-                    marginBottom: 14,
-                  }}
-                >
-                  How this phone is set up
-                </Text>
-                <View
-                  style={{
-                    alignSelf: "flex-start",
-                    marginBottom: 14,
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 999,
-                    backgroundColor: isLinked
-                      ? "#a7f3d0"
-                      : isPreviewOnlyOnDevice
-                        ? "#fde68a"
-                        : "#ede9fe",
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 12,
-                      fontWeight: "700",
-                      color: isLinked
-                        ? "#065f46"
-                        : isPreviewOnlyOnDevice
-                          ? "#b45309"
-                          : "#5b21b6",
-                    }}
-                  >
-                    {weeklyStoryConnectionLabel}
-                  </Text>
-                </View>
-                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  {weeklyStoryConnectionBody}
-                </Text>
-              </>
-            ) : null}
-
-            {weeklyStoryStep === 2 ? (
-              <>
-                <Text
-                  style={{
-                    fontSize: 13,
-                    fontWeight: "600",
-                    letterSpacing: 1,
-                    color: "#6d28d9",
-                    marginBottom: 8,
-                  }}
-                >
-                  THIS WEEK&apos;S FOCUS
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "600",
-                    color: "#5b4d7a",
-                    lineHeight: 22,
-                    marginBottom: 10,
-                  }}
-                >
-                  Here&apos;s something your coach picked for you to notice.
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 22,
-                    fontWeight: "700",
-                    color: UI.textPrimary,
-                    lineHeight: 30,
-                    marginBottom: 12,
-                  }}
-                >
-                  {focusTitle}
-                </Text>
-                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  {focusNotes}
-                </Text>
-                {isLinked && currentCoach ? (
-                  <Text style={{ marginTop: 16, fontSize: 15, color: UI.textSecondary, lineHeight: 22 }}>
-                    From{" "}
-                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
-                      {currentCoach.displayName}
-                    </Text>
-                    {currentCoach.academyName ? (
-                      <>
-                        {" "}
-                        at {currentCoach.academyName}
-                      </>
-                    ) : null}
-                  </Text>
-                ) : null}
-                {assignmentStatusLine ? (
-                  <Text style={{ marginTop: 12, fontSize: 14, color: UI.textSecondary }}>
-                    {assignmentStatusLine}
-                  </Text>
-                ) : null}
-              </>
-            ) : null}
-
-            {weeklyStoryStep === 3 ? (
-              <>
-                <Text
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "700",
-                    color: UI.textPrimary,
-                    lineHeight: 32,
-                    marginBottom: 12,
-                  }}
-                >
-                  {weeklyStoryPracticeStepTitle}
-                </Text>
-                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  {weeklyStoryPracticeBody}
-                </Text>
-                {useWeeklySyncHero && weeklySyncDoc?.familyResourceUrl?.trim() ? (
-                  <Pressable
-                    onPress={() => void openPublishedWebUrl(weeklySyncDoc.familyResourceUrl)}
-                    style={({ pressed }) => ({
-                      marginTop: 18,
-                      paddingVertical: 14,
-                      paddingHorizontal: 16,
-                      borderRadius: CARD_RADIUS,
-                      borderWidth: 1,
-                      borderColor: UI.addCompetitionBorder,
-                      backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
-                      alignSelf: "stretch",
-                      alignItems: "center",
-                    })}
-                  >
-                    <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
-                      {(weeklySyncDoc.familyResourceLabel ?? "").trim() || "Open coach’s link"}
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </>
-            ) : null}
-
-            {weeklyStoryStep === 4 ? (
-              <>
-                <Text
-                  style={{
-                    fontSize: 24,
-                    fontWeight: "700",
-                    color: UI.textPrimary,
-                    lineHeight: 32,
-                    marginBottom: 12,
-                  }}
-                >
-                  Thanks for reading together
-                </Text>
-                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24, marginBottom: 16 }}>
-                  You&apos;ve seen this week&apos;s coach note in full — nothing extra is hiding on another page. Close when you&apos;re ready; your usual weekly screen is right behind this.
-                </Text>
-                <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 24 }}>
-                  {weeklyStoryPrimaryHint}
-                </Text>
-              </>
-            ) : null}
-          </ScrollView>
-
-          <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
-            {weeklyStoryStep > 0 ? (
-              <Pressable
-                onPress={() => setWeeklyStoryStep((s) => Math.max(0, s - 1))}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  borderRadius: CARD_RADIUS,
-                  borderWidth: 1,
-                  borderColor: UI.addCompetitionBorder,
-                  backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
-                  alignItems: "center",
-                })}
-              >
-                <Text style={{ fontSize: 16, fontWeight: "700", color: UI.textPrimary }}>Back</Text>
-              </Pressable>
-            ) : (
-              <View style={{ flex: 1 }} />
-            )}
-            {weeklyStoryStep < WEEKLY_STORY_STEP_COUNT - 1 ? (
-              <Pressable
-                onPress={() =>
-                  setWeeklyStoryStep((s) =>
-                    Math.min(WEEKLY_STORY_STEP_COUNT - 1, s + 1),
-                  )
-                }
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  borderRadius: CARD_RADIUS,
-                  backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
-                  alignItems: "center",
-                })}
-              >
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Next</Text>
-              </Pressable>
-            ) : (
-              <Pressable
-                onPress={closeWeeklyStory}
-                style={({ pressed }) => ({
-                  flex: 1,
-                  paddingVertical: 14,
-                  paddingHorizontal: 16,
-                  borderRadius: CARD_RADIUS,
-                  backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
-                  alignItems: "center",
-                })}
-              >
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Done</Text>
-              </Pressable>
-            )}
-          </View>
-        </View>
-      </Modal>
+        safeAreaTop={insets.top}
+        safeAreaBottom={insets.bottom}
+        stepIndex={weeklyStoryStep}
+        cards={readTogetherStoryCards}
+        onStepBack={() => setWeeklyStoryStep((s) => Math.max(0, s - 1))}
+        onStepNext={() =>
+          setWeeklyStoryStep((s) =>
+            Math.min(readTogetherStoryCards.length - 1, s + 1),
+          )
+        }
+        onFinished={closeWeeklyStory}
+        onOpenPublishedUrl={(url) => void openPublishedWebUrl(url)}
+        primaryFill={UI.primaryFill}
+        primaryFillPressed={UI.primaryFillPressed}
+        accentBorder={UI.addCompetitionBorder}
+        accentBg={UI.addCompetitionBg}
+        accentBgPressed={UI.addCompetitionBgPressed}
+      />
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -1396,7 +1076,7 @@ export default function CoachesScreen() {
           This week together
         </Text>
         <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 4 }}>
-          A simple weekly note from your coach so class and practice line up.
+          Your coach’s family-facing weekly note, plus practice and competition tools below.
         </Text>
         {__DEV__ ? (
           <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
@@ -1457,7 +1137,7 @@ export default function CoachesScreen() {
               </View>
 
               <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#6d28d9" }]}>
-                {focusHeadingWithAthlete.toUpperCase()}
+                {weeklyNoteHeroEyebrow.toUpperCase()}
               </Text>
               <Text style={{ fontSize: 20, fontWeight: "700", color: UI.textPrimary, lineHeight: 28 }}>
                 {focusTitle}
@@ -1468,8 +1148,7 @@ export default function CoachesScreen() {
 
               {useWeeklySyncHero ? (
                 <Text style={{ marginTop: 12, fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
-                  With weekly sync, families only see what your coach publishes: this title, this note, and an
-                  optional family link — not coach-only check-ins or private reference videos.
+                  Only published family fields sync here — not coach-only check-ins or private videos.
                 </Text>
               ) : null}
 
@@ -1495,7 +1174,9 @@ export default function CoachesScreen() {
                 </Text>
               ) : null}
 
-              {useWeeklySyncHero && weeklySyncDoc?.familyResourceUrl?.trim() ? (
+              {useWeeklySyncHero &&
+              weeklySyncDoc &&
+              familyResourceUrlForLinking(weeklySyncDoc.familyResourceUrl) ? (
                 <Pressable
                   onPress={() => void openPublishedWebUrl(weeklySyncDoc.familyResourceUrl)}
                   style={({ pressed }) => ({
@@ -1513,7 +1194,10 @@ export default function CoachesScreen() {
                     Coach link for families
                   </Text>
                   <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
-                    {(weeklySyncDoc.familyResourceLabel ?? "").trim() || "Open link"}
+                    {defaultFamilyLinkButtonLabel(
+                      familyResourceUrlForLinking(weeklySyncDoc.familyResourceUrl)!,
+                      weeklySyncDoc.familyResourceLabel,
+                    )}
                   </Text>
                 </Pressable>
               ) : null}
@@ -1555,24 +1239,30 @@ export default function CoachesScreen() {
 
               <Pressable
                 onPress={openWeeklyStory}
+                accessibilityRole="button"
+                accessibilityLabel={"This week's family huddle. Start the read together walkthrough."}
                 style={({ pressed }) => ({
                   marginTop: 16,
-                  paddingVertical: 12,
+                  paddingVertical: 16,
                   paddingHorizontal: 16,
                   borderRadius: CARD_RADIUS,
                   borderWidth: 1,
                   borderColor: UI.addCompetitionBorder,
                   backgroundColor: pressed ? UI.addCompetitionBgPressed : "#f5f3ff",
                   alignSelf: "stretch",
-                  alignItems: "center",
+                  alignItems: "flex-start",
                 })}
               >
-                <Text style={{ fontSize: 15, fontWeight: "700", color: UI.textPrimary }}>
-                  Read together
+                <Text style={{ fontSize: 17, fontWeight: "700", color: UI.textPrimary, lineHeight: 24 }}>
+                  {"This week's family huddle"}
                 </Text>
-                <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, textAlign: "center" }}>
-                  Short guided flow: connection check, your coach’s note once, then at-home prompts (or their
-                  link) — without repeating the same paragraph in three places.
+                <Text style={{ marginTop: 8, fontSize: 15, color: UI.textSecondary, lineHeight: 22 }}>
+                  {
+                    "Walk through coach's mission, a family-safe recap, practice wins, a study link if there is one, and why the journey matters."
+                  }
+                </Text>
+                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+                  Tap through together — you can close anytime.
                 </Text>
               </Pressable>
 
@@ -1629,22 +1319,6 @@ export default function CoachesScreen() {
                 </Pressable>
               )}
 
-              {isLinked ? (
-                <View style={{ marginTop: 14, flexDirection: "row", flexWrap: "wrap", gap: 16 }}>
-                  <Pressable onPress={() => router.push("/profile/coaches/manage")}>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: UI.primaryFill }}>
-                      Weekly note links
-                    </Text>
-                  </Pressable>
-                  {currentAssignment?.status === "assigned" ? (
-                    <Pressable onPress={() => void loadCoachShareData()}>
-                      <Text style={{ fontSize: 14, fontWeight: "600", color: UI.primaryFill }}>
-                        Refresh
-                      </Text>
-                    </Pressable>
-                  ) : null}
-                </View>
-              ) : null}
             </View>
 
             {role === "parent" && ready ? (
@@ -1657,8 +1331,7 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  Log sessions in Training so you have a record for this athlete. Everything stays on this phone;
-                  use athlete chips in Competition below if you need to switch kids.
+                  Training log on this phone — separate from the coach’s shared weekly note above.
                 </Text>
                 <View
                   style={{
@@ -1710,11 +1383,11 @@ export default function CoachesScreen() {
                       marginBottom: 12,
                     }}
                   >
-                    Opens the log for{" "}
+                    Scoped to{" "}
                     <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
                       {familyCompetition.kidName}
                     </Text>
-                    . Use the athlete chips in Competition below if you need someone else on this phone.
+                    — switch with Competition chips below if this phone tracks more than one athlete.
                   </Text>
                 ) : familyCompetition.kidId ? (
                   <Text
@@ -1725,7 +1398,7 @@ export default function CoachesScreen() {
                       marginBottom: 12,
                     }}
                   >
-                    Opens the log for the athlete currently selected for family competition on this device.
+                    Scoped to the athlete selected under Competition on this device.
                   </Text>
                 ) : (
                   <Text
@@ -1736,8 +1409,8 @@ export default function CoachesScreen() {
                       marginBottom: 12,
                     }}
                   >
-                    No athlete selected for competitions yet — Training opens your usual log. When your coach’s
-                    roster exists on this phone, pick an athlete under Competition to scope sessions.
+                    No competition athlete picked yet — Training uses your default log. Choose someone under
+                    Competition to tie practice counts to a kid on this phone.
                   </Text>
                 )}
                 <Pressable
@@ -1836,61 +1509,6 @@ export default function CoachesScreen() {
                       );
                     })}
                   </ScrollView>
-                ) : null}
-
-                {role === "parent" &&
-                useWeeklySyncHero &&
-                isCoachSyncConfigured() &&
-                Boolean(weeklySyncLink?.weeklySync?.parentWriterSecret?.trim()) &&
-                parentLinkedCoachAthletes.length > 0 ? (
-                  <View
-                    style={{
-                      marginBottom: 14,
-                      padding: 14,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: UI.monthGroupBorder,
-                      backgroundColor: UI.monthListWellBg,
-                      gap: 10,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        letterSpacing: 0.9,
-                        color: "#5b21b6",
-                        fontWeight: "700",
-                      }}
-                    >
-                      Coach roster on this invite
-                    </Text>
-                    <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
-                      Unlink an athlete if they should leave this coach’s pilot roster. This phone keeps
-                      their name and calendar; shared competition rows become normal local entries.
-                    </Text>
-                    {parentLinkedCoachAthletes.map(({ kidId, displayName }) => (
-                      <Pressable
-                        key={kidId}
-                        disabled={unlinkingKidId !== null}
-                        onPress={() => requestUnlinkKidFromCoach(kidId, displayName)}
-                        style={({ pressed }) => ({
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: UI.border,
-                          backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
-                          opacity: unlinkingKidId !== null ? 0.55 : 1,
-                        })}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: UI.textPrimary }}>
-                          {unlinkingKidId === kidId
-                            ? "Removing…"
-                            : `Remove “${displayName}” from coach`}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
                 ) : null}
 
                 <Text
@@ -2471,6 +2089,116 @@ export default function CoachesScreen() {
                     Saved on this phone for now
                   </Text>
                 </View>
+              </Section>
+            ) : null}
+
+            {isLinked ? (
+              <Section title="Coach link & sharing" tone="family">
+                <Text
+                  style={{
+                    fontSize: 15,
+                    color: UI.textSecondary,
+                    lineHeight: 23,
+                    marginBottom: 12,
+                  }}
+                >
+                  Remove or review this phone’s coach invite, refresh the weekly note, or adjust which athletes
+                  stay on the pilot roster.
+                </Text>
+                <Pressable
+                  onPress={() => router.push("/profile/coaches/manage")}
+                  style={({ pressed }) => ({
+                    paddingVertical: 14,
+                    paddingHorizontal: 18,
+                    borderRadius: CARD_RADIUS,
+                    borderWidth: 1,
+                    borderColor: UI.addCompetitionBorder,
+                    backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                    marginBottom: 10,
+                  })}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
+                    Manage coach link
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 4,
+                      fontSize: 13,
+                      color: UI.textSecondary,
+                      textAlign: "center",
+                      lineHeight: 19,
+                    }}
+                  >
+                    Stop syncing this weekly note or remove the invite from this device.
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => void loadCoachShareData()}
+                  style={({ pressed }) => ({
+                    paddingVertical: 12,
+                    paddingHorizontal: 14,
+                    alignSelf: "flex-start",
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: UI.primaryFill }}>
+                    {useWeeklySyncHero ? "Refresh weekly note now" : "Refresh shared updates"}
+                  </Text>
+                </Pressable>
+                {role === "parent" &&
+                useWeeklySyncHero &&
+                isCoachSyncConfigured() &&
+                Boolean(weeklySyncLink?.weeklySync?.parentWriterSecret?.trim()) &&
+                parentLinkedCoachAthletes.length > 0 ? (
+                  <View
+                    style={{
+                      marginTop: 14,
+                      paddingTop: 14,
+                      borderTopWidth: 1,
+                      borderTopColor: UI.familySectionBorder,
+                      gap: 10,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        letterSpacing: 0.9,
+                        color: "#5b21b6",
+                        fontWeight: "700",
+                      }}
+                    >
+                      Athletes on this invite
+                    </Text>
+                    <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
+                      Unlink if someone should leave this coach’s roster on this phone. Names and calendars stay
+                      local; shared competition rows become normal entries.
+                    </Text>
+                    {parentLinkedCoachAthletes.map(({ kidId, displayName }) => (
+                      <Pressable
+                        key={kidId}
+                        disabled={unlinkingKidId !== null}
+                        onPress={() => requestUnlinkKidFromCoach(kidId, displayName)}
+                        style={({ pressed }) => ({
+                          paddingVertical: 12,
+                          paddingHorizontal: 14,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                          opacity: unlinkingKidId !== null ? 0.55 : 1,
+                        })}
+                      >
+                        <Text style={{ fontSize: 14, fontWeight: "700", color: UI.textPrimary }}>
+                          {unlinkingKidId === kidId
+                            ? "Removing…"
+                            : `Remove “${displayName}” from coach`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
               </Section>
             ) : null}
 

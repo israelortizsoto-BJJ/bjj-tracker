@@ -71,17 +71,15 @@ export default function CoachManageScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Weekly note links" }} />
+      <Stack.Screen options={{ title: "Coach link & sharing" }} />
       <View style={{ flex: 1, padding: 16, backgroundColor: UI.screenBg }}>
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
-          Weekly note links on this phone
-        </Text>
-        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20, marginBottom: 10 }}>
-          Each entry below is a coach-level weekly family note channel (what you see on This week together).
-          Invites are not tied to a specific kid in this pilot — one parent phone usually needs one link.
+          Coach link on this phone
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20, marginBottom: 16 }}>
-          Remove a link to stop loading that channel on this device. Nothing is deleted on your coach’s phone.
+          Each active invite controls the family weekly note on This week together. Removing it here stops sync on
+          this device only — nothing is deleted on your coach’s phone. One parent phone usually needs one invite;
+          channels are family-level, not per-kid.
         </Text>
 
         <Pressable

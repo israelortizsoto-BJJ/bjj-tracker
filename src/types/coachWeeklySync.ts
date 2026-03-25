@@ -15,6 +15,8 @@ export type SyncedWeeklyMessagePayload = {
   /** Optional family-facing link from the coach (publish lane only). */
   familyResourceUrl?: string;
   familyResourceLabel?: string;
+  /** Optional parent-safe recap of what coach emphasized with the athlete (not private check-ins). */
+  familyCoachRecapNote?: string;
   updatedAt: string;
 };
 
@@ -75,6 +77,8 @@ export type CoachWeeklySyncPublishBody = {
   programLine?: string;
   familyResourceUrl?: string;
   familyResourceLabel?: string;
+  /** App sends `""` to clear; omitting the key is treated as “keep previous” on the worker. */
+  familyCoachRecapNote?: string;
 };
 
 export type CoachWeeklySyncRedeemParentWriterResponse = {

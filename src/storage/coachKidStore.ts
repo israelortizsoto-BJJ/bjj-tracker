@@ -27,6 +27,7 @@ type KidWeeklyFocusAppendInput =
       coachNotes?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
+      familyCoachRecapNote?: string;
     })
   | (KidWeeklyFocusEntryCustom & {
       kidId: KidId;
@@ -35,6 +36,7 @@ type KidWeeklyFocusAppendInput =
       coachNotes?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
+      familyCoachRecapNote?: string;
     });
 
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
@@ -443,6 +445,7 @@ export type KidWeeklyFocusFocusUpdate =
       youtubeUrl?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
+      familyCoachRecapNote?: string;
     }
   | {
       focusType: "custom";
@@ -451,6 +454,7 @@ export type KidWeeklyFocusFocusUpdate =
       youtubeUrl?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
+      familyCoachRecapNote?: string;
     };
 
 /**
@@ -486,6 +490,12 @@ export async function updateKidWeeklyFocusFocusById(
     typeof focus.familyResourceLabel === "string" && focus.familyResourceLabel.trim()
       ? focus.familyResourceLabel.trim()
       : undefined;
+  const recap =
+    "familyCoachRecapNote" in focus && typeof focus.familyCoachRecapNote === "string"
+      ? focus.familyCoachRecapNote.trim()
+        ? focus.familyCoachRecapNote.trim().slice(0, 2000)
+        : undefined
+      : existing.familyCoachRecapNote;
 
   const updated: KidWeeklyFocusEntry =
     focus.focusType === "template"
@@ -498,6 +508,7 @@ export async function updateKidWeeklyFocusFocusById(
           youtubeUrl: focus.youtubeUrl,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
+          familyCoachRecapNote: recap,
         }
       : {
           ...base,
@@ -507,6 +518,7 @@ export async function updateKidWeeklyFocusFocusById(
           youtubeUrl: focus.youtubeUrl,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
+          familyCoachRecapNote: recap,
         };
 
   all[idx] = updated;
@@ -533,6 +545,8 @@ export async function appendKidWeeklyFocus(
     typeof input.familyResourceLabel === "string" && input.familyResourceLabel.trim()
       ? input.familyResourceLabel.trim()
       : undefined;
+  const recapRaw = (input.familyCoachRecapNote ?? "").trim();
+  const recap = recapRaw ? recapRaw.slice(0, 2000) : undefined;
 
   const created: KidWeeklyFocusEntry =
     input.focusType === "template"
@@ -549,6 +563,7 @@ export async function appendKidWeeklyFocus(
           youtubeUrl: input.youtubeUrl,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
+          familyCoachRecapNote: recap,
           coachOutcome: input.coachOutcome,
           coachNotes: input.coachNotes,
         }
@@ -564,6 +579,7 @@ export async function appendKidWeeklyFocus(
           youtubeUrl: input.youtubeUrl,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
+          familyCoachRecapNote: recap,
           coachOutcome: input.coachOutcome,
           coachNotes: input.coachNotes,
         };

@@ -33,6 +33,11 @@ export type KidWeeklyFocusEntry = {
   familyResourceUrl?: string;
   /** Short button label on parent phones (optional). */
   familyResourceLabel?: string;
+  /**
+   * Optional parent-safe summary of what the coach worked on with the kid (published with the weekly note).
+   * Not for raw private 1:1 check-in notes — use coachNotes for that.
+   */
+  familyCoachRecapNote?: string;
 
 } & KidWeeklyFocusEntryFocus;
 

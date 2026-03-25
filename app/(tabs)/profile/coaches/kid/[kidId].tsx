@@ -23,7 +23,16 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Swipeable } from "react-native-gesture-handler";
 
+import {
+  defaultFamilyLinkButtonLabel,
+  familyResourceUrlForLinking,
+} from "../../../../../src/coach/familyResourceUrl";
 import { kidWeeklyFocusToPublishPayload } from "../../../../../src/coach/weeklyFocusPublish";
+import {
+  READ_TOGETHER_TITLE_ORDER,
+  buildReadTogetherStoryCards,
+} from "../../../../../src/family/readTogetherStoryCards";
+import { ReadTogetherStoryModal } from "../../../../../src/family/ReadTogetherStoryModal";
 import {
   CoachWeeklySyncApiError,
   coachSyncFetchSession,
@@ -59,7 +68,10 @@ import type {
   KidStandingGuidance,
   KidWeeklyFocusEntry,
 } from "../../../../../src/types/coachKid";
-import type { SyncedSharedCompetition } from "../../../../../src/types/coachWeeklySync";
+import type {
+  SyncedSharedCompetition,
+  SyncedWeeklyMessagePayload,
+} from "../../../../../src/types/coachWeeklySync";
 import { toDateKey } from "../../../../../src/_domain/dateKey";
 import { FUNDAMENTALS_TAXONOMY } from "../../../../../src/fundamentals/taxonomy";
 
@@ -347,22 +359,8 @@ function groupCompetitionsByMonth(entries: KidCompetitionEntry[]): {
   }));
 }
 
-function normalizeOpenableHttpUrl(raw?: string): string | null {
-  const t = (raw ?? "").trim();
-  if (!t) return null;
-  const candidate =
-    t.startsWith("http://") || t.startsWith("https://") ? t : `https://${t}`;
-  try {
-    const u = new URL(candidate);
-    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
-    return u.toString();
-  } catch {
-    return null;
-  }
-}
-
 async function openHttpsUrl(rawUrl: string | undefined) {
-  const normalized = normalizeOpenableHttpUrl(rawUrl);
+  const normalized = familyResourceUrlForLinking(rawUrl);
   if (!normalized) return;
   try {
     const canOpen = await Linking.canOpenURL(normalized);
@@ -426,6 +424,8 @@ export default function KidDetailScreen() {
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [competitions, setCompetitions] = useState<KidCompetitionEntry[]>([]);
   const [kidWeekSessions, setKidWeekSessions] = useState<Session[]>([]);
+  const [readTogetherPreviewOpen, setReadTogetherPreviewOpen] = useState(false);
+  const [readTogetherPreviewStep, setReadTogetherPreviewStep] = useState(0);
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewState | null>(null);
   const [playableMediaUri, setPlayableMediaUri] = useState<string | null>(null);
@@ -844,6 +844,144 @@ export default function KidDetailScreen() {
 
   const focusTitle = currentWeekEntry?.title ?? null;
 
+  const readTogetherPreviewPractice = useMemo(() => {
+    const sorted = [...kidWeekSessions].sort(
+      (a, b) =>
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return {
+      sessionCountThisWeek: kidWeekSessions.length,
+      latestSession: sorted[0] ?? null,
+    };
+  }, [kidWeekSessions]);
+
+  const familyHuddleSourceMapRows = useMemo(() => {
+    const e = currentWeekEntry;
+    const titleTrim = (e?.title ?? "").trim();
+    const bodyRaw = e
+      ? e.focusType === "template"
+        ? (e.metadata ?? "").trim()
+        : (e.note ?? "").trim()
+      : "";
+    const recapTrim = (e?.familyCoachRecapNote ?? "").trim();
+    const famUrl = (e?.familyResourceUrl ?? "").trim();
+    const famLabel = (e?.familyResourceLabel ?? "").trim();
+
+    const n = kidWeekSessions.length;
+    const sortedWeekSessions =
+      n > 0
+        ? [...kidWeekSessions].sort(
+            (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          )
+        : [];
+    const latestSession = sortedWeekSessions[0];
+    const matsLine =
+      n === 0
+        ? "No sessions logged this week"
+        : latestSession
+          ? `${n} session${n === 1 ? "" : "s"} · latest ${latestSession.date}`
+          : `${n} session${n === 1 ? "" : "s"} logged`;
+
+    const trunc = (s: string, max: number) =>
+      s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1))}…`;
+
+    let missionLine: string;
+    if (!e) {
+      missionLine = "Save a weekly focus first";
+    } else if (!titleTrim) {
+      missionLine = "Add a title in weekly focus";
+    } else if (bodyRaw) {
+      missionLine = `${trunc(titleTrim, 36)} · family note set`;
+    } else {
+      missionLine = `${trunc(titleTrim, 36)} · default note on publish`;
+    }
+
+    const recapStatus = !e
+      ? `Recap this week’s 1:1 session for parents.\n\n—`
+      : recapTrim
+        ? `Recap this week’s 1:1 session for parents.`
+        : `Recap this week’s 1:1 session for parents.\n\nEmpty — parents see gentle placeholder`;
+
+    const studyLine = !e
+      ? "—"
+      : famUrl
+        ? famLabel
+          ? `${trunc(famLabel, 40)} · link set`
+          : "Link set"
+        : "No link — card uses mission cue";
+
+    const journeyLine =
+      "Class/program text if present, else encouragement (not a separate coach field)";
+
+    return [
+      {
+        heading: READ_TOGETHER_TITLE_ORDER[0],
+        badge: "Weekly Focus" as const,
+        status: missionLine,
+      },
+      {
+        heading: READ_TOGETHER_TITLE_ORDER[1],
+        badge: "You write" as const,
+        status: recapStatus,
+      },
+      {
+        heading: READ_TOGETHER_TITLE_ORDER[2],
+        badge: "From training" as const,
+        status: matsLine,
+      },
+      {
+        heading: READ_TOGETHER_TITLE_ORDER[3],
+        badge: "Optional" as const,
+        status: studyLine,
+      },
+      {
+        heading: READ_TOGETHER_TITLE_ORDER[4],
+        badge: "Auto" as const,
+        status: journeyLine,
+      },
+    ];
+  }, [currentWeekEntry, kidWeekSessions]);
+
+  const readTogetherPreviewCards = useMemo(() => {
+    if (!currentWeekEntry || !weekStartYMD) return [];
+    const payload = kidWeeklyFocusToPublishPayload(currentWeekEntry, weekStartYMD);
+    const synthetic: SyncedWeeklyMessagePayload = {
+      weekStartYMD: payload.weekStartYMD,
+      headline: payload.headline,
+      body: payload.body,
+      updatedAt: currentWeekEntry.updatedAt,
+      ...(payload.familyResourceUrl
+        ? {
+            familyResourceUrl: payload.familyResourceUrl,
+            ...(payload.familyResourceLabel
+              ? { familyResourceLabel: payload.familyResourceLabel }
+              : {}),
+          }
+        : {}),
+      ...(payload.familyCoachRecapNote
+        ? { familyCoachRecapNote: payload.familyCoachRecapNote }
+        : {}),
+    };
+    return buildReadTogetherStoryCards({
+      mode: "weekly_sync",
+      weekStartYMD,
+      weeklySyncDoc: synthetic,
+      weeklySyncNetworkOk: true,
+      missionHeadline: synthetic.headline,
+      missionBody: synthetic.body,
+      missionEyebrow: "Coach’s weekly note (family invite)",
+      legacyClassProgramBody: "",
+      closingNavigationHint:
+        "Preview only — matches published family fields. Private check-ins and coach-only video links never go to families.",
+      practiceSummary: readTogetherPreviewPractice,
+    });
+  }, [currentWeekEntry, weekStartYMD, readTogetherPreviewPractice]);
+
+  const closeReadTogetherPreview = useCallback(() => {
+    setReadTogetherPreviewOpen(false);
+    setReadTogetherPreviewStep(0);
+  }, []);
+
   const standingHeadline = (standingGuidance?.headline ?? "").trim();
   const standingDetail = (standingGuidance?.detail ?? "").trim();
   const standingPrimary =
@@ -887,6 +1025,7 @@ export default function KidDetailScreen() {
           youtubeUrl: currentWeekEntry.youtubeUrl,
           familyResourceUrl: currentWeekEntry.familyResourceUrl,
           familyResourceLabel: currentWeekEntry.familyResourceLabel,
+          familyCoachRecapNote: currentWeekEntry.familyCoachRecapNote,
           coachOutcome: outcomeDraft,
           coachNotes: trimmedNotes ? trimmedNotes : undefined,
         });
@@ -900,6 +1039,7 @@ export default function KidDetailScreen() {
           youtubeUrl: currentWeekEntry.youtubeUrl,
           familyResourceUrl: currentWeekEntry.familyResourceUrl,
           familyResourceLabel: currentWeekEntry.familyResourceLabel,
+          familyCoachRecapNote: currentWeekEntry.familyCoachRecapNote,
           coachOutcome: outcomeDraft,
           coachNotes: trimmedNotes ? trimmedNotes : undefined,
         });
@@ -962,10 +1102,12 @@ export default function KidDetailScreen() {
       return;
     }
     if (__DEV__) {
+      const recap = (latestEntry.familyCoachRecapNote ?? "").trim();
       console.log("[bjj-coach-publish-latest-entry]", {
         entryId: latestEntry.id,
         familyResourceUrl: (latestEntry.familyResourceUrl ?? "").trim() || null,
         familyResourceLabel: (latestEntry.familyResourceLabel ?? "").trim() || null,
+        storedFamilyCoachRecapNoteLen: recap.length,
       });
     }
     const links = await getCoachLinks();
@@ -990,7 +1132,7 @@ export default function KidDetailScreen() {
       );
       Alert.alert(
         "Published to families",
-        "Parents see this week’s title, family note, and any family link you added — not check-ins or your private reference video. They need to open This week together (or Refresh) on their linked phone.",
+        "Families see the weekly focus, family note, optional family recap, and optional family link — never private check-ins or coach-only video. Ask them to open Read together on This week together or pull to refresh on their linked phone.",
       );
     } catch (e) {
       const msg =
@@ -1025,6 +1167,28 @@ export default function KidDetailScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "Kid (Pilot)" }} />
+      <ReadTogetherStoryModal
+        visible={readTogetherPreviewOpen}
+        onRequestClose={closeReadTogetherPreview}
+        safeAreaTop={insets.top}
+        safeAreaBottom={insets.bottom}
+        stepIndex={readTogetherPreviewStep}
+        cards={readTogetherPreviewCards}
+        onStepBack={() => setReadTogetherPreviewStep((s) => Math.max(0, s - 1))}
+        onStepNext={() =>
+          setReadTogetherPreviewStep((s) => {
+            const max = Math.max(0, readTogetherPreviewCards.length - 1);
+            return Math.min(max, s + 1);
+          })
+        }
+        onFinished={closeReadTogetherPreview}
+        onOpenPublishedUrl={(url) => void openHttpsUrl(url)}
+        primaryFill={UI.publishAccent}
+        primaryFillPressed={UI.publishAccentPressed}
+        accentBorder={UI.familyLaneBorder}
+        accentBg="#ecfdf5"
+        accentBgPressed="#d1fae5"
+      />
       <KeyboardAwareScrollView
         ref={keyboardAwareRef}
         enableOnAndroid
@@ -1062,7 +1226,8 @@ export default function KidDetailScreen() {
           {kidName}
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          Coach-only notes stay here. The green section is what you can publish to linked parent phones.
+          This is your coaching space. Private notes stay here. The green section below is what you can publish to
+          linked parent phones.
         </Text>
 
         <View style={{ height: 12 }} />
@@ -1163,83 +1328,93 @@ export default function KidDetailScreen() {
               <Text style={{ fontSize: 11, fontWeight: "800", color: "#1f2937" }}>COACH ONLY</Text>
             </View>
             <Text style={{ fontSize: 12, color: UI.textSecondary, flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Not shared with families. Direction, check-ins, your training log, and competitions stay on this phone.
+              Not published to families.
             </Text>
           </View>
 
           <View
             style={{
-              padding: 16,
+              paddingVertical: 18,
+              paddingHorizontal: 16,
               borderRadius: CARD_RADIUS,
               borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              gap: 10,
+              borderColor: "#bfdbfe",
+              borderLeftWidth: 5,
+              borderLeftColor: "#1d4ed8",
+              backgroundColor: "#f8fafc",
+              gap: 12,
             }}
           >
-            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+            <Text
+              style={{
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: "800",
+                color: "#1e3a8a",
+                textTransform: "uppercase",
+              }}
+            >
               What matters next
             </Text>
-          {standingIsActive ? (
-            <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary }}>
-              {standingPrimary}
+            {standingIsActive ? (
+              <Text style={{ fontSize: 18, fontWeight: "800", color: UI.textPrimary, lineHeight: 24 }}>
+                {standingPrimary}
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "600" }}>
+                Capture the main takeaway and next focus for this kid.
+              </Text>
+            )}
+            {standingSecondaryMuted ? (
+              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                {standingSecondaryMuted}
+              </Text>
+            ) : null}
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+              AI can help draft this and save time
             </Text>
-          ) : (
-            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
-              Capture the main takeaway and next focus for this kid.
-            </Text>
-          )}
-          {standingSecondaryMuted ? (
-            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-              {standingSecondaryMuted}
-            </Text>
-          ) : null}
-          <Text
-            style={{
-              marginTop: 2,
-              fontSize: 12,
-              color: UI.textSecondary,
-              lineHeight: 17,
-              opacity: 0.92,
-            }}
-          >
-            AI can help draft this and save time
-          </Text>
-          <Pressable
-            onPress={() =>
-              router.push(`/profile/coaches/kid/${kidId}/what-matters-next`)
-            }
-            style={({ pressed }) => ({
-              marginTop: 4,
-              paddingVertical: 12,
-              paddingHorizontal: 14,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-              alignSelf: "flex-start",
-            })}
-          >
-            <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
-              {standingIsActive ? "Edit direction" : "Add note"}
-            </Text>
-          </Pressable>
-        </View>
-
-        <View style={{ height: 14 }} />
+            <Pressable
+              onPress={() =>
+                router.push(`/profile/coaches/kid/${kidId}/what-matters-next`)
+              }
+              style={({ pressed }) => ({
+                marginTop: 2,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#1d4ed8",
+                backgroundColor: pressed ? "#1d4ed8" : "#2563eb",
+                alignSelf: "flex-start",
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
+                {standingIsActive ? "Edit direction" : "Add note"}
+              </Text>
+            </Pressable>
+          </View>
 
         <View
           style={{
-            padding: 16,
+            marginTop: 4,
+            paddingLeft: 12,
+            borderLeftWidth: 3,
+            borderLeftColor: "#c7d2fe",
+            gap: 0,
+          }}
+        >
+        <View
+          style={{
+            padding: 14,
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: UI.border,
-            backgroundColor: UI.bgCard,
+            backgroundColor: "#eef2f6",
             gap: 10,
             opacity: canEditOutcome ? 1 : 0.65,
           }}
         >
-          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
+          <Text style={{ fontSize: 11, letterSpacing: 0.6, fontWeight: "800", color: UI.textSecondary }}>
             {"How it's going"}
           </Text>
 
@@ -1413,8 +1588,278 @@ export default function KidDetailScreen() {
             )}
           </View>
         </View>
+        </View>
 
-        <View style={{ height: 14 }} />
+        </View>
+
+        <View style={{ height: 16 }} />
+
+        <View
+          style={{
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.familyLaneBorder,
+            backgroundColor: UI.familyLaneBg,
+            padding: 12,
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: "#a7f3d0",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#065f46" }}>FAMILY / PUBLISH</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: "#047857", flex: 1, minWidth: 140, lineHeight: 17 }}>
+              Families only see the weekly focus, family note, optional family recap, and optional family link after
+              you publish.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              padding: 12,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.familyLaneBorder,
+              backgroundColor: "#d1fae5",
+              gap: 10,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                letterSpacing: 0.4,
+                fontWeight: "800",
+                color: "#065f46",
+              }}
+            >
+              This week’s family huddle
+            </Text>
+            {familyHuddleSourceMapRows.map((row) => (
+              <View key={row.heading} style={{ gap: 4 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: UI.textPrimary,
+                    }}
+                    numberOfLines={2}
+                  >
+                    {row.heading}
+                  </Text>
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 999,
+                      backgroundColor: "#ecfdf5",
+                      borderWidth: 1,
+                      borderColor: UI.familyLaneBorder,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "800",
+                        color: "#047857",
+                        includeFontPadding: false,
+                      }}
+                    >
+                      {row.badge}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }} numberOfLines={3}>
+                  {row.status}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <View
+            style={{
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontSize: 13, letterSpacing: 0.3, fontWeight: "800", color: UI.textPrimary }}>
+              Weekly focus
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
+                {focusTitle ?? "No focus saved yet"}
+              </Text>
+              {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry.youtubeUrl) ? (
+                <Pressable
+                  onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                  })}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: UI.textPrimary }}>
+                    YT video
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {focusTitle && currentWeekEntry?.youtubeUrl?.trim() ? (
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+                Reference link — coach only, not published.
+              </Text>
+            ) : null}
+
+            {focusTitle && currentWeekEntry?.familyResourceUrl?.trim() ? (
+              <Pressable
+                onPress={() => void openHttpsUrl(currentWeekEntry!.familyResourceUrl)}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: UI.familyLaneBorder,
+                  backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
+                  {(() => {
+                    const n = familyResourceUrlForLinking(currentWeekEntry!.familyResourceUrl);
+                    const primary =
+                      n != null
+                        ? defaultFamilyLinkButtonLabel(n, currentWeekEntry!.familyResourceLabel)
+                        : (currentWeekEntry!.familyResourceLabel ?? "").trim() || "Family link";
+                    return `${primary} · open`;
+                  })()}
+                </Text>
+                <Text
+                  style={{ marginTop: 2, fontSize: 11, color: UI.textSecondary }}
+                  numberOfLines={1}
+                >
+                  {familyResourceUrlForLinking(currentWeekEntry.familyResourceUrl) ??
+                    currentWeekEntry.familyResourceUrl.trim()}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {focusTitle ? (
+              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                Week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                Edit weekly focus, then publish.
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() =>
+                currentWeekEntry
+                  ? router.push(
+                      `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
+                    )
+                  : router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)
+              }
+              style={({ pressed }) => ({
+                marginTop: 6,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#1d4ed8",
+                backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
+                alignSelf: "stretch",
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
+                {currentWeekEntry ? "Edit weekly focus & family link" : "Set this week's focus"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={!currentWeekEntry || publishingWeekly}
+              onPress={() => void onPublishWeeklyToFamilies()}
+              style={({ pressed }) => ({
+                marginTop: 10,
+                paddingVertical: 14,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: UI.publishAccent,
+                backgroundColor: pressed ? UI.publishAccentPressed : UI.publishAccent,
+                alignSelf: "stretch",
+                opacity: !currentWeekEntry || publishingWeekly ? 0.55 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "900", textAlign: "center" }}>
+                {publishingWeekly ? "Publishing…" : "Publish to family phones"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setReadTogetherPreviewStep(0);
+                setReadTogetherPreviewOpen(true);
+              }}
+              disabled={!currentWeekEntry}
+              style={({ pressed }) => ({
+                marginTop: 8,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.familyLaneBorder,
+                backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                alignSelf: "stretch",
+                opacity: !currentWeekEntry ? 0.5 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#065f46", fontWeight: "800", textAlign: "center" }}>
+                Preview Family Huddle
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+              style={({ pressed }) => ({
+                paddingVertical: 4,
+                alignSelf: "flex-start",
+                opacity: pressed ? 0.65 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>History</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        <View style={{ height: 16 }} />
+
+        <Text style={{ fontSize: 15, fontWeight: "800", color: UI.textPrimary, marginBottom: 4 }}>
+          This week in action
+        </Text>
 
         <View
           style={{
@@ -1837,175 +2282,6 @@ export default function KidDetailScreen() {
               })}
             </View>
           ) : null}
-        </View>
-        </View>
-
-        <View style={{ height: 16 }} />
-
-        <View
-          style={{
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.familyLaneBorder,
-            backgroundColor: UI.familyLaneBg,
-            padding: 12,
-            gap: 12,
-          }}
-        >
-          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-            <View
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 999,
-                backgroundColor: "#a7f3d0",
-              }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: "800", color: "#065f46" }}>FAMILY / PUBLISH</Text>
-            </View>
-            <Text style={{ fontSize: 12, color: "#047857", flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Linked parents see this only after you publish. Set the weekly focus, then use the green button.
-            </Text>
-          </View>
-
-          <View
-            style={{
-              padding: 16,
-              borderRadius: CARD_RADIUS,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              gap: 8,
-            }}
-          >
-            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
-              {"This week's focus (published title + family note)"}
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Parents get the title, the family-facing note from the editor, and an optional family link — not your
-              check-ins or the reference video field below.
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
-                {focusTitle ?? "No focus saved yet"}
-              </Text>
-              {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry.youtubeUrl) ? (
-                <Pressable
-                  onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
-                  style={({ pressed }) => ({
-                    paddingVertical: 6,
-                    paddingHorizontal: 10,
-                    borderRadius: 999,
-                    borderWidth: 1,
-                    borderColor: UI.border,
-                    backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                  })}
-                >
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: UI.textPrimary }}>
-                    YT video
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-            {focusTitle && currentWeekEntry?.youtubeUrl?.trim() ? (
-              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
-                Reference video / IG — coach device only, not sent to parents.
-              </Text>
-            ) : null}
-
-            {focusTitle && currentWeekEntry?.familyResourceUrl?.trim() ? (
-              <Pressable
-                onPress={() => void openHttpsUrl(currentWeekEntry!.familyResourceUrl)}
-                style={({ pressed }) => ({
-                  alignSelf: "flex-start",
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: UI.familyLaneBorder,
-                  backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
-                })}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
-                  {(currentWeekEntry.familyResourceLabel ?? "").trim() || "Family link"} · open
-                </Text>
-                <Text
-                  style={{ marginTop: 2, fontSize: 11, color: UI.textSecondary }}
-                  numberOfLines={1}
-                >
-                  {currentWeekEntry.familyResourceUrl.trim()}
-                </Text>
-              </Pressable>
-            ) : null}
-
-            {focusTitle ? (
-              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                Week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
-              </Text>
-            ) : (
-              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                Pick a focus, add a family link if you want, then publish.
-              </Text>
-            )}
-
-            <Pressable
-              onPress={() =>
-                currentWeekEntry
-                  ? router.push(
-                      `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
-                    )
-                  : router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)
-              }
-              style={({ pressed }) => ({
-                marginTop: 6,
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#1d4ed8",
-                backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
-                alignSelf: "stretch",
-              })}
-            >
-              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
-                {currentWeekEntry ? "Edit weekly focus & family link" : "Set this week's focus"}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              disabled={!currentWeekEntry || publishingWeekly}
-              onPress={() => void onPublishWeeklyToFamilies()}
-              style={({ pressed }) => ({
-                marginTop: 10,
-                paddingVertical: 14,
-                paddingHorizontal: 14,
-                borderRadius: 12,
-                borderWidth: 2,
-                borderColor: UI.publishAccent,
-                backgroundColor: pressed ? UI.publishAccentPressed : UI.publishAccent,
-                alignSelf: "stretch",
-                opacity: !currentWeekEntry || publishingWeekly ? 0.55 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "900", textAlign: "center" }}>
-                {publishingWeekly ? "Publishing…" : "Publish to family phones"}
-              </Text>
-              <Text style={{ marginTop: 6, fontSize: 12, color: "#ecfdf5", textAlign: "center", lineHeight: 17 }}>
-                {"Required for parents to see this week's note. Sends title, family note, and family link only."}
-              </Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
-              style={({ pressed }) => ({
-                paddingVertical: 4,
-                alignSelf: "flex-start",
-                opacity: pressed ? 0.65 : 1,
-              })}
-            >
-              <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>History</Text>
-            </Pressable>
-          </View>
         </View>
 
         {!ready ? (
