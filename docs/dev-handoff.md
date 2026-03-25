@@ -72,8 +72,8 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-23  
-**Status:** MatMind Dev was recovered and validated in a real two-device Dev lane. Build 18 in TestFlight remains older reality; today’s shared-athlete and role-split work is Dev-validated and should not be assumed broadly shipped in TestFlight unless explicitly recorded.
+**Date:** 2026-03-24  
+**Status:** MatMind Dev now has a substantially improved coach/parent weekly lane: shared-athlete sync + parent competition sync are working in Dev, and the parent-facing weekly story model is now Family Huddle end-to-end. Coach publish flow and parent reading flow both received major clarity passes (including Family Huddle source-map/preview alignment, Card 2 recap update/clear reliability, removal of swipe delete exposure on the parent weekly list, and unlink/relink hardening). TestFlight should still be treated as older reality until a new build is explicitly documented.
 
 On `dev`, the Coach Share lane now includes a role split (**Coach** and **Parent**) with a role picker and role-specific profile entry behavior. Worker-backed sync is deployed and active for invite/redeem + shared athlete linking + weekly note/shared-athlete visibility. Two-device smoke succeeded in Dev: coach creates invite, parent accepts invite, parent adds athlete, and coach sees the athlete as linked. Current limitation remains unchanged for deeper data: parent-entered **training logs** and **competition data** still do **not** sync back to coach and remain local-only on the parent side.
 
@@ -106,6 +106,44 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 - **Tier model / pricing** exploration started; **AI capabilities likely land in Pro by default**; **dashboard cost posture** under discussion.
 
 ## What we completed most recently
+
+### 2026-03-24 — Family Huddle / weekly story rework
+- Parent “Read together” was rebuilt into a stronger five-card family story:
+  1. Mission of the week
+  2. What we sharpened with Coach
+  3. On the mats this week
+  4. Study the move
+  5. The bigger journey
+- New shared story-card mapper and modal:
+  - `src/family/readTogetherStoryCards.ts`
+  - `src/family/ReadTogetherStoryModal.tsx`
+- Parent entry CTA updated to **“This week’s family huddle”**
+- Parent weekly heading is now family/invite-scoped, not athlete-scoped
+- Family link behavior works on parent side, including YouTube / Instagram family links
+- Card 2 recap now updates and clears correctly after publish
+
+### 2026-03-24 — Coach Family Huddle publish clarity
+- Coach kid detail was simplified and re-ordered:
+  - stronger **What matters next**
+  - **How it’s going** visually subordinated
+  - Family / Publish lane moved higher and made easier to understand
+- Coach-side Family Huddle source map now mirrors parent card headings
+- Weekly focus editor labels now align with Family Huddle:
+  - Mission of the week
+  - What we sharpened with Coach
+  - Study the move
+- Preview CTA renamed to **Preview Family Huddle**
+
+### 2026-03-24 — Parent unlink / relink hardening
+- Parent can unlink a child from coach without deleting the child profile
+- Parent can relink an **existing** child profile to the invite/session instead of creating duplicates
+- Reconnect flow now surfaces existing kids first
+
+### 2026-03-24 — Competition sync hardening
+- Parent-to-coach competition create/delete is working in Dev on the intended edit/delete path
+- Synced competition rows no longer expose swipe delete on parent weekly list
+- Coach-side competition refresh behavior is reliable with explicit refresh control
+- Invite clutter on coach side was reduced and invite cards now show linked athlete context
 
 ### 2026-03-22 — Family Competition parent lane (**committed** locally: `6e10dd7` → `c1b4369`, `d5cb4af`, `353f6bd`)
 - **Parent-owned local lane** on the Coach Share weekly surface: **add / edit / delete** competition entries for the family view, **format** support, **month grouping** with **chevron** expand/collapse, **multi-kid child chips** (selection stored per device; resolves against pilot roster via `src/family/coachShareCompetitionBuckets.ts`), and a **stronger family palette** aligned with the weekly story.
@@ -189,7 +227,11 @@ Validated:
 - **2026-03-21 batch** (family weekly Coach Share surface, competition structured fields + form polish, mock **What matters next** drafting): treat as **Dev / local** until a new TestFlight is explicitly validated and noted here—not assumed for **broad** TestFlight testers
 - **2026-03-22 batch** (**Family Competition** lane, **household** roster/editing, **keyboard** fix, palette): **working in local dev** on commits through **`83588d7`** — **not** claimed for TestFlight or broad testers
 - **Weekly two-device sync + shared athletes:** validated in Dev on a two-device setup; worker-backed invite/redeem and athlete linking are working in that lane
-- **Competition/training cross-device sync:** still not implemented for parent -> coach; treat those entries as local-only on parent device for now
+- **2026-03-24 batch:** Dev-validated Family Huddle end-to-end (coach publish -> parent weekly family note/link -> parent Read together / Family Huddle flow)
+- **2026-03-24 batch:** Dev-validated parent unlink/relink hardening (unlink does not delete child profile; relink reuses the existing child without duplicates)
+- **2026-03-24 batch:** Dev-validated competition create/delete sync on the intended edit/delete path (synced competition rows no longer expose swipe delete on the parent weekly list; coach-side competition refresh is reliable with explicit refresh control)
+- **TestFlight boundary:** still do not overclaim TestFlight availability until a new build is explicitly shipped and documented
+- **Competition/training cross-device sync:** broader training sync remains out of scope here; parent-entered training logs can still reflect device-local training activity realities on parent (no broader parent->coach training replication implied in this slice)
 - **Kid roster / standing guidance / weekly focus / check-ins / kid-linked training / competition + swipe row deletes:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
 - Coach Share pilot remains intentionally contained/hidden for general testers
 - Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
@@ -233,28 +275,19 @@ Validated:
 - **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
-- **Dev operational rule:** once MatMind Dev is installed, open the installed app directly. Do not rely on QR relaunch behavior after install.
-- **Dev startup command (current reliable lane):**
-  - `cd "/Users/ods/Repos/bjj-tracker"`
-  - `export EXPO_PUBLIC_COACH_SYNC_BASE_URL="https://matmind-coach-sync.ortizdigitalstudio.workers.dev"`
-  - `npx expo start --dev-client -c --tunnel`
-- **Two-device setup risk:** second device must be in Apple/EAS dev provisioning profile. Wife's phone required explicit registration before install succeeded.
-- **Still-open product loop:** parent-entered competition/training updates do not yet sync to coach.
-- **UX loop:** weekly hero / "Read together" still has repetition/confusion that needs cleanup.
-- Kyle internal testing: run the **full kid pilot path** including **What matters next** (**Help me phrase** → review → **apply or discard**; confirm drafts do not save until apply), **edit this week’s focus** (existing row), **History** editor routing, **check-ins** (save + **swipe delete**), **log training** + **swipe delete session**, **competition** (new optional fields + notes scroll + save/delete in scroll + optional video + **swipe delete**), and **roster delete** — confirm UX + cascade cleanup (incl. standing guidance + kid-linked sessions).
-- **Family Competition + households (local dev):** exercise **child chips** with **multiple kids**, **month chevrons**, **family competition editor** add/edit/delete, **household** create + grouped roster + **kid detail household edit**.
-- **Family Coach Share path (device QA):** Profile → **This week with your coach** → weekly surface (**This week together**), **join** flow, **weekly story** (**Read together** steps + **early exit**).
-- **Deferred / unchanged intent:** broader Coach Share template/parent preview polish, collapsible long check-in lists, extra taxonomy items, and resuming **external** feedback triage — still tabled until this lane is stable.
-- Validate **video pick → persist → playback** across devices/OS versions (MediaLibrary resolution for `ph://` / `assets-library://` when needed)
-- Validate **caps** behavior (60 weekly focus rows/kid, 60 competitions/kid) under heavy use
-- Coach Share template lane: parent-first hierarchy, multi-item preview, custom focus, YouTube + Instagram reference links (formatting + tap behavior)
+- TestFlight readiness checklist still needs a dedicated pass
+- Broader coach/parent cleanup for TestFlight may still include:
+  - role placement architecture (Coach/Parent still living where it lives now)
+  - clearer coach preview/template/sandbox distinction if still relevant
+  - any remaining parent/coach wording cleanup
+- Broader training sync remains out of scope
+- "The bigger journey" card is still mostly auto/fallback driven
+- Black Belt testing should focus on comprehension and flow quality, not assume all cross-device data types sync
 
 ## Best next-session recommendation
-Next likely moves:
-1. **Next architecture slice:** implement parent-owned **competition sync** to coach first, then decide the right shape for training sync.
-2. Keep two-device Dev smoke in the loop on every sync slice (Coach phone + Parent phone) using the tunnel startup command above.
-3. Preserve release honesty: continue separating **Dev-validated truth** from **TestFlight-shipped truth** in docs and QA notes.
-4. Keep Coach Share pilot-scoped for broader testers until explicit release callout.
+1. Run a TestFlight readiness punch list first thing
+2. Decide what must be fixed before a Black Belt coach-testing build
+3. Then prepare the feedback/TestFlight lane carefully and document what testers should validate
 
 ## Suggested restart commands for next session
 - `git status -sb`
