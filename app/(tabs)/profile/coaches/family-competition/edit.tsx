@@ -267,7 +267,14 @@ export default function FamilyCompetitionEditScreen() {
           if (!target) {
             Alert.alert(
               "Could not sync",
-              "This athlete is linked, but this phone cannot find a writable link right now.",
+              "This athlete is linked here, but this phone could not open the coach invite that lists them for writing. Open Coach link & sharing, confirm the channel shows “Linked — competition sync ready”, then tap Athletes on this invite to relink or add them on that code.",
+              [
+                { text: "Not now", style: "cancel" },
+                {
+                  text: "Coach link settings",
+                  onPress: () => router.push("/profile/coaches/manage"),
+                },
+              ],
             );
             return;
           }
@@ -332,7 +339,14 @@ export default function FamilyCompetitionEditScreen() {
           if (!target) {
             Alert.alert(
               "Could not sync",
-              "This linked competition could not be matched to a writable link on this phone.",
+              "This entry is synced, but this phone could not match it to a writable invite (wrong channel, stale link, or setup not finished). Open Coach link & sharing → Athletes on this invite for the code that ends with the same suffix as your coach shared, then relink this child if needed.",
+              [
+                { text: "Not now", style: "cancel" },
+                {
+                  text: "Coach link settings",
+                  onPress: () => router.push("/profile/coaches/manage"),
+                },
+              ],
             );
             return;
           }

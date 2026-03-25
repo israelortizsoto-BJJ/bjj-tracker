@@ -27,12 +27,11 @@ export type ResolveLinkedTargetDevCreateContext = {
 function sessionListsAthleteForParentWriter(
   session: Awaited<ReturnType<typeof coachSyncFetchSession>>,
   trimmedAthleteId: string,
+  mode: "rosterOrCompetition" | "rosterOnly",
 ): boolean {
-  if (
-    session.athletes.some((a) => a.id.trim() === trimmedAthleteId)
-  ) {
-    return true;
-  }
+  const onRoster = session.athletes.some((a) => a.id.trim() === trimmedAthleteId);
+  if (mode === "rosterOnly") return onRoster;
+  if (onRoster) return true;
   return session.competitions.some(
     (c) => c.sharedAthleteId.trim() === trimmedAthleteId,
   );
@@ -50,11 +49,17 @@ function toOpErrorMessage(e: unknown): string {
  * `sharedAthleteId` on any `session.competitions` row (trimmed compare). When
  * `existingSharedCompetitionId` is set, prefers a session that lists that competition but falls
  * back to any session that lists the athlete (GET can omit a row briefly after POST).
+ *
+ * `requireAthleteOnSessionRoster`: when true (e.g. parent removes athlete from coach session), only
+ * `session.athletes` counts. Otherwise a competition-only match can point at a token where DELETE
+ * /athletes/:id returns 404 while the athlete still exists on another invite — worker DELETE
+ * requires a roster row, not just competitions.
  */
 export async function resolveLinkedTargetForParentWriter(
   sharedAthleteId: string,
   existingSharedCompetitionId?: string,
   devCreate?: ResolveLinkedTargetDevCreateContext,
+  options?: { requireAthleteOnSessionRoster?: boolean },
 ): Promise<LinkedSyncTarget | null> {
   const trimmedAthleteId = sharedAthleteId.trim();
   if (!trimmedAthleteId) return null;
@@ -65,6 +70,10 @@ export async function resolveLinkedTargetForParentWriter(
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   if (!activeParentLinks.length) return null;
+
+  const listMode: "rosterOrCompetition" | "rosterOnly" = options?.requireAthleteOnSessionRoster
+    ? "rosterOnly"
+    : "rosterOrCompetition";
 
   if (__DEV__ && devCreate) {
     console.log("[bjj-sync-debug] parent competition create resolveLinkedTarget start", {
@@ -80,9 +89,15 @@ export async function resolveLinkedTargetForParentWriter(
   for (const l of activeParentLinks) {
     try {
       const ws = l.weeklySync;
-      const tokenForFetch = ws.linkToken.trim().toLowerCase();
-      const session = await coachSyncFetchSession(tokenForFetch, ws.apiBaseUrl);
-      const athleteOk = sessionListsAthleteForParentWriter(session, trimmedAthleteId);
+      // Must match stored token casing: same as `coachSyncCreateSessionCompetition` / other call sites.
+      // Lowercasing here caused silent fetch failures on case-sensitive workers while the UI still showed “linked”.
+      const token = ws.linkToken.trim();
+      const session = await coachSyncFetchSession(token, ws.apiBaseUrl);
+      const athleteOk = sessionListsAthleteForParentWriter(
+        session,
+        trimmedAthleteId,
+        listMode,
+      );
       const tokenTail =
         ws.linkToken.length > 8 ? ws.linkToken.slice(-8) : ws.linkToken;
       const hasSecret = Boolean(ws.parentWriterSecret?.trim());
@@ -124,7 +139,7 @@ export async function resolveLinkedTargetForParentWriter(
       }
       if (!athleteOk) continue;
       const target: LinkedSyncTarget = {
-        linkToken: ws.linkToken.trim(),
+        linkToken: token,
         apiBaseUrl: ws.apiBaseUrl,
         parentWriterSecret: ws.parentWriterSecret!.trim(),
       };
@@ -284,7 +299,7 @@ export async function deleteParentKidCompetitionEntry(
         ok: false,
         alertTitle: "Could not sync",
         alertMessage:
-          "This linked competition could not be matched to a writable link on this phone.",
+          "This linked competition could not be matched to a writable invite on this phone. Open Coach link & sharing (from This week together), pick the channel whose code matches your coach, then Athletes on this invite to relink this child.",
       };
     }
     try {

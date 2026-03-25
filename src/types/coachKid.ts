@@ -47,6 +47,16 @@ export type Kid = {
   householdLabel?: string;
   /** When set, this roster row is tied to a parent-created athlete on the linked sync session. */
   sharedAthleteId?: string;
+  /**
+   * Normalized lowercase invite token for the writer session this row was last reconciled from.
+   * Lets us prune stale linked rows when multiple invites exist and only some session GETs succeed.
+   */
+  sharedFromInviteTokenNorm?: string;
+  /**
+   * True when created from the parent “link athletes” flow. With shared AsyncStorage (role switching),
+   * hide on the coach roster while unlinked so the row does not look like an active coach athlete.
+   */
+  isParentManagedChildProfile?: boolean;
   createdAt: string;
   updatedAt: string;
 };

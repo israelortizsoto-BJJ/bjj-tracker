@@ -69,7 +69,7 @@ function json(data: unknown, status = 200, cors = true): Response {
   const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8" };
   if (cors) {
     headers["Access-Control-Allow-Origin"] = "*";
-    headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, OPTIONS";
+    headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
     headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
   }
   return new Response(JSON.stringify(data), { status, headers });
@@ -199,7 +199,7 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 
