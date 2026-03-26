@@ -72,19 +72,24 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-24  
-**Status:** MatMind Dev now has a substantially improved coach/parent weekly lane: shared-athlete sync + parent competition sync are working in Dev, and the parent-facing weekly story model is now Family Huddle end-to-end. Coach publish flow and parent reading flow both received major clarity passes (including Family Huddle source-map/preview alignment, Card 2 recap update/clear reliability, removal of swipe delete exposure on the parent weekly list, and unlink/relink hardening). TestFlight should still be treated as older reality until a new build is explicitly documented.
+**Date:** 2026-03-25  
+**Status:** Family Huddle and the coach/parent weekly lane still work in Dev. Today focused on **link-state correctness**, **reconnect truth**, and **publish readiness** so coach roster, publish readiness, and parent weekly “linked” state stay aligned. The fresh-path end-to-end flow is passing in Dev: parent unlinked → coach creates a fresh invite → parent intentionally connects → parent links child → coach publishes → parent receives the weekly note / Family Huddle. This session also included a real architecture tightening pass (canonical invite-token normalization, shared binding helpers, stricter parent weekly linked-state selection, stronger roster/publish alignment, stricter reconnect behavior, more honest revoke presentation on-device). We temporarily added DEV-only tracing for auto-relink to identify the problem path; final passing QA came after the strict linked-state fix. **TestFlight is still older reality** until a new build is shipped and documented here.
 
 On `dev`, the Coach Share lane now includes a role split (**Coach** and **Parent**) with a role picker and role-specific profile entry behavior. Worker-backed sync is deployed and active for invite/redeem + shared athlete linking + weekly note/shared-athlete visibility. Two-device smoke succeeded in Dev: coach creates invite, parent accepts invite, parent adds athlete, and coach sees the athlete as linked. Current limitation remains unchanged for deeper data: parent-entered **training logs** and **competition data** still do **not** sync back to coach and remain local-only on the parent side.
 
 ## Git checkpoint
 
-**Working tree:**
-- **`git status -sb`:** branch **ahead of `origin/dev` by 22**; **modified** Coach Share screens, `app.config.ts`, `coachShareStore`, `storageKeys`, `tsconfig.json`, and related types; **untracked** `coach-sync-worker/` and weekly-sync `src/*` files (see `docs/project-core-files.md`).
-- Treat **family competition + household + keyboard fix** as **committed locally** (`6e10dd7` … `83588d7`). Treat **weekly sync** as **coded but only in the dirty tree** until committed and deployed.
+**Before build or release work:** run `git status -sb` (and the usual gates) so you see the exact tree on that machine — branch position and cleanliness can differ between clones.
 
-**Latest commit (last clean checkpoint for shipped-local batch):**
-- `83588d7` — Add household editing for existing coach pilot kids
+Earlier handoff language about a **dirty tree**, **ahead by 22**, and **weekly sync living only in uncommitted changes** is **obsolete**. **Dev truth** is the **committed** history on `dev`, especially the **Family Huddle** story, **coach → parent publish**, and **link-binding / reconnect hardening** slice.
+
+**TestFlight** is still **older shipped reality** until a new feedback build is uploaded and noted here — do not assume external testers match Dev.
+
+**Recent commits (this slice):**
+- `4b37521` — enforce strict parent weekly link state and reconnect flow
+- `af919e4` — polish coach-share copy and simplify unlink path
+- `1a5d4e1` — improve competition sync recovery and unlink helper messaging
+- `4fd1d99` — stabilize coach-parent link binding and publish readiness
 
 ## ODS founder roll-up rule
 If MatMind had meaningful work today, that work should be reflected in ODS the same day.
@@ -106,6 +111,26 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 - **Tier model / pricing** exploration started; **AI capabilities likely land in Pro by default**; **dashboard cost posture** under discussion.
 
 ## What we completed most recently
+
+### 2026-03-25 — strict parent link-state + reconnect hardening
+- Added canonical invite-token normalization and shared coach-link binding helpers
+- Tightened parent weekly “linked” truth so weekly sync now requires a stricter redeemed parent channel, not just any local active weekly row
+- Fixed the parent auto-relink contamination loop: after remove-link, parent now stays truly unlinked until an intentional reconnect
+- Fresh invite → intentional reconnect → relink existing child → coach publish flow now passes again in Dev
+- Added a safe coach publish fallback when exactly one active writer session contains the child, but otherwise fail honestly
+- Roster truth and publish truth are now more tightly aligned
+- Temporarily added DEV tracing for auto-relink; used it to identify the problem path — final passing QA came after the strict linked-state fix
+
+### 2026-03-25 — coach/parent unlink/revoke honesty
+- Revoke/remove-link paths now clear local linked presentation more honestly
+- Coach roster no longer relies as heavily on stale local child linkage alone
+- Parent and coach are less likely to diverge into “looks linked here, not writable there” states
+
+### 2026-03-25 — external-feedback polish follow-up
+- Removed duplicate parent unlink affordance in the main parent weekly flow
+- Reduced remaining visible “pilot” language in key user-facing areas
+- Tightened parent athlete-linking copy
+- Polished Family Huddle copy on the remaining rough cards
 
 ### 2026-03-24 — Family Huddle / weekly story rework
 - Parent “Read together” was rebuilt into a stronger five-card family story:
@@ -223,6 +248,10 @@ Validated:
 
 ### Product / release validation
 Validated:
+- Dev-validated fresh-path reconnect flow now passes (unlink → fresh invite → intentional reconnect → relink → publish → parent receive)
+- Dev-validated parent stays unlinked until intentional reconnect (no surprise auto-link from a fresh invite alone)
+- Dev-validated coach publish after fresh reconnect passes
+- Broader TestFlight reality is still not updated until a new external feedback build ships; treat TestFlight as stale vs Dev until documented
 - Build 18 is still the latest documented TestFlight reality for broader testers, and is older than the newest Dev-validated shared-athlete role-split slice
 - **2026-03-21 batch** (family weekly Coach Share surface, competition structured fields + form polish, mock **What matters next** drafting): treat as **Dev / local** until a new TestFlight is explicitly validated and noted here—not assumed for **broad** TestFlight testers
 - **2026-03-22 batch** (**Family Competition** lane, **household** roster/editing, **keyboard** fix, palette): **working in local dev** on commits through **`83588d7`** — **not** claimed for TestFlight or broad testers
@@ -275,25 +304,26 @@ Validated:
 - **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
-- TestFlight readiness checklist still needs a dedicated pass
-- Broader coach/parent cleanup for TestFlight may still include:
-  - role placement architecture (Coach/Parent still living where it lives now)
-  - clearer coach preview/template/sandbox distinction if still relevant
-  - any remaining parent/coach wording cleanup
+- Final external-feedback TestFlight go/no-go checklist still needs a dedicated pass
+- Likely remaining work is now polish / readiness, not the same deep link-state debugging from earlier
+- Still need to decide whether coach should keep “Add a kid” in the external-testing model
+- Still need a broader navigation / role-placement decision later if product wants it
+- Family Huddle / bigger-journey and some coach/parent wording may still get another polish pass
 - Broader training sync remains out of scope
 - "The bigger journey" card is still mostly auto/fallback driven
 - Black Belt testing should focus on comprehension and flow quality, not assume all cross-device data types sync
 
 ## Best next-session recommendation
-1. Run a TestFlight readiness punch list first thing
-2. Decide what must be fixed before a Black Belt coach-testing build
-3. Then prepare the feedback/TestFlight lane carefully and document what testers should validate
+1. Start with the final external-feedback TestFlight readiness checklist
+2. Decide must-fix vs acceptable-for-feedback vs document-as-known-limitation
+3. If go, prepare and ship the external feedback TestFlight build deliberately
+4. Update handoff immediately after any build/upload
 
 ## Suggested restart commands for next session
 - `git status -sb`
 - `git log -8 --oneline`
 - `sed -n '1,280p' "docs/dev-handoff.md"`
-- `sed -n '1,220p' "docs/recaps/2026-03-22_dev-recap.md"`
+- `sed -n '1,220p' "docs/recaps/2026-03-25_dev-recap.md"`
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
