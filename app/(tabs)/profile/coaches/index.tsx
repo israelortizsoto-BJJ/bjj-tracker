@@ -5,7 +5,6 @@ import {
   Alert,
   Linking,
   Pressable,
-  ScrollView,
   Text,
   View,
 } from "react-native";
@@ -60,7 +59,6 @@ import {
   partitionFamilyCompetitionEntries,
   resolveFamilyCompetitionKidId,
   shouldShowFamilyCompetitionResult,
-  sortedKidsForFamilyCompetitionChips,
 } from "../../../../src/family/coachShareCompetitionBuckets";
 import { useDeviceRole } from "../../../../src/deviceRole/DeviceRoleProvider";
 import {
@@ -79,7 +77,6 @@ import {
   type KidCompetitionEntry,
 } from "../../../../src/types/coachKid";
 import {
-  defaultFamilyLinkButtonLabel,
   familyResourceUrlForLinking,
 } from "../../../../src/coach/familyResourceUrl";
 import { buildReadTogetherStoryCards } from "../../../../src/family/readTogetherStoryCards";
@@ -91,12 +88,15 @@ const UI = {
   bgCard: "#fefdff",
   bgCardActive: "#e8e4ff",
   bgHero: "#fff5ec",
+  heroBlob1: "rgba(99, 102, 241, 0.14)",
+  heroBlob2: "rgba(236, 72, 153, 0.12)",
   border: "#e5e7eb",
   heroBorder: "#e8d4ec",
   textPrimary: "#111827",
   textSecondary: "#4b5563",
   primaryFill: "#4f46e5",
   primaryFillPressed: "#4338ca",
+  primaryTextOnFill: "#ffffff",
   deleteBg: "#dc2626",
   deleteText: "#ffffff",
   rowMutedBg: "#f9fafb",
@@ -113,6 +113,10 @@ const UI = {
   addCompetitionBg: "#ede9fe",
   addCompetitionBgPressed: "#ddd6fe",
   addCompetitionBorder: "#c4b5fd",
+  progressRail: "#e5e7eb",
+  progressRailActive: "#c7d2fe",
+  progressDotInactive: "#f3f4f6",
+  progressDotActive: "#c7d2fe",
 };
 
 /** Richer chip fills for competition rows (labels stable from `familyCompetitionChipForEntry`). */
@@ -175,8 +179,6 @@ type FamilyCompetitionLoadState = {
   kidId: string | null;
   kidName: string | null;
   multiKidOnRoster: boolean;
-  /** Populated only when `multiKidOnRoster` (2+ kids), for horizontal chips. */
-  competitionChipRows: { id: string; label: string }[];
   upcoming: KidCompetitionEntry[];
   recent: KidCompetitionEntry[];
 };
@@ -191,7 +193,6 @@ const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
   kidId: null,
   kidName: null,
   multiKidOnRoster: false,
-  competitionChipRows: [],
   upcoming: [],
   recent: [],
 };
@@ -375,20 +376,12 @@ export default function CoachesScreen() {
     }
 
     const rosterCount = Object.keys(loadedKidsById).length;
-    const competitionChipRows =
-      rosterCount > 1
-        ? sortedKidsForFamilyCompetitionChips(loadedKidsById).map((k) => ({
-            id: k.id,
-            label: kidDisplayNameForId(loadedKidsById, k.id) ?? "Athlete",
-          }))
-        : [];
 
     let nextFamily: FamilyCompetitionLoadState = {
       todayYMD: today,
       kidId: rosterKidId,
       kidName: rosterKidId ? kidDisplayNameForId(loadedKidsById, rosterKidId) : null,
       multiKidOnRoster: rosterCount > 1,
-      competitionChipRows,
       upcoming: [],
       recent: [],
     };
@@ -444,36 +437,6 @@ export default function CoachesScreen() {
     setReady(true);
   }, [role]);
 
-  const selectFamilyCompetitionKid = useCallback(async (nextKidId: string) => {
-    await setFamilyCompetitionSelectedKidId(nextKidId);
-    const compApplyGen = ++applyFamilyCompGenRef.current;
-    const today = todayYMD();
-    const compEntries = await getKidCompetitionEntriesForKid(nextKidId);
-    const part = partitionFamilyCompetitionEntries(compEntries, today);
-    const loadedKidsById = await getKidsById();
-    setFamilyCompetition((prev) => {
-      if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
-      if (!loadedKidsById[nextKidId]) return prev;
-      const rosterCount = Object.keys(loadedKidsById).length;
-      return {
-        ...prev,
-        todayYMD: today,
-        kidId: nextKidId,
-        kidName: kidDisplayNameForId(loadedKidsById, nextKidId),
-        multiKidOnRoster: rosterCount > 1,
-        competitionChipRows:
-          rosterCount > 1
-            ? sortedKidsForFamilyCompetitionChips(loadedKidsById).map((k) => ({
-                id: k.id,
-                label: kidDisplayNameForId(loadedKidsById, k.id) ?? "Athlete",
-              }))
-            : [],
-        upcoming: part.upcoming,
-        recent: part.recent,
-      };
-    });
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       void loadCoachShareData();
@@ -514,6 +477,31 @@ export default function CoachesScreen() {
     [familyCompetition.upcoming],
   );
 
+  const nextUpcomingCompetitionEntry =
+    familyCompetition.upcoming.length > 0 ? familyCompetition.upcoming[0]! : null;
+
+  const nextUpcomingCompetitionChip = useMemo(() => {
+    if (!nextUpcomingCompetitionEntry) return null;
+    const chipBase = familyCompetitionChipForEntry(
+      nextUpcomingCompetitionEntry,
+      familyCompetition.todayYMD,
+    );
+    return {
+      ...chipBase,
+      ...familyFacingCompetitionChipStyle(chipBase),
+    };
+  }, [nextUpcomingCompetitionEntry, familyCompetition.todayYMD]);
+
+  const nextUpcomingCompetitionPromoterFmt = useMemo(() => {
+    if (!nextUpcomingCompetitionEntry) return null;
+    return familyCompetitionPromoterFormatLine(nextUpcomingCompetitionEntry, 72);
+  }, [nextUpcomingCompetitionEntry]);
+
+  const nextUpcomingCompetitionDateLabel = useMemo(() => {
+    if (!nextUpcomingCompetitionEntry) return null;
+    return formatFamilyCompetitionDate(nextUpcomingCompetitionEntry.eventDate);
+  }, [nextUpcomingCompetitionEntry]);
+
   const [familyUpcomingMonthsExpanded, setFamilyUpcomingMonthsExpanded] = useState(
     () => new Set<string>(),
   );
@@ -521,25 +509,31 @@ export default function CoachesScreen() {
     () => new Set<string>(),
   );
 
+  // Parent-focused redesign: keep the competition calendar collapsed by default
+  // (we show a dedicated "Next competition" card instead).
+  const [competitionCalendarExpanded, setCompetitionCalendarExpanded] = useState(false);
+
   useEffect(() => {
     if (!familyUpcomingMonthGroups.length) return;
+    if (role === "parent" && !competitionCalendarExpanded) return;
     setFamilyUpcomingMonthsExpanded((prev) => {
       if (prev.size > 0) return prev;
       const cur = familyCompetition.todayYMD.slice(0, 7);
       const hasCur = familyUpcomingMonthGroups.some((g) => g.monthKey === cur);
       return new Set([hasCur ? cur : familyUpcomingMonthGroups[0]!.monthKey]);
     });
-  }, [familyUpcomingMonthGroups, familyCompetition.todayYMD]);
+  }, [familyUpcomingMonthGroups, familyCompetition.todayYMD, role, competitionCalendarExpanded]);
 
   useEffect(() => {
     if (!familyRecentMonthGroups.length) return;
+    if (role === "parent" && !competitionCalendarExpanded) return;
     setFamilyRecentMonthsExpanded((prev) => {
       if (prev.size > 0) return prev;
       const cur = familyCompetition.todayYMD.slice(0, 7);
       const hasCur = familyRecentMonthGroups.some((g) => g.monthKey === cur);
       return new Set([hasCur ? cur : familyRecentMonthGroups[0]!.monthKey]);
     });
-  }, [familyRecentMonthGroups, familyCompetition.todayYMD]);
+  }, [familyRecentMonthGroups, familyCompetition.todayYMD, role, competitionCalendarExpanded]);
 
   const toggleFamilyUpcomingMonth = useCallback((monthKey: string) => {
     setFamilyUpcomingMonthsExpanded((prev) => {
@@ -929,10 +923,30 @@ export default function CoachesScreen() {
     : familyCompetition.kidId
       ? "Selected athlete"
       : "No athlete selected";
+  const topHeaderKidLabel = familyCompetition.kidName
+    ? familyCompetition.kidName
+    : familyCompetition.kidId
+      ? "your athlete"
+      : "your child";
+
+  const whyThisMattersText = useMemo(() => {
+    const childName = familyCompetition.kidName?.trim() || "your kid";
+    const mission = (focusTitle ?? "").trim();
+
+    if (!mission) {
+      return `A short shared routine helps ${childName} remember the goal for the week — and helps you cheer them on with confidence.`;
+    }
+
+    return `This week’s mission (“${mission}”) turns training into a family game: you both know what to practice, and ${childName} can feel proud when it clicks.`;
+  }, [familyCompetition.kidName, focusTitle]);
   /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
   const weeklyNoteHeroEyebrow = useWeeklySyncHero
-    ? "Coach’s weekly note (family invite)"
-    : "This week’s coach focus";
+    ? currentCoach?.displayName
+      ? `Coach's weekly focus from ${currentCoach.displayName}`
+      : "Coach's weekly focus"
+    : currentCoach?.displayName
+      ? `Coach's weekly focus from ${currentCoach.displayName}`
+      : "Coach's weekly focus";
 
   const legacyClassProgramBody = useMemo(() => {
     if (useWeeklySyncHero) return "";
@@ -963,6 +977,7 @@ export default function CoachesScreen() {
         missionHeadline: focusTitle,
         missionBody: focusNotes,
         missionEyebrow: weeklyNoteHeroEyebrow,
+        whyThisMattersText,
         legacyClassProgramBody,
         closingNavigationHint: weeklyStoryPrimaryHint,
         practiceSummary,
@@ -975,6 +990,7 @@ export default function CoachesScreen() {
       focusTitle,
       focusNotes,
       weeklyNoteHeroEyebrow,
+      whyThisMattersText,
       legacyClassProgramBody,
       weeklyStoryPrimaryHint,
       practiceSummary,
@@ -1018,10 +1034,7 @@ export default function CoachesScreen() {
           }
           style={{ fontSize: 26, fontWeight: "700", color: UI.textPrimary, marginBottom: 6 }}
         >
-          This week together
-        </Text>
-        <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 4 }}>
-          Your coach’s family-facing weekly note, plus practice and competition tools below.
+          {`This week together — ${topHeaderKidLabel}`}
         </Text>
         {__DEV__ ? (
           <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
@@ -1044,8 +1057,100 @@ export default function CoachesScreen() {
                 borderWidth: 1,
                 borderColor: UI.heroBorder,
                 backgroundColor: UI.bgHero,
+                overflow: "hidden",
               }}
             >
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  right: -70,
+                  top: -70,
+                  width: 170,
+                  height: 170,
+                  borderRadius: 999,
+                  backgroundColor: UI.heroBlob1,
+                }}
+              />
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  left: -65,
+                  bottom: -75,
+                  width: 170,
+                  height: 170,
+                  borderRadius: 999,
+                  backgroundColor: UI.heroBlob2,
+                }}
+              />
+              <Pressable
+                onPress={openWeeklyStory}
+                accessibilityRole="button"
+                accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
+                style={({ pressed }) => ({
+                  marginTop: 0,
+                  marginBottom: 16,
+                  paddingVertical: 16,
+                  paddingHorizontal: 16,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: role === "parent" ? UI.primaryFill : UI.addCompetitionBorder,
+                  backgroundColor:
+                    role === "parent"
+                      ? pressed
+                        ? UI.primaryFillPressed
+                        : UI.primaryFill
+                      : pressed
+                        ? UI.addCompetitionBgPressed
+                        : "#f5f3ff",
+                  alignSelf: "stretch",
+                  alignItems: "flex-start",
+                })}
+              >
+                <Text
+                  style={{
+                    fontSize: 12,
+                    fontWeight: "900",
+                    letterSpacing: 0.8,
+                    color: role === "parent" ? UI.primaryTextOnFill : "#6d28d9",
+                  }}
+                >
+                  Start Family Huddle
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 6,
+                    fontSize: 18,
+                    fontWeight: "800",
+                    color: role === "parent" ? UI.primaryTextOnFill : UI.textPrimary,
+                    lineHeight: 24,
+                  }}
+                >
+                  Click here to begin
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 8,
+                    fontSize: 15,
+                    color: role === "parent" ? "#e0e7ff" : UI.textSecondary,
+                    lineHeight: 22,
+                  }}
+                >
+                  First action: read this week&apos;s mission together, then log practice.
+                </Text>
+              </Pressable>
+              <Text
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 1,
+                  fontWeight: "800",
+                  color: "#7c3aed",
+                  marginBottom: 12,
+                }}
+              >
+                WEEKLY MISSION
+              </Text>
               <View
                 style={{
                   alignSelf: "flex-start",
@@ -1091,60 +1196,11 @@ export default function CoachesScreen() {
                 {focusNotes}
               </Text>
 
-              {useWeeklySyncHero ? (
-                <Text style={{ marginTop: 12, fontSize: 12, color: UI.textSecondary, lineHeight: 18 }}>
-                  Only published family fields sync here — not coach-only check-ins or private videos.
-                </Text>
-              ) : null}
-
               {useWeeklySyncHero && weeklySyncFetchFailed && weeklySyncDoc ? (
                 <Text style={{ marginTop: 10, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
                   Showing last saved note — could not reach the sync service. Pull to refresh or try again
                   shortly.
                 </Text>
-              ) : null}
-
-              {isLinked && currentCoach ? (
-                <Text style={{ marginTop: 16, fontSize: 14, color: UI.textSecondary, lineHeight: 21 }}>
-                  From{" "}
-                  <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
-                    {currentCoach.displayName}
-                  </Text>
-                  {currentCoach.academyName ? (
-                    <>
-                      {" "}
-                      at {currentCoach.academyName}
-                    </>
-                  ) : null}
-                </Text>
-              ) : null}
-
-              {useWeeklySyncHero &&
-              weeklySyncDoc &&
-              familyResourceUrlForLinking(weeklySyncDoc.familyResourceUrl) ? (
-                <Pressable
-                  onPress={() => void openPublishedWebUrl(weeklySyncDoc.familyResourceUrl)}
-                  style={({ pressed }) => ({
-                    marginTop: 14,
-                    paddingVertical: 14,
-                    paddingHorizontal: 16,
-                    borderRadius: CARD_RADIUS,
-                    borderWidth: 1,
-                    borderColor: UI.addCompetitionBorder,
-                    backgroundColor: pressed ? UI.addCompetitionBgPressed : "#f5f3ff",
-                    alignSelf: "stretch",
-                  })}
-                >
-                  <Text style={{ fontSize: 12, fontWeight: "700", color: "#5b21b6", marginBottom: 4 }}>
-                    Coach link for families
-                  </Text>
-                  <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
-                    {defaultFamilyLinkButtonLabel(
-                      familyResourceUrlForLinking(weeklySyncDoc.familyResourceUrl)!,
-                      weeklySyncDoc.familyResourceLabel,
-                    )}
-                  </Text>
-                </Pressable>
               ) : null}
 
               {!useWeeklySyncHero && currentModule?.title ? (
@@ -1182,35 +1238,6 @@ export default function CoachesScreen() {
                 </Text>
               ) : null}
 
-              <Pressable
-                onPress={openWeeklyStory}
-                accessibilityRole="button"
-                accessibilityLabel={"This week's family huddle. Start the read together walkthrough."}
-                style={({ pressed }) => ({
-                  marginTop: 16,
-                  paddingVertical: 16,
-                  paddingHorizontal: 16,
-                  borderRadius: CARD_RADIUS,
-                  borderWidth: 1,
-                  borderColor: UI.addCompetitionBorder,
-                  backgroundColor: pressed ? UI.addCompetitionBgPressed : "#f5f3ff",
-                  alignSelf: "stretch",
-                  alignItems: "flex-start",
-                })}
-              >
-                <Text style={{ fontSize: 17, fontWeight: "700", color: UI.textPrimary, lineHeight: 24 }}>
-                  {"This week's family huddle"}
-                </Text>
-                <Text style={{ marginTop: 8, fontSize: 15, color: UI.textSecondary, lineHeight: 22 }}>
-                  {
-                    "Walk through coach's mission, a family-safe recap, practice wins, a study link if there is one, and why the journey matters."
-                  }
-                </Text>
-                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-                  Tap through together — you can close anytime.
-                </Text>
-              </Pressable>
-
               {isLinked && currentAssignment?.status === "assigned" ? (
                 <Pressable
                   onPress={() => void handleMarkCurrentAssignmentComplete()}
@@ -1219,12 +1246,25 @@ export default function CoachesScreen() {
                     paddingVertical: 14,
                     paddingHorizontal: 20,
                     borderRadius: CARD_RADIUS,
-                    backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                    backgroundColor:
+                      role === "parent"
+                        ? pressed
+                          ? UI.addCompetitionBgPressed
+                          : UI.addCompetitionBg
+                        : pressed
+                          ? UI.primaryFillPressed
+                          : UI.primaryFill,
                     alignSelf: "stretch",
                     alignItems: "center",
                   })}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: role === "parent" ? UI.primaryFill : "#ffffff",
+                    }}
+                  >
                     Log practice for this week
                   </Text>
                 </Pressable>
@@ -1236,12 +1276,25 @@ export default function CoachesScreen() {
                     paddingVertical: 14,
                     paddingHorizontal: 20,
                     borderRadius: CARD_RADIUS,
-                    backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                    backgroundColor:
+                      role === "parent"
+                        ? pressed
+                          ? UI.addCompetitionBgPressed
+                          : UI.addCompetitionBg
+                        : pressed
+                          ? UI.primaryFillPressed
+                          : UI.primaryFill,
                     alignSelf: "stretch",
                     alignItems: "center",
                   })}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: role === "parent" ? UI.primaryFill : "#ffffff",
+                    }}
+                  >
                     Connect with your coach
                   </Text>
                 </Pressable>
@@ -1253,12 +1306,25 @@ export default function CoachesScreen() {
                     paddingVertical: 14,
                     paddingHorizontal: 20,
                     borderRadius: CARD_RADIUS,
-                    backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                    backgroundColor:
+                      role === "parent"
+                        ? pressed
+                          ? UI.addCompetitionBgPressed
+                          : UI.addCompetitionBg
+                        : pressed
+                          ? UI.primaryFillPressed
+                          : UI.primaryFill,
                     alignSelf: "stretch",
                     alignItems: "center",
                   })}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>
+                  <Text
+                    style={{
+                      fontSize: 16,
+                      fontWeight: "700",
+                      color: role === "parent" ? UI.primaryFill : "#ffffff",
+                    }}
+                  >
                     Refresh this week’s update
                   </Text>
                 </Pressable>
@@ -1266,106 +1332,259 @@ export default function CoachesScreen() {
 
             </View>
 
+            <View
+              style={{
+                marginTop: 18,
+                marginBottom: -2,
+                paddingHorizontal: 2,
+              }}
+            >
+              <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: "#6b7280" }}>
+                TRACK THIS WEEK
+              </Text>
+            </View>
+
             {role === "parent" && ready ? (
-              <Section title="This week's practice (Training)" tone="family">
-                <Text
-                  style={{
-                    fontSize: 15,
-                    color: UI.textSecondary,
-                    lineHeight: 23,
-                    marginBottom: 12,
-                  }}
-                >
-                  Training log on this phone — separate from the coach’s shared weekly note above.
-                </Text>
+              <Section title="Training progress" tone="family">
                 <View
                   style={{
                     marginBottom: 12,
-                    padding: 12,
-                    borderRadius: 12,
+                    padding: 14,
+                    borderRadius: CARD_RADIUS,
                     borderWidth: 1,
                     borderColor: UI.addCompetitionBorder,
                     backgroundColor: "#f5f3ff",
                   }}
                 >
-                  <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-                    This week for{" "}
-                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
-                      {activeAthleteLabel}
-                    </Text>
-                    :{" "}
-                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
-                      {practiceSummary.sessionCountThisWeek}
-                    </Text>{" "}
-                    {practiceSummary.sessionCountThisWeek === 1 ? "session" : "sessions"} logged
-                  </Text>
-                  {practiceSummary.latestSession ? (
-                    <Text
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "900", color: "#6d28d9" }}>
+                        SESSIONS THIS WEEK
+                      </Text>
+                      <Text style={{ marginTop: 6, fontSize: 34, fontWeight: "900", color: UI.textPrimary }}>
+                        {practiceSummary.sessionCountThisWeek}
+                      </Text>
+                      <Text style={{ marginTop: 2, fontSize: 13, fontWeight: "800", color: UI.textSecondary }}>
+                        {practiceSummary.sessionCountThisWeek === 1 ? "session logged" : "sessions logged"}
+                      </Text>
+                      <Text style={{ marginTop: 6, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+                        For{" "}
+                        <Text style={{ fontWeight: "900", color: UI.textPrimary }}>
+                          {activeAthleteLabel}
+                        </Text>
+                      </Text>
+                    </View>
+
+                    <View
                       style={{
-                        marginTop: 6,
-                        fontSize: 13,
-                        color: UI.textSecondary,
-                        lineHeight: 19,
+                        alignSelf: "flex-start",
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor:
+                          practiceSummary.sessionCountThisWeek >= 3 ? "#34d399" : UI.progressRailActive,
+                        backgroundColor:
+                          practiceSummary.sessionCountThisWeek >= 3 ? "#dcfce7" : UI.progressRailActive,
                       }}
                     >
-                      Latest:{" "}
-                      <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
-                        {sessionSummaryTitle(practiceSummary.latestSession)}
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: "900",
+                          color:
+                            practiceSummary.sessionCountThisWeek >= 3 ? "#065f46" : "#3730a3",
+                        }}
+                      >
+                        {practiceSummary.sessionCountThisWeek >= 3 ? "Goal reached" : "Keep building"}
                       </Text>
-                      {" · "}
-                      {new Date(
-                        practiceSummary.latestSession.createdAt,
-                      ).toLocaleDateString()}
+                    </View>
+                  </View>
+
+                  <View style={{ marginTop: 14 }}>
+                    <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.8, color: "#6d28d9" }}>
+                      3-step progress
                     </Text>
-                  ) : null}
+                    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 10 }}>
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor:
+                            practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryFill : UI.border,
+                          backgroundColor:
+                            practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryFill : UI.progressDotInactive,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "900",
+                            color:
+                              practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryTextOnFill : UI.textPrimary,
+                          }}
+                        >
+                          1
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 8,
+                          borderRadius: 999,
+                          marginHorizontal: 6,
+                          backgroundColor:
+                            practiceSummary.sessionCountThisWeek >= 2 ? UI.progressRailActive : UI.progressRail,
+                        }}
+                      />
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor:
+                            practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryFill : UI.border,
+                          backgroundColor:
+                            practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryFill : UI.progressDotInactive,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "900",
+                            color:
+                              practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryTextOnFill : UI.textPrimary,
+                          }}
+                        >
+                          2
+                        </Text>
+                      </View>
+                      <View
+                        style={{
+                          flex: 1,
+                          height: 8,
+                          borderRadius: 999,
+                          marginHorizontal: 6,
+                          backgroundColor:
+                            practiceSummary.sessionCountThisWeek >= 3 ? UI.progressRailActive : UI.progressRail,
+                        }}
+                      />
+                      <View
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor:
+                            practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryFill : UI.border,
+                          backgroundColor:
+                            practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryFill : UI.progressDotInactive,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            fontWeight: "900",
+                            color:
+                              practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryTextOnFill : UI.textPrimary,
+                          }}
+                        >
+                          3
+                        </Text>
+                      </View>
+                    </View>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "space-between",
+                        marginTop: 8,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "900",
+                          color:
+                            practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryFill : UI.textSecondary,
+                          width: 90,
+                        }}
+                      >
+                        1 practice
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "900",
+                          color:
+                            practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryFill : UI.textSecondary,
+                          width: 90,
+                          textAlign: "center",
+                        }}
+                      >
+                        2 practices
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "900",
+                          color:
+                            practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryFill : UI.textSecondary,
+                          width: 90,
+                          textAlign: "right",
+                        }}
+                      >
+                        3+ practices
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View
+                    style={{
+                      marginTop: 14,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: UI.border,
+                      backgroundColor: "#ffffff",
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.6, color: "#6d28d9" }}>
+                      Latest session
+                    </Text>
+                    {practiceSummary.latestSession ? (
+                      <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                        <Text style={{ fontWeight: "900", color: UI.textPrimary }}>
+                          {sessionSummaryTitle(practiceSummary.latestSession)}
+                        </Text>
+                        {" · "}
+                        {new Date(practiceSummary.latestSession.createdAt).toLocaleDateString()}
+                      </Text>
+                    ) : (
+                      <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                        No sessions logged yet. Open Training to add your first one.
+                      </Text>
+                    )}
+                  </View>
                 </View>
-                {familyCompetition.kidId && familyCompetition.kidName ? (
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: UI.textSecondary,
-                      lineHeight: 19,
-                      marginBottom: 12,
-                    }}
-                  >
-                    Scoped to{" "}
-                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>
-                      {familyCompetition.kidName}
-                    </Text>
-                    — switch with Competition chips below if this phone tracks more than one athlete.
-                  </Text>
-                ) : familyCompetition.kidId ? (
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: UI.textSecondary,
-                      lineHeight: 19,
-                      marginBottom: 12,
-                    }}
-                  >
-                    Scoped to the athlete selected under Competition on this device.
-                  </Text>
-                ) : (
-                  <Text
-                    style={{
-                      fontSize: 13,
-                      color: UI.textSecondary,
-                      lineHeight: 19,
-                      marginBottom: 12,
-                    }}
-                  >
-                    No competition athlete picked yet — Training uses your default log. Choose someone under
-                    Competition to tie practice counts to a kid on this phone.
-                  </Text>
-                )}
+
                 <Pressable
                   onPress={() => {
                     const d = todayYMD();
                     const k = familyCompetition.kidId;
                     router.push(
                       k
-                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}`
-                        : `/training?date=${encodeURIComponent(d)}`,
+                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
+                        : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
                     );
                   }}
                   style={({ pressed }) => ({
@@ -1380,7 +1599,7 @@ export default function CoachesScreen() {
                   })}
                 >
                   <Text style={{ fontSize: 16, fontWeight: "700", color: UI.primaryFill }}>
-                    Open Training log
+                    Track your training
                   </Text>
                   <Text
                     style={{
@@ -1391,87 +1610,187 @@ export default function CoachesScreen() {
                       lineHeight: 19,
                     }}
                   >
-                    Today’s date is pre-selected; change the day in Training if you need to backfill.
+                    Add a new session or review what’s already logged this week.
                   </Text>
                 </Pressable>
               </Section>
             ) : null}
 
             <Section title="Competition" tone="family">
-                <Text
+              {role === "parent" ? (
+                <View
                   style={{
-                    fontSize: 15,
-                    color: UI.textSecondary,
-                    lineHeight: 23,
-                    marginBottom: 6,
+                    marginBottom: 12,
+                    paddingVertical: 16,
+                    paddingHorizontal: 16,
+                    borderRadius: CARD_RADIUS,
+                    borderWidth: 1,
+                    borderColor: UI.nextUpcomingBorder,
+                    backgroundColor: UI.nextUpcomingFill,
+                    overflow: "hidden",
                   }}
                 >
-                  Tournament dates on this phone: what is coming up, then what already happened.
-                </Text>
-
-                {familyCompetition.competitionChipRows.length > 0 ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    contentContainerStyle={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 8,
-                      paddingBottom: 2,
-                      marginBottom: 10,
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      right: -60,
+                      top: -60,
+                      width: 160,
+                      height: 160,
+                      borderRadius: 999,
+                      backgroundColor: UI.heroBlob1,
                     }}
-                  >
-                    {familyCompetition.competitionChipRows.map((row) => {
-                      const selected = row.id === familyCompetition.kidId;
-                      return (
-                        <Pressable
-                          key={row.id}
-                          onPress={() => void selectFamilyCompetitionKid(row.id)}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={`Competitions for ${row.label}`}
-                          style={({ pressed }) => ({
-                            paddingVertical: 10,
-                            paddingHorizontal: 14,
-                            borderRadius: 999,
-                            borderWidth: selected ? 2 : 1,
-                            borderColor: selected ? UI.primaryFill : UI.addCompetitionBorder,
-                            backgroundColor: selected ? UI.bgCardActive : UI.addCompetitionBg,
-                            opacity: pressed ? 0.92 : 1,
-                          })}
-                        >
+                  />
+                  <View
+                    pointerEvents="none"
+                    style={{
+                      position: "absolute",
+                      left: -70,
+                      bottom: -80,
+                      width: 180,
+                      height: 180,
+                      borderRadius: 999,
+                      backgroundColor: "rgba(129, 140, 248, 0.12)",
+                    }}
+                  />
+
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <View style={{ flex: 1, paddingRight: 12 }}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          letterSpacing: 1,
+                          fontWeight: "900",
+                          color: "#3730a3",
+                        }}
+                      >
+                        NEXT COMPETITION
+                      </Text>
+
+                      {nextUpcomingCompetitionEntry ? (
+                        <>
                           <Text
                             style={{
-                              fontSize: 14,
-                              fontWeight: selected ? "800" : "600",
-                              color: selected ? UI.primaryFill : UI.textPrimary,
+                              marginTop: 8,
+                              fontSize: 18,
+                              fontWeight: "900",
+                              color: UI.textPrimary,
+                              lineHeight: 24,
                             }}
                           >
-                            {row.label}
+                            {nextUpcomingCompetitionEntry.tournamentName}
+                          </Text>
+                          {nextUpcomingCompetitionDateLabel ? (
+                            <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                              {nextUpcomingCompetitionDateLabel}
+                            </Text>
+                          ) : null}
+                          {nextUpcomingCompetitionPromoterFmt ? (
+                            <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+                              {nextUpcomingCompetitionPromoterFmt}
+                            </Text>
+                          ) : null}
+
+                          {nextUpcomingCompetitionChip ? (
+                            <View
+                              style={{
+                                marginTop: 10,
+                                alignSelf: "flex-start",
+                                paddingVertical: 6,
+                                paddingHorizontal: 10,
+                                borderRadius: 999,
+                                backgroundColor: nextUpcomingCompetitionChip.backgroundColor,
+                              }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: "900", color: nextUpcomingCompetitionChip.textColor }}>
+                                {nextUpcomingCompetitionChip.label}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </>
+                      ) : (
+                        <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                          No upcoming dates right now.
+                        </Text>
+                      )}
+                    </View>
+
+                    <View style={{ alignItems: "flex-end" }}>
+                      <Pressable
+                        onPress={() => {
+                          setCompetitionCalendarExpanded((v) => {
+                            const next = !v;
+                            if (!next) {
+                              setFamilyUpcomingMonthsExpanded(new Set<string>());
+                              setFamilyRecentMonthsExpanded(new Set<string>());
+                            }
+                            return next;
+                          });
+                        }}
+                        style={({ pressed }) => ({
+                          paddingVertical: 10,
+                          paddingHorizontal: 12,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: UI.nextUpcomingBorder,
+                          backgroundColor: pressed ? "rgba(99, 102, 241, 0.18)" : "#eef2ff",
+                        })}
+                        accessibilityRole="button"
+                        accessibilityLabel="View competitions"
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: "900", color: "#3730a3" }}>
+                          {competitionCalendarExpanded ? "Hide competitions" : "View competitions"}
+                        </Text>
+                      </Pressable>
+
+                      {familyCompetition.kidId ? (
+                        <Pressable
+                          onPress={() => {
+                            router.push(
+                              `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(familyCompetition.kidId!)}&openNonce=${encodeURIComponent(
+                                String(Date.now()),
+                              )}`,
+                            );
+                          }}
+                          style={({ pressed }) => ({
+                            marginTop: 10,
+                            paddingVertical: 10,
+                            paddingHorizontal: 12,
+                            borderRadius: 999,
+                            borderWidth: 1,
+                            borderColor: UI.addCompetitionBorder,
+                            backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
+                          })}
+                          accessibilityRole="button"
+                          accessibilityLabel="Add competition"
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "900", color: UI.primaryFill }}>
+                            Add competition
                           </Text>
                         </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                ) : null}
+                      ) : null}
+                    </View>
+                  </View>
+                </View>
+              ) : null}
 
-                <Text
-                  style={{
-                    fontSize: 14,
-                    color: UI.textSecondary,
-                    lineHeight: 21,
-                    marginBottom: 12,
-                  }}
-                >
-                  {familyCompetition.multiKidOnRoster && familyCompetition.kidId
-                    ? "Tap a row to review or edit; swipe left to remove it from this device."
-                    : familyCompetition.kidName
-                      ? `These entries follow ${familyCompetition.kidName}. Tap a row to review or edit; swipe left to remove it from this device.`
+                {competitionCalendarExpanded ? (
+                  <Text
+                    style={{
+                      fontSize: 14,
+                      color: UI.textSecondary,
+                      lineHeight: 21,
+                      marginBottom: 12,
+                    }}
+                  >
+                    {familyCompetition.kidName
+                      ? `${familyCompetition.kidName}: tap a competition to edit, swipe left to delete.`
                       : familyCompetition.kidId
-                        ? "Tap a row to review or edit; swipe left to remove it from this device."
-                        : "Add an athlete below so this calendar knows who you are planning for."}
-                </Text>
+                        ? "Tap a competition to edit, swipe left to delete."
+                        : "Add an athlete below to start this calendar."}
+                  </Text>
+                ) : null}
 
                 {!familyCompetition.kidId ? (
                   <>
@@ -1493,30 +1812,7 @@ export default function CoachesScreen() {
                 ) : null}
 
                 {familyCompetition.kidId ? (
-                  <Pressable
-                    onPress={() =>
-                      router.push(
-                        `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(familyCompetition.kidId!)}&openNonce=${Date.now()}`,
-                      )
-                    }
-                    style={({ pressed }) => ({
-                      marginBottom: familyCompetitionGlobalEmpty ? 12 : 14,
-                      paddingVertical: 12,
-                      paddingHorizontal: 14,
-                      borderRadius: CARD_RADIUS,
-                      borderWidth: 1,
-                      borderColor: UI.addCompetitionBorder,
-                      backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
-                      alignSelf: "stretch",
-                    })}
-                  >
-                    <Text style={{ fontSize: 15, fontWeight: "700", color: UI.primaryFill }}>
-                      Add competition
-                    </Text>
-                    <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
-                      Tournament name, date, and basics — saved on this phone.
-                    </Text>
-                  </Pressable>
+                  null
                 ) : null}
 
                 {familyCompetitionGlobalEmpty && familyCompetition.kidId ? (
@@ -2038,7 +2334,7 @@ export default function CoachesScreen() {
             ) : null}
 
             {isLinked ? (
-              <Section title="Coach link & sharing" tone="family">
+              <Section title="Link & refresh" tone="default">
                 <Text
                   style={{
                     fontSize: 15,
@@ -2047,8 +2343,7 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  Open Manage coach link to add or remove athletes on this invite, or to remove the whole invite from
-                  this phone. Refresh below anytime to pull the latest weekly note.
+                  Manage your coach link (athletes + invite), then refresh anytime for the latest weekly note.
                 </Text>
                 <Pressable
                   onPress={() => router.push("/profile/coaches/manage")}

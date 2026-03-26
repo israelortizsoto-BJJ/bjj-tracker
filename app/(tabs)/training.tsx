@@ -291,13 +291,16 @@ const INSIGHT_CARD_CONTAINER = {
 export default function Training() {
 // 3A) Navigation / params
   const router = useRouter();
-  const params = useLocalSearchParams<{ date?: string; kidId?: string }>();
+  const params = useLocalSearchParams<{ date?: string; kidId?: string; fromWeekly?: string }>();
 
   const initialDate =
     typeof params.date === "string" && params.date ? params.date : todayYMD();
 
   const kidIdParam =
     typeof params.kidId === "string" && params.kidId.trim() ? params.kidId.trim() : undefined;
+  const cameFromWeekly =
+    typeof params.fromWeekly === "string" &&
+    (params.fromWeekly === "1" || params.fromWeekly === "true");
 // 3B) State
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
@@ -1452,7 +1455,42 @@ const renderNewSessionCTA = () => (
   </View>
 )}
 
-<Pressable
+    {cameFromWeekly ? (
+      <View style={{ flexDirection: "row", gap: 12, marginTop: 8, alignItems: "center" }}>
+        <Pressable
+          onPress={() => router.push("/profile/coaches")}
+          style={({ pressed }) => ({
+            paddingVertical: 12,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+            alignSelf: "flex-start",
+          })}
+        >
+          <Text style={{ color: UI.textPrimary, fontSize: 14, fontWeight: "700" }}>
+            Back to This week
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={refresh}
+          style={({ pressed }) => ({
+            paddingVertical: 12,
+            paddingHorizontal: 18,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+            alignSelf: "flex-start",
+          })}
+        >
+          <Text style={{ color: UI.textSecondary, fontSize: 14, fontWeight: "600" }}>↻ Refresh</Text>
+        </Pressable>
+      </View>
+    ) : (
+      <Pressable
         onPress={refresh}
         style={({ pressed }) => ({
           marginTop: 8,
@@ -1467,6 +1505,7 @@ const renderNewSessionCTA = () => (
       >
         <Text style={{ color: UI.textSecondary, fontSize: 14, fontWeight: "600" }}>↻ Refresh</Text>
       </Pressable>
+    )}
 </ScrollView>
 <Modal
   visible={!!preview}
