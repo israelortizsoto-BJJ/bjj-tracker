@@ -803,7 +803,7 @@ export default function KidDetailScreen() {
 
   useEffect(() => {
     if (!kidId) {
-      Alert.alert("Missing kid id", "This pilot route requires a kid selection.");
+      Alert.alert("Missing kid id", "Choose a kid from the roster first.");
       router.replace("/profile/coaches/kids");
     }
   }, [kidId]);
@@ -885,7 +885,7 @@ export default function KidDetailScreen() {
         : "No link — card uses mission cue";
 
     const journeyLine =
-      "Class/program text if present, else encouragement (not a separate coach field)";
+      "From class or program notes when you add them, otherwise a short encouragement line.";
 
     return [
       {
@@ -946,7 +946,7 @@ export default function KidDetailScreen() {
       missionEyebrow: "Coach’s weekly note (family invite)",
       legacyClassProgramBody: "",
       closingNavigationHint:
-        "Preview only — matches published family fields. Private check-ins and coach-only video links never go to families.",
+        "Families see this same story after you publish — not private check-ins or coach-only video.",
       practiceSummary: readTogetherPreviewPractice,
     });
   }, [currentWeekEntry, weekStartYMD, readTogetherPreviewPractice]);
@@ -1188,7 +1188,7 @@ export default function KidDetailScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: "Kid (Pilot)" }} />
+      <Stack.Screen options={{ title: "Athlete" }} />
       <ReadTogetherStoryModal
         visible={readTogetherPreviewOpen}
         onRequestClose={closeReadTogetherPreview}
@@ -1275,7 +1275,7 @@ export default function KidDetailScreen() {
             Roster · Household
           </Text>
           <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
-            Used only to group kids on the pilot roster. Same kid id; does not change coaching data.
+            Groups this athlete on your roster view only — does not change coaching data.
           </Text>
           <TextInput
             value={householdDraft}
@@ -2313,7 +2313,7 @@ export default function KidDetailScreen() {
         ) : null}
 
         <Text style={{ marginTop: 12, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>
-          Internal pilot (coach-side)
+          Coach view — not shown to families
         </Text>
       </KeyboardAwareScrollView>
 

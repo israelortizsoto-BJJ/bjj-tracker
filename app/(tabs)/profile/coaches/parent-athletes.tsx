@@ -2,6 +2,7 @@ import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   Text,
   TextInput,
@@ -19,6 +20,7 @@ import {
   normalizeInviteLinkToken,
 } from "../../../../src/coachShare/inviteLinkToken";
 import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
+import { resolveLinkedTargetForParentWriter } from "../../../../src/family/parentKidCompetitionDelete";
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSessionAthlete,
@@ -28,8 +30,11 @@ import {
 import { getCoachLinks, setCoachLinks } from "../../../../src/storage/coachShareStore";
 import {
   attachSharedAthleteToKid,
+  clearFamilyCompetitionSelectedKidId,
+  getFamilyCompetitionSelectedKidId,
   getKidsById,
   setKidsById,
+  unlinkParentAthleteFromCoachSession,
 } from "../../../../src/storage/coachKidStore";
 import { setCachedWeeklyForLinkToken } from "../../../../src/storage/coachWeeklySyncCacheStore";
 import type { CoachLink } from "../../../../src/types/coachShare";
@@ -73,6 +78,7 @@ export default function ParentLinkedAthletesScreen() {
   const [nameDraft, setNameDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [linkingKidId, setLinkingKidId] = useState<string | null>(null);
+  const [unlinkingKidId, setUnlinkingKidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** After a successful `coachSyncFetchSession` this visit; enables stale `sharedAthleteId` relink. */
   const [sessionAthletesAuthoritative, setSessionAthletesAuthoritative] = useState(false);
@@ -207,6 +213,28 @@ export default function ParentLinkedAthletesScreen() {
     sessionAthletesAuthoritative,
   ]);
 
+  /** Session athletes that match a local child profile on this invite — eligible for Remove from coach. */
+  const removableAthleteRows = useMemo(() => {
+    if (!sessionAthletesAuthoritative || !currentInviteTokenNorm) return [];
+    const rows: { athlete: SyncedSharedAthlete; kid: Kid }[] = [];
+    for (const a of sessionAthletes) {
+      const aid = (typeof a.id === "string" ? a.id : "").trim();
+      if (!aid) continue;
+      const kid = Object.values(kidsById).find((k) => {
+        if ((k.sharedAthleteId ?? "").trim() !== aid) return false;
+        return parentKidCoherentlyLinkedToInviteToken(k, currentInviteTokenNorm, allActiveCoachLinks);
+      });
+      if (kid) rows.push({ athlete: a, kid });
+    }
+    return rows;
+  }, [
+    allActiveCoachLinks,
+    currentInviteTokenNorm,
+    kidsById,
+    sessionAthletes,
+    sessionAthletesAuthoritative,
+  ]);
+
   useFocusEffect(
     useCallback(() => {
       if (!id) return;
@@ -328,6 +356,74 @@ export default function ParentLinkedAthletesScreen() {
     }
   }, [link, nameDraft]);
 
+  const requestRemoveAthleteFromCoach = useCallback(
+    (kid: Kid, displayName: string) => {
+      if (!syncOk) {
+        Alert.alert(
+          "Sync unavailable",
+          "Coach sync is not configured in this build, so this action cannot reach the server.",
+        );
+        return;
+      }
+      Alert.alert(
+        `Remove “${displayName}” from this coach?`,
+        "Your coach will no longer see this athlete on their roster or shared competitions. This phone keeps the profile; synced competitions become local entries you can edit or delete.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Remove from coach",
+            style: "destructive",
+            onPress: () => {
+              void (async () => {
+                setUnlinkingKidId(kid.id);
+                setError(null);
+                try {
+                  const sid = kid.sharedAthleteId?.trim();
+                  if (!sid) {
+                    Alert.alert("Not linked", "This athlete is not on a coach session from this phone.");
+                    return;
+                  }
+                  const target = await resolveLinkedTargetForParentWriter(sid, undefined, undefined, {
+                    requireAthleteOnSessionRoster: true,
+                  });
+                  if (!target) {
+                    Alert.alert(
+                      "Could not reach coach session",
+                      "This phone could not open the invite that lists this athlete. Confirm this channel shows Linked, then try again or ask your coach for help.",
+                    );
+                    return;
+                  }
+                  await unlinkParentAthleteFromCoachSession({
+                    kidId: kid.id,
+                    linkToken: target.linkToken,
+                    parentWriterSecret: target.parentWriterSecret,
+                    apiBaseUrl: target.apiBaseUrl,
+                  });
+                  const selected = await getFamilyCompetitionSelectedKidId();
+                  if (selected === kid.id) {
+                    await clearFamilyCompetitionSelectedKidId();
+                  }
+                  await refresh();
+                } catch (e) {
+                  const msg =
+                    e instanceof CoachWeeklySyncApiError
+                      ? e.message
+                      : e instanceof Error
+                        ? e.message
+                        : "Something went wrong.";
+                  Alert.alert("Could not remove", msg);
+                } finally {
+                  setUnlinkingKidId(null);
+                }
+              })();
+            },
+          },
+        ],
+      );
+    },
+    [refresh, syncOk],
+  );
+
   if (!id) {
     return (
       <>
@@ -360,11 +456,11 @@ export default function ParentLinkedAthletesScreen() {
             marginBottom: 8,
           }}
         >
-          Link athletes to this invite
+          Who’s on this invite?
         </Text>
         <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 16 }}>
-          If you shared this invite before, link the same child profile first — that keeps one roster row for
-          your coach. Add someone new only when you truly need another athlete on this channel.
+          Pick an existing child below, or add a new athlete if they are not on this phone yet. Reuse the same
+          profile when you reconnect so your coach sees one roster row per child.
         </Text>
 
         {!ready ? (
@@ -379,14 +475,15 @@ export default function ParentLinkedAthletesScreen() {
                   EXISTING CHILD PROFILES
                 </Text>
                 <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-                  Primary: link an athlete you already set up on this phone (same profile for your coach — no
-                  duplicate). Use this after reconnecting or if they no longer appear under “On this invite”.
+                  Children already on this phone — tap to attach to this invite (after a reconnect, or if they
+                  dropped off the list below).
                 </Text>
                 {relinkCandidateKids.map((k) => {
                   const household = (k.householdLabel ?? "").trim();
                   const isLinking = linkingKidId === k.id;
                   const disableRow =
                     isLinking ||
+                    unlinkingKidId !== null ||
                     busy ||
                     !link.weeklySync?.parentWriterSecret ||
                     !k.name.trim();
@@ -448,10 +545,40 @@ export default function ParentLinkedAthletesScreen() {
                     {a.name}
                   </Text>
                 ))}
-                <Text style={{ marginTop: 8, fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-                  To stop sharing someone with your coach later, open This week together → Competition →
-                  Remove from coach.
-                </Text>
+                {removableAthleteRows.length > 0 ? (
+                  <View style={{ marginTop: 10, gap: 8 }}>
+                    <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                      Remove from coach when they should leave this roster. The profile stays on this phone;
+                      shared competitions become normal entries here.
+                    </Text>
+                    {removableAthleteRows.map(({ athlete, kid }) => {
+                      const name = (athlete.name ?? kid.name ?? "").trim() || "Athlete";
+                      const isUnlinking = unlinkingKidId === kid.id;
+                      const disableRemove =
+                        isUnlinking || busy || linkingKidId !== null || !link.weeklySync?.parentWriterSecret;
+                      return (
+                        <Pressable
+                          key={kid.id}
+                          disabled={disableRemove}
+                          onPress={() => requestRemoveAthleteFromCoach(kid, name)}
+                          style={({ pressed }) => ({
+                            paddingVertical: 12,
+                            paddingHorizontal: 14,
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: UI.danger,
+                            backgroundColor: pressed ? "#fef2f2" : UI.bgCard,
+                            opacity: disableRemove ? 0.55 : 1,
+                          })}
+                        >
+                          <Text style={{ fontSize: 14, fontWeight: "700", color: UI.danger }}>
+                            {isUnlinking ? "Removing…" : `Remove “${name}” from coach`}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
               </View>
             ) : null}
 
@@ -459,7 +586,7 @@ export default function ParentLinkedAthletesScreen() {
               ADD NEW ATHLETE
             </Text>
             <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18, marginBottom: 12 }}>
-              Secondary: use only when this child is not already in your roster above.
+              Only if they are not listed above — this creates a new child profile on this phone.
             </Text>
 
             <TextInput
@@ -471,7 +598,12 @@ export default function ParentLinkedAthletesScreen() {
               placeholder="Athlete name"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="words"
-              editable={!busy && linkingKidId === null && Boolean(link.weeklySync?.parentWriterSecret)}
+              editable={
+                !busy &&
+                linkingKidId === null &&
+                unlinkingKidId === null &&
+                Boolean(link.weeklySync?.parentWriterSecret)
+              }
               style={{
                 paddingVertical: 12,
                 paddingHorizontal: 12,
@@ -492,6 +624,7 @@ export default function ParentLinkedAthletesScreen() {
               disabled={
                 busy ||
                 linkingKidId !== null ||
+                unlinkingKidId !== null ||
                 !link.weeklySync?.parentWriterSecret ||
                 !nameDraft.trim()
               }
@@ -504,6 +637,7 @@ export default function ParentLinkedAthletesScreen() {
                 opacity:
                   busy ||
                   linkingKidId !== null ||
+                  unlinkingKidId !== null ||
                   !link.weeklySync?.parentWriterSecret ||
                   !nameDraft.trim()
                     ? 0.55

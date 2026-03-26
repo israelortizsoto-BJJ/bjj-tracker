@@ -58,11 +58,11 @@ function buildMatsBody(input: BuildReadTogetherStoryCardsInput): string {
     const weekHint = weekStartYMD
       ? `Week of ${weekStartYMD}. `
       : "";
-    return `${weekHint}No training sessions are logged for the selected athlete this week yet. Showing up counts — log a session from the Training tab when you can, then revisit this story to celebrate it together.`;
+    return `${weekHint}No practice logged this week yet — that is okay. When they train, log a quick session in Training, then come back here to cheer what they put on the mats together.`;
   }
 
   const lines: string[] = [
-    `${n} ${n === 1 ? "session" : "sessions"} logged this week for the athlete selected on this screen.`,
+    `${n} ${n === 1 ? "session" : "sessions"} on the mats this week for the athlete you picked on this screen.`,
   ];
   if (latest) {
     lines.push(
@@ -70,7 +70,7 @@ function buildMatsBody(input: BuildReadTogetherStoryCardsInput): string {
     );
   }
   lines.push(
-    "Use this as a simple check-in: what felt strong, what felt messy, and one thing to try again next time.",
+    "You might wonder together: what felt strong, what felt tricky, and one small thing to try again next time — effort and curiosity count more than a perfect day.",
   );
   return lines.join("\n\n");
 }
@@ -145,10 +145,10 @@ export function buildReadTogetherStoryCards(
   let studyBody: string;
   if (familyUrl) {
     studyBody =
-      "Your coach shared a family link with this week’s note. Open it together when you are ready — it is separate from anything coach-only on their device.\n\nIf the link does not open, check your connection or ask your coach to republish.";
+      "Your coach left a link with this week’s note. Open it together when it feels right.\n\nIf it does not open, check your connection or ask your coach for a fresh link.";
   } else {
     studyBody =
-      "No family link came with this week’s note — that is OK. Use the mission title as your cue: rehearse one rep slowly at home, talk through the steps in kid-friendly words, or ask your coach for a safe drill you can try together.";
+      "No link this week — that is fine. Use the mission as your cue: one slow rep at home, talk through the steps in simple words, or ask your coach for a safe drill to try together.";
   }
 
   const classLine = (doc?.classLine ?? "").trim();
@@ -159,7 +159,7 @@ export function buildReadTogetherStoryCards(
   if (mode === "weekly_sync") {
     journeyMain =
       fromDoc ||
-      "Jiu-jitsu is a long arc — some weeks click, some weeks wobble. What matters is steady encouragement, honest effort, and knowing you are on the same team.";
+      "Jiu-jitsu grows a little at a time. Some weeks feel easy, some feel hard — both are normal. Cheer for effort, stay patient, and remember you are on the same team.";
   } else {
     journeyMain =
       legacyClassProgramBody.trim() ||
@@ -195,7 +195,7 @@ export function buildReadTogetherStoryCards(
   const matsCard: ReadTogetherStoryCard = {
     key: "mats",
     title: READ_TOGETHER_TITLES.mats,
-    eyebrow: "Your Training tab, this week",
+    eyebrow: "Practice this week",
     body: matsBody,
   };
 

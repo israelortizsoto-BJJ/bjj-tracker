@@ -35,14 +35,9 @@ import {
 } from "../../../../src/storage/coachWeeklySyncCacheStore";
 import {
   activeCoachLinksForParentLinkedUi,
-  parentKidPresentedAsLinkedToCoach,
   parentStrictWeeklyLinkedCoachLinksForUi,
 } from "../../../../src/coachShare/coachLinkBinding";
-import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
-import {
-  CoachWeeklySyncApiError,
-  coachSyncFetchSession,
-} from "../../../../src/services/coachWeeklySyncApi";
+import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
 import type { SyncedWeeklyMessagePayload } from "../../../../src/types/coachWeeklySync";
 import type { CoachPilotPreviewItem } from "../../../../src/storage/coachShareStore";
 import type {
@@ -73,13 +68,9 @@ import {
   getKidsById,
   setFamilyCompetitionSelectedKidId,
   todayYMD,
-  unlinkParentAthleteFromCoachSession,
 } from "../../../../src/storage/coachKidStore";
 import { StorageKeys } from "../../../../src/storage/storageKeys";
-import {
-  deleteParentKidCompetitionEntry,
-  resolveLinkedTargetForParentWriter,
-} from "../../../../src/family/parentKidCompetitionDelete";
+import { deleteParentKidCompetitionEntry } from "../../../../src/family/parentKidCompetitionDelete";
 import { getKidCompetitionEntriesForKid } from "../../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../../src/types";
 import {
@@ -258,10 +249,6 @@ export default function CoachesScreen() {
   const [familyCompetition, setFamilyCompetition] = useState<FamilyCompetitionLoadState>(
     INITIAL_FAMILY_COMPETITION,
   );
-  const [parentLinkedCoachAthletes, setParentLinkedCoachAthletes] = useState<
-    { kidId: string; displayName: string }[]
-  >([]);
-  const [unlinkingKidId, setUnlinkingKidId] = useState<string | null>(null);
   const [weeklySyncDoc, setWeeklySyncDoc] = useState<SyncedWeeklyMessagePayload | null>(null);
   const [weeklySyncFetchFailed, setWeeklySyncFetchFailed] = useState(false);
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
@@ -446,19 +433,6 @@ export default function CoachesScreen() {
     });
     setPracticeSummary(nextPracticeSummary);
 
-    const activeLinksForParent =
-      role === "parent"
-        ? parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks)
-        : loadedCoachLinks.filter((l) => l.status === "active");
-    const linkedCoachAthletes = Object.values(loadedKidsById)
-      .filter((k) => parentKidPresentedAsLinkedToCoach(k, activeLinksForParent))
-      .map((k) => ({
-        kidId: k.id,
-        displayName: (k.name ?? "").trim() || "Athlete",
-      }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName));
-    setParentLinkedCoachAthletes(linkedCoachAthletes);
-
     setCoachLinks(loadedCoachLinks);
     setCoachesById(loadedCoachesById);
     setPacksById(loadedPacksById);
@@ -503,77 +477,6 @@ export default function CoachesScreen() {
     useCallback(() => {
       void loadCoachShareData();
     }, [loadCoachShareData]),
-  );
-
-  const requestUnlinkKidFromCoach = useCallback(
-    (kidId: string, displayName: string) => {
-      if (!isCoachSyncConfigured()) {
-        Alert.alert(
-          "Sync unavailable",
-          "Coach sync is not configured in this build, so this action cannot reach the server.",
-        );
-        return;
-      }
-      Alert.alert(
-        `Remove “${displayName}” from this coach?`,
-        "Your coach will no longer see this athlete on their coach roster or shared competitions. This phone keeps the athlete; synced competitions become local-only entries you can edit or delete.",
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Remove from coach",
-            style: "destructive",
-            onPress: () => {
-              void (async () => {
-                setUnlinkingKidId(kidId);
-                try {
-                  const kids = await getKidsById();
-                  const sid = kids[kidId]?.sharedAthleteId?.trim();
-                  if (!sid) {
-                    Alert.alert(
-                      "Not linked",
-                      "This athlete is not on a coach session from this phone.",
-                    );
-                    return;
-                  }
-                  const target = await resolveLinkedTargetForParentWriter(sid, undefined, undefined, {
-                    requireAthleteOnSessionRoster: true,
-                  });
-                  if (!target) {
-                    Alert.alert(
-                      "Could not reach coach session",
-                      "This phone could not open the invite that lists this athlete. Open Coach link & sharing → Athletes on this invite to finish setup or relink, then try again.",
-                    );
-                    return;
-                  }
-                  await unlinkParentAthleteFromCoachSession({
-                    kidId,
-                    linkToken: target.linkToken,
-                    parentWriterSecret: target.parentWriterSecret,
-                    apiBaseUrl: target.apiBaseUrl,
-                  });
-                  const selected = await getFamilyCompetitionSelectedKidId();
-                  if (selected === kidId) {
-                    await clearFamilyCompetitionSelectedKidId();
-                  }
-                  await loadCoachShareData();
-                } catch (e) {
-                  const msg =
-                    e instanceof CoachWeeklySyncApiError
-                      ? e.message
-                      : e instanceof Error
-                        ? e.message
-                        : "Something went wrong.";
-                  Alert.alert("Could not remove", msg);
-                } finally {
-                  setUnlinkingKidId(null);
-                }
-              })();
-            },
-          },
-        ],
-      );
-    },
-    [loadCoachShareData],
   );
 
   const familyUpcomingMonthGroups = useMemo(
@@ -994,12 +897,12 @@ export default function CoachesScreen() {
 
   const weeklyStoryPrimaryHint =
     isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
-      ? "When you’re ready, use Log practice for this week on the screen behind this."
+      ? "When you’re ready, tap Log practice for this week on This week."
       : useWeeklySyncHero
-        ? "When you’re ready, use Refresh this week’s update or open This week’s practice (Training tab) on the screen behind this."
+        ? "When you’re ready, refresh This week for the latest note, or open Training to log practice together."
         : !isLinked
-          ? "When you’re ready, use Connect with your coach on the screen behind this."
-          : "When you’re ready, use Refresh this week’s update on the screen behind this.";
+          ? "When you’re ready, tap Connect with your coach on This week."
+          : "When you’re ready, refresh This week for the latest update.";
 
   const closeWeeklyStory = useCallback(() => {
     setWeeklyStoryOpen(false);
@@ -1259,7 +1162,7 @@ export default function CoachesScreen() {
 
               {!isLinked && hasCoachPilotPreviewOnDevice ? (
                 <Text style={{ marginTop: 12, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
-                  Coach pilot previews on this phone are not shared with families until you connect with a real invite.
+                  Preview items on this phone are not shared with families until you connect with your coach’s invite.
                 </Text>
               ) : null}
 
@@ -2134,8 +2037,8 @@ export default function CoachesScreen() {
                     marginBottom: 12,
                   }}
                 >
-                  Remove or review this phone’s coach invite, refresh the weekly note, or adjust which athletes
-                  stay on the coach roster.
+                  Open Manage coach link to add or remove athletes on this invite, or to remove the whole invite from
+                  this phone. Refresh below anytime to pull the latest weekly note.
                 </Text>
                 <Pressable
                   onPress={() => router.push("/profile/coaches/manage")}
@@ -2163,7 +2066,7 @@ export default function CoachesScreen() {
                       lineHeight: 19,
                     }}
                   >
-                    Stop syncing this weekly note or remove the invite from this device.
+                    Add or remove athletes, or remove this invite from this device only.
                   </Text>
                 </Pressable>
                 <Pressable
@@ -2179,66 +2082,14 @@ export default function CoachesScreen() {
                     {useWeeklySyncHero ? "Refresh weekly note now" : "Refresh shared updates"}
                   </Text>
                 </Pressable>
-                {role === "parent" &&
-                useWeeklySyncHero &&
-                isCoachSyncConfigured() &&
-                Boolean(weeklySyncLink?.weeklySync?.parentWriterSecret?.trim()) &&
-                parentLinkedCoachAthletes.length > 0 ? (
-                  <View
-                    style={{
-                      marginTop: 14,
-                      paddingTop: 14,
-                      borderTopWidth: 1,
-                      borderTopColor: UI.familySectionBorder,
-                      gap: 10,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        letterSpacing: 0.9,
-                        color: "#5b21b6",
-                        fontWeight: "700",
-                      }}
-                    >
-                      Athletes on this invite
-                    </Text>
-                    <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
-                      Unlink if someone should leave this coach’s roster on this phone. Names and calendars stay
-                      local; shared competition rows become normal entries.
-                    </Text>
-                    {parentLinkedCoachAthletes.map(({ kidId, displayName }) => (
-                      <Pressable
-                        key={kidId}
-                        disabled={unlinkingKidId !== null}
-                        onPress={() => requestUnlinkKidFromCoach(kidId, displayName)}
-                        style={({ pressed }) => ({
-                          paddingVertical: 12,
-                          paddingHorizontal: 14,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: UI.border,
-                          backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
-                          opacity: unlinkingKidId !== null ? 0.55 : 1,
-                        })}
-                      >
-                        <Text style={{ fontSize: 14, fontWeight: "700", color: UI.textPrimary }}>
-                          {unlinkingKidId === kidId
-                            ? "Removing…"
-                            : `Remove “${displayName}” from coach`}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
               </Section>
             ) : null}
 
             {showCoachOperationalTools ? (
               <>
-                <Section title="Coach Tools (pilot)">
+                <Section title="Coach tools">
                   <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                    Coach-side pilot on this device — use Profile → Switch role if this phone is for a parent.
+                    Coach tools on this device — use Profile → Switch role if this phone is for a parent.
                   </Text>
                   <Pressable
                     onPress={() => router.push("/profile/coaches/kids")}
@@ -2256,7 +2107,7 @@ export default function CoachesScreen() {
                     style={({ pressed }) => cardButtonStyle(pressed)}
                   >
                     <Text style={{ fontSize: 15, color: UI.textSecondary, fontWeight: "600" }}>
-                      Template Preview (Coach Pilot)
+                      Template preview
                     </Text>
                     <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
                       Coach-side preview only; use Kids roster for kid weekly focus.
@@ -2265,9 +2116,9 @@ export default function CoachesScreen() {
                 </Section>
 
                 {pilotPreviewItems.length > 0 ? (
-                  <Section title="Coach Pilot Preview">
+                  <Section title="Weekly focus preview">
                     <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                      Internal pilot preview (coach-side). This does not assign or publish anything to families.
+                      Saved on this device only — not shared with families until you publish from a kid’s weekly focus.
                     </Text>
 
                     <View style={{ marginTop: 12, gap: 10 }}>
@@ -2409,18 +2260,18 @@ export default function CoachesScreen() {
                           Add Custom Focus
                         </Text>
                         <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-                          Title required. Optional short note. Internal pilot preview only.
+                          Title required. Optional short note. Saved on this device only.
                         </Text>
                       </Pressable>
                     </View>
                   </Section>
                 ) : (
-                  <Section title="Coach Pilot Preview">
+                  <Section title="Weekly focus preview">
                     <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                      Internal pilot preview (coach-side). This does not assign or publish anything to families.
+                      Saved on this device only — not shared with families until you publish from a kid’s weekly focus.
                     </Text>
                     <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary }}>
-                      No preview items yet. Add a template from Coach Tools or add a custom focus.
+                      No preview items yet. Add a template from Coach tools or add a custom focus.
                     </Text>
                   </Section>
                 )}
@@ -2446,7 +2297,7 @@ export default function CoachesScreen() {
                   Receipt queue: {completionReceiptsQueue.length}
                 </Text>
                 <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Pilot preview items: {pilotPreviewItems.length}
+                  Weekly focus preview items: {pilotPreviewItems.length}
                 </Text>
               </Section>
             ) : null}
