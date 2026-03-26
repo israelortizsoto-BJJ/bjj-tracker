@@ -16,7 +16,10 @@ import {
   coachSyncFetchSession,
   coachSyncRedeemParentWriter,
 } from "../../../../src/services/coachWeeklySyncApi";
-import { parentStrictWeeklyLinkedCoachLinksForUi } from "../../../../src/coachShare/coachLinkBinding";
+import {
+  devSnapshotCoachLinkRow,
+  parentStrictWeeklyLinkedCoachLinksForUi,
+} from "../../../../src/coachShare/coachLinkBinding";
 import {
   inviteLinkTokenTail,
   normalizeInviteLinkToken,
@@ -117,18 +120,13 @@ export default function CoachJoinScreen() {
             Boolean(l.weeklySync?.linkToken?.trim()) &&
             normalizeInviteLinkToken(l.weeklySync!.linkToken) === token,
         );
-        console.log("[bjj-sync-debug] coach join before merge", {
+        console.log("[mm:autoRelink]", {
+          step: "parent_join_redeem",
+          phase: "before",
           tokenNorm: token,
-          tokenTail: inviteLinkTokenTail(token),
-          activeLinksForTokenCount: activeForToken.length,
-          activeLinksForToken: activeForToken.map((l) => ({
-            linkId: l.id,
-            status: l.status,
-            hasWriterSecret: Boolean(l.weeklySync?.writerSecret?.trim()),
-            hasParentWriterSecret: Boolean(l.weeklySync?.parentWriterSecret?.trim()),
-            linkTokenTail: inviteLinkTokenTail(l.weeklySync?.linkToken ?? ""),
-            updatedAt: l.updatedAt,
-          })),
+          tokenTailEntered: inviteLinkTokenTail(token),
+          rows: existingLinks.map(devSnapshotCoachLinkRow),
+          activeRowsForToken: activeForToken.map(devSnapshotCoachLinkRow),
         });
       }
 
@@ -147,8 +145,12 @@ export default function CoachJoinScreen() {
       const canonicalForToken = writerForToken ?? linksForToken[0];
 
       let linkIdForParentAthletes: string;
+      let redeemOutcomeDev: string;
 
       if (canonicalForToken?.weeklySync?.linkToken?.trim()) {
+        redeemOutcomeDev = writerForToken
+          ? "merged_parent_secret_into_existing_row_had_writer_secret"
+          : "merged_parent_secret_into_existing_row_no_writer_secret";
         const ws = canonicalForToken.weeklySync;
         const mergedLink: CoachLink = {
           ...canonicalForToken,
@@ -173,6 +175,7 @@ export default function CoachJoinScreen() {
         await setCoachLinks(nextLinks);
         linkIdForParentAthletes = mergedLink.id;
       } else {
+        redeemOutcomeDev = "new_row_created";
         const newLink: CoachLink = {
           id: `link_sync_${Date.now()}`,
           coachId: coach.id,
@@ -213,18 +216,15 @@ export default function CoachJoinScreen() {
             Boolean(l.weeklySync?.linkToken?.trim()) &&
             normalizeInviteLinkToken(l.weeklySync!.linkToken) === token,
         );
-        console.log("[bjj-sync-debug] coach join after merge", {
+        console.log("[mm:autoRelink]", {
+          step: "parent_join_redeem",
+          phase: "after",
           tokenNorm: token,
-          tokenTail: inviteLinkTokenTail(token),
-          activeLinksForTokenCount: activeForTokenAfter.length,
-          activeLinksForToken: activeForTokenAfter.map((l) => ({
-            linkId: l.id,
-            hasWriterSecret: Boolean(l.weeklySync?.writerSecret?.trim()),
-            hasParentWriterSecret: Boolean(l.weeklySync?.parentWriterSecret?.trim()),
-            linkTokenTail: inviteLinkTokenTail(l.weeklySync?.linkToken ?? ""),
-            updatedAt: l.updatedAt,
-          })),
-          chosenLinkIdForAthletes: linkIdForParentAthletes,
+          tokenTailEntered: inviteLinkTokenTail(token),
+          rows: after.map(devSnapshotCoachLinkRow),
+          activeRowsForToken: activeForTokenAfter.map(devSnapshotCoachLinkRow),
+          chosenLinkIdForParentAthletes: linkIdForParentAthletes,
+          redeemOutcome: redeemOutcomeDev,
         });
       }
 

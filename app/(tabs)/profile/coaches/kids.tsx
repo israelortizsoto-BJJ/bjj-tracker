@@ -20,9 +20,13 @@ import {
   activeCoachWriterInviteTokenNorms,
   coachKidShowsFamilyChannelLinkedBadge,
   dedupeActiveCoachWriterLinks,
+  devSnapshotCoachLinkRow,
   kidVisibleOnCoachRoster,
 } from "../../../../src/coachShare/coachLinkBinding";
-import { normalizeInviteLinkToken } from "../../../../src/coachShare/inviteLinkToken";
+import {
+  inviteLinkTokenTail,
+  normalizeInviteLinkToken,
+} from "../../../../src/coachShare/inviteLinkToken";
 import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/config/coachSync";
 import {
   CoachWeeklySyncApiError,
@@ -322,22 +326,50 @@ export default function KidsRosterScreen() {
         },
       };
 
+      const existingCoaches = await getCoachesById();
+      const existingLinks = await getCoachLinks();
+      const newNorm = normalizeInviteLinkToken(res.linkToken);
+      const newTail = inviteLinkTokenTail(res.linkToken);
       if (__DEV__) {
-        console.log("[bjj-sync-debug] coach create invite wrote writer link row", {
-          linkId: newLink.id,
-          linkTokenTail: newLink.weeklySync?.linkToken?.length
-            ? newLink.weeklySync.linkToken.slice(-8)
-            : null,
-          hasWriterSecret: Boolean(newLink.weeklySync?.writerSecret?.trim()),
-          hasParentWriterSecret: Boolean(newLink.weeklySync?.parentWriterSecret?.trim()),
-          parentProfileId: newLink.parentProfileId,
+        const sameNormBefore = existingLinks.filter(
+          (l) =>
+            l.status === "active" &&
+            Boolean(l.weeklySync?.linkToken?.trim()) &&
+            normalizeInviteLinkToken(l.weeklySync!.linkToken) === newNorm,
+        );
+        console.log("[mm:autoRelink]", {
+          step: "coach_create_invite",
+          phase: "before",
+          rows: existingLinks.map(devSnapshotCoachLinkRow),
+          newInviteTokenTail: newTail,
+          newInviteTokenNorm: newNorm,
+          existingActiveRowsSameNormCount: sameNormBefore.length,
         });
       }
 
-      const existingCoaches = await getCoachesById();
-      const existingLinks = await getCoachLinks();
       await setCoachesById({ ...existingCoaches, [coach.id]: coach });
       await setCoachLinks([...existingLinks, newLink]);
+
+      if (__DEV__) {
+        const afterLinks = await getCoachLinks();
+        const sameNormOtherIds = afterLinks.filter(
+          (l) =>
+            l.id !== newLink.id &&
+            l.status === "active" &&
+            Boolean(l.weeklySync?.linkToken?.trim()) &&
+            normalizeInviteLinkToken(l.weeklySync!.linkToken) === newNorm,
+        );
+        console.log("[mm:autoRelink]", {
+          step: "coach_create_invite",
+          phase: "after",
+          rows: afterLinks.map(devSnapshotCoachLinkRow),
+          newLinkId: newLink.id,
+          newInviteTokenTail: newTail,
+          storageMutation: "append_new_row",
+          otherActiveRowsSameNormCount: sameNormOtherIds.length,
+        });
+      }
+
       await loadKids();
       Alert.alert(
         "Invite ready",

@@ -35,6 +35,7 @@ import {
 } from "../../../../src/storage/coachWeeklySyncCacheStore";
 import {
   activeCoachLinksForParentLinkedUi,
+  buildDevParentWeeklyLinkedStateTrace,
   parentStrictWeeklyLinkedCoachLinksForUi,
 } from "../../../../src/coachShare/coachLinkBinding";
 import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
@@ -478,6 +479,15 @@ export default function CoachesScreen() {
       void loadCoachShareData();
     }, [loadCoachShareData]),
   );
+
+  useEffect(() => {
+    if (!__DEV__ || role !== "parent") return;
+    const trace = buildDevParentWeeklyLinkedStateTrace(coachLinks);
+    console.log("[mm:autoRelink]", {
+      step: "parent_weekly_screen",
+      ...trace,
+    });
+  }, [coachLinks, role]);
 
   const familyUpcomingMonthGroups = useMemo(
     () =>

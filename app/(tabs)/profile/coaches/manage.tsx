@@ -3,7 +3,11 @@ import { useCallback, useState } from "react";
 import { Alert, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { parentStrictWeeklyLinkedCoachLinksForUi } from "../../../../src/coachShare/coachLinkBinding";
+import {
+  devSnapshotCoachLinkRow,
+  parentStrictWeeklyLinkedCoachLinksForUi,
+} from "../../../../src/coachShare/coachLinkBinding";
+import { inviteLinkTokenTail } from "../../../../src/coachShare/inviteLinkToken";
 import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
 import { useDeviceRole } from "../../../../src/deviceRole/DeviceRoleProvider";
 import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
@@ -64,6 +68,18 @@ export default function CoachManageScreen() {
             text: "Remove",
             style: "destructive",
             onPress: async () => {
+              if (__DEV__) {
+                const beforeLinks = await getCoachLinks();
+                const t = link.weeklySync?.linkToken?.trim() ?? "";
+                console.log("[mm:autoRelink]", {
+                  step: "parent_remove_link",
+                  phase: "before",
+                  rows: beforeLinks.map(devSnapshotCoachLinkRow),
+                  targetLinkId: link.id,
+                  targetTokenTail: t ? inviteLinkTokenTail(t) : null,
+                });
+              }
+
               const ws = link.weeklySync;
               const secret = ws?.parentWriterSecret?.trim();
               let sessionAthleteIds: Set<string> | null = null;
@@ -117,6 +133,19 @@ export default function CoachManageScreen() {
                   : l,
               );
               await setCoachLinks(next);
+              if (__DEV__) {
+                const afterLinks = await getCoachLinks();
+                const affected = link.weeklySync?.linkToken?.trim() ?? "";
+                const rowAfter = afterLinks.find((x) => x.id === link.id);
+                console.log("[mm:autoRelink]", {
+                  step: "parent_remove_link",
+                  phase: "after",
+                  rows: afterLinks.map(devSnapshotCoachLinkRow),
+                  targetLinkId: link.id,
+                  rowOutcome: rowAfter?.status === "revoked" ? "revoked" : "not_revoked_unexpected",
+                  clearedLocalBindingsForTokenTail: affected ? inviteLinkTokenTail(affected) : null,
+                });
+              }
               if (link.weeklySync?.linkToken) {
                 await clearCachedWeeklyForLinkToken(link.weeklySync.linkToken);
               }

@@ -1,7 +1,7 @@
 import { coachSyncFetchSession } from "../services/coachWeeklySyncApi";
 import type { Kid } from "../types/coachKid";
-import type { CoachLink } from "../types/coachShare";
-import { normalizeInviteLinkToken } from "./inviteLinkToken";
+import type { CoachLink, CoachLinkStatus } from "../types/coachShare";
+import { inviteLinkTokenTail, normalizeInviteLinkToken } from "./inviteLinkToken";
 
 /**
  * One active coach-writer row per normalized invite token (newest wins).
@@ -92,6 +92,81 @@ export function parentActiveLegacyCoachShareLinks(links: CoachLink[]): CoachLink
  */
 export function activeCoachLinksForParentLinkedUi(links: CoachLink[]): CoachLink[] {
   return [...parentStrictWeeklyLinkedCoachLinksForUi(links), ...parentActiveLegacyCoachShareLinks(links)];
+}
+
+/** DEV-only snapshots for auto-relink tracing; no secrets, token tails only. */
+export type DevCoachLinkRowSnap = {
+  id: string;
+  status: CoachLinkStatus;
+  tokenNorm: string | null;
+  tokenTail: string | null;
+  hasWeeklySync: boolean;
+  hasWriterSecret: boolean;
+  hasParentWriterSecret: boolean;
+};
+
+export function devSnapshotCoachLinkRow(l: CoachLink): DevCoachLinkRowSnap {
+  const ws = l.weeklySync;
+  const tokenRaw = typeof ws?.linkToken === "string" ? ws.linkToken.trim() : "";
+  const tokenNorm = tokenRaw ? normalizeInviteLinkToken(tokenRaw) || null : null;
+  return {
+    id: l.id,
+    status: l.status,
+    tokenNorm,
+    tokenTail: tokenRaw ? inviteLinkTokenTail(tokenRaw) : null,
+    hasWeeklySync: Boolean(ws),
+    hasWriterSecret: Boolean(ws?.writerSecret?.trim()),
+    hasParentWriterSecret: Boolean(ws?.parentWriterSecret?.trim()),
+  };
+}
+
+export function buildDevParentWeeklyLinkedStateTrace(links: CoachLink[]): {
+  allRows: DevCoachLinkRowSnap[];
+  parentWeeklyWithSecretPreDedupe: DevCoachLinkRowSnap[];
+  strictWeeklyForUi: DevCoachLinkRowSnap[];
+  legacyActiveCount: number;
+  activeCoachLinksForParentLinkedUiCount: number;
+  chosenActiveWeeklyTokenTail: string | null;
+  parentShownAsLinked: boolean;
+  useWeeklySyncHero: boolean;
+  parentLinkedUiReason: string;
+} {
+  const allRows = links.map(devSnapshotCoachLinkRow);
+  const parentWeeklyWithSecretPreDedupe = activeParentWeeklyLinksWithSecret(links).map(
+    devSnapshotCoachLinkRow,
+  );
+  const strictWeekly = parentStrictWeeklyLinkedCoachLinksForUi(links);
+  const strictWeeklyForUi = strictWeekly.map(devSnapshotCoachLinkRow);
+  const legacy = parentActiveLegacyCoachShareLinks(links);
+  const activeUi = activeCoachLinksForParentLinkedUi(links);
+  const hero = strictWeekly[0];
+  const tokenRaw = hero?.weeklySync?.linkToken?.trim() ?? "";
+  const chosenActiveWeeklyTokenTail = tokenRaw ? inviteLinkTokenTail(tokenRaw) : null;
+  const parentShownAsLinked = activeUi.length > 0;
+  const useWeeklySyncHero = strictWeekly.length > 0;
+
+  let parentLinkedUiReason: string;
+  if (!parentShownAsLinked) {
+    parentLinkedUiReason = "not_linked:empty_activeCoachLinksForParentLinkedUi";
+  } else if (strictWeekly.length > 0) {
+    parentLinkedUiReason = "linked:strict_weekly_redeemed_parentWriterSecret";
+  } else if (legacy.length > 0) {
+    parentLinkedUiReason = "linked:legacy_active_rows_without_weeklySync";
+  } else {
+    parentLinkedUiReason = "linked:unexpected_active_ui";
+  }
+
+  return {
+    allRows,
+    parentWeeklyWithSecretPreDedupe,
+    strictWeeklyForUi,
+    legacyActiveCount: legacy.length,
+    activeCoachLinksForParentLinkedUiCount: activeUi.length,
+    chosenActiveWeeklyTokenTail,
+    parentShownAsLinked,
+    useWeeklySyncHero,
+    parentLinkedUiReason,
+  };
 }
 
 /**
