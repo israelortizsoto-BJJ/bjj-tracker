@@ -73,8 +73,10 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-26  
-**Status:** The coach/parent architecture—publish, link, reconnect, and the working coach → parent weekly loop—remains intact; recent work was **presentation + information architecture**, not a backend rewrite. The parent weekly lane is now materially stronger in Dev: a guided weekly flow (what the child is working on, what to do first, what to track this week) shaped by live spouse/parent usability testing, while preserving Family Huddle and the publish/training/competition loops that already passed. **Custom Weekly Focus** editing is fixed again (Custom Focus selectable when editing an existing entry). Navigation is simplified around a **4-tab** model: **This Week**, **Training**, **Learn**, **Profile**—implemented with care for hidden/internal routes and Expo Router so legacy paths and redirects stay coherent. Parent weekly UI took hierarchy/art-direction cues from Stitch-style references but still uses current MatMind data hooks and logic. **TestFlight remains older shipped reality** until a new build is uploaded and documented here—nothing below is claimed as external-tester truth yet.
+**Date:** 2026-03-27  
+**Status:** The coach/parent architecture—publish, link, reconnect, and the working coach → parent weekly loop—remains intact; recent work was **presentation + information architecture**, not a backend rewrite. The parent weekly lane is now materially stronger in Dev: a guided weekly flow (what the child is working on, what to do first, what to track this week) shaped by live spouse/parent usability testing, while preserving Family Huddle and the publish/training/competition loops that already passed. **Custom Weekly Focus** editing is fixed again (Custom Focus selectable when editing an existing entry). Navigation is simplified around a **4-tab** model: **This Week**, **Training**, **Learn**, **Profile**—implemented with care for hidden/internal routes and Expo Router so legacy paths and redirects stay coherent. Parent weekly UI took hierarchy/art-direction cues from Stitch-style references but still uses current MatMind data hooks and logic.
+
+**2026-03-27 (latest):** A narrow **release-shaping** cleanup landed for the next feedback build: **This Week** / **Learn** shells were tightened after two-device QA; duplicate top headers were fixed by letting nested stack headers own those tabs; coach **This Week** root (`/this-week`) is now a short coach landing with a CTA into Kids roster, while the parent root keeps the family-facing weekly experience (coach root no longer shows parent-facing Family Huddle, parent competition shell, parent link-refresh shell, or root weekly-focus preview). Visible internal/dev exposure for feedback logic was reduced; **Profile** internal controls remain intentionally available in dev/internal contexts. This was **not** a sync expansion or architecture refactor—worker-backed weekly scope and the parent-entered training/competition boundary are unchanged. **TestFlight remains older shipped reality** until a new build is uploaded and documented here—nothing below is claimed as external-tester truth yet.
 
 On `dev`, the Coach Share lane now includes a role split (**Coach** and **Parent**) with a role picker and role-specific profile entry behavior. Worker-backed sync is deployed and active for invite/redeem + shared athlete linking + weekly note/shared-athlete visibility. Two-device smoke succeeded in Dev: coach creates invite, parent accepts invite, parent adds athlete, and coach sees the athlete as linked. Current limitation remains unchanged for deeper data: parent-entered **training logs** and **competition data** still do **not** sync back to coach and remain local-only on the parent side.
 
@@ -87,6 +89,7 @@ Earlier handoff language about a **dirty tree**, **ahead by 22**, and **weekly s
 **TestFlight** is still **older shipped reality** until a new feedback build is uploaded and noted here — do not assume external testers match Dev.
 
 **Recent commits (this slice):**
+- `9d805a6` — Polish: tighten weekly routing and hide internal controls
 - `4b37521` — enforce strict parent weekly link state and reconnect flow
 - `af919e4` — polish coach-share copy and simplify unlink path
 - `1a5d4e1` — improve competition sync recovery and unlink helper messaging
@@ -126,6 +129,14 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 - Consolidated Fundamentals + Gear into **Learn** (`app/(tabs)/learn/**`)
 - Removed Welcome from the permanent tab bar (kept as hidden/onboarding entry)
 - Updated redirects/dev links and fixed leaked scaffold tabs in Expo Router
+
+### 2026-03-27 — weekly routing polish for next feedback build
+- Narrow release-shaping cleanup after two-device QA: coach **This Week** root, parent **This Week** root, **Training**, **Learn**, and routing sanity
+- Cleaned up **This Week** / **Learn** shell; fixed duplicate top headers by letting nested stack headers own those tabs
+- Coach **This Week** tab root: short coach landing + CTA into Kids roster; coach root no longer shows parent-facing Family Huddle, parent competition shell, parent link-refresh shell, or root weekly-focus preview
+- Parent **This Week** tab root: keeps the family-facing weekly experience
+- Reduced visible internal/dev exposure for feedback logic; **Profile** internal controls remain available intentionally in dev/internal contexts
+- Commit: `9d805a6` — *Polish: tighten weekly routing and hide internal controls*
 
 ### 2026-03-25 — strict parent link-state + reconnect hardening
 - Added canonical invite-token normalization and shared coach-link binding helpers
@@ -252,7 +263,7 @@ Parent-first Coach Share hierarchy, coach pilot preview quality, **custom focus*
 ## What passed
 
 ### Gates
-- `npx tsc --noEmit` and `npx eslint .` passed at **`83588d7`** for the **committed** batch (per prior session discipline).
+- `npx tsc --noEmit` and `npx eslint .` passed at **`83588d7`** for an **earlier** committed batch (per prior session discipline); **re-run both** on current `dev` before trusting release readiness (includes routing polish through **`9d805a6`**).
 - The **uncommitted weekly-sync working tree** has **not** been asserted as gated in this handoff — **re-run both** after committing or before any push/release cut.
 
 ### Production config validation
@@ -267,6 +278,7 @@ Validated:
 - Dev-validated parent **training** and **competition** flows still pass after the redesign (in the tested Dev loop)
 - Dev-validated **Custom Weekly Focus** editing works again (Custom Focus path when editing an existing entry)
 - Dev-validated **4-tab** structure (**This Week** / **Training** / **Learn** / **Profile**) is in place in Dev
+- **2026-03-27 (Dev):** two-device QA passed after weekly routing polish for coach **This Week** root, parent **This Week** root, **Training**, **Learn**, and basic routing sanity—**not** claimed for TestFlight until a new build ships and is documented here
 - Dev-validated fresh-path reconnect flow still passes (unlink → fresh invite → intentional reconnect → relink → publish → parent receive)
 - Dev-validated parent stays unlinked until intentional reconnect (no surprise auto-link from a fresh invite alone)
 - Dev-validated coach publish after fresh reconnect passes
@@ -287,6 +299,7 @@ Validated:
 - Reference link pill supports YouTube + Instagram links
 
 ## Commits landed most recently
+- `9d805a6` — Polish: tighten weekly routing and hide internal controls
 - `83588d7` — Add household editing for existing coach pilot kids  
 - `f7873a3` — Fix keyboard visibility in coach kid add form  
 - `d5cb4af` — Add family competition child selection for multi-kid households  
@@ -333,20 +346,20 @@ Validated:
 - Black Belt testing should focus on comprehension and flow quality, not assume all cross-device data types sync
 
 ## Best next-session recommendation
-1. Start with a clean QA pass on the new 4-tab structure
-2. Run the final external-feedback TestFlight go/no-go checklist
+1. Run the final external-feedback TestFlight go/no-go checklist (core Dev surfaces including coach/parent **This Week** roots were smoke-tested 2026-03-27)
+2. Re-run quality gates on current `dev` if not already verified after `9d805a6`
 3. Decide must-fix vs acceptable-for-feedback vs known limitation
 4. If go, prepare and ship the external feedback TestFlight build deliberately
-5. Update handoff immediately after any build/upload
+5. Update handoff immediately after any build/upload (TestFlight truth stays separate until then)
 
 ## Suggested restart commands for next session
 - `git status -sb`
 - `git log -8 --oneline`
 - `sed -n '1,280p' "docs/dev-handoff.md"`
-- `sed -n '1,220p' "docs/recaps/2026-03-26_dev-recap.md"`
+- `sed -n '1,220p' "docs/recaps/2026-03-27_dev-recap.md"`
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
 - Broader external feedback triage can stay tabled until this pilot lane is stable enough for internal use.
-- **Gates** were last asserted for the **committed** snapshot at **`83588d7`**; the **dirty** sync tree needs a fresh run before trust.
+- **Gates** were last fully documented for an older snapshot (**`83588d7`**); latest `dev` includes **`9d805a6`** — **re-run both** gates on the current tree before trust; the **dirty** sync tree (if any) still needs a fresh run before trust.
 - **Spouse / external tester device** build age is **unknown** — assume **no sync features** until a matching dev/client build is installed.

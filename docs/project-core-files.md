@@ -20,7 +20,7 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 
 ## Core App Surfaces
 - app/(tabs)/welcome.tsx — present but **hidden** from the main tab bar (`href: null` in `app/(tabs)/_layout.tsx`); onboarding/legacy entry
-- app/(tabs)/this-week/** — **This Week** tab: weekly coach/parent lane (join, manage, templates, kids, parent athletes, Family Huddle surface, etc.)
+- app/(tabs)/this-week/** — **This Week** tab: weekly coach/parent lane (join, manage, templates, kids, parent athletes, Family Huddle surface, etc.). **Tab root** (`this-week/index.tsx`) is **role-specific**: **Coach** = short landing + CTA into Kids roster; **Parent** = family-facing weekly. Nested `this-week/_layout.tsx` stack headers (with `learn/_layout.tsx` for **Learn**) avoid duplicate top headers.
 - app/(tabs)/learn/** — **Learn** tab: fundamentals + gear (`learn/index.tsx`, `learn/fundamentals.tsx`, `learn/gear.tsx`, `learn/_layout.tsx`)
 - app/(tabs)/training.tsx
 - app/(tabs)/training/[id].tsx
