@@ -305,21 +305,19 @@ export default function KidWeeklyFocusScreen() {
 
         <View style={{ flexDirection: "row", gap: 10 }}>
           <Pressable
-            disabled={Boolean(editEntryId)}
             onPress={() => setTab("templates")}
             style={({ pressed }) => ({
               ...tabButtonStyle(tab === "templates"),
-              opacity: editEntryId ? (tab === "templates" ? 1 : 0.45) : pressed ? 0.85 : 1,
+              opacity: pressed ? 0.85 : 1,
             })}
           >
             <Text style={tabTextStyle(tab === "templates")}>Templates</Text>
           </Pressable>
           <Pressable
-            disabled={Boolean(editEntryId)}
             onPress={() => setTab("custom")}
             style={({ pressed }) => ({
               ...tabButtonStyle(tab === "custom"),
-              opacity: editEntryId ? (tab === "custom" ? 1 : 0.45) : pressed ? 0.85 : 1,
+              opacity: pressed ? 0.85 : 1,
             })}
           >
             <Text style={tabTextStyle(tab === "custom")}>Custom Focus</Text>

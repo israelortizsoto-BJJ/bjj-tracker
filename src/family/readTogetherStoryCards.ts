@@ -30,7 +30,7 @@ export const READ_TOGETHER_TITLES = {
   coachRecap: "What we sharpened with Coach",
   mats: "On the mats this week",
   studyMove: "Study the move",
-  journey: "The bigger journey",
+  journey: "Why this matters",
 } as const;
 
 /** Coach-side source map order — matches parent Read together card sequence. */
@@ -85,6 +85,8 @@ export type BuildReadTogetherStoryCardsInput = {
   missionHeadline: string;
   missionBody: string;
   missionEyebrow: string;
+  /** Plain-English "why this matters" copy (parent translation). */
+  whyThisMattersText?: string;
   /** Legacy class + program copy for journey fallback */
   legacyClassProgramBody: string;
   /** Hint shown after journey copy (navigation / next steps). */
@@ -109,6 +111,7 @@ export function buildReadTogetherStoryCards(
     missionHeadline,
     missionBody,
     missionEyebrow,
+    whyThisMattersText,
     legacyClassProgramBody,
     closingNavigationHint,
   } = input;
@@ -156,7 +159,10 @@ export function buildReadTogetherStoryCards(
   const fromDoc = [classLine, programLine].filter(Boolean).join("\n\n");
 
   let journeyMain: string;
-  if (mode === "weekly_sync") {
+  const whyTrim = (whyThisMattersText ?? "").trim();
+  if (whyTrim) {
+    journeyMain = whyTrim;
+  } else if (mode === "weekly_sync") {
     journeyMain =
       fromDoc ||
       "Jiu-jitsu grows a little at a time. Some weeks feel easy, some feel hard — both are normal. Cheer for effort, stay patient, and remember you are on the same team.";
@@ -215,7 +221,7 @@ export function buildReadTogetherStoryCards(
   const journeyCard: ReadTogetherStoryCard = {
     key: "journey",
     title: READ_TOGETHER_TITLES.journey,
-    eyebrow: "Keep the long view",
+    eyebrow: "Connect at home",
     body: journeyBody,
   };
 
