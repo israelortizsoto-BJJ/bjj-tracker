@@ -7,7 +7,7 @@ import {
   COACH_PILOT_PREVIEW_MAX_ITEMS,
   getCoachPilotPreviewItems,
   setCoachPilotPreviewItems,
-} from "../../../../src/storage/coachShareStore";
+} from "../../../src/storage/coachShareStore";
 import { TEMPLATE_CONTENT } from "./template-preview";
 
 const UI = {
@@ -70,7 +70,7 @@ export default function TemplateSelectedScreen() {
 
       await setCoachPilotPreviewItems(updated);
 
-      router.replace("/profile/coaches");
+      router.replace("/this-week");
       return;
     }
 
@@ -97,15 +97,15 @@ export default function TemplateSelectedScreen() {
 
     await setCoachPilotPreviewItems(updated);
 
-    router.replace("/profile/coaches");
+    router.replace("/this-week");
   };
 
   const handleBackToTemplates = () => {
-    router.push("/profile/coaches/templates");
+    router.push("/this-week/templates");
   };
 
   const handleBackToCreatePack = () => {
-    router.push("/profile/coaches/create-pack");
+    router.push("/this-week/create-pack");
   };
 
   return (

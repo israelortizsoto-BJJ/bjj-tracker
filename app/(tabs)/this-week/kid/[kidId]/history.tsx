@@ -7,8 +7,8 @@ import {
   getKidWeeklyFocusEntriesForKid,
   startOfWeekMondayYMD,
   todayYMD,
-} from "../../../../../../src/storage/coachKidStore";
-import type { CoachOutcome, KidWeeklyFocusEntry } from "../../../../../../src/types/coachKid";
+} from "../../../../../src/storage/coachKidStore";
+import type { CoachOutcome, KidWeeklyFocusEntry } from "../../../../../src/types/coachKid";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -89,13 +89,13 @@ function openEntryEditor(kidId: string, entry: KidWeeklyFocusEntry) {
 
   const goFocus = () =>
     router.push({
-      pathname: "/profile/coaches/kid/[kidId]/weekly-focus",
+      pathname: "/this-week/kid/[kidId]/weekly-focus",
       params: { kidId, entryId: entry.id },
     });
 
   const goProgress = () =>
     router.push({
-      pathname: "/profile/coaches/kid/[kidId]/progress-reflection",
+      pathname: "/this-week/kid/[kidId]/progress-reflection",
       params: { kidId, entryId: entry.id },
     });
 
@@ -194,7 +194,7 @@ export default function KidWeeklyHistoryScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
       >
         <Pressable
-          onPress={() => router.push(`/profile/coaches/kid/${kidId}`)}
+          onPress={() => router.push(`/this-week/kid/${kidId}`)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,
@@ -241,7 +241,7 @@ export default function KidWeeklyHistoryScreen() {
                 Set a weekly focus for this kid to start building history over time.
               </Text>
               <Pressable
-                onPress={() => router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)}
+                onPress={() => router.push(`/this-week/kid/${kidId}/weekly-focus`)}
                 style={({ pressed }) => ({
                   marginTop: 8,
                   paddingVertical: 12,

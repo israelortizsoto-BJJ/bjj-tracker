@@ -27,24 +27,24 @@ import {
   dedupeActiveCoachWriterLinks,
   resolveCoachPublishWriterLink,
   sortCoachWriterLinksNewestFirst,
-} from "../../../../../src/coachShare/coachLinkBinding";
-import { normalizeInviteLinkToken } from "../../../../../src/coachShare/inviteLinkToken";
+} from "../../../../src/coachShare/coachLinkBinding";
+import { normalizeInviteLinkToken } from "../../../../src/coachShare/inviteLinkToken";
 import {
   defaultFamilyLinkButtonLabel,
   familyResourceUrlForLinking,
-} from "../../../../../src/coach/familyResourceUrl";
-import { kidWeeklyFocusToPublishPayload } from "../../../../../src/coach/weeklyFocusPublish";
+} from "../../../../src/coach/familyResourceUrl";
+import { kidWeeklyFocusToPublishPayload } from "../../../../src/coach/weeklyFocusPublish";
 import {
   READ_TOGETHER_TITLE_ORDER,
   buildReadTogetherStoryCards,
-} from "../../../../../src/family/readTogetherStoryCards";
-import { ReadTogetherStoryModal } from "../../../../../src/family/ReadTogetherStoryModal";
+} from "../../../../src/family/readTogetherStoryCards";
+import { ReadTogetherStoryModal } from "../../../../src/family/ReadTogetherStoryModal";
 import {
   CoachWeeklySyncApiError,
   coachSyncFetchSession,
   coachSyncPublishWeekly,
-} from "../../../../../src/services/coachWeeklySyncApi";
-import { getCoachLinks } from "../../../../../src/storage/coachShareStore";
+} from "../../../../src/services/coachWeeklySyncApi";
+import { getCoachLinks } from "../../../../src/storage/coachShareStore";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
@@ -54,16 +54,16 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
   updateKidHouseholdLabel,
-} from "../../../../../src/storage/coachKidStore";
-import { deleteSessionById } from "../../../../../src/storage/sessionsStore";
-import { getKidStandingGuidance } from "../../../../../src/storage/kidStandingGuidanceStore";
-import { StorageKeys } from "../../../../../src/storage/storageKeys";
+} from "../../../../src/storage/coachKidStore";
+import { deleteSessionById } from "../../../../src/storage/sessionsStore";
+import { getKidStandingGuidance } from "../../../../src/storage/kidStandingGuidanceStore";
+import { StorageKeys } from "../../../../src/storage/storageKeys";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntriesForKid,
   upsertSharedCompetitionsForKid,
-} from "../../../../../src/storage/kidCompetitionStore";
-import type { Session } from "../../../../../src/types";
+} from "../../../../src/storage/kidCompetitionStore";
+import type { Session } from "../../../../src/types";
 import type {
   CoachOutcome,
   KidCompetitionEntry,
@@ -72,13 +72,13 @@ import type {
   KidCompetitionResult,
   KidStandingGuidance,
   KidWeeklyFocusEntry,
-} from "../../../../../src/types/coachKid";
+} from "../../../../src/types/coachKid";
 import type {
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
-} from "../../../../../src/types/coachWeeklySync";
-import { toDateKey } from "../../../../../src/_domain/dateKey";
-import { FUNDAMENTALS_TAXONOMY } from "../../../../../src/fundamentals/taxonomy";
+} from "../../../../src/types/coachWeeklySync";
+import { toDateKey } from "../../../../src/_domain/dateKey";
+import { FUNDAMENTALS_TAXONOMY } from "../../../../src/fundamentals/taxonomy";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -804,7 +804,7 @@ export default function KidDetailScreen() {
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing kid id", "Choose a kid from the roster first.");
-      router.replace("/profile/coaches/kids");
+      router.replace("/this-week/kids");
     }
   }, [kidId]);
 
@@ -972,7 +972,7 @@ export default function KidDetailScreen() {
       const updated = await updateKidHouseholdLabel(kidId, householdDraft);
       if (!updated) {
         Alert.alert("Kid not found", "This roster entry may have been removed.");
-        router.replace("/profile/coaches/kids");
+        router.replace("/this-week/kids");
         return;
       }
       setHouseholdDraft(updated.householdLabel ?? "");
@@ -1229,7 +1229,7 @@ export default function KidDetailScreen() {
         }}
       >
         <Pressable
-          onPress={() => router.push("/profile/coaches/kids")}
+          onPress={() => router.push("/this-week/kids")}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,
@@ -1397,7 +1397,7 @@ export default function KidDetailScreen() {
             </Text>
             <Pressable
               onPress={() =>
-                router.push(`/profile/coaches/kid/${kidId}/what-matters-next`)
+                router.push(`/this-week/kid/${kidId}/what-matters-next`)
               }
               style={({ pressed }) => ({
                 marginTop: 2,
@@ -1566,7 +1566,7 @@ export default function KidDetailScreen() {
                       <Pressable
                         onPress={() =>
                           router.push(
-                            `/profile/coaches/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
+                            `/this-week/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
                           )
                         }
                         style={({ pressed }) => ({
@@ -1598,7 +1598,7 @@ export default function KidDetailScreen() {
                 })}
                 {thisWeekReflections.length > 3 ? (
                   <Pressable
-                    onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+                    onPress={() => router.push(`/this-week/kid/${kidId}/history`)}
                     style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
                   >
                     <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
@@ -1801,9 +1801,9 @@ export default function KidDetailScreen() {
               onPress={() =>
                 currentWeekEntry
                   ? router.push(
-                      `/profile/coaches/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
+                      `/this-week/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
                     )
-                  : router.push(`/profile/coaches/kid/${kidId}/weekly-focus`)
+                  : router.push(`/this-week/kid/${kidId}/weekly-focus`)
               }
               style={({ pressed }) => ({
                 marginTop: 6,
@@ -1865,7 +1865,7 @@ export default function KidDetailScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/profile/coaches/kid/${kidId}/history`)}
+              onPress={() => router.push(`/this-week/kid/${kidId}/history`)}
               style={({ pressed }) => ({
                 paddingVertical: 4,
                 alignSelf: "flex-start",
@@ -2107,7 +2107,7 @@ export default function KidDetailScreen() {
           ) : null}
 
           <Pressable
-            onPress={() => router.push(`/profile/coaches/kid/${kidId}/competition/edit`)}
+            onPress={() => router.push(`/this-week/kid/${kidId}/competition/edit`)}
             style={({ pressed }) => ({
               paddingVertical: 10,
               paddingHorizontal: 12,
@@ -2194,7 +2194,7 @@ export default function KidDetailScreen() {
                               onPress={() => {
                                 if (isSyncedRow) return;
                                 router.push(
-                                  `/profile/coaches/kid/${kidId}/competition/edit?entryId=${encodeURIComponent(row.id)}`,
+                                  `/this-week/kid/${kidId}/competition/edit?entryId=${encodeURIComponent(row.id)}`,
                                 );
                               }}
                               style={({ pressed }) => ({

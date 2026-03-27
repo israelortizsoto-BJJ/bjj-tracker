@@ -9,24 +9,24 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   deleteParentKidCompetitionEntry,
   resolveLinkedTargetForParentWriter,
-} from "../../../../../src/family/parentKidCompetitionDelete";
+} from "../../../../src/family/parentKidCompetitionDelete";
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSessionCompetition,
   coachSyncUpdateSessionCompetition,
-} from "../../../../../src/services/coachWeeklySyncApi";
-import { getKidsById, todayYMD } from "../../../../../src/storage/coachKidStore";
+} from "../../../../src/services/coachWeeklySyncApi";
+import { getKidsById, todayYMD } from "../../../../src/storage/coachKidStore";
 import {
   createKidCompetitionEntry,
   getKidCompetitionEntryById,
   getWorkerCompetitionIdForEntry,
   updateKidCompetitionEntry,
-} from "../../../../../src/storage/kidCompetitionStore";
+} from "../../../../src/storage/kidCompetitionStore";
 import type {
   KidCompetitionEventStatus,
   KidCompetitionFormat,
   KidCompetitionResult,
-} from "../../../../../src/types/coachKid";
+} from "../../../../src/types/coachKid";
 const UI = {
   screenBg: "#f3f4f6",
   bgCard: "#ffffff",
@@ -162,7 +162,7 @@ export default function FamilyCompetitionEditScreen() {
       const found = await getKidCompetitionEntryById(entryId);
       if (!found || found.kidId !== kidId) {
         Alert.alert("Not found", "This competition is missing or belongs to another athlete.");
-        router.replace("/profile/coaches");
+        router.replace("/this-week");
         return;
       }
       if (__DEV__) {
@@ -191,7 +191,7 @@ export default function FamilyCompetitionEditScreen() {
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing athlete", "Go back to This week together and try again.");
-      router.replace("/profile/coaches");
+      router.replace("/this-week");
     }
   }, [kidId]);
 
@@ -272,7 +272,7 @@ export default function FamilyCompetitionEditScreen() {
                 { text: "Not now", style: "cancel" },
                 {
                   text: "Coach link settings",
-                  onPress: () => router.push("/profile/coaches/manage"),
+                  onPress: () => router.push("/this-week/manage"),
                 },
               ],
             );
@@ -344,7 +344,7 @@ export default function FamilyCompetitionEditScreen() {
                 { text: "Not now", style: "cancel" },
                 {
                   text: "Coach link settings",
-                  onPress: () => router.push("/profile/coaches/manage"),
+                  onPress: () => router.push("/this-week/manage"),
                 },
               ],
             );
@@ -385,7 +385,7 @@ export default function FamilyCompetitionEditScreen() {
           format: formatDraft,
         });
       }
-      router.replace("/profile/coaches");
+      router.replace("/this-week");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Could not save", msg || "Try again.");
@@ -396,7 +396,7 @@ export default function FamilyCompetitionEditScreen() {
 
   function onDelete() {
     if (isNew) {
-      router.replace("/profile/coaches");
+      router.replace("/this-week");
       return;
     }
     Alert.alert(
@@ -417,7 +417,7 @@ export default function FamilyCompetitionEditScreen() {
               Alert.alert(outcome.alertTitle, outcome.alertMessage);
               return;
             }
-            router.replace("/profile/coaches");
+            router.replace("/this-week");
           },
         },
       ],
@@ -447,7 +447,7 @@ export default function FamilyCompetitionEditScreen() {
           }}
         >
           <Pressable
-            onPress={() => router.replace("/profile/coaches")}
+            onPress={() => router.replace("/this-week")}
             style={({ pressed }) => ({
               marginBottom: 12,
               paddingVertical: 10,

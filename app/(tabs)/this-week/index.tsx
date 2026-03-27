@@ -27,19 +27,19 @@ import {
   setCoachesById as persistCoachesById,
   setCompletionReceiptsQueue as persistCompletionReceiptsQueue,
   setCoachPilotPreviewItems,
-} from "../../../../src/storage/coachShareStore";
+} from "../../../src/storage/coachShareStore";
 import {
   getCachedWeeklyForLinkToken,
   setCachedWeeklyForLinkToken,
-} from "../../../../src/storage/coachWeeklySyncCacheStore";
+} from "../../../src/storage/coachWeeklySyncCacheStore";
 import {
   activeCoachLinksForParentLinkedUi,
   buildDevParentWeeklyLinkedStateTrace,
   parentStrictWeeklyLinkedCoachLinksForUi,
-} from "../../../../src/coachShare/coachLinkBinding";
-import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
-import type { SyncedWeeklyMessagePayload } from "../../../../src/types/coachWeeklySync";
-import type { CoachPilotPreviewItem } from "../../../../src/storage/coachShareStore";
+} from "../../../src/coachShare/coachLinkBinding";
+import { coachSyncFetchSession } from "../../../src/services/coachWeeklySyncApi";
+import type { SyncedWeeklyMessagePayload } from "../../../src/types/coachWeeklySync";
+import type { CoachPilotPreviewItem } from "../../../src/storage/coachShareStore";
 import type {
   AssignmentMap,
   CoachIdentityMap,
@@ -47,7 +47,7 @@ import type {
   CompletionReceipt,
   PackEnrollment,
   ProgramPackMap,
-} from "../../../../src/types/coachShare";
+} from "../../../src/types/coachShare";
 import {
   familyCompetitionChipForEntry,
   familyCompetitionPromoterFormatLine,
@@ -59,28 +59,28 @@ import {
   partitionFamilyCompetitionEntries,
   resolveFamilyCompetitionKidId,
   shouldShowFamilyCompetitionResult,
-} from "../../../../src/family/coachShareCompetitionBuckets";
-import { useDeviceRole } from "../../../../src/deviceRole/DeviceRoleProvider";
+} from "../../../src/family/coachShareCompetitionBuckets";
+import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
 import {
   clearFamilyCompetitionSelectedKidId,
   getFamilyCompetitionSelectedKidId,
   getKidsById,
   setFamilyCompetitionSelectedKidId,
   todayYMD,
-} from "../../../../src/storage/coachKidStore";
-import { StorageKeys } from "../../../../src/storage/storageKeys";
-import { deleteParentKidCompetitionEntry } from "../../../../src/family/parentKidCompetitionDelete";
-import { getKidCompetitionEntriesForKid } from "../../../../src/storage/kidCompetitionStore";
-import type { Session } from "../../../../src/types";
+} from "../../../src/storage/coachKidStore";
+import { StorageKeys } from "../../../src/storage/storageKeys";
+import { deleteParentKidCompetitionEntry } from "../../../src/family/parentKidCompetitionDelete";
+import { getKidCompetitionEntriesForKid } from "../../../src/storage/kidCompetitionStore";
+import type { Session } from "../../../src/types";
 import {
   kidCompetitionEntryIsSyncedFromWorker,
   type KidCompetitionEntry,
-} from "../../../../src/types/coachKid";
+} from "../../../src/types/coachKid";
 import {
   familyResourceUrlForLinking,
-} from "../../../../src/coach/familyResourceUrl";
-import { buildReadTogetherStoryCards } from "../../../../src/family/readTogetherStoryCards";
-import { ReadTogetherStoryModal } from "../../../../src/family/ReadTogetherStoryModal";
+} from "../../../src/coach/familyResourceUrl";
+import { buildReadTogetherStoryCards } from "../../../src/family/readTogetherStoryCards";
+import { ReadTogetherStoryModal } from "../../../src/family/ReadTogetherStoryModal";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
 const UI = {
@@ -1270,7 +1270,7 @@ export default function CoachesScreen() {
                 </Pressable>
               ) : !isLinked ? (
                 <Pressable
-                  onPress={() => router.push("/profile/coaches/join")}
+                  onPress={() => router.push("/this-week/join")}
                   style={({ pressed }) => ({
                     marginTop: 18,
                     paddingVertical: 14,
@@ -1748,7 +1748,7 @@ export default function CoachesScreen() {
                         <Pressable
                           onPress={() => {
                             router.push(
-                              `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(familyCompetition.kidId!)}&openNonce=${encodeURIComponent(
+                              `/this-week/family-competition/edit?kidId=${encodeURIComponent(familyCompetition.kidId!)}&openNonce=${encodeURIComponent(
                                 String(Date.now()),
                               )}`,
                             );
@@ -1973,7 +1973,7 @@ export default function CoachesScreen() {
                                             const k = familyCompetition.kidId;
                                             if (!k) return;
                                             router.push(
-                                              `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
+                                              `/this-week/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
                                             );
                                           }}
                                           style={{
@@ -2199,7 +2199,7 @@ export default function CoachesScreen() {
                                             const k = familyCompetition.kidId;
                                             if (!k) return;
                                             router.push(
-                                              `/profile/coaches/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
+                                              `/this-week/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
                                             );
                                           }}
                                           style={{
@@ -2346,7 +2346,7 @@ export default function CoachesScreen() {
                   Manage your coach link (athletes + invite), then refresh anytime for the latest weekly note.
                 </Text>
                 <Pressable
-                  onPress={() => router.push("/profile/coaches/manage")}
+                  onPress={() => router.push("/this-week/manage")}
                   style={({ pressed }) => ({
                     paddingVertical: 14,
                     paddingHorizontal: 18,
@@ -2397,7 +2397,7 @@ export default function CoachesScreen() {
                     Coach tools on this device — use Profile → Switch role if this phone is for a parent.
                   </Text>
                   <Pressable
-                    onPress={() => router.push("/profile/coaches/kids")}
+                    onPress={() => router.push("/this-week/kids")}
                     style={({ pressed }) => cardButtonStyle(pressed)}
                   >
                     <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
@@ -2408,7 +2408,7 @@ export default function CoachesScreen() {
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => router.push("/profile/coaches/create-pack")}
+                    onPress={() => router.push("/this-week/create-pack")}
                     style={({ pressed }) => cardButtonStyle(pressed)}
                   >
                     <Text style={{ fontSize: 15, color: UI.textSecondary, fontWeight: "600" }}>
@@ -2550,7 +2550,7 @@ export default function CoachesScreen() {
 
                     <View style={{ marginTop: 14, gap: 10 }}>
                       <Pressable
-                        onPress={() => router.push("/profile/coaches/custom-focus")}
+                        onPress={() => router.push("/this-week/custom-focus")}
                         style={({ pressed }) => ({
                           paddingVertical: 12,
                           paddingHorizontal: 14,

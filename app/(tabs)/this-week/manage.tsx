@@ -6,22 +6,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   devSnapshotCoachLinkRow,
   parentStrictWeeklyLinkedCoachLinksForUi,
-} from "../../../../src/coachShare/coachLinkBinding";
-import { inviteLinkTokenTail } from "../../../../src/coachShare/inviteLinkToken";
-import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
-import { useDeviceRole } from "../../../../src/deviceRole/DeviceRoleProvider";
-import { coachSyncFetchSession } from "../../../../src/services/coachWeeklySyncApi";
+} from "../../../src/coachShare/coachLinkBinding";
+import { inviteLinkTokenTail } from "../../../src/coachShare/inviteLinkToken";
+import { isCoachSyncConfigured } from "../../../src/config/coachSync";
+import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
+import { coachSyncFetchSession } from "../../../src/services/coachWeeklySyncApi";
 import {
   getCoachLinks,
   setCoachLinks,
-} from "../../../../src/storage/coachShareStore";
+} from "../../../src/storage/coachShareStore";
 import {
   clearLocalCoachSharingBindingsForInviteToken,
   getKidsById,
   unlinkParentAthleteFromCoachSession,
-} from "../../../../src/storage/coachKidStore";
-import { clearCachedWeeklyForLinkToken } from "../../../../src/storage/coachWeeklySyncCacheStore";
-import type { CoachLink } from "../../../../src/types/coachShare";
+} from "../../../src/storage/coachKidStore";
+import { clearCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
+import type { CoachLink } from "../../../src/types/coachShare";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -194,7 +194,7 @@ export default function CoachManageScreen() {
           </Text>
 
           <Pressable
-            onPress={() => router.push("/profile/coaches")}
+            onPress={() => router.push("/this-week")}
             style={{
               marginBottom: 16,
               paddingVertical: 10,
@@ -348,7 +348,7 @@ export default function CoachManageScreen() {
                       <Pressable
                         onPress={() =>
                           router.push({
-                            pathname: "/profile/coaches/parent-athletes",
+                            pathname: "/this-week/parent-athletes",
                             params: { linkId: link.id },
                           })
                         }

@@ -10,29 +10,29 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 
-import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/config/coachSync";
+import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../src/config/coachSync";
 import {
   CoachWeeklySyncApiError,
   coachSyncFetchSession,
   coachSyncRedeemParentWriter,
-} from "../../../../src/services/coachWeeklySyncApi";
+} from "../../../src/services/coachWeeklySyncApi";
 import {
   devSnapshotCoachLinkRow,
   parentStrictWeeklyLinkedCoachLinksForUi,
-} from "../../../../src/coachShare/coachLinkBinding";
+} from "../../../src/coachShare/coachLinkBinding";
 import {
   inviteLinkTokenTail,
   normalizeInviteLinkToken,
-} from "../../../../src/coachShare/inviteLinkToken";
+} from "../../../src/coachShare/inviteLinkToken";
 import {
   getCoachLinks,
   getCoachesById,
   getOrCreateLocalParentProfileId,
   setCoachLinks,
   setCoachesById,
-} from "../../../../src/storage/coachShareStore";
-import { setCachedWeeklyForLinkToken } from "../../../../src/storage/coachWeeklySyncCacheStore";
-import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare";
+} from "../../../src/storage/coachShareStore";
+import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
+import type { CoachIdentity, CoachLink } from "../../../src/types/coachShare";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -229,7 +229,7 @@ export default function CoachJoinScreen() {
       }
 
       router.replace({
-        pathname: "/profile/coaches/parent-athletes",
+        pathname: "/this-week/parent-athletes",
         params: { linkId: linkIdForParentAthletes },
       });
     } catch (e) {
@@ -407,7 +407,7 @@ export default function CoachJoinScreen() {
             </View>
 
             <Pressable
-              onPress={() => router.push("/profile/coaches")}
+              onPress={() => router.push("/this-week")}
               style={({ pressed }) => ({
                 marginTop: 18,
                 paddingVertical: 14,

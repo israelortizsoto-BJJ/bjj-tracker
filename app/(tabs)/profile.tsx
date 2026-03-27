@@ -336,48 +336,6 @@ export default function ProfileScreen() {
       </Text>
       <View style={{ height: 20 }} />
 
-      {role === "parent" ? (
-        <Pressable
-          onPress={() => router.push("/profile/coaches")}
-          style={({ pressed }) => ({
-            paddingVertical: 14,
-            paddingHorizontal: 18,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-          })}
-        >
-          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
-            This week with your coach
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-            Weekly focus, read together, connect with your coach, and family competition
-          </Text>
-        </Pressable>
-      ) : role === "coach" ? (
-        <Pressable
-          onPress={() => router.push("/profile/coaches/kids")}
-          style={({ pressed }) => ({
-            paddingVertical: 14,
-            paddingHorizontal: 18,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-          })}
-        >
-          <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "600" }}>
-            Coach tools
-          </Text>
-          <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-            Kids roster, family invites, weekly notes, and pilot templates
-          </Text>
-        </Pressable>
-      ) : null}
-
-      <View style={{ height: 16 }} />
-
       {role === "coach" || role === "parent" ? (
         <View
           style={{

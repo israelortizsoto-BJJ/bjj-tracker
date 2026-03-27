@@ -11,7 +11,7 @@ const UI = {
 
 export default function CreateProgramPackScreen() {
   const handleUseTemplate = () => {
-    router.push("/profile/coaches/templates");
+    router.push("/this-week/templates");
   };
 
   const handleCustomizeExisting = () => {
@@ -33,7 +33,7 @@ export default function CreateProgramPackScreen() {
       <Stack.Screen options={{ title: "Choose Weekly Focus" }} />
       <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 16 }}>
         <Pressable
-          onPress={() => router.replace("/profile/coaches/kids")}
+          onPress={() => router.replace("/this-week/kids")}
           style={{
             marginBottom: 10,
             paddingVertical: 10,

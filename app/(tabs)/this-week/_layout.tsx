@@ -2,8 +2,8 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import React, { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
-import { useDeviceRole } from "../../../../src/deviceRole/DeviceRoleProvider";
-import { isParentAllowedCoachSegments } from "../../../../src/deviceRole/coachRouteGate";
+import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
+import { isParentAllowedCoachSegments } from "../../../src/deviceRole/coachRouteGate";
 
 export default function CoachesStackLayout() {
   const segments = useSegments();
@@ -14,7 +14,7 @@ export default function CoachesStackLayout() {
     if (loading) return;
     if (role !== "parent") return;
     if (isParentAllowedCoachSegments(segments)) return;
-    router.replace("/profile/coaches");
+    router.replace("/this-week");
   }, [loading, role, router, segments]);
 
   if (loading) {

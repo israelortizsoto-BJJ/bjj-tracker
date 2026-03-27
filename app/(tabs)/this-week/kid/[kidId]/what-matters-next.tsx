@@ -13,13 +13,13 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useFocusEffect } from "@react-navigation/native";
 
-import { getDefaultWhatMattersNextDraftGenerator } from "../../../../../../src/ai-coach/whatMattersNextDraftGenerator";
-import { loadWhatMattersNextDraftPayload } from "../../../../../../src/ai-coach/loadWhatMattersNextDraftPayload";
-import type { WhatMattersNextDraftResult } from "../../../../../../src/ai-coach/whatMattersNextDraftTypes";
+import { getDefaultWhatMattersNextDraftGenerator } from "../../../../../src/ai-coach/whatMattersNextDraftGenerator";
+import { loadWhatMattersNextDraftPayload } from "../../../../../src/ai-coach/loadWhatMattersNextDraftPayload";
+import type { WhatMattersNextDraftResult } from "../../../../../src/ai-coach/whatMattersNextDraftTypes";
 import {
   getKidStandingGuidance,
   saveKidStandingGuidance,
-} from "../../../../../../src/storage/kidStandingGuidanceStore";
+} from "../../../../../src/storage/kidStandingGuidanceStore";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -69,7 +69,7 @@ export default function WhatMattersNextScreen() {
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing kid id", "This pilot route requires a kid selection.");
-      router.replace("/profile/coaches/kids");
+      router.replace("/this-week/kids");
     }
   }, [kidId]);
 
@@ -125,7 +125,7 @@ export default function WhatMattersNextScreen() {
         headline: headlineDraft,
         detail: detailDraft,
       });
-      router.replace(`/profile/coaches/kid/${kidId}`);
+      router.replace(`/this-week/kid/${kidId}`);
     } finally {
       setSaving(false);
     }
@@ -142,7 +142,7 @@ export default function WhatMattersNextScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
       >
         <Pressable
-          onPress={() => router.replace(`/profile/coaches/kid/${kidId}`)}
+          onPress={() => router.replace(`/this-week/kid/${kidId}`)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,

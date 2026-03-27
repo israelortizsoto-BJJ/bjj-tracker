@@ -10,7 +10,7 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
   updateKidWeeklyFocusFocusById,
-} from "../../../../../../src/storage/coachKidStore";
+} from "../../../../../src/storage/coachKidStore";
 import { TEMPLATE_CONTENT } from "../../template-preview";
 
 const UI = {
@@ -70,7 +70,7 @@ export default function KidWeeklyFocusScreen() {
         const existing = await getKidWeeklyFocusEntryById(editEntryId);
         if (!existing || existing.kidId !== kidId) {
           Alert.alert("Not found", "This weekly focus entry is missing or belongs to another kid.");
-          router.replace(`/profile/coaches/kid/${kidId}`);
+          router.replace(`/this-week/kid/${kidId}`);
           return;
         }
         if (existing.focusType === "template" && !TEMPLATE_CONTENT[existing.templateId]) {
@@ -78,7 +78,7 @@ export default function KidWeeklyFocusScreen() {
             "Unavailable template",
             "This log uses a template that is no longer in the pilot catalog. Add a new weekly focus from the kid screen.",
           );
-          router.replace(`/profile/coaches/kid/${kidId}`);
+          router.replace(`/this-week/kid/${kidId}`);
           return;
         }
         if (existing.focusType === "template") {
@@ -220,7 +220,7 @@ export default function KidWeeklyFocusScreen() {
         });
       }
 
-      router.replace(`/profile/coaches/kid/${kidId}`);
+      router.replace(`/this-week/kid/${kidId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Could not save", msg || "Something went wrong saving this weekly focus.");
@@ -270,7 +270,7 @@ export default function KidWeeklyFocusScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
       >
         <Pressable
-          onPress={() => router.push(`/profile/coaches/kid/${kidId}`)}
+          onPress={() => router.push(`/this-week/kid/${kidId}`)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,

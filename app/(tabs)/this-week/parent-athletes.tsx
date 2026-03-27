@@ -14,20 +14,20 @@ import { useFocusEffect } from "@react-navigation/native";
 import {
   parentKidCoherentlyLinkedToInviteToken,
   parentStrictWeeklyLinkedCoachLinksForUi,
-} from "../../../../src/coachShare/coachLinkBinding";
+} from "../../../src/coachShare/coachLinkBinding";
 import {
   inviteLinkTokenTail,
   normalizeInviteLinkToken,
-} from "../../../../src/coachShare/inviteLinkToken";
-import { isCoachSyncConfigured } from "../../../../src/config/coachSync";
-import { resolveLinkedTargetForParentWriter } from "../../../../src/family/parentKidCompetitionDelete";
+} from "../../../src/coachShare/inviteLinkToken";
+import { isCoachSyncConfigured } from "../../../src/config/coachSync";
+import { resolveLinkedTargetForParentWriter } from "../../../src/family/parentKidCompetitionDelete";
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSessionAthlete,
   coachSyncFetchSession,
   coachSyncRedeemParentWriter,
-} from "../../../../src/services/coachWeeklySyncApi";
-import { getCoachLinks, setCoachLinks } from "../../../../src/storage/coachShareStore";
+} from "../../../src/services/coachWeeklySyncApi";
+import { getCoachLinks, setCoachLinks } from "../../../src/storage/coachShareStore";
 import {
   attachSharedAthleteToKid,
   clearFamilyCompetitionSelectedKidId,
@@ -35,11 +35,11 @@ import {
   getKidsById,
   setKidsById,
   unlinkParentAthleteFromCoachSession,
-} from "../../../../src/storage/coachKidStore";
-import { setCachedWeeklyForLinkToken } from "../../../../src/storage/coachWeeklySyncCacheStore";
-import type { CoachLink } from "../../../../src/types/coachShare";
-import type { Kid, KidsById } from "../../../../src/types/coachKid";
-import type { SyncedSharedAthlete } from "../../../../src/types/coachWeeklySync";
+} from "../../../src/storage/coachKidStore";
+import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
+import type { CoachLink } from "../../../src/types/coachShare";
+import type { Kid, KidsById } from "../../../src/types/coachKid";
+import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -430,7 +430,7 @@ export default function ParentLinkedAthletesScreen() {
         <Stack.Screen options={{ title: "Athletes" }} />
         <View style={{ flex: 1, backgroundColor: UI.screenBg, padding: 20 }}>
           <Text style={{ color: UI.danger }}>Missing link.</Text>
-          <Pressable onPress={() => router.replace("/profile/coaches")} style={{ marginTop: 16 }}>
+          <Pressable onPress={() => router.replace("/this-week")} style={{ marginTop: 16 }}>
             <Text style={{ color: UI.primaryFill, fontWeight: "700" }}>Back</Text>
           </Pressable>
         </View>
@@ -652,7 +652,7 @@ export default function ParentLinkedAthletesScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.replace("/profile/coaches")}
+              onPress={() => router.replace("/this-week")}
               style={({ pressed }) => ({
                 marginTop: 18,
                 paddingVertical: 14,

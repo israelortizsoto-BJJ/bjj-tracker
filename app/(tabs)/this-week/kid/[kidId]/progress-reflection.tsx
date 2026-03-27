@@ -9,8 +9,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   getKidWeeklyFocusEntryById,
   patchKidWeeklyFocusCoachFields,
-} from "../../../../../../src/storage/coachKidStore";
-import type { CoachOutcome } from "../../../../../../src/types/coachKid";
+} from "../../../../../src/storage/coachKidStore";
+import type { CoachOutcome } from "../../../../../src/types/coachKid";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -71,7 +71,7 @@ export default function KidProgressReflectionEditScreen() {
       const entry = await getKidWeeklyFocusEntryById(entryId);
       if (!entry || entry.kidId !== kidId) {
         Alert.alert("Not found", "This progress entry is missing or belongs to another kid.");
-        router.replace(`/profile/coaches/kid/${kidId}`);
+        router.replace(`/this-week/kid/${kidId}`);
         return;
       }
       setFocusTitle(entry.title);
@@ -97,7 +97,7 @@ export default function KidProgressReflectionEditScreen() {
         coachOutcome: outcomeDraft,
         coachNotes: trimmed ? trimmed : "",
       });
-      router.replace(`/profile/coaches/kid/${kidId}`);
+      router.replace(`/this-week/kid/${kidId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Could not save", msg || "Something went wrong saving progress.");
@@ -125,7 +125,7 @@ export default function KidProgressReflectionEditScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: 24 }}
         >
         <Pressable
-          onPress={() => router.replace(`/profile/coaches/kid/${kidId}`)}
+          onPress={() => router.replace(`/this-week/kid/${kidId}`)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,

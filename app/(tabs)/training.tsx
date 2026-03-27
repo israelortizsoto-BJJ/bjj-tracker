@@ -1458,7 +1458,7 @@ const renderNewSessionCTA = () => (
     {cameFromWeekly ? (
       <View style={{ flexDirection: "row", gap: 12, marginTop: 8, alignItems: "center" }}>
         <Pressable
-          onPress={() => router.push("/profile/coaches")}
+          onPress={() => router.push("/this-week")}
           style={({ pressed }) => ({
             paddingVertical: 12,
             paddingHorizontal: 18,

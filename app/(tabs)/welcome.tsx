@@ -6,6 +6,7 @@ import React, { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StorageKeys } from "../../src/storage/storageKeys";
+import { getDeviceRole } from "../../src/storage/deviceRoleStore";
 import MatMindLogo from "../../assets/images/matmind-logo.png";
 
 
@@ -38,7 +39,7 @@ export default function Welcome() {
         return;
       }
 
-      let shouldRedirectToTraining = false;
+      let shouldRedirectAfterProfileComplete = false;
 
       try {
         const raw = await AsyncStorage.getItem(StorageKeys.profile);
@@ -49,7 +50,7 @@ export default function Welcome() {
               !!p?.belt && p?.stripes !== undefined && !!p?.academy && !!p?.professor;
 
             if (isComplete) {
-              shouldRedirectToTraining = true;
+              shouldRedirectAfterProfileComplete = true;
             }
           } catch {
             // ignore parse errors and fall through to showing Welcome
@@ -60,8 +61,13 @@ export default function Welcome() {
           setChecking(false);
         }
 
-        if (!cancelled && shouldRedirectToTraining) {
-          router.replace("/training");
+        if (!cancelled && shouldRedirectAfterProfileComplete) {
+          const role = await getDeviceRole();
+          if (role === "parent" || role === "coach") {
+            router.replace("/this-week");
+          } else {
+            router.replace("/training");
+          }
         }
       }
     })();
@@ -143,14 +149,15 @@ export default function Welcome() {
             </Text>
           </Pressable>
 
-          {/* Fundamentals – clearly disabled / coming soon */}
-          <View style={[styles.card, styles.cardDisabled]}>
-            <Text style={styles.cardTitle}>Fundamentals</Text>
+          <Pressable
+            onPress={() => router.push("/learn")}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+          >
+            <Text style={styles.cardTitle}>Learn</Text>
             <Text style={styles.cardBody}>
-              Structured BJJ fundamentals are coming soon. For now, log what you train and build the habit.
+              Fundamentals map and gear basics — quick references alongside your training log.
             </Text>
-            <Text style={styles.comingSoonLabel}>Coming soon</Text>
-          </View>
+          </Pressable>
 
           {/* Dev shortcuts (unchanged behavior) */}
           {isDev() && flags.enableHiddenTabs ? (
@@ -166,22 +173,22 @@ export default function Welcome() {
                 <Text style={styles.devButtonText}>Open Health (hidden)</Text>
               </Pressable>
               <Pressable
-                onPress={() => router.push("/gear")}
+                onPress={() => router.push("/learn/gear")}
                 style={({ pressed }) => [
                   styles.devButton,
                   pressed && styles.devButtonPressed,
                 ]}
               >
-                <Text style={styles.devButtonText}>Open Gear (hidden)</Text>
+                <Text style={styles.devButtonText}>Open Gear (learn stack)</Text>
               </Pressable>
               <Pressable
-                onPress={() => router.push("/Fundamentals")}
+                onPress={() => router.push("/learn/fundamentals")}
                 style={({ pressed }) => [
                   styles.devButton,
                   pressed && styles.devButtonPressed,
                 ]}
               >
-                <Text style={styles.devButtonText}>Open Fundamentals (hidden)</Text>
+                <Text style={styles.devButtonText}>Open Fundamentals (learn stack)</Text>
               </Pressable>
             </View>
           ) : null}

@@ -22,24 +22,24 @@ import {
   dedupeActiveCoachWriterLinks,
   devSnapshotCoachLinkRow,
   kidVisibleOnCoachRoster,
-} from "../../../../src/coachShare/coachLinkBinding";
+} from "../../../src/coachShare/coachLinkBinding";
 import {
   inviteLinkTokenTail,
   normalizeInviteLinkToken,
-} from "../../../../src/coachShare/inviteLinkToken";
-import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../../src/config/coachSync";
+} from "../../../src/coachShare/inviteLinkToken";
+import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../src/config/coachSync";
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSession,
   coachSyncFetchSession,
-} from "../../../../src/services/coachWeeklySyncApi";
+} from "../../../src/services/coachWeeklySyncApi";
 import {
   getCoachLinks,
   getCoachesById,
   getOrCreateLocalParentProfileId,
   setCoachLinks,
   setCoachesById,
-} from "../../../../src/storage/coachShareStore";
+} from "../../../src/storage/coachShareStore";
 import {
   clearLocalCoachSharingBindingsForInviteToken,
   deleteKidPilot,
@@ -47,10 +47,10 @@ import {
   normalizeKidHouseholdLabel,
   reconcileCoachKidRosterFromWriterSessions,
   setKidsById,
-} from "../../../../src/storage/coachKidStore";
-import type { CoachIdentity, CoachLink } from "../../../../src/types/coachShare";
-import type { Kid, KidsById } from "../../../../src/types/coachKid";
-import type { SyncedSharedAthlete } from "../../../../src/types/coachWeeklySync";
+} from "../../../src/storage/coachKidStore";
+import type { CoachIdentity, CoachLink } from "../../../src/types/coachShare";
+import type { Kid, KidsById } from "../../../src/types/coachKid";
+import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
 
 type InviteSessionAthletesState = { names: string[]; fetchFailed: boolean };
 
@@ -416,7 +416,7 @@ export default function KidsRosterScreen() {
       setKidName("");
       setHouseholdLabelDraft("");
 
-      router.replace(`/profile/coaches/kid/${id}`);
+      router.replace(`/this-week/kid/${id}`);
     } finally {
       setSavingKid(false);
     }
@@ -770,7 +770,7 @@ export default function KidsRosterScreen() {
                       )}
                     >
                       <Pressable
-                        onPress={() => router.push(`/profile/coaches/kid/${kid.id}`)}
+                        onPress={() => router.push(`/this-week/kid/${kid.id}`)}
                         style={({ pressed }) => ({
                           padding: 12,
                           borderRadius: 12,

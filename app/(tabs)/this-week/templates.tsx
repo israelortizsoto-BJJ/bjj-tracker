@@ -12,7 +12,7 @@ const UI = {
 export default function CoachTemplatesScreen() {
   const handleUseTemplate = (templateId: string) => {
     router.push({
-      pathname: "/profile/coaches/template-selected",
+      pathname: "/this-week/template-selected",
       params: { templateId },
     });
   };
@@ -22,7 +22,7 @@ export default function CoachTemplatesScreen() {
       <Stack.Screen options={{ title: "Program Pack Templates" }} />
       <ScrollView style={{ flex: 1, backgroundColor: UI.screenBg }} contentContainerStyle={{ padding: 16 }}>
         <Pressable
-          onPress={() => router.push("/profile/coaches/create-pack")}
+          onPress={() => router.push("/this-week/create-pack")}
           style={{
             marginBottom: 10,
             paddingVertical: 8,
@@ -69,7 +69,7 @@ export default function CoachTemplatesScreen() {
               Focus Type: Custom · Owner: Coach-written · Scope: This Week
             </Text>
             <Pressable
-              onPress={() => router.push("/profile/coaches/custom-focus")}
+              onPress={() => router.push("/this-week/custom-focus")}
               style={{
                 marginTop: 10,
                 paddingVertical: 8,

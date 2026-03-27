@@ -45,12 +45,12 @@ export default function TemplatePreviewScreen() {
   const template = TEMPLATE_CONTENT[effectiveTemplateId];
 
   const handleBackToTemplates = () => {
-    router.push("/profile/coaches/templates");
+    router.push("/this-week/templates");
   };
 
   const handleContinueWithTemplate = () => {
     router.push({
-      pathname: "/profile/coaches/template-selected",
+      pathname: "/this-week/template-selected",
       params: { templateId: effectiveTemplateId },
     });
   };

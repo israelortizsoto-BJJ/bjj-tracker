@@ -729,7 +729,7 @@ Alert.alert(
       text: "OK",
       onPress: () =>
         kidIdParam
-          ? router.replace(`/profile/coaches/kid/${encodeURIComponent(kidIdParam)}`)
+          ? router.replace(`/this-week/kid/${encodeURIComponent(kidIdParam)}`)
           : router.replace(`/training?date=${encodeURIComponent(finalDate)}`),
     },
   ]

@@ -1,66 +1,34 @@
 import { Tabs } from "expo-router";
-import { isDev } from "../../src/config/runtime";
 
 const HIDDEN = { href: null } as const;
 
+/**
+ * Tab bar: only the first four screens are visible.
+ *
+ * Expo Router merges `Tabs.Screen` with file routes. Any direct child of this layout
+ * that is not matched by a `Tabs.Screen` `name` is appended as an extra tab
+ * (`useSortedScreens` / `getSortedChildren`). So every *tab-level* route must be
+ * listed. Nested stack routes (e.g. `this-week/join`, `learn/fundamentals`) live
+ * inside their segment layouts and must not appear here.
+ *
+ * Hoisted to this tab navigator (no `training/` or `profile/` `_layout.tsx`):
+ * `training/[id]`, `profile/dev-settings`.
+ */
 export default function TabLayout() {
   return (
     <Tabs screenOptions={{ headerShown: true }}>
-      {isDev()
-        ? [
-            <Tabs.Screen key="welcome" name="welcome" options={{ title: "Welcome" }} />,
-            <Tabs.Screen key="profile" name="profile" options={{ title: "Profile" }} />,
-            <Tabs.Screen key="training" name="training" options={{ title: "Training" }} />,
-            <Tabs.Screen key="Fundamentals" name="Fundamentals" options={{ title: "Fundamentals" }} />,
-            <Tabs.Screen key="gear" name="gear" options={{ title: "Gear" }} />,
-            <Tabs.Screen key="profile/dev-settings" name="profile/dev-settings" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches" name="profile/coaches" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/index" name="profile/coaches/index" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/join" name="profile/coaches/join" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/manage" name="profile/coaches/manage" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/create-pack" name="profile/coaches/create-pack" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/templates" name="profile/coaches/templates" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/template-preview" name="profile/coaches/template-preview" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/template-selected" name="profile/coaches/template-selected" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/custom-focus" name="profile/coaches/custom-focus" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kids" name="profile/coaches/kids" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]" name="profile/coaches/kid/[kidId]" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/weekly-focus" name="profile/coaches/kid/[kidId]/weekly-focus" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/what-matters-next" name="profile/coaches/kid/[kidId]/what-matters-next" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/history" name="profile/coaches/kid/[kidId]/history" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/progress-reflection" name="profile/coaches/kid/[kidId]/progress-reflection" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/competition/edit" name="profile/coaches/kid/[kidId]/competition/edit" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/family-competition/edit" name="profile/coaches/family-competition/edit" options={HIDDEN} />,
-            <Tabs.Screen key="training/[id]" name="training/[id]" options={HIDDEN} />,
-            <Tabs.Screen key="health" name="health" options={HIDDEN} />,
-          ]
-        : [
-            <Tabs.Screen key="welcome" name="welcome" options={{ title: "Welcome" }} />,
-            <Tabs.Screen key="profile" name="profile" options={{ title: "Profile" }} />,
-            <Tabs.Screen key="training" name="training" options={{ title: "Training" }} />,
-            <Tabs.Screen key="Fundamentals" name="Fundamentals" options={{ title: "Fundamentals" }} />,
-            <Tabs.Screen key="gear" name="gear" options={{ title: "Gear" }} />,
-            <Tabs.Screen key="profile/dev-settings" name="profile/dev-settings" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches" name="profile/coaches" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/index" name="profile/coaches/index" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/join" name="profile/coaches/join" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/manage" name="profile/coaches/manage" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/create-pack" name="profile/coaches/create-pack" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/templates" name="profile/coaches/templates" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/template-preview" name="profile/coaches/template-preview" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/template-selected" name="profile/coaches/template-selected" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/custom-focus" name="profile/coaches/custom-focus" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kids" name="profile/coaches/kids" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]" name="profile/coaches/kid/[kidId]" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/weekly-focus" name="profile/coaches/kid/[kidId]/weekly-focus" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/what-matters-next" name="profile/coaches/kid/[kidId]/what-matters-next" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/history" name="profile/coaches/kid/[kidId]/history" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/progress-reflection" name="profile/coaches/kid/[kidId]/progress-reflection" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/kid/[kidId]/competition/edit" name="profile/coaches/kid/[kidId]/competition/edit" options={HIDDEN} />,
-            <Tabs.Screen key="profile/coaches/family-competition/edit" name="profile/coaches/family-competition/edit" options={HIDDEN} />,
-            <Tabs.Screen key="training/[id]" name="training/[id]" options={HIDDEN} />,
-            <Tabs.Screen key="health" name="health" options={HIDDEN} />,
-          ]}
+      <Tabs.Screen name="this-week" options={{ title: "This Week" }} />
+      <Tabs.Screen name="training" options={{ title: "Training" }} />
+      <Tabs.Screen name="learn" options={{ title: "Learn" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+      <Tabs.Screen name="welcome" options={HIDDEN} />
+      <Tabs.Screen name="Fundamentals" options={HIDDEN} />
+      <Tabs.Screen name="gear" options={HIDDEN} />
+      <Tabs.Screen name="health" options={HIDDEN} />
+      <Tabs.Screen name="training/[id]" options={HIDDEN} />
+      <Tabs.Screen name="profile/dev-settings" options={HIDDEN} />
+      <Tabs.Screen name="profile/coaches" options={HIDDEN} />
+      <Tabs.Screen name="profile/coaches/index" options={HIDDEN} />
     </Tabs>
   );
 }

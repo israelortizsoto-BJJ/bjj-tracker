@@ -11,20 +11,20 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
-} from "../../../../../../../src/media/persistCameraRollMedia";
+} from "../../../../../../src/media/persistCameraRollMedia";
 import {
   createKidCompetitionEntry,
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
   updateKidCompetitionEntry,
-} from "../../../../../../../src/storage/kidCompetitionStore";
-import { todayYMD } from "../../../../../../../src/storage/coachKidStore";
+} from "../../../../../../src/storage/kidCompetitionStore";
+import { todayYMD } from "../../../../../../src/storage/coachKidStore";
 import type {
   KidCompetitionEventStatus,
   KidCompetitionFormat,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
-} from "../../../../../../../src/types/coachKid";
+} from "../../../../../../src/types/coachKid";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -174,7 +174,7 @@ export default function KidCompetitionEditScreen() {
       const found = await getKidCompetitionEntryById(entryId);
       if (!found || found.kidId !== kidId) {
         Alert.alert("Not found", "This competition entry is missing or belongs to another kid.");
-        router.replace(`/profile/coaches/kid/${kidId}`);
+        router.replace(`/this-week/kid/${kidId}`);
         return;
       }
       setNameDraft(found.tournamentName);
@@ -195,7 +195,7 @@ export default function KidCompetitionEditScreen() {
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing kid id", "This pilot route requires a kid selection.");
-      router.replace("/profile/coaches/kids");
+      router.replace("/this-week/kids");
     }
   }, [kidId]);
 
@@ -307,7 +307,7 @@ export default function KidCompetitionEditScreen() {
           videoAssetId,
         });
       }
-      router.replace(`/profile/coaches/kid/${kidId}`);
+      router.replace(`/this-week/kid/${kidId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert(
@@ -322,7 +322,7 @@ export default function KidCompetitionEditScreen() {
 
   function onDelete() {
     if (isNew) {
-      router.replace(`/profile/coaches/kid/${kidId}`);
+      router.replace(`/this-week/kid/${kidId}`);
       return;
     }
     Alert.alert("Delete competition?", "This cannot be undone.", [
@@ -332,7 +332,7 @@ export default function KidCompetitionEditScreen() {
         style: "destructive",
         onPress: async () => {
           await deleteKidCompetitionEntry(entryId);
-          router.replace(`/profile/coaches/kid/${kidId}`);
+          router.replace(`/this-week/kid/${kidId}`);
         },
       },
     ]);
@@ -372,7 +372,7 @@ export default function KidCompetitionEditScreen() {
           }}
         >
         <Pressable
-          onPress={() => router.replace(`/profile/coaches/kid/${kidId}`)}
+          onPress={() => router.replace(`/this-week/kid/${kidId}`)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,

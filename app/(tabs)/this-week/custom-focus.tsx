@@ -7,7 +7,7 @@ import {
   COACH_PILOT_PREVIEW_MAX_ITEMS,
   getCoachPilotPreviewItems,
   setCoachPilotPreviewItems,
-} from "../../../../src/storage/coachShareStore";
+} from "../../../src/storage/coachShareStore";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -63,7 +63,7 @@ export default function CustomFocusScreen() {
 
       await setCoachPilotPreviewItems(updated);
 
-      router.replace("/profile/coaches");
+      router.replace("/this-week");
     } finally {
       setSaving(false);
     }
@@ -187,7 +187,7 @@ export default function CustomFocusScreen() {
             }}
           >
             <Pressable
-              onPress={() => router.replace("/profile/coaches")}
+              onPress={() => router.replace("/this-week")}
               style={({ pressed }) => ({
                 paddingVertical: 10,
                 paddingHorizontal: 14,
