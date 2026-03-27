@@ -19,33 +19,36 @@ Use this list before relying on memory, stale summaries, or scattered notes.
 - app/role-picker.tsx
 
 ## Core App Surfaces
-- app/(tabs)/welcome.tsx
-- app/(tabs)/profile.tsx
+- app/(tabs)/welcome.tsx — present but **hidden** from the main tab bar (`href: null` in `app/(tabs)/_layout.tsx`); onboarding/legacy entry
+- app/(tabs)/this-week/** — **This Week** tab: weekly coach/parent lane (join, manage, templates, kids, parent athletes, Family Huddle surface, etc.)
+- app/(tabs)/learn/** — **Learn** tab: fundamentals + gear (`learn/index.tsx`, `learn/fundamentals.tsx`, `learn/gear.tsx`, `learn/_layout.tsx`)
 - app/(tabs)/training.tsx
 - app/(tabs)/training/[id].tsx
-- app/(tabs)/Fundamentals.tsx
-- app/(tabs)/gear.tsx
+- app/(tabs)/profile.tsx
+- app/(tabs)/Fundamentals.tsx — top-level legacy route; **redirects** to `/learn/fundamentals`
+- app/(tabs)/gear.tsx — top-level legacy route; **redirects** to `/learn/gear`
 
-## Coach Share current lane
-- app/(tabs)/profile/coaches/index.tsx
-- app/(tabs)/profile/coaches/_layout.tsx
-- app/(tabs)/profile/coaches/join.tsx
-- app/(tabs)/profile/coaches/manage.tsx
-- app/(tabs)/profile/coaches/create-pack.tsx
-- app/(tabs)/profile/coaches/parent-athletes.tsx
-- app/(tabs)/profile/coaches/templates.tsx
-- app/(tabs)/profile/coaches/template-preview.tsx
-- app/(tabs)/profile/coaches/template-selected.tsx
+## Weekly coach/parent lane (This Week tab; historically “Coach Share” surfaces)
+- app/(tabs)/this-week/index.tsx
+- app/(tabs)/this-week/_layout.tsx
+- app/(tabs)/this-week/join.tsx
+- app/(tabs)/this-week/manage.tsx
+- app/(tabs)/this-week/create-pack.tsx
+- app/(tabs)/this-week/templates.tsx
+- app/(tabs)/this-week/template-preview.tsx
+- app/(tabs)/this-week/template-selected.tsx
+- app/(tabs)/this-week/custom-focus.tsx
+- app/(tabs)/this-week/parent-athletes.tsx
 
 ## Device role split (Coach/Parent)
 - src/storage/deviceRoleStore.ts
 - src/deviceRole/DeviceRoleProvider.tsx
 - src/deviceRole/coachRouteGate.ts
 
-## Family Competition (parent-facing lane on Coach Share weekly surface)
-- app/(tabs)/profile/coaches/family-competition/edit.tsx
+## Family Competition (parent-facing lane on **This Week** weekly surface)
+- app/(tabs)/this-week/family-competition/edit.tsx
 - src/family/coachShareCompetitionBuckets.ts
-- (routing) app/(tabs)/_layout.tsx — hidden tab screen for `family-competition/edit`
+- (routing) nested under `this-week/_layout.tsx`; tab bar stays 4 visible tabs via `app/(tabs)/_layout.tsx`
 
 ## Coach weekly sync — two-device worker-backed session
 These files implement invite/redeem session flow, coach publish of weekly payload, and parent read/shared-athlete linkage via Cloudflare Worker + local cache. Current scope includes **weekly note + shared athletes**. Parent-entered **competition/training** data still behaves as local-only and does not sync back to coach yet.
@@ -57,14 +60,14 @@ These files implement invite/redeem session flow, coach publish of weekly payloa
 - src/coach/weeklyFocusPublish.ts
 - app.config.ts — `extra.coachSyncBaseUrl` / env wiring for `EXPO_PUBLIC_COACH_SYNC_BASE_URL`
 
-## Coach kid pilot (internal, Profile → Coach Share → Kids)
-- app/(tabs)/profile/coaches/kids.tsx
-- app/(tabs)/profile/coaches/kid/[kidId].tsx
-- app/(tabs)/profile/coaches/kid/[kidId]/what-matters-next.tsx
-- app/(tabs)/profile/coaches/kid/[kidId]/weekly-focus.tsx
-- app/(tabs)/profile/coaches/kid/[kidId]/history.tsx
-- app/(tabs)/profile/coaches/kid/[kidId]/progress-reflection.tsx
-- app/(tabs)/profile/coaches/kid/[kidId]/competition/edit.tsx
+## Coach kid pilot (internal, **This Week** → Kids)
+- app/(tabs)/this-week/kids.tsx
+- app/(tabs)/this-week/kid/[kidId].tsx
+- app/(tabs)/this-week/kid/[kidId]/what-matters-next.tsx
+- app/(tabs)/this-week/kid/[kidId]/weekly-focus.tsx
+- app/(tabs)/this-week/kid/[kidId]/history.tsx
+- app/(tabs)/this-week/kid/[kidId]/progress-reflection.tsx
+- app/(tabs)/this-week/kid/[kidId]/competition/edit.tsx
 - src/storage/coachKidStore.ts (roster + **household** fields / grouping helpers as implemented)
 - src/storage/kidStandingGuidanceStore.ts
 - src/storage/kidCompetitionStore.ts

@@ -25,14 +25,15 @@ Avoid putting dev-only navigation inside Welcome/onboarding screens (redirect lo
 Use Dev Settings “Dev Shortcuts” to reach hidden routes.
 
 ## Hidden routes stay hidden from the tab bar by default unless intentionally exposed in dev.
-Use `href: null` for internal routes and Coach Share subroutes.
-Coach Share should still remain reachable from Profile, not as a main tab. For the dedicated TestFlight coach-testing lane, Coach Share can be exposed from `Profile` while remaining hidden by default otherwise.
-Tester-facing tab exposure is now intentional for product clarity:
-- Welcome
-- Profile
+Use `href: null` for internal routes and nested **This Week** / **Learn** stack screens so join flows, kid drill-downs, and legacy tab filenames do not leak as extra tabs.
+In Dev, the weekly coach/parent lane is the **This Week** tab (`app/(tabs)/this-week/**`); Profile remains the home for account/settings and dev shortcuts. Black Belt / coach feedback builds still use `docs/release-checklist-ios.md` (prod bundle, Coach Share visibility rules there).
+Tester-facing tab exposure in Dev is intentionally simplified to four tabs:
+- This Week
 - Training
-- Fundamentals
-- Gear
+- Learn
+- Profile
+
+Welcome remains available as a hidden/onboarding route, not a permanent tab.
 
 ## Terminal-first workflow is the default.
 Prefer terminal-driven, repeatable edits and commands wherever practical.
@@ -72,8 +73,8 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-25  
-**Status:** Family Huddle and the coach/parent weekly lane still work in Dev. Today focused on **link-state correctness**, **reconnect truth**, and **publish readiness** so coach roster, publish readiness, and parent weekly “linked” state stay aligned. The fresh-path end-to-end flow is passing in Dev: parent unlinked → coach creates a fresh invite → parent intentionally connects → parent links child → coach publishes → parent receives the weekly note / Family Huddle. This session also included a real architecture tightening pass (canonical invite-token normalization, shared binding helpers, stricter parent weekly linked-state selection, stronger roster/publish alignment, stricter reconnect behavior, more honest revoke presentation on-device). We temporarily added DEV-only tracing for auto-relink to identify the problem path; final passing QA came after the strict linked-state fix. **TestFlight is still older reality** until a new build is shipped and documented here.
+**Date:** 2026-03-26  
+**Status:** The coach/parent architecture—publish, link, reconnect, and the working coach → parent weekly loop—remains intact; recent work was **presentation + information architecture**, not a backend rewrite. The parent weekly lane is now materially stronger in Dev: a guided weekly flow (what the child is working on, what to do first, what to track this week) shaped by live spouse/parent usability testing, while preserving Family Huddle and the publish/training/competition loops that already passed. **Custom Weekly Focus** editing is fixed again (Custom Focus selectable when editing an existing entry). Navigation is simplified around a **4-tab** model: **This Week**, **Training**, **Learn**, **Profile**—implemented with care for hidden/internal routes and Expo Router so legacy paths and redirects stay coherent. Parent weekly UI took hierarchy/art-direction cues from Stitch-style references but still uses current MatMind data hooks and logic. **TestFlight remains older shipped reality** until a new build is uploaded and documented here—nothing below is claimed as external-tester truth yet.
 
 On `dev`, the Coach Share lane now includes a role split (**Coach** and **Parent**) with a role picker and role-specific profile entry behavior. Worker-backed sync is deployed and active for invite/redeem + shared athlete linking + weekly note/shared-athlete visibility. Two-device smoke succeeded in Dev: coach creates invite, parent accepts invite, parent adds athlete, and coach sees the athlete as linked. Current limitation remains unchanged for deeper data: parent-entered **training logs** and **competition data** still do **not** sync back to coach and remain local-only on the parent side.
 
@@ -111,6 +112,20 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 - **Tier model / pricing** exploration started; **AI capabilities likely land in Pro by default**; **dashboard cost posture** under discussion.
 
 ## What we completed most recently
+
+### 2026-03-26 — parent weekly dashboard redesign
+- Rebuilt the parent weekly screen into a stronger “what to do this week / what to track this week” flow
+- Used live spouse/parent usability feedback to tighten copy, hierarchy, CTA clarity, and section behavior
+- Preserved the working Family Huddle / publish / training / competition loop while improving the parent experience (same data layer; coach-parent sync behavior unchanged)
+
+### 2026-03-26 — Custom Weekly Focus edit fix
+- Fixed weekly-focus editing so **Custom Focus** is active/selectable again when editing an existing entry
+
+### 2026-03-26 — 4-tab IA restructure for external feedback
+- Promoted the weekly coach/parent lane to a main **This Week** tab (`app/(tabs)/this-week/**`)
+- Consolidated Fundamentals + Gear into **Learn** (`app/(tabs)/learn/**`)
+- Removed Welcome from the permanent tab bar (kept as hidden/onboarding entry)
+- Updated redirects/dev links and fixed leaked scaffold tabs in Expo Router
 
 ### 2026-03-25 — strict parent link-state + reconnect hardening
 - Added canonical invite-token normalization and shared coach-link binding helpers
@@ -248,10 +263,14 @@ Validated:
 
 ### Product / release validation
 Validated:
-- Dev-validated fresh-path reconnect flow now passes (unlink → fresh invite → intentional reconnect → relink → publish → parent receive)
+- Dev-validated parent weekly redesign still preserves **coach → parent weekly publish**
+- Dev-validated parent **training** and **competition** flows still pass after the redesign (in the tested Dev loop)
+- Dev-validated **Custom Weekly Focus** editing works again (Custom Focus path when editing an existing entry)
+- Dev-validated **4-tab** structure (**This Week** / **Training** / **Learn** / **Profile**) is in place in Dev
+- Dev-validated fresh-path reconnect flow still passes (unlink → fresh invite → intentional reconnect → relink → publish → parent receive)
 - Dev-validated parent stays unlinked until intentional reconnect (no surprise auto-link from a fresh invite alone)
 - Dev-validated coach publish after fresh reconnect passes
-- Broader TestFlight reality is still not updated until a new external feedback build ships; treat TestFlight as stale vs Dev until documented
+- Broader **TestFlight** reality is still not updated until a new build ships and is documented; treat TestFlight as stale vs Dev until then
 - Build 18 is still the latest documented TestFlight reality for broader testers, and is older than the newest Dev-validated shared-athlete role-split slice
 - **2026-03-21 batch** (family weekly Coach Share surface, competition structured fields + form polish, mock **What matters next** drafting): treat as **Dev / local** until a new TestFlight is explicitly validated and noted here—not assumed for **broad** TestFlight testers
 - **2026-03-22 batch** (**Family Competition** lane, **household** roster/editing, **keyboard** fix, palette): **working in local dev** on commits through **`83588d7`** — **not** claimed for TestFlight or broad testers
@@ -262,9 +281,9 @@ Validated:
 - **TestFlight boundary:** still do not overclaim TestFlight availability until a new build is explicitly shipped and documented
 - **Competition/training cross-device sync:** broader training sync remains out of scope here; parent-entered training logs can still reflect device-local training activity realities on parent (no broader parent->coach training replication implied in this slice)
 - **Kid roster / standing guidance / weekly focus / check-ins / kid-linked training / competition + swipe row deletes:** exercised via **Dev / local pilot** (not stated as live in the current TestFlight build)
-- Coach Share pilot remains intentionally contained/hidden for general testers
-- Coach Share pilot preview is cleaner (debug data hidden; clearer preview state)
-- Custom focus is supported in Coach Share templates and preview
+- **TestFlight** navigation may still differ from Dev (4-tab **This Week** / **Learn** stack) until a new build is uploaded and documented
+- Weekly template/preview on the coach side remains cleaner (debug data hidden; clearer preview state)
+- Custom focus is supported in weekly templates and preview
 - Reference link pill supports YouTube + Instagram links
 
 ## Commits landed most recently
@@ -298,32 +317,33 @@ Validated:
 - Terminal-first execution remains a hard project rule
 - Build 12 is the **last documented** coach-testing build in TestFlight until handoff is updated after a new upload (beta reality)
 - Feedback triage is intentionally tabled short-term
-- Coach Share remains **hidden/pilot-scoped** (not a broad tester-facing feature yet)
-- **Coach Share pilot + per-kid tracking** is the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
+- Weekly coach/parent flows (**This Week** tab in Dev; historically “Coach Share” family surfaces) are the primary lane for real-world feedback prep; **TestFlight** may still show an older tab layout until a new build ships
+- **Per-kid tracking** under **This Week** remains the highest-ROI lane for Kyle internal testing (local pilot / Dev until we ship a new build)
 - Kid roster / weekly focus / **coach kid competition** rows / kid-linked training session data remain **local-only (AsyncStorage + on-device media copies)** for the pilot. The **weekly sync experiment** (when committed and deployed) targets a **narrow weekly message document** only — **not** a full multi-device replication of competition or training.
 - **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
 - Final external-feedback TestFlight go/no-go checklist still needs a dedicated pass
-- Likely remaining work is now polish / readiness, not the same deep link-state debugging from earlier
+- Parent weekly lane is much stronger but may still get another visual/personality pass
+- Family Huddle v2 remains an open design opportunity
 - Still need to decide whether coach should keep “Add a kid” in the external-testing model
-- Still need a broader navigation / role-placement decision later if product wants it
-- Family Huddle / bigger-journey and some coach/parent wording may still get another polish pass
+- Need a final decision on whether the current IA is the exact external-feedback build IA or a testing-phase simplification
 - Broader training sync remains out of scope
 - "The bigger journey" card is still mostly auto/fallback driven
 - Black Belt testing should focus on comprehension and flow quality, not assume all cross-device data types sync
 
 ## Best next-session recommendation
-1. Start with the final external-feedback TestFlight readiness checklist
-2. Decide must-fix vs acceptable-for-feedback vs document-as-known-limitation
-3. If go, prepare and ship the external feedback TestFlight build deliberately
-4. Update handoff immediately after any build/upload
+1. Start with a clean QA pass on the new 4-tab structure
+2. Run the final external-feedback TestFlight go/no-go checklist
+3. Decide must-fix vs acceptable-for-feedback vs known limitation
+4. If go, prepare and ship the external feedback TestFlight build deliberately
+5. Update handoff immediately after any build/upload
 
 ## Suggested restart commands for next session
 - `git status -sb`
 - `git log -8 --oneline`
 - `sed -n '1,280p' "docs/dev-handoff.md"`
-- `sed -n '1,220p' "docs/recaps/2026-03-25_dev-recap.md"`
+- `sed -n '1,220p' "docs/recaps/2026-03-26_dev-recap.md"`
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
