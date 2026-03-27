@@ -78,3 +78,15 @@ export function isCoachShareProfileEntryVisible(): boolean {
   if (coerceTruthyBuildFlag(readExtraValue("showCoachShareProfileEntry"))) return true;
   return isDev();
 }
+
+/**
+ * When true, Profile shows pilot role switch and the Developer Settings row.
+ * Omit internal flags on feedback builds so testers do not see these entries.
+ * Internal builds may set EXPO_PUBLIC_INTERNAL_PROFILE_CONTROLS=1 or extra.internalProfileControls.
+ */
+export function showInternalProfileControls(): boolean {
+  if (isDev()) return true;
+  if (coerceTruthyBuildFlag(process.env.EXPO_PUBLIC_INTERNAL_PROFILE_CONTROLS)) return true;
+  if (coerceTruthyBuildFlag(readExtraValue("internalProfileControls"))) return true;
+  return false;
+}

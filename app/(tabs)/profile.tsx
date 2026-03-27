@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { router } from "expo-router";
 import {
   Alert,
+  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -15,8 +16,9 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
 import { StorageKeys } from "../../src/storage/storageKeys";
 
-import { isDev } from "../../src/config/runtime";
+import { showInternalProfileControls } from "../../src/config/runtime";
 import type { DeviceRole } from "../../src/storage/deviceRoleStore";
+import MatMindLogo from "../../assets/images/matmind-logo.png";
 
 const DEFAULT_PROFILE: Profile = {
   belt: "White",
@@ -132,6 +134,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   pillActive: { borderColor: UI.pillActiveBorder, backgroundColor: "#edf2ff", color: UI.textPrimary },
+  profileLogoPress: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 10,
+  },
+  profileLogo: { width: 72, height: 72 },
 });
 
 export default function ProfileScreen() {
@@ -200,6 +208,29 @@ export default function ProfileScreen() {
     );
   }
 
+  const onPilotRoleSwitch = () => {
+    if (role !== "coach" && role !== "parent") return;
+    const next: DeviceRole = role === "coach" ? "parent" : "coach";
+    Alert.alert(
+      "Switch pilot role?",
+      next === "coach"
+        ? "You’ll see coach tools and roster flows. Nothing stored on this phone is deleted."
+        : "You’ll see the family weekly screen and parent flows. Nothing stored on this phone is deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Switch",
+          onPress: () => {
+            void (async () => {
+              await setRole(next);
+              router.replace("/profile");
+            })();
+          },
+        },
+      ],
+    );
+  };
+
   return (
   <SafeAreaView style={styles.container}>
     <KeyboardAwareScrollView
@@ -211,10 +242,37 @@ export default function ProfileScreen() {
 >
       {/* Onboarding */}
       <View style={{ marginTop: 8, marginBottom: 24, alignItems: "center" }}>
+        <Pressable
+          onLongPress={
+            !showInternalProfileControls() ? () => router.push("/profile/dev-settings") : undefined
+          }
+          hitSlop={12}
+          style={({ pressed }) => [
+            styles.profileLogoPress,
+            pressed && !showInternalProfileControls() ? { opacity: 0.88 } : null,
+          ]}
+        >
+          <Image
+            source={MatMindLogo}
+            style={styles.profileLogo}
+            resizeMode="contain"
+            accessible
+            accessibilityRole="image"
+            accessibilityLabel="MatMind logo"
+          />
+        </Pressable>
         <Text style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}>
           Train.
         </Text>
-        <Text style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}>
+        <Text
+          onLongPress={
+            !showInternalProfileControls() && (role === "coach" || role === "parent")
+              ? onPilotRoleSwitch
+              : undefined
+          }
+          suppressHighlighting
+          style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}
+        >
           Reflect.
         </Text>
         <Text style={{ fontSize: 24, fontWeight: "700", letterSpacing: 0.8, color: UI.textPrimary }}>
@@ -336,7 +394,7 @@ export default function ProfileScreen() {
       </Text>
       <View style={{ height: 20 }} />
 
-      {role === "coach" || role === "parent" ? (
+      {showInternalProfileControls() && (role === "coach" || role === "parent") ? (
         <View
           style={{
             paddingVertical: 14,
@@ -357,27 +415,7 @@ export default function ProfileScreen() {
             Switch to preview the other lane. Your data stays on this phone.
           </Text>
           <Pressable
-            onPress={() => {
-              const next: DeviceRole = role === "coach" ? "parent" : "coach";
-              Alert.alert(
-                "Switch pilot role?",
-                next === "coach"
-                  ? "You’ll see coach tools and roster flows. Nothing stored on this phone is deleted."
-                  : "You’ll see the family weekly screen and parent flows. Nothing stored on this phone is deleted.",
-                [
-                  { text: "Cancel", style: "cancel" },
-                  {
-                    text: "Switch",
-                    onPress: () => {
-                      void (async () => {
-                        await setRole(next);
-                        router.replace("/profile");
-                      })();
-                    },
-                  },
-                ],
-              );
-            }}
+            onPress={onPilotRoleSwitch}
             style={({ pressed }) => ({
               marginTop: 12,
               paddingVertical: 12,
@@ -396,7 +434,7 @@ export default function ProfileScreen() {
         </View>
       ) : null}
 
-      {isDev() ? (
+      {showInternalProfileControls() ? (
         <Pressable
           onPress={() => router.push("/profile/dev-settings")}
           style={({ pressed }) => ({

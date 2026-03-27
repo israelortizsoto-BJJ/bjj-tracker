@@ -10,7 +10,6 @@ export default function LearnHome() {
       <Stack.Screen options={{ title: "Learn" }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.inner}>
-          <Text style={styles.title}>Learn</Text>
           <Text style={styles.subtitle}>
             Fundamentals and gear basics — quick references for families and beginners.
           </Text>
@@ -46,8 +45,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f3f4f6" },
   scroll: { flexGrow: 1, paddingHorizontal: 24, paddingVertical: 32, paddingBottom: 44 },
   inner: { flex: 1 },
-  title: { fontSize: 26, fontWeight: "800", letterSpacing: 0.5, color: "#020617" },
-  subtitle: { marginTop: 8, marginBottom: 24, fontSize: 14, lineHeight: 20, color: "#4b5563" },
+  subtitle: { marginBottom: 24, fontSize: 14, lineHeight: 20, color: "#4b5563" },
   sectionLabel: {
     fontSize: 11,
     letterSpacing: 1.1,

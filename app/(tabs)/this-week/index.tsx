@@ -1000,27 +1000,71 @@ export default function CoachesScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "This week" }} />
-      <ReadTogetherStoryModal
-        visible={weeklyStoryOpen}
-        onRequestClose={closeWeeklyStory}
-        safeAreaTop={insets.top}
-        safeAreaBottom={insets.bottom}
-        stepIndex={weeklyStoryStep}
-        cards={readTogetherStoryCards}
-        onStepBack={() => setWeeklyStoryStep((s) => Math.max(0, s - 1))}
-        onStepNext={() =>
-          setWeeklyStoryStep((s) =>
-            Math.min(readTogetherStoryCards.length - 1, s + 1),
-          )
-        }
-        onFinished={closeWeeklyStory}
-        onOpenPublishedUrl={(url) => void openPublishedWebUrl(url)}
-        primaryFill={UI.primaryFill}
-        primaryFillPressed={UI.primaryFillPressed}
-        accentBorder={UI.addCompetitionBorder}
-        accentBg={UI.addCompetitionBg}
-        accentBgPressed={UI.addCompetitionBgPressed}
-      />
+      {role === "coach" ? (
+        <KeyboardAwareScrollView
+          enableOnAndroid
+          extraScrollHeight={80}
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1, backgroundColor: UI.screenBg }}
+          contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        >
+          {!ready ? (
+            <Text style={{ marginTop: 4, fontSize: 15, color: UI.textSecondary }}>
+              Loading…
+            </Text>
+          ) : (
+            <View>
+              <Text
+                style={{ fontSize: 26, fontWeight: "700", color: UI.textPrimary, marginBottom: 8 }}
+              >
+                Coach home
+              </Text>
+              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 22 }}>
+                Open your kids roster to manage athletes and weekly focus.
+              </Text>
+              <Pressable
+                onPress={() => router.push("/this-week/kids")}
+                style={({ pressed }) => ({
+                  paddingVertical: 14,
+                  paddingHorizontal: 18,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: UI.primaryFill,
+                  backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                  alignSelf: "stretch",
+                  alignItems: "center",
+                })}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: UI.primaryTextOnFill }}>
+                  Open kids roster
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </KeyboardAwareScrollView>
+      ) : (
+        <>
+          <ReadTogetherStoryModal
+            visible={weeklyStoryOpen}
+            onRequestClose={closeWeeklyStory}
+            safeAreaTop={insets.top}
+            safeAreaBottom={insets.bottom}
+            stepIndex={weeklyStoryStep}
+            cards={readTogetherStoryCards}
+            onStepBack={() => setWeeklyStoryStep((s) => Math.max(0, s - 1))}
+            onStepNext={() =>
+              setWeeklyStoryStep((s) =>
+                Math.min(readTogetherStoryCards.length - 1, s + 1),
+              )
+            }
+            onFinished={closeWeeklyStory}
+            onOpenPublishedUrl={(url) => void openPublishedWebUrl(url)}
+            primaryFill={UI.primaryFill}
+            primaryFillPressed={UI.primaryFillPressed}
+            accentBorder={UI.addCompetitionBorder}
+            accentBg={UI.addCompetitionBg}
+            accentBgPressed={UI.addCompetitionBgPressed}
+          />
       <KeyboardAwareScrollView
         enableOnAndroid
         extraScrollHeight={80}
@@ -1036,13 +1080,7 @@ export default function CoachesScreen() {
         >
           {`This week together — ${topHeaderKidLabel}`}
         </Text>
-        {__DEV__ ? (
-          <Text style={{ fontSize: 12, color: "#9ca3af", marginBottom: 14 }}>
-            Dev: long-press the title for local storage debug counts.
-          </Text>
-        ) : (
-          <View style={{ height: 14 }} />
-        )}
+        <View style={{ height: 14 }} />
 
         {!ready ? (
           <Text style={{ marginTop: 4, fontSize: 15, color: UI.textSecondary }}>
@@ -2609,6 +2647,8 @@ export default function CoachesScreen() {
           </>
         )}
       </KeyboardAwareScrollView>
+        </>
+      )}
     </>
   );
 }
