@@ -209,12 +209,12 @@ export default function DevSettingsScreen() {
     />
     <DevNavButton
       title="Open Gear (hidden)"
-      subtitle="Hidden route: /gear"
+      subtitle="Hidden route: /gear → /learn/gear"
       path="/gear"
     />
     <DevNavButton
       title="Open Fundamentals (hidden)"
-      subtitle="Hidden route: /Fundamentals"
+      subtitle="Hidden route: /Fundamentals → /learn/fundamentals"
       path="/Fundamentals"
     />
     <DevNavButton
