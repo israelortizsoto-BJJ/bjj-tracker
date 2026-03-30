@@ -1410,9 +1410,7 @@ export default function KidDetailScreen() {
                 alignSelf: "flex-start",
               })}
             >
-              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
-                {standingIsActive ? "Edit direction" : "Add note"}
-              </Text>
+              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>Edit Note</Text>
             </Pressable>
           </View>
 

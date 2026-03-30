@@ -1,6 +1,6 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Keyboard, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useFocusEffect } from "@react-navigation/native";
 
@@ -49,6 +49,25 @@ export default function KidWeeklyFocusScreen() {
   const [ready, setReady] = useState(false);
 
   const [tab, setTab] = useState<Tab>("templates");
+
+  const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
+  const bumpScrollToFocusedInput = useCallback(() => {
+    const run = () => {
+      (keyboardAwareRef.current as { update?: () => void } | null)?.update?.();
+    };
+    requestAnimationFrame(run);
+    setTimeout(run, 120);
+    setTimeout(run, 340);
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === "ios") {
+      const sub = Keyboard.addListener("keyboardWillChangeFrame", bumpScrollToFocusedInput);
+      return () => sub.remove();
+    }
+    const sub = Keyboard.addListener("keyboardDidShow", bumpScrollToFocusedInput);
+    return () => sub.remove();
+  }, [bumpScrollToFocusedInput]);
 
   // Templates selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -263,6 +282,7 @@ export default function KidWeeklyFocusScreen() {
         options={{ title: editEntryId ? "Edit Weekly Focus (Pilot)" : "Set Weekly Focus (Pilot)" }}
       />
       <KeyboardAwareScrollView
+        ref={keyboardAwareRef}
         enableOnAndroid
         extraScrollHeight={80}
         keyboardShouldPersistTaps="handled"
@@ -402,6 +422,8 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={familyCoachRecapNote}
               onChangeText={setFamilyCoachRecapNote}
+              onFocus={bumpScrollToFocusedInput}
+              onContentSizeChange={bumpScrollToFocusedInput}
               placeholder="e.g. We drilled base and one clean stand-up escape…"
               placeholderTextColor={UI.textSecondary}
               multiline
@@ -509,6 +531,8 @@ export default function KidWeeklyFocusScreen() {
                 placeholder="Optional short note for this kid’s emphasis"
                 placeholderTextColor={UI.textSecondary}
                 multiline
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
                 style={{
                   marginTop: 6,
                   paddingVertical: 10,
@@ -551,6 +575,8 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={familyCoachRecapNote}
               onChangeText={setFamilyCoachRecapNote}
+              onFocus={bumpScrollToFocusedInput}
+              onContentSizeChange={bumpScrollToFocusedInput}
               placeholder="e.g. We drilled base and one clean stand-up escape…"
               placeholderTextColor={UI.textSecondary}
               multiline

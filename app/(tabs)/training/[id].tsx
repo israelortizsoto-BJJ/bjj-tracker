@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
 import { toDateKey } from "../../../src/_domain/dateKey";
 import { buildTechniqueIndex, getTechniqueById } from "../../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../../src/fundamentals/taxonomy";
@@ -153,6 +154,7 @@ async function saveFavoriteTechIds(next: string[]) {
 // State Variables Block1 //
 export default function TrainingSessionEditor() {
   const router = useRouter();
+  const { role: deviceRole } = useDeviceRole();
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const prefillDate = String(params.date || "");
@@ -729,7 +731,9 @@ Alert.alert(
       text: "OK",
       onPress: () =>
         kidIdParam
-          ? router.replace(`/this-week/kid/${encodeURIComponent(kidIdParam)}`)
+          ? deviceRole === "parent"
+            ? router.replace("/this-week")
+            : router.replace(`/this-week/kid/${encodeURIComponent(kidIdParam)}`)
           : router.replace(`/training?date=${encodeURIComponent(finalDate)}`),
     },
   ]
