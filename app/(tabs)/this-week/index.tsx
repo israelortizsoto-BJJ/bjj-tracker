@@ -79,7 +79,9 @@ import { getKidCompetitionEntriesForKid } from "../../../src/storage/kidCompetit
 import type { Session } from "../../../src/types";
 import {
   kidCompetitionEntryIsSyncedFromWorker,
+  type Kid,
   type KidCompetitionEntry,
+  type KidsById,
 } from "../../../src/types/coachKid";
 import {
   familyResourceUrlForLinking,
@@ -266,8 +268,61 @@ export default function CoachesScreen() {
   const [practiceSummary, setPracticeSummary] = useState<ParentWeeklyPracticeSummary>(
     INITIAL_PRACTICE_SUMMARY,
   );
+  const [kidsByIdState, setKidsByIdState] = useState<KidsById>({});
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
+
+  const computeParentKidScopedState = useCallback(
+    async (kidId: string | null, loadedKidsById: KidsById, today: string) => {
+      const rosterCount = Object.keys(loadedKidsById).length;
+      let nextFamily: FamilyCompetitionLoadState = {
+        todayYMD: today,
+        kidId,
+        kidName: kidId ? kidDisplayNameForId(loadedKidsById, kidId) : null,
+        multiKidOnRoster: rosterCount > 1,
+        upcoming: [],
+        recent: [],
+      };
+      if (kidId) {
+        const compEntries = await getKidCompetitionEntriesForKid(kidId);
+        const part = partitionFamilyCompetitionEntries(compEntries, today);
+        nextFamily = {
+          ...nextFamily,
+          upcoming: part.upcoming,
+          recent: part.recent,
+        };
+      }
+
+      const rawSessions = await AsyncStorage.getItem(StorageKeys.sessions);
+      const allSessions = readSessionsSafe(rawSessions).map((s) => ({
+        ...s,
+        date: s.date || today,
+      }));
+      const scopedSessions = kidId
+        ? allSessions.filter((s) => (s.kidId ?? "").trim() === kidId)
+        : allSessions.filter((s) => !(s.kidId ?? "").trim());
+      const weekStart = startOfWeekMondayYMD(today);
+      const thisWeekSessions = scopedSessions
+        .filter((s) => s.date >= weekStart && s.date <= today)
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        );
+      const latestSessionOverall = scopedSessions
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0] ?? null;
+      const nextPracticeSummary: ParentWeeklyPracticeSummary = {
+        sessionCountThisWeek: thisWeekSessions.length,
+        latestSession: latestSessionOverall,
+      };
+
+      return { nextFamily, nextPracticeSummary };
+    },
+    [],
+  );
 
   const loadCoachShareData = useCallback(async () => {
     setReady(false);
@@ -390,58 +445,19 @@ export default function CoachesScreen() {
         await setFamilyCompetitionSelectedKidId(rosterKidId);
       }
     }
-
-    const rosterCount = Object.keys(loadedKidsById).length;
-
-    let nextFamily: FamilyCompetitionLoadState = {
-      todayYMD: today,
-      kidId: rosterKidId,
-      kidName: rosterKidId ? kidDisplayNameForId(loadedKidsById, rosterKidId) : null,
-      multiKidOnRoster: rosterCount > 1,
-      upcoming: [],
-      recent: [],
-    };
     const compApplyGen = ++applyFamilyCompGenRef.current;
-    if (rosterKidId) {
-      const compEntries = await getKidCompetitionEntriesForKid(rosterKidId);
-      const part = partitionFamilyCompetitionEntries(compEntries, today);
-      nextFamily = {
-        ...nextFamily,
-        upcoming: part.upcoming,
-        recent: part.recent,
-      };
-    }
-    const rawSessions = await AsyncStorage.getItem(StorageKeys.sessions);
-    const allSessions = readSessionsSafe(rawSessions).map((s) => ({
-      ...s,
-      date: s.date || today,
-    }));
-    const scopedSessions = nextFamily.kidId
-      ? allSessions.filter((s) => (s.kidId ?? "").trim() === nextFamily.kidId)
-      : allSessions.filter((s) => !(s.kidId ?? "").trim());
-    const weekStart = startOfWeekMondayYMD(today);
-    const thisWeekSessions = scopedSessions
-      .filter((s) => s.date >= weekStart && s.date <= today)
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-    const latestSessionOverall = scopedSessions
-      .slice()
-      .sort(
-        (a, b) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      )[0] ?? null;
-    const nextPracticeSummary: ParentWeeklyPracticeSummary = {
-      sessionCountThisWeek: thisWeekSessions.length,
-      latestSession: latestSessionOverall,
-    };
+    const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
+      rosterKidId,
+      loadedKidsById,
+      today,
+    );
 
     setFamilyCompetition((prev) => {
       if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
       return nextFamily;
     });
     setPracticeSummary(nextPracticeSummary);
+    setKidsByIdState(loadedKidsById);
 
     setCoachLinks(loadedCoachLinks);
     setCoachesById(loadedCoachesById);
@@ -451,7 +467,7 @@ export default function CoachesScreen() {
     setCompletionReceiptsQueue(loadedCompletionReceiptsQueue);
     setPilotPreviewItemsState(loadedPilotPreviewItems);
     setReady(true);
-  }, [role]);
+  }, [computeParentKidScopedState, role]);
 
   useFocusEffect(
     useCallback(() => {
@@ -979,6 +995,42 @@ export default function CoachesScreen() {
       ? `Coach's weekly focus from ${currentCoach.displayName}`
       : "Coach's weekly focus";
 
+  const relevantParentKids = useMemo(
+    () =>
+      Object.values(kidsByIdState)
+        .filter((kid) => kid && kid.id)
+        .sort((a, b) =>
+          (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }),
+        ),
+    [kidsByIdState],
+  );
+
+  const showParentKidSelector =
+    role === "parent" &&
+    ready &&
+    familyCompetition.multiKidOnRoster &&
+    relevantParentKids.length >= 2;
+
+  const handleSelectParentKidForThisWeek = useCallback(
+    async (kid: Kid) => {
+      if (!kid?.id || kid.id === familyCompetition.kidId) return;
+      const today = todayYMD();
+      await setFamilyCompetitionSelectedKidId(kid.id);
+      const compApplyGen = ++applyFamilyCompGenRef.current;
+      const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
+        kid.id,
+        kidsByIdState,
+        today,
+      );
+      setFamilyCompetition((prev) => {
+        if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
+        return nextFamily;
+      });
+      setPracticeSummary(nextPracticeSummary);
+    },
+    [computeParentKidScopedState, familyCompetition.kidId, kidsByIdState],
+  );
+
   const legacyClassProgramBody = useMemo(() => {
     if (useWeeklySyncHero) return "";
     const parts = [
@@ -1437,6 +1489,50 @@ export default function CoachesScreen() {
                 TRACK THIS WEEK
               </Text>
             </View>
+
+            {showParentKidSelector ? (
+              <View
+                style={{
+                  marginTop: 12,
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: 8,
+                }}
+              >
+                {relevantParentKids.map((kid) => {
+                  const selected = kid.id === familyCompetition.kidId;
+                  return (
+                    <Pressable
+                      key={kid.id}
+                      onPress={() => void handleSelectParentKidForThisWeek(kid)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Show This week for ${kid.name.trim() || "this child"}`}
+                      style={({ pressed }) => ({
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 999,
+                        borderWidth: 1,
+                        borderColor: selected ? UI.primaryFill : UI.border,
+                        backgroundColor: selected
+                          ? (pressed ? UI.primaryFillPressed : UI.primaryFill)
+                          : (pressed ? "#f3f4f6" : UI.bgCard),
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color: selected ? UI.primaryTextOnFill : UI.textPrimary,
+                        }}
+                      >
+                        {kid.name.trim() || "Child"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
 
             {role === "parent" && ready ? (
               <Section title="Training progress" tone="family">
