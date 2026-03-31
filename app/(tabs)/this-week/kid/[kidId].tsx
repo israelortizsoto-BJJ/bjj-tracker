@@ -388,6 +388,7 @@ export default function KidDetailScreen() {
   const [ready, setReady] = useState(false);
   const [kidName, setKidName] = useState<string>("—");
   const [householdDraft, setHouseholdDraft] = useState("");
+  const [householdBaseline, setHouseholdBaseline] = useState("");
   const [savingHousehold, setSavingHousehold] = useState(false);
   const [householdSavedAck, setHouseholdSavedAck] = useState(false);
   const [currentWeekEntry, setCurrentWeekEntry] = useState<KidWeeklyFocusEntry | null>(null);
@@ -450,7 +451,9 @@ export default function KidDetailScreen() {
       if (loadGen !== coachKidDetailLoadGenRef.current) return false;
       const kid = kids[kidId];
       setKidName(kid?.name ?? "—");
-      setHouseholdDraft(kid?.householdLabel ?? "");
+      const householdLabel = kid?.householdLabel ?? "";
+      setHouseholdDraft(householdLabel);
+      setHouseholdBaseline(householdLabel);
 
       const entry = await getLatestKidWeeklyFocusForWeek(kidId, weekStartYMD);
       setCurrentWeekEntry(entry);
@@ -812,6 +815,8 @@ export default function KidDetailScreen() {
     setHouseholdSavedAck(false);
   }, [kidId]);
 
+  const householdDirty = householdDraft !== householdBaseline;
+
   const canEditOutcome = Boolean(currentWeekEntry);
 
   const competitionListTodayYMD = todayYMD();
@@ -975,7 +980,9 @@ export default function KidDetailScreen() {
         router.replace("/this-week/kids");
         return;
       }
-      setHouseholdDraft(updated.householdLabel ?? "");
+      const savedHouseholdLabel = updated.householdLabel ?? "";
+      setHouseholdDraft(savedHouseholdLabel);
+      setHouseholdBaseline(savedHouseholdLabel);
       setHouseholdSavedAck(true);
     } finally {
       setSavingHousehold(false);
@@ -1298,7 +1305,7 @@ export default function KidDetailScreen() {
             }}
           />
           <Pressable
-            disabled={!ready || savingHousehold}
+            disabled={!ready || savingHousehold || !householdDirty}
             onPress={() => void onSaveHousehold()}
             style={({ pressed }) => ({
               alignSelf: "flex-start",
@@ -1308,22 +1315,17 @@ export default function KidDetailScreen() {
               borderWidth: 1,
               borderColor: UI.border,
               backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-              opacity: !ready || savingHousehold ? 0.55 : 1,
+              opacity: !ready || savingHousehold || !householdDirty ? 0.55 : 1,
             })}
           >
             <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>
               {savingHousehold
                 ? "Saving…"
-                : householdSavedAck
+                : householdSavedAck && !householdDirty
                   ? "Saved"
                   : "Save household"}
             </Text>
           </Pressable>
-          {householdSavedAck && !savingHousehold ? (
-            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
-              Household saved
-            </Text>
-          ) : null}
         </View>
 
         <View style={{ height: 16 }} />
