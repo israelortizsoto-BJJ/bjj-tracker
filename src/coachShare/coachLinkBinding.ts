@@ -219,11 +219,20 @@ export function activeCoachWriterInviteTokenNorms(links: CoachLink[]): Set<strin
  * Coach roster: parent-managed rows only show when their stored token matches an active
  * writer channel here. Other rows unchanged.
  */
-export function kidVisibleOnCoachRoster(kid: Kid, writerTokenNorms: Set<string>): boolean {
+export function kidVisibleOnCoachRoster(
+  kid: Kid,
+  writerTokenNorms: Set<string>,
+  activeWriterAthleteIds?: ReadonlySet<string>,
+): boolean {
   if (kid.isParentManagedChildProfile && !(kid.sharedAthleteId ?? "").trim()) return false;
   if (kid.isParentManagedChildProfile && (kid.sharedAthleteId ?? "").trim()) {
+    const sharedAthleteId = (kid.sharedAthleteId ?? "").trim();
     const kidToken = normalizeInviteLinkToken(kid.sharedFromInviteTokenNorm);
-    if (!kidToken || !writerTokenNorms.has(kidToken)) return false;
+    const tokenCoherent = Boolean(kidToken && writerTokenNorms.has(kidToken));
+    const existsInActiveWriterSession = Boolean(
+      sharedAthleteId && activeWriterAthleteIds?.has(sharedAthleteId),
+    );
+    if (!tokenCoherent && !existsInActiveWriterSession) return false;
   }
   return true;
 }

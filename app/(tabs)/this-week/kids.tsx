@@ -111,6 +111,7 @@ function buildHouseholdSections(kids: Kid[]): { sectionKey: string; title: strin
 export default function KidsRosterScreen() {
   const [ready, setReady] = useState(false);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
+  const [activeWriterAthleteIds, setActiveWriterAthleteIds] = useState<Set<string>>(new Set());
   const [kidName, setKidName] = useState("");
   const [householdLabelDraft, setHouseholdLabelDraft] = useState("");
   const [savingKid, setSavingKid] = useState(false);
@@ -160,6 +161,20 @@ export default function KidsRosterScreen() {
         }
       }
       setInviteSessionAthletesByToken(athletesByToken);
+      if (syncConfigured && writers.length > 0 && successfulSnapshots.length > 0) {
+        const nextActiveWriterAthleteIds = new Set<string>();
+        for (const snap of successfulSnapshots) {
+          for (const athlete of snap.athletes) {
+            const athleteId = typeof athlete.id === "string" ? athlete.id.trim() : "";
+            if (athleteId) {
+              nextActiveWriterAthleteIds.add(athleteId);
+            }
+          }
+        }
+        setActiveWriterAthleteIds(nextActiveWriterAthleteIds);
+      } else {
+        setActiveWriterAthleteIds(new Set());
+      }
       if (writers.length > 0 && syncConfigured && successfulSnapshots.length > 0) {
         await reconcileCoachKidRosterFromWriterSessions({
           successfulSnapshots,
@@ -198,11 +213,11 @@ export default function KidsRosterScreen() {
 
   const { kids, householdSections } = useMemo(() => {
     const visible = Object.values(kidsById).filter((k) =>
-      kidVisibleOnCoachRoster(k, activeWriterTokenNorms),
+      kidVisibleOnCoachRoster(k, activeWriterTokenNorms, activeWriterAthleteIds),
     );
     const sorted = visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return { kids: sorted, householdSections: buildHouseholdSections(sorted) };
-  }, [kidsById, activeWriterTokenNorms]);
+  }, [kidsById, activeWriterTokenNorms, activeWriterAthleteIds]);
 
   /** Same rule as the roster “· linked” badge: invite token on device + sharedAthleteId. */
   const hasLinkedAthleteOnRoster = useMemo(
