@@ -26,7 +26,7 @@ import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../../../src/media/persistCameraRollMedia";
-import { StorageKeys } from "../../../src/storage/storageKeys";
+import { getSessions, setSessions } from "../../../src/storage/sessionsStore";
 import type { Session, TechniqueEntry } from "../../../src/types";
 
 // Fundamentals: build static search index once (do NOT move inside component)
@@ -78,18 +78,11 @@ const FAVORITE_TECH_IDS_KEY = "mm.tech.favoriteIds.v1";
 
 
 async function loadSessions(): Promise<Session[]> {
-  const raw = await AsyncStorage.getItem(StorageKeys.sessions);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+  return getSessions();
 }
 
 async function saveSessions(sessions: Session[]) {
-  await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(sessions));
+  await setSessions(sessions);
 }
 // --- Tech Picker Prefs: Caps + Dedupe (Pure Helpers) ---
 const RECENT_CAP = 3;

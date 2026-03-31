@@ -7,6 +7,7 @@ import {
   stripWorkerSyncLinkageForKid,
 } from "./kidCompetitionStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
+import { deleteSessionsForKid } from "./sessionsStore";
 import { StorageKeys } from "./storageKeys";
 import type {
   CoachOutcome,
@@ -18,7 +19,6 @@ import type {
   KidsById,
 } from "../types/coachKid";
 import type { SyncedSharedAthlete } from "../types/coachWeeklySync";
-import type { Session } from "../types";
 
 type KidWeeklyFocusAppendInput =
   | (KidWeeklyFocusEntryTemplate & {
@@ -543,21 +543,7 @@ export async function deleteKidWeeklyFocusEntryById(
  * remove training sessions linked to a deleted kid so `bjj.sessions.v2` has no orphan kid-linked sessions.
  */
 async function deleteKidTrainingSessionsForKid(kidId: KidId): Promise<void> {
-  const raw = await AsyncStorage.getItem(StorageKeys.sessions);
-  if (!raw) return;
-
-  let parsed: unknown = null;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return;
-  }
-
-  if (!Array.isArray(parsed)) return;
-
-  const sessions = parsed as Session[];
-  const next = sessions.filter((s) => String(s.kidId ?? "").trim() !== kidId);
-  await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(next));
+  await deleteSessionsForKid(kidId);
 }
 
 /**
