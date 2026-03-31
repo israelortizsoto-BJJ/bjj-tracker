@@ -255,6 +255,7 @@ export default function CoachManageScreen() {
                 const ws = link.weeklySync!;
                 const isCoachWriterDevice = Boolean(ws.writerSecret?.trim());
                 const parentWriterOk = Boolean(ws.parentWriterSecret?.trim());
+                const hasUsableWeeklyLinkToken = Boolean(ws.linkToken?.trim());
                 return (
                   <View
                     key={link.id}
@@ -344,7 +345,7 @@ export default function CoachManageScreen() {
                       {ws.linkToken}
                     </Text>
 
-                    {!isCoachWriterDevice ? (
+                    {hasUsableWeeklyLinkToken ? (
                       <Pressable
                         onPress={() =>
                           router.push({
