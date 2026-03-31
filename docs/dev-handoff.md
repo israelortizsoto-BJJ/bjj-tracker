@@ -73,10 +73,12 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-27  
-**Status:** The coach/parent architecture—publish, link, reconnect, and the working coach → parent weekly loop—remains intact; recent work was **presentation + information architecture**, not a backend rewrite. The parent weekly lane is now materially stronger in Dev: a guided weekly flow (what the child is working on, what to do first, what to track this week) shaped by live spouse/parent usability testing, while preserving Family Huddle and the publish/training/competition loops that already passed. **Custom Weekly Focus** editing is fixed again (Custom Focus selectable when editing an existing entry). Navigation is simplified around a **4-tab** model: **This Week**, **Training**, **Learn**, **Profile**—implemented with care for hidden/internal routes and Expo Router so legacy paths and redirects stay coherent. Parent weekly UI took hierarchy/art-direction cues from Stitch-style references but still uses current MatMind data hooks and logic.
+**Date:** 2026-03-30  
+**Status:** The coach/parent architecture—publish, link, reconnect, and the working coach -> parent weekly loop—remains intact; recent work stayed in **Dev lane quality + workflow polish**, not backend scope expansion. Build 20 cleanup/verification work tightened parent and coach navigation behavior, improved multiline keyboard usability in coach writing flows, and added a **Dev-only** parent-awareness banner for newer coach weekly updates (server `weekly.updatedAt` vs local `lastSeenUpdatedAt` per link token). Parent awareness behavior is intentionally scoped to successful fetches and does not advance seen-state from offline cache. TestFlight truth is unchanged until explicitly shipped and documented.
 
 **2026-03-27 (latest):** A narrow **release-shaping** cleanup landed for the next feedback build: **This Week** / **Learn** shells were tightened after two-device QA; duplicate top headers were fixed by letting nested stack headers own those tabs; coach **This Week** root (`/this-week`) is now a short coach landing with a CTA into Kids roster, while the parent root keeps the family-facing weekly experience (coach root no longer shows parent-facing Family Huddle, parent competition shell, parent link-refresh shell, or root weekly-focus preview). Visible internal/dev exposure for feedback logic was reduced; **Profile** internal controls remain intentionally available in dev/internal contexts. This was **not** a sync expansion or architecture refactor—worker-backed weekly scope and the parent-entered training/competition boundary are unchanged. **TestFlight remains older shipped reality** until a new build is uploaded and documented here—nothing below is claimed as external-tester truth yet.
+
+**2026-03-30 (latest):** Build 20 QA cleanup + verification landed in Dev with three core outcomes: (1) parent training save flow now returns directly to **This Week** after save, and back-navigation to **This Week** uses clean replace behavior instead of stack-growing push behavior; (2) coach writing keyboard usability for multiline fields was hardened (including stronger re-scroll behavior) for **What Matters Next** and **Weekly Focus**, validated on device; (3) coach workflow cleanup now lands **Log Session** on the main **Training** tab and de-emphasizes Add Kid roster UI in Dev when linked athletes already exist (manual add fallback still available in Dev, production Add Kid behavior unchanged). A **Dev-only** parent-side **New coach update** banner is now implemented as an MVP awareness layer from `weekly.updatedAt` vs local last-seen state; no production/TestFlight rollout is claimed for this banner in this handoff.
 
 On `dev`, the Coach Share lane now includes a role split (**Coach** and **Parent**) with a role picker and role-specific profile entry behavior. Worker-backed sync is deployed and active for invite/redeem + shared athlete linking + weekly note/shared-athlete visibility. Two-device smoke succeeded in Dev: coach creates invite, parent accepts invite, parent adds athlete, and coach sees the athlete as linked. Current limitation remains unchanged for deeper data: parent-entered **training logs** and **competition data** still do **not** sync back to coach and remain local-only on the parent side.
 
@@ -137,6 +139,27 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 - Parent **This Week** tab root: keeps the family-facing weekly experience
 - Reduced visible internal/dev exposure for feedback logic; **Profile** internal controls remain available intentionally in dev/internal contexts
 - Commit: `9d805a6` — *Polish: tighten weekly routing and hide internal controls*
+
+### 2026-03-30 — Build 20 QA cleanup + verification (Dev)
+- Parent training save flow now returns directly to **This Week** after save
+- Back to **This Week** behavior moved from stack-growing push to clean replace
+- Coach note terminology cleanup in UX copy/actions:
+  - **Coach Note**
+  - **Optional detail**
+  - **Save Note**
+  - **Edit Note**
+- Multiline keyboard/input visibility fixed across coach writing flows:
+  - **What Matters Next**
+  - **Weekly Focus**
+- Final multiline fix required stronger re-scroll behavior on multiline fields; verified on device
+- Coach **Log Session** now lands on main **Training** tab (not forced `/training/new`)
+- In Dev, Add Kid roster UI is de-emphasized when linked athletes already exist; manual add fallback remains available
+- Production behavior for Add Kid remains unchanged
+- Added **Dev-only** parent-side **New coach update** banner MVP:
+  - Banner uses server `weekly.updatedAt` + local `lastSeenUpdatedAt` per `linkToken`
+  - Banner appears only on successful fetch when server timestamp is newer than last seen
+  - Offline cache reads do not advance seen-state
+  - No production/TestFlight behavior change
 
 ### 2026-03-25 — strict parent link-state + reconnect hardening
 - Added canonical invite-token normalization and shared coach-link binding helpers
@@ -279,6 +302,8 @@ Validated:
 - Dev-validated **Custom Weekly Focus** editing works again (Custom Focus path when editing an existing entry)
 - Dev-validated **4-tab** structure (**This Week** / **Training** / **Learn** / **Profile**) is in place in Dev
 - **2026-03-27 (Dev):** two-device QA passed after weekly routing polish for coach **This Week** root, parent **This Week** root, **Training**, **Learn**, and basic routing sanity—**not** claimed for TestFlight until a new build ships and is documented here
+- **2026-03-30 (Dev):** Build 20 QA cleanup and on-device verification passed for parent save/back nav behavior, coach multiline writing visibility, and coach Log Session landing behavior
+- **2026-03-30 (Dev):** parent **New coach update** awareness banner is implemented as **Dev-only MVP** and is intentionally not claimed for production/TestFlight
 - Dev-validated fresh-path reconnect flow still passes (unlink → fresh invite → intentional reconnect → relink → publish → parent receive)
 - Dev-validated parent stays unlinked until intentional reconnect (no surprise auto-link from a fresh invite alone)
 - Dev-validated coach publish after fresh reconnect passes

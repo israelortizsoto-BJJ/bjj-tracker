@@ -1904,9 +1904,7 @@ export default function KidDetailScreen() {
             <Pressable
               onPress={() =>
                 router.push(
-                  `/training/new?date=${encodeURIComponent(
-                    todayYMD(),
-                  )}&kidId=${encodeURIComponent(kidId)}`,
+                  `/training?date=${encodeURIComponent(todayYMD())}&kidId=${encodeURIComponent(kidId)}`,
                 )
               }
               style={({ pressed }) => ({

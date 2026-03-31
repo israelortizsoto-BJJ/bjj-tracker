@@ -33,6 +33,11 @@ import {
   setCachedWeeklyForLinkToken,
 } from "../../../src/storage/coachWeeklySyncCacheStore";
 import {
+  getLastSeenUpdatedAt,
+  setLastSeenUpdatedAt,
+} from "../../../src/storage/parentWeeklyLastSeenStore";
+import { isDev } from "../../../src/config/runtime";
+import {
   activeCoachLinksForParentLinkedUi,
   buildDevParentWeeklyLinkedStateTrace,
   parentStrictWeeklyLinkedCoachLinksForUi,
@@ -256,6 +261,8 @@ export default function CoachesScreen() {
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
   const [weeklySyncFromCache, setWeeklySyncFromCache] = useState(false);
   const [weeklySyncNetworkOk, setWeeklySyncNetworkOk] = useState(false);
+  /** Dev + parent: show after successful weekly fetch when `weekly.updatedAt` is newer than local last-seen. */
+  const [showNewCoachUpdateBanner, setShowNewCoachUpdateBanner] = useState(false);
   const [practiceSummary, setPracticeSummary] = useState<ParentWeeklyPracticeSummary>(
     INITIAL_PRACTICE_SUMMARY,
   );
@@ -288,6 +295,8 @@ export default function CoachesScreen() {
     ]);
 
     let loadedCoachesById = loadedCoachesByIdInitial;
+
+    let nextShowNewCoachUpdateBanner = false;
 
     const linksForParentWeeklyFetch =
       role === "parent"
@@ -341,6 +350,12 @@ export default function CoachesScreen() {
         };
         loadedCoachesById = merged;
         await persistCoachesById(merged);
+        if (isDev() && role === "parent" && session.weekly?.updatedAt) {
+          const lastSeen = await getLastSeenUpdatedAt(activeWeeklySyncLink.weeklySync.linkToken);
+          if (lastSeen === null || session.weekly.updatedAt > lastSeen) {
+            nextShowNewCoachUpdateBanner = true;
+          }
+        }
       } catch {
         nextWeeklyFetchFailed = true;
         nextWeeklyNetworkOk = false;
@@ -358,6 +373,7 @@ export default function CoachesScreen() {
     setWeeklySyncFetchedAt(nextWeeklyFetchedAt);
     setWeeklySyncFromCache(nextWeeklyFromCache);
     setWeeklySyncNetworkOk(nextWeeklyNetworkOk);
+    setShowNewCoachUpdateBanner(nextShowNewCoachUpdateBanner);
 
     const today = todayYMD();
     const rosterKidId = resolveFamilyCompetitionKidId(
@@ -567,6 +583,21 @@ export default function CoachesScreen() {
       ? parentStrictWeeklyLinkedCoachLinksForUi(coachLinks)[0]
       : activeCoachLinks.find((l) => l.weeklySync);
   const useWeeklySyncHero = Boolean(weeklySyncLink);
+
+  useEffect(() => {
+    if (!isDev() || role !== "parent" || !ready) return;
+    if (!weeklySyncDoc?.updatedAt || !weeklySyncNetworkOk) return;
+    const raw = weeklySyncLink?.weeklySync?.linkToken;
+    if (!raw?.trim()) return;
+    void setLastSeenUpdatedAt(raw, weeklySyncDoc.updatedAt);
+  }, [
+    ready,
+    role,
+    weeklySyncDoc,
+    weeklySyncNetworkOk,
+    weeklySyncLink?.weeklySync?.linkToken,
+    weeklySyncDoc?.updatedAt,
+  ]);
 
   const firstCoach = allCoaches[0];
   const firstPack = allPacks[0];
@@ -1223,6 +1254,31 @@ export default function CoachesScreen() {
                         : "Not linked yet"}
                 </Text>
               </View>
+
+              {isDev() &&
+              role === "parent" &&
+              showNewCoachUpdateBanner &&
+              weeklySyncDoc?.updatedAt ? (
+                <View
+                  style={{
+                    alignSelf: "stretch",
+                    marginBottom: 12,
+                    paddingVertical: 10,
+                    paddingHorizontal: 12,
+                    borderRadius: 10,
+                    backgroundColor: "#e0e7ff",
+                    borderWidth: 1,
+                    borderColor: "#c7d2fe",
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#312e81" }}>
+                    New coach update
+                  </Text>
+                  <Text style={{ marginTop: 4, fontSize: 13, color: "#4338ca" }}>
+                    Updated {new Date(weeklySyncDoc.updatedAt).toLocaleString()}
+                  </Text>
+                </View>
+              ) : null}
 
               <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#6d28d9" }]}>
                 {weeklyNoteHeroEyebrow.toUpperCase()}

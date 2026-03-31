@@ -1,7 +1,7 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -203,6 +203,26 @@ export default function KidsRosterScreen() {
     const sorted = visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return { kids: sorted, householdSections: buildHouseholdSections(sorted) };
   }, [kidsById, activeWriterTokenNorms]);
+
+  /** Same rule as the roster “· linked” badge: invite token on device + sharedAthleteId. */
+  const hasLinkedAthleteOnRoster = useMemo(
+    () => kids.some((k) => coachKidShowsFamilyChannelLinkedBadge(k, activeWriterTokenNorms)),
+    [kids, activeWriterTokenNorms],
+  );
+
+  /**
+   * Dev only: full “Add kid” form when roster is empty or no linked athletes yet; otherwise
+   * de-emphasize behind a manual fallback (production unchanged).
+   */
+  const showAddKidProminent =
+    !__DEV__ || kids.length === 0 || !hasLinkedAthleteOnRoster;
+
+  const [devManualAddKidExpanded, setDevManualAddKidExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!hasLinkedAthleteOnRoster) setDevManualAddKidExpanded(false);
+  }, [hasLinkedAthleteOnRoster]);
 
   /** Newest invite first — shown as the primary row; older codes live under “More invites”. */
   const sortedWriterLinks = useMemo(
@@ -803,76 +823,120 @@ export default function KidsRosterScreen() {
 
         <View style={{ height: 18 }} />
 
-        <View
-          style={{
-            padding: 16,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: UI.bgCard,
-            gap: 12,
-          }}
-        >
-          <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "600", color: UI.textSecondary }}>
-            ADD KID
-          </Text>
-          <TextInput
-            value={kidName}
-            onChangeText={setKidName}
-            placeholder="Kid name"
-            placeholderTextColor={UI.textSecondary}
-            autoCapitalize="words"
-            style={{
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              color: UI.textPrimary,
-            }}
-          />
-          <TextInput
-            value={householdLabelDraft}
-            onChangeText={setHouseholdLabelDraft}
-            placeholder="Household (optional)"
-            placeholderTextColor={UI.textSecondary}
-            autoCapitalize="words"
-            style={{
-              paddingVertical: 10,
-              paddingHorizontal: 12,
-              borderRadius: 12,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              color: UI.textPrimary,
-            }}
-          />
+        {__DEV__ && !showAddKidProminent && !devManualAddKidExpanded ? (
           <Pressable
-            disabled={savingKid}
-            onPress={() => void onAddKid()}
+            onPress={() => setDevManualAddKidExpanded(true)}
             style={({ pressed }) => ({
-              marginTop: 4,
-              paddingVertical: 12,
-              borderRadius: 12,
+              padding: 14,
+              borderRadius: CARD_RADIUS,
               borderWidth: 1,
               borderColor: UI.border,
-              backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-              opacity: savingKid ? 0.6 : 1,
-              alignItems: "center",
+              borderStyle: "dashed",
+              backgroundColor: pressed ? "#f9fafb" : "#fafafa",
+              gap: 4,
             })}
           >
-            <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "800" }}>
-              Save Kid
+            <Text style={{ fontSize: 13, fontWeight: "700", color: UI.textSecondary }}>
+              Add kid manually (dev)
+            </Text>
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+              Roster already has invite-linked athletes. Use this only for a local-only / edge-case row.
             </Text>
           </Pressable>
-          <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-            Coach-side roster.
-            {syncConfigured
-              ? " Weekly note sharing uses the blue Family weekly note card above."
-              : " Weekly note sharing is off until the sync URL is configured."}
-          </Text>
-        </View>
+        ) : null}
+
+        {showAddKidProminent || (__DEV__ && devManualAddKidExpanded) ? (
+          <View
+            style={{
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              gap: 12,
+            }}
+          >
+            {__DEV__ && devManualAddKidExpanded && !showAddKidProminent ? (
+              <Pressable
+                onPress={() => setDevManualAddKidExpanded(false)}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  paddingVertical: 6,
+                  paddingHorizontal: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? "#f3f4f6" : UI.bgCard,
+                })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary }}>
+                  Hide manual add
+                </Text>
+              </Pressable>
+            ) : null}
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "600", color: UI.textSecondary }}>
+              {__DEV__ && devManualAddKidExpanded && !showAddKidProminent
+                ? "ADD KID (MANUAL · DEV)"
+                : "ADD KID"}
+            </Text>
+            <TextInput
+              value={kidName}
+              onChangeText={setKidName}
+              placeholder="Kid name"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="words"
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+              }}
+            />
+            <TextInput
+              value={householdLabelDraft}
+              onChangeText={setHouseholdLabelDraft}
+              placeholder="Household (optional)"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="words"
+              style={{
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+              }}
+            />
+            <Pressable
+              disabled={savingKid}
+              onPress={() => void onAddKid()}
+              style={({ pressed }) => ({
+                marginTop: 4,
+                paddingVertical: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                opacity: savingKid ? 0.6 : 1,
+                alignItems: "center",
+              })}
+            >
+              <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "800" }}>
+                Save Kid
+              </Text>
+            </Pressable>
+            <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+              Coach-side roster.
+              {syncConfigured
+                ? " Weekly note sharing uses the blue Family weekly note card above."
+                : " Weekly note sharing is off until the sync URL is configured."}
+            </Text>
+          </View>
+        ) : null}
         </KeyboardAwareScrollView>
       </View>
     </>
