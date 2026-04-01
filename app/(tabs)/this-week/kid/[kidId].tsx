@@ -948,10 +948,10 @@ export default function KidDetailScreen() {
       weeklySyncNetworkOk: true,
       missionHeadline: synthetic.headline,
       missionBody: synthetic.body,
-      missionEyebrow: "Coach’s weekly note (family invite)",
+      missionEyebrow: "Shared weekly note (this invite)",
       legacyClassProgramBody: "",
       closingNavigationHint:
-        "Families see this same story after you publish — not private check-ins or coach-only video.",
+        "Publishing updates the shared weekly note for this invite.",
       practiceSummary: readTogetherPreviewPractice,
     });
   }, [currentWeekEntry, weekStartYMD, readTogetherPreviewPractice]);
@@ -1161,7 +1161,7 @@ export default function KidDetailScreen() {
       await coachSyncPublishWeekly(ws.linkToken, writerSecret, payload, ws.apiBaseUrl);
       Alert.alert(
         "Published to families",
-        "Families see the weekly focus, family note, optional family recap, and optional family link — never private check-ins or coach-only video. Ask them to open Read together on This week together or pull to refresh on their linked phone.",
+        "Families see the shared weekly note for this invite. Private check-ins stay coach-only. Ask them to open Read together on This week together or pull to refresh on their linked phone.",
       );
     } catch (e) {
       const msg =
@@ -1638,8 +1638,7 @@ export default function KidDetailScreen() {
               <Text style={{ fontSize: 11, fontWeight: "800", color: "#065f46" }}>FAMILY / PUBLISH</Text>
             </View>
             <Text style={{ fontSize: 12, color: "#047857", flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Families only see the weekly focus, family note, optional family recap, and optional family link after
-              you publish.
+              Publishing updates the shared weekly note for this invite. Private check-ins stay coach-only.
             </Text>
           </View>
 
@@ -1661,7 +1660,7 @@ export default function KidDetailScreen() {
                 color: "#065f46",
               }}
             >
-              This week’s family huddle
+              Shared family note
             </Text>
             {familyHuddleSourceMapRows.map((row) => (
               <View key={row.heading} style={{ gap: 4 }}>

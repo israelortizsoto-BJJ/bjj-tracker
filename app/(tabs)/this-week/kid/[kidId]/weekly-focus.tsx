@@ -361,7 +361,7 @@ export default function KidWeeklyFocusScreen() {
               Mission of the week
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Pilot catalog · title + template detail publish as the family mission card.
+              Pilot catalog · title + template detail · publishes into the shared weekly note for this invite.
             </Text>
 
             <View style={{ gap: 10 }}>
@@ -417,7 +417,8 @@ export default function KidWeeklyFocusScreen() {
               What we sharpened with Coach
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional · parent-safe recap — not private check-in notes. Publishes with the weekly note.
+              Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for
+              this invite.
             </Text>
             <TextInput
               value={familyCoachRecapNote}
@@ -498,7 +499,7 @@ export default function KidWeeklyFocusScreen() {
               Mission of the week
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Title + note publish as the family mission card.
+              Title + note · publishes into the shared weekly note for this invite.
             </Text>
 
             <View>
@@ -570,7 +571,8 @@ export default function KidWeeklyFocusScreen() {
               What we sharpened with Coach
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional · parent-safe recap — not private check-in notes. Publishes with the weekly note.
+              Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for
+              this invite.
             </Text>
             <TextInput
               value={familyCoachRecapNote}

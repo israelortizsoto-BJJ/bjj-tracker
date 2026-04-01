@@ -134,7 +134,7 @@ export function buildReadTogetherStoryCards(
   const coachRecapBody = recap
     ? recap
     : mode === "weekly_sync"
-      ? "Your coach has not added a short family recap for this week yet — that is optional. The mission card still carries this week’s focus; you can also ask your coach after class for one sentence about what to reinforce at home."
+      ? "Your coach has not added a short family recap for this week yet — that is optional. The shared weekly note still carries this week’s focus; you can also ask your coach after class for one sentence about what to reinforce at home."
       : "This view is not using the family weekly note channel yet, so there is no published recap field on this card. After you connect this phone with your coach’s invite, an optional family recap can appear here when they publish.";
 
   const matsBody = buildMatsBody(input);

@@ -1007,12 +1007,6 @@ export default function CoachesScreen() {
     : familyCompetition.kidId
       ? "Selected athlete"
       : "No athlete selected";
-  const topHeaderKidLabel = familyCompetition.kidName
-    ? familyCompetition.kidName
-    : familyCompetition.kidId
-      ? "your athlete"
-      : "your child";
-
   const whyThisMattersText = useMemo(() => {
     const childName = familyCompetition.kidName?.trim() || "your kid";
     const mission = (focusTitle ?? "").trim();
@@ -1021,7 +1015,7 @@ export default function CoachesScreen() {
       return `A short shared routine helps ${childName} remember the goal for the week — and helps you cheer them on with confidence.`;
     }
 
-    return `This week’s mission (“${mission}”) turns training into a family game: you both know what to practice, and ${childName} can feel proud when it clicks.`;
+    return `This week’s mission turns training into a family game: you both know what to practice, and ${childName} can feel proud when it clicks.`;
   }, [familyCompetition.kidName, focusTitle]);
   /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
   const weeklyNoteHeroEyebrow = useWeeklySyncHero
@@ -1254,7 +1248,7 @@ export default function CoachesScreen() {
           }
           style={{ fontSize: 26, fontWeight: "700", color: UI.textPrimary, marginBottom: 6 }}
         >
-          {`This week together — ${topHeaderKidLabel}`}
+          This week together
         </Text>
         <View style={{ height: 14 }} />
 
@@ -1360,10 +1354,20 @@ export default function CoachesScreen() {
                   letterSpacing: 1,
                   fontWeight: "800",
                   color: "#7c3aed",
+                  marginBottom: 6,
+                }}
+              >
+                Family Mission
+              </Text>
+              <Text
+                style={{
+                  fontSize: 14,
+                  color: UI.textSecondary,
+                  lineHeight: 20,
                   marginBottom: 12,
                 }}
               >
-                WEEKLY MISSION
+                Same note for every family on this coach link.
               </Text>
               <View
                 style={{
@@ -1571,27 +1575,38 @@ export default function CoachesScreen() {
 
             </View>
 
-            <View
-              style={{
-                marginTop: 18,
-                marginBottom: -2,
-                paddingHorizontal: 2,
-              }}
-            >
-              <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: "#6b7280" }}>
-                TRACK THIS WEEK
-              </Text>
-            </View>
-
             {showParentKidSelector ? (
-              <View
-                style={{
-                  marginTop: 12,
-                  flexDirection: "row",
-                  flexWrap: "wrap",
-                  gap: 8,
-                }}
-              >
+              <>
+                <View
+                  style={{
+                    marginTop: 18,
+                    marginBottom: -2,
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: "#6b7280" }}>
+                    Track this child
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    marginTop: 8,
+                    paddingHorizontal: 2,
+                    fontSize: 14,
+                    color: UI.textSecondary,
+                    lineHeight: 20,
+                  }}
+                >
+                  Choose a child for training, competition, and practice below.
+                </Text>
+                <View
+                  style={{
+                    marginTop: 12,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
                 {relevantParentKids.map((kid) => {
                   const selected = kid.id === familyCompetition.kidId;
                   return (
@@ -1600,7 +1615,7 @@ export default function CoachesScreen() {
                       onPress={() => void handleSelectParentKidForThisWeek(kid)}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
-                      accessibilityLabel={`Show This week for ${kid.name.trim() || "this child"}`}
+                      accessibilityLabel={`Training and competition for ${kid.name.trim() || "this child"}`}
                       style={({ pressed }) => ({
                         paddingVertical: 8,
                         paddingHorizontal: 12,
@@ -1624,7 +1639,8 @@ export default function CoachesScreen() {
                     </Pressable>
                   );
                 })}
-              </View>
+                </View>
+              </>
             ) : null}
 
             {role === "parent" && ready ? (
