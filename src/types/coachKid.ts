@@ -102,6 +102,9 @@ export type KidCompetitionOutcomeKind =
 /** Gi / No-Gi / both; optional on stored entries. */
 export type KidCompetitionFormat = "gi" | "nogi" | "both";
 
+/** Local coach competition clip (up to 3 per entry); `videoUri` / `videoAssetId` mirror slot 0. */
+export type KidCompetitionVideoRef = { uri: string; assetId?: string };
+
 export type KidCompetitionEntry = {
   /**
    * Local primary key. Rows hydrated from the worker may use `shared-comp-<workerCompetitionId>`
@@ -124,6 +127,8 @@ export type KidCompetitionEntry = {
   organizationOrPromoter?: string;
   outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;
+  /** Up to 3 persisted clips; slot 0 is mirrored in `videoUri` / `videoAssetId`. */
+  competitionVideos?: KidCompetitionVideoRef[];
   videoUri?: string;
   videoAssetId?: string;
   createdAt: string;

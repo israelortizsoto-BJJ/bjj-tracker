@@ -24,7 +24,53 @@ import type {
   KidCompetitionFormat,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
+  KidCompetitionVideoRef,
 } from "../../../../../../src/types/coachKid";
+
+const MAX_COMPETITION_VIDEOS = 3;
+
+type VideoSlotTuple = [
+  KidCompetitionVideoRef | null,
+  KidCompetitionVideoRef | null,
+  KidCompetitionVideoRef | null,
+];
+
+const EMPTY_VIDEO_SLOTS: VideoSlotTuple = [null, null, null];
+
+function videoSlotsFromEntry(entry: {
+  competitionVideos?: KidCompetitionVideoRef[];
+  videoUri?: string;
+  videoAssetId?: string;
+}): VideoSlotTuple {
+  const list =
+    entry.competitionVideos && entry.competitionVideos.length > 0
+      ? entry.competitionVideos
+      : entry.videoUri?.trim()
+        ? [
+            {
+              uri: entry.videoUri.trim(),
+              ...(entry.videoAssetId?.trim()
+                ? { assetId: entry.videoAssetId.trim() }
+                : {}),
+            },
+          ]
+        : [];
+  const capped = list.slice(0, MAX_COMPETITION_VIDEOS);
+  return [
+    capped[0] ?? null,
+    capped[1] ?? null,
+    capped[2] ?? null,
+  ];
+}
+
+function compactVideoSlots(slots: VideoSlotTuple): KidCompetitionVideoRef[] {
+  const out: KidCompetitionVideoRef[] = [];
+  for (let i = 0; i < MAX_COMPETITION_VIDEOS; i++) {
+    const s = slots[i];
+    if (s) out.push(s);
+  }
+  return out;
+}
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -151,11 +197,10 @@ export default function KidCompetitionEditScreen() {
     undefined,
   );
   const [notesDraft, setNotesDraft] = useState("");
-  const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
-  const [videoAssetId, setVideoAssetId] = useState<string | undefined>(undefined);
+  const [videoSlots, setVideoSlots] = useState<VideoSlotTuple>(EMPTY_VIDEO_SLOTS);
+  const [videoSlotKeys, setVideoSlotKeys] = useState<[number, number, number]>([0, 0, 0]);
   const [saving, setSaving] = useState(false);
-  const videoRef = useRef<Video>(null);
-  const [videoKey, setVideoKey] = useState(0);
+  const videoSlotRefs = useRef<(Video | null)[]>([null, null, null]);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
@@ -185,8 +230,8 @@ export default function KidCompetitionEditScreen() {
       setFormatDraft(found.format);
       setOutcomeKindDraft(found.outcomeKind);
       setNotesDraft(found.coachNotes ?? "");
-      setVideoUri(found.videoUri);
-      setVideoAssetId(found.videoAssetId);
+      setVideoSlots(videoSlotsFromEntry(found));
+      setVideoSlotKeys([0, 0, 0]);
     } finally {
       setLoading(false);
     }
@@ -210,8 +255,8 @@ export default function KidCompetitionEditScreen() {
         setFormatDraft(undefined);
         setOutcomeKindDraft(undefined);
         setNotesDraft("");
-        setVideoUri(undefined);
-        setVideoAssetId(undefined);
+        setVideoSlots(EMPTY_VIDEO_SLOTS);
+        setVideoSlotKeys([0, 0, 0]);
         setLoading(false);
         return;
       }
@@ -243,7 +288,7 @@ export default function KidCompetitionEditScreen() {
     return true;
   }
 
-  async function pickVideo() {
+  async function pickVideoForSlot(slotIndex: number) {
     if (!(await ensureMediaPermissions())) return;
 
     try {
@@ -254,14 +299,37 @@ export default function KidCompetitionEditScreen() {
       if (!result.canceled && result.assets?.[0]?.uri) {
         const asset = result.assets[0];
         const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
-        setVideoUri(persisted);
-        setVideoAssetId(asset.assetId ?? undefined);
-        setVideoKey((k) => k + 1);
+        const ref: KidCompetitionVideoRef = asset.assetId
+          ? { uri: persisted, assetId: asset.assetId }
+          : { uri: persisted };
+        setVideoSlots((prev) => {
+          const next: VideoSlotTuple = [prev[0], prev[1], prev[2]];
+          next[slotIndex] = ref;
+          return next;
+        });
+        setVideoSlotKeys((prev) => {
+          const next: [number, number, number] = [prev[0], prev[1], prev[2]];
+          next[slotIndex] += 1;
+          return next;
+        });
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Could not attach video", msg || "Try another clip or check storage space.");
     }
+  }
+
+  function clearVideoSlot(slotIndex: number) {
+    setVideoSlots((prev) => {
+      const next: VideoSlotTuple = [prev[0], prev[1], prev[2]];
+      next[slotIndex] = null;
+      return next;
+    });
+    setVideoSlotKeys((prev) => {
+      const next: [number, number, number] = [prev[0], prev[1], prev[2]];
+      next[slotIndex] += 1;
+      return next;
+    });
   }
 
   async function onSave() {
@@ -272,6 +340,8 @@ export default function KidCompetitionEditScreen() {
       Alert.alert("Invalid date", "Use YYYY-MM-DD.");
       return;
     }
+
+    const competitionVideos = compactVideoSlots(videoSlots);
 
     setSaving(true);
     try {
@@ -288,8 +358,7 @@ export default function KidCompetitionEditScreen() {
           format: formatDraft,
           outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
-          videoUri,
-          videoAssetId,
+          ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
         });
       } else {
         await updateKidCompetitionEntry(entryId, {
@@ -303,8 +372,7 @@ export default function KidCompetitionEditScreen() {
           format: formatDraft,
           outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
-          videoUri,
-          videoAssetId,
+          competitionVideos,
         });
       }
       router.replace(`/this-week/kid/${kidId}`);
@@ -313,7 +381,7 @@ export default function KidCompetitionEditScreen() {
       Alert.alert(
         "Could not save",
         msg ||
-          "Competition data could not be saved. If this keeps happening, try shorter notes or remove the video and save again.",
+          "Competition data could not be saved. If this keeps happening, try shorter notes or remove the video(s) and save again.",
       );
     } finally {
       setSaving(false);
@@ -338,11 +406,12 @@ export default function KidCompetitionEditScreen() {
     ]);
   }
 
-  async function replayVideo() {
+  async function replayVideoSlot(slotIndex: number) {
     try {
-      if (!videoRef.current) return;
-      await videoRef.current.setPositionAsync(0);
-      await videoRef.current.playAsync();
+      const r = videoSlotRefs.current[slotIndex];
+      if (!r) return;
+      await r.setPositionAsync(0);
+      await r.playAsync();
     } catch {
       // ignore
     }
@@ -690,79 +759,124 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textSecondary,
               }}
             >
-              VIDEO (OPTIONAL)
+              VIDEOS (OPTIONAL, MAX {MAX_COMPETITION_VIDEOS})
             </Text>
-            <Pressable
-              onPress={() => void pickVideo()}
-              style={({ pressed }) => ({
-                marginTop: 8,
-                paddingVertical: 12,
-                paddingHorizontal: 14,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                alignSelf: "flex-start",
-              })}
-            >
-              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
-                🎥 Choose from library
-              </Text>
-            </Pressable>
+            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+              Three slots; empty middle slots are dropped when you save.
+            </Text>
 
-            {videoUri ? (
-              <View style={{ marginTop: 12, gap: 8 }}>
-                <Video
-                  key={videoKey}
-                  ref={videoRef}
-                  source={{ uri: videoUri }}
-                  style={{ width: "100%", height: 220, borderRadius: 12 }}
-                  useNativeControls
-                  resizeMode={ResizeMode.CONTAIN}
-                  isLooping={false}
-                  onPlaybackStatusUpdate={(status) => {
-                    if (!status || typeof status !== "object") return;
-                    // @ts-ignore expo-av playback status
-                    if (status.didJustFinish) setVideoKey((k) => k + 1);
+            {([0, 1, 2] as const).map((slotIndex) => {
+              const clip = videoSlots[slotIndex];
+              const slotLabel = `Clip ${slotIndex + 1}`;
+              return (
+                <View
+                  key={slotIndex}
+                  style={{
+                    marginTop: 10,
+                    padding: 10,
+                    borderRadius: 12,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: UI.bgCard,
+                    gap: 8,
                   }}
-                />
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-                  <Pressable
-                    onPress={() => void replayVideo()}
-                    style={({ pressed }) => ({
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                    })}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary }}>
-                      ↻ Replay
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => {
-                      setVideoUri(undefined);
-                      setVideoAssetId(undefined);
-                    }}
-                    style={({ pressed }) => ({
-                      paddingVertical: 10,
-                      paddingHorizontal: 14,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: pressed ? "#fef2f2" : UI.bgCard,
-                    })}
-                  >
-                    <Text style={{ fontSize: 13, fontWeight: "800", color: UI.danger }}>
-                      Remove video
-                    </Text>
-                  </Pressable>
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: UI.textSecondary }}>
+                    {slotLabel}
+                  </Text>
+                  {clip ? (
+                    <>
+                      <Video
+                        key={videoSlotKeys[slotIndex]}
+                        ref={(r) => {
+                          videoSlotRefs.current[slotIndex] = r;
+                        }}
+                        source={{ uri: clip.uri }}
+                        style={{ width: "100%", height: 140, borderRadius: 10 }}
+                        useNativeControls
+                        resizeMode={ResizeMode.CONTAIN}
+                        isLooping={false}
+                        onPlaybackStatusUpdate={(status) => {
+                          if (!status || typeof status !== "object") return;
+                          // @ts-ignore expo-av playback status
+                          if (status.didJustFinish) {
+                            setVideoSlotKeys((prev) => {
+                              const next: [number, number, number] = [prev[0], prev[1], prev[2]];
+                              next[slotIndex] += 1;
+                              return next;
+                            });
+                          }
+                        }}
+                      />
+                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                        <Pressable
+                          onPress={() => void replayVideoSlot(slotIndex)}
+                          style={({ pressed }) => ({
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: UI.border,
+                            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                          })}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
+                            Replay
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => void pickVideoForSlot(slotIndex)}
+                          style={({ pressed }) => ({
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: UI.border,
+                            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                          })}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
+                            Replace
+                          </Text>
+                        </Pressable>
+                        <Pressable
+                          onPress={() => clearVideoSlot(slotIndex)}
+                          style={({ pressed }) => ({
+                            paddingVertical: 8,
+                            paddingHorizontal: 12,
+                            borderRadius: 10,
+                            borderWidth: 1,
+                            borderColor: UI.border,
+                            backgroundColor: pressed ? "#fef2f2" : UI.bgCard,
+                          })}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: UI.danger }}>
+                            Remove
+                          </Text>
+                        </Pressable>
+                      </View>
+                    </>
+                  ) : (
+                    <Pressable
+                      onPress={() => void pickVideoForSlot(slotIndex)}
+                      style={({ pressed }) => ({
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        backgroundColor: pressed ? "#edf2ff" : "#f9fafb",
+                        alignSelf: "flex-start",
+                      })}
+                    >
+                      <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>
+                        🎥 Add from library
+                      </Text>
+                    </Pressable>
+                  )}
                 </View>
-              </View>
-            ) : null}
+              );
+            })}
 
             <Pressable
               disabled={!canSave || saving || loading}

@@ -288,6 +288,23 @@ function competitionMetaLine(row: KidCompetitionEntry): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
+/** Local coach clips: `competitionVideos` when present, else legacy `videoUri` / `videoAssetId`. */
+function coachCompetitionVideoRefsForRow(row: KidCompetitionEntry): {
+  uri: string;
+  assetId?: string | null;
+}[] {
+  const fromArr = row.competitionVideos?.filter((v) => (v?.uri ?? "").trim()) ?? [];
+  if (fromArr.length > 0) {
+    return fromArr.map((v) => ({
+      uri: v.uri.trim(),
+      assetId: v.assetId ?? null,
+    }));
+  }
+  const u = row.videoUri?.trim();
+  if (u) return [{ uri: u, assetId: row.videoAssetId ?? null }];
+  return [];
+}
+
 function formatMonthHeading(monthKey: string) {
   const [y, m] = monthKey.split("-").map(Number);
   if (!y || !m) return monthKey;
@@ -1071,6 +1088,37 @@ export default function KidDetailScreen() {
     },
     [load],
   );
+
+  const openCoachCompetitionVideos = useCallback((row: KidCompetitionEntry) => {
+    const refs = coachCompetitionVideoRefsForRow(row);
+    if (refs.length === 0) return;
+    const play = (i: number) =>
+      setMediaPreview({
+        type: "video",
+        uri: refs[i].uri,
+        assetId: refs[i].assetId ?? null,
+      });
+    if (refs.length === 1) {
+      play(0);
+      return;
+    }
+    // Android supports at most three alert buttons; omit Cancel when showing three clips.
+    if (refs.length === 3 && Platform.OS === "android") {
+      Alert.alert("3 videos", "Choose a clip to preview.", [
+        { text: "Video 1", onPress: () => play(0) },
+        { text: "Video 2", onPress: () => play(1) },
+        { text: "Video 3", onPress: () => play(2) },
+      ]);
+      return;
+    }
+    Alert.alert(`${refs.length} videos`, "Choose a clip to preview.", [
+      ...refs.map((r, i) => ({
+        text: `Video ${i + 1}`,
+        onPress: () => play(i),
+      })),
+      { text: "Cancel", style: "cancel" },
+    ]);
+  }, []);
 
   const onPublishWeeklyToFamilies = useCallback(async () => {
     if (!kidId || !weekStartYMD) {
@@ -2165,6 +2213,7 @@ export default function KidDetailScreen() {
                         {entries.map((row) => {
                           const isSyncedRow = Boolean(row.sharedCompetitionId);
                           const competitionMeta = competitionMetaLine(row);
+                          const compVideoRefs = coachCompetitionVideoRefsForRow(row);
                           return (
                           <Swipeable
                             key={row.id}
@@ -2227,16 +2276,12 @@ export default function KidDetailScreen() {
                                 >
                                   {row.tournamentName}
                                 </Text>
-                                {row.videoUri?.trim() ? (
+                                {compVideoRefs.length > 0 ? (
                                   <Pressable
                                     onPress={(e) => {
                                       e.stopPropagation?.();
                                       (e as { preventDefault?: () => void }).preventDefault?.();
-                                      setMediaPreview({
-                                        type: "video",
-                                        uri: row.videoUri!.trim(),
-                                        assetId: row.videoAssetId ?? null,
-                                      });
+                                      openCoachCompetitionVideos(row);
                                     }}
                                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                                   >
@@ -2257,7 +2302,9 @@ export default function KidDetailScreen() {
                                           fontWeight: "700",
                                         }}
                                       >
-                                        VID
+                                        {compVideoRefs.length === 1
+                                          ? "1 video"
+                                          : `${compVideoRefs.length} videos`}
                                       </Text>
                                     </View>
                                   </Pressable>

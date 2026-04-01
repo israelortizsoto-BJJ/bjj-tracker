@@ -8,6 +8,7 @@ import type {
   KidCompetitionFormat,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
+  KidCompetitionVideoRef,
   KidId,
 } from "../types/coachKid";
 import type { SyncedSharedCompetition } from "../types/coachWeeklySync";
@@ -75,6 +76,81 @@ function normalizeOrganizationOrPromoter(raw: unknown): string | undefined {
   return t ? t : undefined;
 }
 
+const MAX_COMPETITION_VIDEOS = 3;
+
+function parseAndCapCompetitionVideos(raw: unknown): KidCompetitionVideoRef[] {
+  if (!Array.isArray(raw)) return [];
+  const out: KidCompetitionVideoRef[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const uriRaw = (item as { uri?: unknown }).uri;
+    const uri = typeof uriRaw === "string" ? uriRaw.trim() : "";
+    if (!uri) continue;
+    const assetIdRaw = (item as { assetId?: unknown }).assetId;
+    const assetId =
+      typeof assetIdRaw === "string" && assetIdRaw.trim()
+        ? assetIdRaw.trim()
+        : undefined;
+    out.push(assetId ? { uri, assetId } : { uri });
+    if (out.length >= MAX_COMPETITION_VIDEOS) break;
+  }
+  return out;
+}
+
+function mediaFromSlots(
+  slots: KidCompetitionVideoRef[],
+): Pick<KidCompetitionEntry, "competitionVideos" | "videoUri" | "videoAssetId"> {
+  const capped = slots.slice(0, MAX_COMPETITION_VIDEOS);
+  const first = capped[0];
+  return {
+    competitionVideos: capped.length > 0 ? capped : undefined,
+    videoUri: first?.uri,
+    videoAssetId: first?.assetId,
+  };
+}
+
+/**
+ * Legacy `videoUri` / `videoAssetId` mirror slot 0; `competitionVideos` is capped.
+ * Drops an empty `competitionVideos` array.
+ */
+function normalizeKidCompetitionEntryMedia(
+  entry: KidCompetitionEntry,
+): Pick<KidCompetitionEntry, "competitionVideos" | "videoUri" | "videoAssetId"> {
+  const legacyUri =
+    typeof entry.videoUri === "string" ? entry.videoUri.trim() : "";
+  const legacyAssetId =
+    typeof entry.videoAssetId === "string" && entry.videoAssetId.trim()
+      ? entry.videoAssetId.trim()
+      : undefined;
+
+  let slots = parseAndCapCompetitionVideos(entry.competitionVideos);
+
+  if (slots.length === 0 && legacyUri) {
+    slots = legacyAssetId ? [{ uri: legacyUri, assetId: legacyAssetId }] : [{ uri: legacyUri }];
+  } else if (slots.length > 0 && legacyUri && slots[0].uri === legacyUri) {
+    const first = slots[0];
+    if (!first.assetId && legacyAssetId) {
+      slots = [{ ...first, assetId: legacyAssetId }, ...slots.slice(1)];
+    }
+  }
+
+  return mediaFromSlots(slots);
+}
+
+function collectKidCompetitionVideoUris(entry: KidCompetitionEntry): string[] {
+  const uris = new Set<string>();
+  for (const s of parseAndCapCompetitionVideos(entry.competitionVideos)) {
+    uris.add(s.uri);
+  }
+  const legacy = typeof entry.videoUri === "string" ? entry.videoUri.trim() : "";
+  if (legacy) uris.add(legacy);
+  return [...uris];
+}
+
+function persistKidCompetitionEntryShape(entry: KidCompetitionEntry): KidCompetitionEntry {
+  return { ...entry, ...normalizeKidCompetitionEntryMedia(entry) };
+}
+
 /** Local rows mirrored from the worker use `id` `shared-comp-<workerCompetitionId>`. */
 const SHARED_COMP_LOCAL_ID_PREFIX = "shared-comp-";
 
@@ -120,6 +196,7 @@ function normalizeKidCompetitionEntry(
   const { sharedAthleteId: _omitAthlete, sharedCompetitionId: _omitComp, ...rest } =
     raw;
   const linkage = normalizeSharedLinkageFields(raw);
+  const media = normalizeKidCompetitionEntryMedia(raw);
   return {
     ...rest,
     ...linkage,
@@ -129,6 +206,7 @@ function normalizeKidCompetitionEntry(
       raw.organizationOrPromoter,
     ),
     outcomeKind: normalizeOutcomeKind(raw.outcomeKind),
+    ...media,
   };
 }
 
@@ -170,9 +248,10 @@ async function getRaw(): Promise<KidCompetitionEntry[]> {
 }
 
 async function setRaw(entries: KidCompetitionEntry[]): Promise<void> {
+  const sanitized = entries.map((e) => persistKidCompetitionEntryShape(e));
   await AsyncStorage.setItem(
     StorageKeys.kidCompetitionEntries,
-    JSON.stringify(entries),
+    JSON.stringify(sanitized),
   );
 }
 
@@ -427,6 +506,7 @@ export type KidCompetitionCreateInput = {
   organizationOrPromoter?: string;
   outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;
+  competitionVideos?: KidCompetitionVideoRef[];
   videoUri?: string;
   videoAssetId?: string;
 };
@@ -442,6 +522,16 @@ export async function createKidCompetitionEntry(
     ? input.organizationOrPromoter.trim()
     : undefined;
 
+  let videoSlots: KidCompetitionVideoRef[] = [];
+  if (input.competitionVideos && input.competitionVideos.length > 0) {
+    videoSlots = parseAndCapCompetitionVideos(input.competitionVideos);
+  } else if (input.videoUri?.trim()) {
+    const u = input.videoUri.trim();
+    const aid = input.videoAssetId?.trim();
+    videoSlots = aid ? [{ uri: u, assetId: aid }] : [{ uri: u }];
+  }
+  const videoFields = mediaFromSlots(videoSlots);
+
   const created: KidCompetitionEntry = {
     id,
     kidId: input.kidId,
@@ -455,8 +545,7 @@ export async function createKidCompetitionEntry(
     ...(org ? { organizationOrPromoter: org } : {}),
     ...(input.outcomeKind ? { outcomeKind: input.outcomeKind } : {}),
     coachNotes: input.coachNotes?.trim() ? input.coachNotes.trim() : undefined,
-    videoUri: input.videoUri,
-    videoAssetId: input.videoAssetId,
+    ...videoFields,
     createdAt: nowIso,
     updatedAt: nowIso,
   };
@@ -488,6 +577,7 @@ export type KidCompetitionUpdateInput = Partial<{
   organizationOrPromoter: string | undefined;
   outcomeKind: KidCompetitionOutcomeKind | undefined;
   coachNotes: string | undefined;
+  competitionVideos: KidCompetitionVideoRef[] | undefined;
   videoUri: string | undefined;
   videoAssetId: string | undefined;
 }>;
@@ -503,19 +593,73 @@ export async function updateKidCompetitionEntry(
   const existing = all[idx];
   const nowIso = new Date().toISOString();
 
-  let nextVideoUri = existing.videoUri;
-  if (Object.prototype.hasOwnProperty.call(patch, "videoUri")) {
+  const existingMedia = normalizeKidCompetitionEntryMedia(existing);
+  const existingSlots = existingMedia.competitionVideos ?? [];
+
+  const hasCompetitionVideosPatch = Object.prototype.hasOwnProperty.call(
+    patch,
+    "competitionVideos",
+  );
+  const hasVideoUriPatch = Object.prototype.hasOwnProperty.call(patch, "videoUri");
+  const hasVideoAssetIdPatch = Object.prototype.hasOwnProperty.call(
+    patch,
+    "videoAssetId",
+  );
+
+  let nextSlots: KidCompetitionVideoRef[];
+
+  if (hasCompetitionVideosPatch) {
+    nextSlots = parseAndCapCompetitionVideos(patch.competitionVideos);
+  } else if (hasVideoUriPatch) {
     const v = patch.videoUri;
-    if (existing.videoUri && v !== existing.videoUri) {
-      await bestEffortDeletePersistedMedia(existing.videoUri);
+    if (typeof v === "undefined") {
+      nextSlots = [];
+    } else if (typeof v === "string") {
+      const uri = v.trim();
+      if (!uri) {
+        nextSlots = [];
+      } else {
+        const assetIdFromPatch =
+          hasVideoAssetIdPatch &&
+          typeof patch.videoAssetId === "string" &&
+          patch.videoAssetId.trim()
+            ? patch.videoAssetId.trim()
+            : undefined;
+        const assetId = assetIdFromPatch ?? existingSlots[0]?.assetId;
+        nextSlots = assetId ? [{ uri, assetId }] : [{ uri }];
+      }
+    } else {
+      nextSlots = existingSlots;
     }
-    nextVideoUri = v;
+  } else if (hasVideoAssetIdPatch) {
+    const aid =
+      typeof patch.videoAssetId === "string" && patch.videoAssetId.trim()
+        ? patch.videoAssetId.trim()
+        : undefined;
+    if (existingSlots.length === 0) {
+      nextSlots = [];
+    } else {
+      nextSlots = [
+        {
+          ...existingSlots[0],
+          ...(typeof aid !== "undefined" ? { assetId: aid } : {}),
+        },
+        ...existingSlots.slice(1),
+      ];
+    }
+  } else {
+    nextSlots = existingSlots;
   }
 
-  let nextVideoAssetId = existing.videoAssetId;
-  if (Object.prototype.hasOwnProperty.call(patch, "videoAssetId")) {
-    nextVideoAssetId = patch.videoAssetId;
+  const oldUris = new Set(collectKidCompetitionVideoUris(existing));
+  const newUris = new Set(nextSlots.map((s) => s.uri));
+  for (const u of oldUris) {
+    if (!newUris.has(u)) {
+      await bestEffortDeletePersistedMedia(u);
+    }
   }
+
+  const nextVideoFields = mediaFromSlots(nextSlots);
 
   let nextCoachNotes = existing.coachNotes;
   if (Object.prototype.hasOwnProperty.call(patch, "coachNotes")) {
@@ -580,8 +724,7 @@ export async function updateKidCompetitionEntry(
     organizationOrPromoter: nextOrganizationOrPromoter,
     outcomeKind: nextOutcomeKind,
     coachNotes: nextCoachNotes,
-    videoUri: nextVideoUri,
-    videoAssetId: nextVideoAssetId,
+    ...nextVideoFields,
   };
 
   all[idx] = updated;
@@ -595,7 +738,9 @@ export async function deleteKidCompetitionEntry(entryId: string): Promise<boolea
   const found = all.find((e) => e.id === entryId);
   if (!found) return false;
 
-  await bestEffortDeletePersistedMedia(found.videoUri);
+  for (const u of collectKidCompetitionVideoUris(found)) {
+    await bestEffortDeletePersistedMedia(u);
+  }
 
   const next = all.filter((e) => e.id !== entryId);
   await setRaw(capCompetitionsByKid(next));
@@ -607,7 +752,9 @@ export async function deleteAllKidCompetitionEntriesForKid(kidId: KidId): Promis
   const all = await getRaw();
   const removed = all.filter((e) => e.kidId === kidId);
   for (const e of removed) {
-    await bestEffortDeletePersistedMedia(e.videoUri);
+    for (const u of collectKidCompetitionVideoUris(e)) {
+      await bestEffortDeletePersistedMedia(u);
+    }
   }
   const next = all.filter((e) => e.kidId !== kidId);
   await setRaw(capCompetitionsByKid(next));
