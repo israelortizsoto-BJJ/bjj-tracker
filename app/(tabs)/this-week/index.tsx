@@ -324,9 +324,12 @@ export default function CoachesScreen() {
         ...s,
         date: s.date || today,
       }));
-      const scopedSessions = kidId
+      let scopedSessions = kidId
         ? allSessions.filter((s) => (s.kidId ?? "").trim() === kidId)
         : allSessions.filter((s) => !(s.kidId ?? "").trim());
+      if (role === "parent" && kidId) {
+        scopedSessions = scopedSessions.filter((s) => s.trainingLoggedByRole !== "coach");
+      }
       const weekStart = startOfWeekMondayYMD(today);
       const thisWeekSessions = scopedSessions
         .filter((s) => s.date >= weekStart && s.date <= today)
@@ -347,7 +350,7 @@ export default function CoachesScreen() {
 
       return { nextFamily, nextPracticeSummary };
     },
-    [],
+    [role],
   );
 
   const loadCoachShareData = useCallback(async () => {

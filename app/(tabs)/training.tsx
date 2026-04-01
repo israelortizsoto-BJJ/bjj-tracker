@@ -23,6 +23,7 @@ import {
 } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { toDateKey } from "../../src/_domain/dateKey";
+import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
 
 import { buildTechniqueIndex, getTechniqueById } from "../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
@@ -291,6 +292,7 @@ const INSIGHT_CARD_CONTAINER = {
 export default function Training() {
 // 3A) Navigation / params
   const router = useRouter();
+  const { role: deviceRole } = useDeviceRole();
   const params = useLocalSearchParams<{ date?: string; kidId?: string; fromWeekly?: string }>();
 
   const initialDate =
@@ -391,14 +393,18 @@ const refresh = useCallback(async () => {
     // - when kidId is provided: show only sessions for that kid
     // - when kidId is absent: show only account-level sessions (no kidId)
     const scoped = kidIdParam
-      ? normalized.filter((s) => (s.kidId ?? "").trim() === kidIdParam)
+      ? normalized.filter((s) => {
+          if ((s.kidId ?? "").trim() !== kidIdParam) return false;
+          if (deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
+          return true;
+        })
       : normalized.filter((s) => !(s.kidId ?? "").trim());
 
     setSessions(scoped);
   } finally {
     setIsLoadingSessions(false);
   }
-}, [kidIdParam]);
+}, [kidIdParam, deviceRole]);
 
 useEffect(() => {
   if (typeof params.date === "string" && params.date) {

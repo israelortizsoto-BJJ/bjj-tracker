@@ -668,12 +668,19 @@ if (primaryPersisted?.techniqueId) {
 }
 
 // 3) Build payload with dual-write: techniques[] + mirrored top-level fields from first entry
+const effectiveKidId = (kidIdParam ?? existingSession?.kidId ?? "").trim() || undefined;
 const payload: Session = {
   id: realId,
   createdAt: isNew ? now : existingSession?.createdAt || now,
   date: finalDate,
 
-  kidId: kidIdParam ?? existingSession?.kidId,
+  kidId: effectiveKidId,
+
+  trainingLoggedByRole: effectiveKidId
+    ? deviceRole === "coach"
+      ? "coach"
+      : "parent"
+    : undefined,
 
   // REQUIRED in Session type
   system: system ?? existingSession?.system ?? "",

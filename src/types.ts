@@ -23,6 +23,8 @@ export type Session = {
    * - When missing, the Training tab treats the session as account-level.
    */
   kidId?: string;
+  /** Who logged this kid-linked session on-device (parent weekly vs coach planning). Omit on account-level sessions. */
+  trainingLoggedByRole?: "parent" | "coach";
 
   // New (more specific technique breakdown)
   position?: string;
