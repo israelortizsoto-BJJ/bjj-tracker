@@ -73,10 +73,12 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-03-31  
-**Status:** The coach/parent architecture—publish, link, reconnect, and the working coach → parent weekly loop—remains intact. **2026-03-31** work in Dev aligned **multi-kid and invite-linked athlete truth** (parent **This Week** selector, coach roster visibility, parent access to **Athletes on this invite** from the manage-coach link screen), polished **household save-state** on coach kid detail, introduced **Phase 1 raw session persistence** behind `getSessions` / `setSessions` / `deleteSessionsForKid` (training editor + `coachKidStore` rewired; **no** schema/key/version change), and tightened **Family Huddle / weekly note copy** so coach and parent screens honestly describe the **shared-per-invite** published model. **Research confirmed (not “fixed” in code today):** synced Family Huddle / weekly note remains **invite-scoped** with **last publish wins** for the whole invite; **parent child pills do not switch** which published Family Huddle content you see—that is a **current model limitation**, not a per-athlete published story. **Option B** (per-athlete weekly plans inside one invite) is the **next strategic architecture direction** and is **not implemented**. **TestFlight truth is unchanged** until a build ships and this handoff is updated.
+**Date:** 2026-04-01  
+**Status:** **Build 21 bridge QA is complete** in Dev: multi-kid **invite truth** is confirmed end-to-end for parent and coach, and the **shared Family Huddle** model is confirmed as **invite-scoped** with **last publish wins** (still a **known product limitation** until Option B). A **critical training bleed bug** is **fixed**—coach-logged kid training sessions **no longer incorrectly surface on the parent side**. **Competition video** support is **shipped coach-side only**: up to **three** videos per competition entry. **Family Huddle** remains **invite-scoped**, not per-athlete. The **build is ready for the release flow** (cut Build 21 → internal testers / coaches); **TestFlight / external tester truth** updates only after upload and verification as documented here.
 
-**2026-03-31 (latest):** Multi-kid truth alignment: parent **This Week** now uses **truly linked kids** for the active invite in Dev; coach roster visibility was improved so invite-linked multi-kid truth reads more accurately; parents can open **Athletes on this invite** from the manage-coach link screen; parent and coach views agree more clearly on **invite-linked** kids. Household save-state on coach kid detail: save is **disabled when not dirty**, shows a clear **Saved** state after success, and redundant helper text was removed. **Session persistence Phase 1:** a real raw-session boundary (`getSessions`, `setSessions`, `deleteSessionsForKid`) now backs `app/(tabs)/training/[id].tsx` and `src/storage/coachKidStore.ts`—no storage schema migration. **Shared-vs-child UI honesty:** Family Huddle / weekly note wording was updated for clarity only (shared-per-invite reality). **Build 21 bridge (planning, not shipped):** direction is cleaner multi-kid link truth, clearer invite athlete management, and session persistence write cleanup; the **known limitation** remains **one shared Family Huddle / weekly note per invite**.
+**2026-04-01 (latest):** Final **Build 21 bridge QA pass** closed: multi-kid invite truth across parent and coach verified; shared **Family Huddle** behavior (invite-scoped, last publish wins) explicitly confirmed. **Training bleed fix:** sessions logged by the coach for a linked kid no longer appear on the parent training surface. **Competition:** coach-side entries support up to **three** competition videos per entry (parent-side competition video archive **not** in this build). Release posture: **ready to cut Build 21** and ship to internal testers/coaches.
+
+**2026-03-31:** Multi-kid truth alignment: parent **This Week** now uses **truly linked kids** for the active invite in Dev; coach roster visibility was improved so invite-linked multi-kid truth reads more accurately; parents can open **Athletes on this invite** from the manage-coach link screen; parent and coach views agree more clearly on **invite-linked** kids. Household save-state on coach kid detail: save is **disabled when not dirty**, shows a clear **Saved** state after success, and redundant helper text was removed. **Session persistence Phase 1:** a real raw-session boundary (`getSessions`, `setSessions`, `deleteSessionsForKid`) now backs `app/(tabs)/training/[id].tsx` and `src/storage/coachKidStore.ts`—no storage schema migration. **Shared-vs-child UI honesty:** Family Huddle / weekly note wording was updated for clarity only (shared-per-invite reality).
 
 **2026-03-27:** A narrow **release-shaping** cleanup landed for the next feedback build: **This Week** / **Learn** shells were tightened after two-device QA; duplicate top headers were fixed by letting nested stack headers own those tabs; coach **This Week** root (`/this-week`) is now a short coach landing with a CTA into Kids roster, while the parent root keeps the family-facing weekly experience (coach root no longer shows parent-facing Family Huddle, parent competition shell, parent link-refresh shell, or root weekly-focus preview). Visible internal/dev exposure for feedback logic was reduced; **Profile** internal controls remain intentionally available in dev/internal contexts. This was **not** a sync expansion or architecture refactor—worker-backed weekly scope and the parent-entered training/competition boundary are unchanged. **TestFlight remains older shipped reality** until a new build is uploaded and documented here—nothing below is claimed as external-tester truth yet.
 
@@ -119,6 +121,12 @@ Continued **slice → device QA → fix**. **Family competition** and **househol
 - **Tier model / pricing** exploration started; **AI capabilities likely land in Pro by default**; **dashboard cost posture** under discussion.
 
 ## What we completed most recently
+
+### 2026-04-01 — Build 21 bridge QA complete + training bleed fix + competition video upgrade
+- **Build 21 bridge QA (final pass):** Multi-kid **invite truth** verified across **parent** and **coach**; **shared Family Huddle** model verified as **invite-scoped** with **last publish wins** (documented limitation until Option B)
+- **Training bleed fix (critical):** Coach-logged kid **training sessions** no longer incorrectly appear on the **parent** side
+- **Competition videos (coach-side only):** Up to **three** competition videos supported per competition entry on the coach path
+- **Release readiness:** Build 21 is **ready for release flow** (cut → internal testers / coaches); external/TestFlight truth still follows upload + handoff update
 
 ### 2026-03-31 — Multi-kid truth, household polish, session persistence Phase 1, Family Huddle wording (Dev)
 - **Multi-kid / invite alignment:** Parent **This Week** kid selector uses **truly linked kids** for the active invite in Dev; coach roster visibility improved for more accurate invite-linked multi-kid truth; parent can reach **Athletes on this invite** from the manage-coach link screen; parent and coach sides align more clearly on **invite-linked** athletes
@@ -313,6 +321,7 @@ Validated:
 - **2026-03-27 (Dev):** two-device QA passed after weekly routing polish for coach **This Week** root, parent **This Week** root, **Training**, **Learn**, and basic routing sanity—**not** claimed for TestFlight until a new build ships and is documented here
 - **2026-03-30 (Dev):** Build 20 QA cleanup and on-device verification passed for parent save/back nav behavior, coach multiline writing visibility, and coach Log Session landing behavior
 - **2026-03-31 (Dev):** Multi-kid invite alignment, household save-state behavior, session persistence Phase 1 wiring, and Family Huddle wording validated in the Dev lane; **TestFlight** is still **not** updated or claimed for this slice until a new build ships and is documented here
+- **2026-04-01 (Dev):** Build 21 bridge QA complete—multi-kid invite truth, Family Huddle shared-invite model, training bleed fix, and coach-side multi-video competition entries verified in the Dev lane; **ready to cut Build 21** for internal testers/coaches; **TestFlight** remains stale until a new build ships and is documented here
 - **2026-03-30 (Dev):** parent **New coach update** awareness banner is implemented as **Dev-only MVP** and is intentionally not claimed for production/TestFlight
 - Dev-validated fresh-path reconnect flow still passes (unlink → fresh invite → intentional reconnect → relink → publish → parent receive)
 - Dev-validated parent stays unlinked until intentional reconnect (no surprise auto-link from a fresh invite alone)
@@ -371,9 +380,11 @@ Validated:
 - **AI Drafting Slice 1** is **mock/on-device** only until a real provider is integrated; **no auto-save** from drafting; coach **apply** is the save path
 
 ## Open loops
-- Final external-feedback TestFlight go/no-go checklist still needs a dedicated pass
+- **Family Huddle / weekly note (explicit):** Still **invite-scoped** with **last publish wins** for the invite—this is the **current shipped model**, not per-athlete switching on the parent side
+- **Per-athlete weekly plans:** **Deferred to Option B** (not implemented; design + worker contract are the next strategic slice after Build 21 ships internally)
+- **Parent-side competition video archive:** **Not implemented**; multi-video competition support in this build is **coach-side only**
+- Final external-feedback TestFlight go/no-go checklist still needs a dedicated pass after internal Build 21 validation
 - Parent weekly lane is much stronger but may still get another visual/personality pass
-- Family Huddle v2 remains an open design opportunity; **synced** Family Huddle / weekly note is still **invite-scoped** (last publish wins for the invite)—**per-athlete published** weekly plans (**Option B**) are **not** implemented
 - Still need to decide whether coach should keep “Add a kid” in the external-testing model
 - Need a final decision on whether the current IA is the exact external-feedback build IA or a testing-phase simplification
 - Broader training sync remains out of scope
@@ -381,10 +392,9 @@ Validated:
 - Black Belt testing should focus on comprehension and flow quality, not assume all cross-device data types sync
 
 ## Best next-session recommendation
-1. **Build 21 bridge (Dev):** Continue toward cleaner **multi-kid link truth**, clearer **invite athlete management**, and **session persistence write-path** cleanup on top of Phase 1
-2. Hold explicit product/engineering clarity on the **shared-per-invite Family Huddle / weekly note** limitation until **Option B** (per-athlete weekly plans inside one invite) is scoped—**Option B is not implemented**
-3. Re-run `npx tsc --noEmit` and `npx eslint .` on current `dev` before meaningful pushes
-4. When ready for testers, run the external-feedback TestFlight go/no-go checklist and update this handoff after any upload (**TestFlight truth** stays separate from **Dev truth** until then)
+1. **Cut Build 21**
+2. **Ship to internal testers / coaches**
+3. **Begin Option B design + worker contract**
 
 ## Suggested restart commands for next session
 - `git status -sb`
