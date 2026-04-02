@@ -1,5 +1,5 @@
 /**
- * Minimal KV-backed API: one session per invite token; coach writes weekly doc; parent reads and adds athletes.
+ * Minimal KV-backed API: one session per invite token; coach writes invite-level and optional per-athlete weekly docs; parent reads and adds athletes.
  *
  * Deploy: set KV id in wrangler.toml, then `npx wrangler deploy` from this folder.
  */
@@ -43,14 +43,17 @@ type SharedCompetition = {
   updatedAt: string;
 };
 
-/** Stored shape; legacy rows omit schemaVersion / athletes / parentWriterSecret until migrated. */
+/** Stored shape; legacy rows omit schemaVersion / athletes / parentWriterSecret / weeklyByAthleteId until migrated. */
 type SessionRecord = {
   schemaVersion: number;
   writerSecret: string;
   coachId: string;
   coachDisplayName: string;
   academyName?: string;
+  /** Invite-level weekly doc (legacy); unchanged when publishing with `sharedAthleteId`. */
   weekly: WeeklyDoc | null;
+  /** Per shared-athlete weekly docs; keys must match `athletes[].id`. */
+  weeklyByAthleteId: Record<string, WeeklyDoc>;
   createdAt: string;
   athletes: SharedAthlete[];
   competitions: SharedCompetition[];
@@ -58,7 +61,7 @@ type SessionRecord = {
 };
 
 const TOKEN_RE = /^[a-f0-9]{48,128}$/i;
-const SESSION_SCHEMA_VERSION = 2 as const;
+const SESSION_SCHEMA_VERSION = 3 as const;
 const MAX_ATHLETES_PER_SESSION = 24;
 const MAX_COMPETITIONS_PER_SESSION = 400;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
@@ -141,7 +144,93 @@ function parseSharedCompetitions(raw: unknown): SharedCompetition[] {
   return out;
 }
 
-/** Normalize legacy v1 KV rows into in-memory v2 shape (persisted on next write). */
+function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
+  if (!raw || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  const weekStartYMD = typeof o.weekStartYMD === "string" ? o.weekStartYMD.trim() : "";
+  const headline = typeof o.headline === "string" ? o.headline.trim() : "";
+  const bodyText = typeof o.body === "string" ? o.body.trim() : "";
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStartYMD) || !headline || headline.length > 200 || !updatedAt) {
+    return null;
+  }
+  if (bodyText.length > 8000) return null;
+  const classLine =
+    typeof o.classLine === "string" && o.classLine.trim() ? o.classLine.trim().slice(0, 500) : undefined;
+  const programLine =
+    typeof o.programLine === "string" && o.programLine.trim()
+      ? o.programLine.trim().slice(0, 500)
+      : undefined;
+  const familyResourceUrlRaw =
+    typeof o.familyResourceUrl === "string" ? o.familyResourceUrl.trim().slice(0, 500) : "";
+  let familyResourceUrl: string | undefined;
+  if (familyResourceUrlRaw) {
+    const withScheme =
+      familyResourceUrlRaw.startsWith("http://") || familyResourceUrlRaw.startsWith("https://")
+        ? familyResourceUrlRaw
+        : `https://${familyResourceUrlRaw}`;
+    try {
+      const u = new URL(withScheme);
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        familyResourceUrl = u.toString().slice(0, 500);
+      }
+    } catch {
+      const head = withScheme.slice(0, 24).toLowerCase();
+      if (
+        !head.startsWith("javascript:") &&
+        !head.startsWith("data:") &&
+        /^https?:\/\//i.test(withScheme) &&
+        !/\s/.test(withScheme)
+      ) {
+        familyResourceUrl = withScheme.slice(0, 500);
+      }
+    }
+  }
+  const familyResourceLabel =
+    typeof o.familyResourceLabel === "string" && o.familyResourceLabel.trim()
+      ? o.familyResourceLabel.trim().slice(0, 120)
+      : undefined;
+  const familyCoachRecapRaw = typeof o.familyCoachRecapNote === "string" ? o.familyCoachRecapNote.trim() : "";
+  const familyCoachRecapNote = familyCoachRecapRaw
+    ? familyCoachRecapRaw.slice(0, 2000)
+    : undefined;
+  return {
+    weekStartYMD,
+    headline,
+    body: bodyText,
+    ...(classLine ? { classLine } : {}),
+    ...(programLine ? { programLine } : {}),
+    ...(familyResourceUrl ? { familyResourceUrl, ...(familyResourceLabel ? { familyResourceLabel } : {}) } : {}),
+    ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
+    updatedAt,
+  };
+}
+
+function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, WeeklyDoc> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const id = k.trim();
+    if (!id || id.length > 64) continue;
+    const doc = parseWeeklyDoc(v);
+    if (doc) out[id] = doc;
+  }
+  return out;
+}
+
+/** Entries keyed only by athletes still on the session; bounded for KV size. */
+function weeklyByAthleteIdForStorageAndApi(rec: SessionRecord): Record<string, WeeklyDoc> {
+  const athleteIds = new Set(rec.athletes.map((a) => a.id));
+  const out: Record<string, WeeklyDoc> = {};
+  for (const [k, v] of Object.entries(rec.weeklyByAthleteId)) {
+    if (!athleteIds.has(k)) continue;
+    out[k] = v;
+    if (Object.keys(out).length >= MAX_ATHLETES_PER_SESSION) break;
+  }
+  return out;
+}
+
+/** Normalize legacy v1 KV rows into in-memory shape (persisted on next write). */
 function normalizeSessionRecord(raw: unknown): SessionRecord | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -166,6 +255,8 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
       ? r.parentWriterSecret.trim()
       : undefined;
 
+  const weeklyByAthleteId = parseWeeklyByAthleteId(r.weeklyByAthleteId);
+
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
     writerSecret,
@@ -173,6 +264,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
     coachDisplayName,
     academyName,
     weekly,
+    weeklyByAthleteId,
     createdAt,
     athletes,
     competitions,
@@ -189,6 +281,7 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
   const toStore: SessionRecord = {
     ...rec,
     schemaVersion: SESSION_SCHEMA_VERSION,
+    weeklyByAthleteId: weeklyByAthleteIdForStorageAndApi(rec),
     athletes: rec.athletes.slice(0, MAX_ATHLETES_PER_SESSION),
     competitions: rec.competitions.slice(0, MAX_COMPETITIONS_PER_SESSION),
   };
@@ -243,6 +336,7 @@ export default {
           coachDisplayName,
           academyName,
           weekly: null,
+          weeklyByAthleteId: {},
           createdAt: now,
           athletes: [],
           competitions: [],
@@ -285,6 +379,7 @@ export default {
               ...(rec.academyName ? { academyName: rec.academyName } : {}),
             },
             weekly: rec.weekly,
+            weeklyByAthleteId: weeklyByAthleteIdForStorageAndApi(rec),
             athletes: rec.athletes,
             competitions: rec.competitions,
           },
@@ -381,10 +476,12 @@ export default {
           return error("Not found", 404);
         }
 
+        const { [athleteId]: _removedWeekly, ...restWeeklyByAthlete } = rec.weeklyByAthleteId;
         const next: SessionRecord = {
           ...rec,
           athletes: rec.athletes.filter((a) => a.id !== athleteId),
           competitions: rec.competitions.filter((c) => c.sharedAthleteId !== athleteId),
+          weeklyByAthleteId: restWeeklyByAthlete,
         };
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
@@ -410,6 +507,8 @@ export default {
           return error("Invalid JSON", 400);
         }
         const b = typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+        const sharedAthleteIdRaw =
+          typeof b.sharedAthleteId === "string" ? b.sharedAthleteId.trim() : "";
         const weekStartYMD = typeof b.weekStartYMD === "string" ? b.weekStartYMD.trim() : "";
         const headline = typeof b.headline === "string" ? b.headline.trim() : "";
         const bodyText = typeof b.body === "string" ? b.body.trim() : "";
@@ -464,6 +563,15 @@ export default {
           return error("Unauthorized", 401);
         }
 
+        if (sharedAthleteIdRaw) {
+          if (sharedAthleteIdRaw.length > 64) {
+            return error("sharedAthleteId invalid", 400);
+          }
+          if (!rec.athletes.some((a) => a.id === sharedAthleteIdRaw)) {
+            return error("sharedAthleteId is not linked to this session", 400);
+          }
+        }
+
         const hasFamilyCoachRecapKey = Object.prototype.hasOwnProperty.call(
           b,
           "familyCoachRecapNote",
@@ -498,7 +606,9 @@ export default {
           !hasFamilyCoachRecapKey ||
           (typeof b.familyCoachRecapNote === "string" && !b.familyCoachRecapNote.trim())
         ) {
-          const prevRecapRaw = rec.weekly?.familyCoachRecapNote;
+          const prevRecapRaw = sharedAthleteIdRaw
+            ? rec.weeklyByAthleteId[sharedAthleteIdRaw]?.familyCoachRecapNote
+            : rec.weekly?.familyCoachRecapNote;
           const chosenHasKey = Object.prototype.hasOwnProperty.call(weekly, "familyCoachRecapNote");
           console.log("[coach-sync-weekly-put familyCoachRecapNote]", {
             hasFamilyCoachRecapKey,
@@ -508,9 +618,16 @@ export default {
             storedRecapLen: familyCoachRecapNote ? familyCoachRecapNote.length : 0,
             storedHasKey: chosenHasKey,
             weekStartYMD,
+            sharedAthleteId: sharedAthleteIdRaw || null,
           });
         }
-        const next: SessionRecord = { ...rec, weekly };
+
+        const next: SessionRecord = sharedAthleteIdRaw
+          ? {
+              ...rec,
+              weeklyByAthleteId: { ...rec.weeklyByAthleteId, [sharedAthleteIdRaw]: weekly },
+            }
+          : { ...rec, weekly };
         await writeSession(env.SESSIONS, token, next);
 
         return json({ ok: true }, 200);
