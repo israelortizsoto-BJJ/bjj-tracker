@@ -54,6 +54,8 @@ export type CoachWeeklySyncSessionResponse = {
   schemaVersion?: number;
   coach: CoachWeeklySyncCoachSummary;
   weekly: SyncedWeeklyMessagePayload | null;
+  /** Per-athlete weekly docs; absent or empty on older workers — use `resolveWeeklyDoc` when scoping by athlete. */
+  weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null>;
   athletes: SyncedSharedAthlete[];
   competitions: SyncedSharedCompetition[];
 };
@@ -79,6 +81,8 @@ export type CoachWeeklySyncPublishBody = {
   familyResourceLabel?: string;
   /** App sends `""` to clear; omitting the key is treated as “keep previous” on the worker. */
   familyCoachRecapNote?: string;
+  /** When set, worker stores this snapshot under that athlete id instead of invite-level `weekly`. */
+  sharedAthleteId?: string;
 };
 
 export type CoachWeeklySyncRedeemParentWriterResponse = {

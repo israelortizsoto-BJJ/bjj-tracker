@@ -10,8 +10,9 @@ import type {
   CoachWeeklySyncRedeemParentWriterResponse,
   CoachWeeklySyncSessionResponse,
   CoachWeeklySyncUpdateCompetitionBody,
-  SyncedSharedCompetition,
   SyncedSharedAthlete,
+  SyncedSharedCompetition,
+  SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
 
 export class CoachWeeklySyncApiError extends Error {
@@ -89,6 +90,41 @@ export async function coachSyncCreateSession(
   return payload as CoachWeeklySyncCreateSessionResponse;
 }
 
+/** Basic shape guard for weekly docs inside `weeklyByAthleteId` (and consistent with `weekly`). */
+function isSyncedWeeklyMessagePayloadShape(v: unknown): v is SyncedWeeklyMessagePayload {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.weekStartYMD === "string" &&
+    typeof o.headline === "string" &&
+    typeof o.body === "string" &&
+    typeof o.updatedAt === "string"
+  );
+}
+
+/**
+ * Parses `weeklyByAthleteId` from session GET JSON.
+ * Non-object → `{}`. Invalid values are dropped (resolver will fall back to `weekly`).
+ */
+function parseWeeklyByAthleteIdField(raw: unknown): Record<string, SyncedWeeklyMessagePayload | null> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const out: Record<string, SyncedWeeklyMessagePayload | null> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const key = k.trim();
+    if (!key) continue;
+    if (v === null) {
+      out[key] = null;
+      continue;
+    }
+    if (isSyncedWeeklyMessagePayloadShape(v)) {
+      out[key] = v;
+    }
+  }
+  return out;
+}
+
 export async function coachSyncFetchSession(
   linkToken: string,
   apiBaseUrlOverride?: string | null,
@@ -144,10 +180,12 @@ export async function coachSyncFetchSession(
         typeof (c as { updatedAt?: unknown }).updatedAt === "string",
     );
   }
+  const weeklyByAthleteId = parseWeeklyByAthleteIdField(p.weeklyByAthleteId);
   return {
     ...(typeof p.schemaVersion === "number" ? { schemaVersion: p.schemaVersion } : {}),
     coach: p.coach as CoachWeeklySyncSessionResponse["coach"],
     weekly: (p.weekly ?? null) as CoachWeeklySyncSessionResponse["weekly"],
+    weeklyByAthleteId,
     athletes,
     competitions,
   };
