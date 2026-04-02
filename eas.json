@@ -15,7 +15,10 @@
     },
     "production": {
       "distribution": "store",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_COACH_SYNC_BASE_URL": "https://matmind-coach-sync.ortizdigitalstudio.workers.dev"
+      }
     },
     "testflight-internal": {
       "distribution": "store",
