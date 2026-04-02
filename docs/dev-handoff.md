@@ -1,3 +1,38 @@
+## 🔄 EOD UPDATE — 2026-04-01 (Build 22 QA Launch)
+
+### What we did
+- Build 22 uploaded to TestFlight
+- Internal testers group configured
+- Created structured QA plans for parents and coaches
+- Generated PDF test sheets for testers
+- Defined TestFlight “What to Test” instructions
+- Shifted focus from development → real user validation
+
+### What this unlocked
+- First real-world validation of parent + coach training loop
+- Clear tester guidance and feedback structure
+
+### Current focus (next session)
+- Deploy Build 22 to:
+  - 3 black belt coaches
+  - 3+ families
+- Ensure all testers install via TestFlight (not dev builds)
+
+### Known risks
+- Coach Share visibility and clarity
+- Parent confusion logging first session
+- Session visibility bugs (regression check)
+- Weak understanding of coach role
+
+### Success criteria (this week)
+- Parent logs 2–3 sessions without help
+- Coach understands value without explanation
+- No data loss or missing sessions
+- At least 3 strong feedback insights collected
+
+### Reminder
+No new features. Focus on usability, clarity, and habit loop.
+
 # BJJ Tracker —
 Action: think-hard look through this Developer Handoff notes, plan out the day. If you are making assumptions, tell me when you are doing so. Let's get to work
 
