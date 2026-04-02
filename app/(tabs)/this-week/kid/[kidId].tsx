@@ -74,6 +74,7 @@ import type {
   KidWeeklyFocusEntry,
 } from "../../../../src/types/coachKid";
 import type {
+  CoachWeeklySyncPublishBody,
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
 } from "../../../../src/types/coachWeeklySync";
@@ -1203,9 +1204,19 @@ export default function KidDetailScreen() {
       );
       return;
     }
-    const payload = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD);
+    const sharedAthleteId = (kidRow?.sharedAthleteId ?? "").trim() || undefined;
+    const basePublish = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD);
+    const payload: CoachWeeklySyncPublishBody = {
+      ...basePublish,
+      ...(sharedAthleteId ? { sharedAthleteId } : {}),
+    };
     setPublishingWeekly(true);
     try {
+      console.log("PUBLISH DEBUG", {
+        kidId,
+        sharedAthleteId,
+        payload,
+      });
       await coachSyncPublishWeekly(ws.linkToken, writerSecret, payload, ws.apiBaseUrl);
       Alert.alert(
         "Published to families",

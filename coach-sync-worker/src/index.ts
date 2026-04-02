@@ -625,7 +625,10 @@ export default {
         const next: SessionRecord = sharedAthleteIdRaw
           ? {
               ...rec,
-              weeklyByAthleteId: { ...rec.weeklyByAthleteId, [sharedAthleteIdRaw]: weekly },
+              weeklyByAthleteId: {
+                ...(rec.weeklyByAthleteId || {}),
+                [sharedAthleteIdRaw]: weekly,
+              },
             }
           : { ...rec, weekly };
         await writeSession(env.SESSIONS, token, next);

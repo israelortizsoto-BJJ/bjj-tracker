@@ -44,6 +44,7 @@ import {
   parentStrictWeeklyLinkedCoachLinksForUi,
 } from "../../../src/coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken } from "../../../src/coachShare/inviteLinkToken";
+import { resolveWeeklyDoc } from "../../../src/coach/resolveWeeklyDoc";
 import { coachSyncFetchSession } from "../../../src/services/coachWeeklySyncApi";
 import type { SyncedWeeklyMessagePayload } from "../../../src/types/coachWeeklySync";
 import type { CoachPilotPreviewItem } from "../../../src/storage/coachShareStore";
@@ -152,7 +153,7 @@ function familyFacingCompetitionChipStyle(chip: {
 const CARD_RADIUS = 16;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
 
-/** Dev parent weekly: resolve family-competition kid only within kids coherent with the active redeemed weekly invite token. */
+/** Parent weekly: resolve family-competition kid only within kids coherent with the active redeemed weekly invite token. */
 function resolveParentWeeklyInviteFilteredFamilyCompKidId(
   kidsById: KidsById,
   storedKidId: string | null | undefined,
@@ -285,6 +286,11 @@ export default function CoachesScreen() {
     INITIAL_FAMILY_COMPETITION,
   );
   const [weeklySyncDoc, setWeeklySyncDoc] = useState<SyncedWeeklyMessagePayload | null>(null);
+  /** Invite-level `weekly` plus per-athlete map; resolved into `weeklySyncDoc` in an effect. */
+  const [weeklySessionSnapshot, setWeeklySessionSnapshot] = useState<{
+    weekly: SyncedWeeklyMessagePayload | null;
+    weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
+  } | null>(null);
   const [weeklySyncFetchFailed, setWeeklySyncFetchFailed] = useState(false);
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
   const [weeklySyncFromCache, setWeeklySyncFromCache] = useState(false);
@@ -390,7 +396,6 @@ export default function CoachesScreen() {
       role === "parent"
         ? linksForParentWeeklyFetch[0]
         : linksForParentWeeklyFetch.find((l) => l.weeklySync);
-    let nextWeeklyDoc: SyncedWeeklyMessagePayload | null = null;
     let nextWeeklyFetchFailed = false;
     let nextWeeklyFetchedAt: string | null = null;
     let nextWeeklyFromCache = false;
@@ -410,7 +415,6 @@ export default function CoachesScreen() {
             fetchedFamilyCoachRecapNoteLen: recap.length,
           });
         }
-        nextWeeklyDoc = session.weekly;
         nextWeeklyFetchFailed = false;
         nextWeeklyFromCache = false;
         nextWeeklyNetworkOk = true;
@@ -420,7 +424,12 @@ export default function CoachesScreen() {
           activeWeeklySyncLink.weeklySync.linkToken,
           session.weekly,
           nowIso,
+          session.weeklyByAthleteId ?? {},
         );
+        setWeeklySessionSnapshot({
+          weekly: session.weekly,
+          weeklyByAthleteId: session.weeklyByAthleteId ?? {},
+        });
         const c = session.coach;
         const merged: typeof loadedCoachesById = {
           ...loadedCoachesById,
@@ -446,13 +455,17 @@ export default function CoachesScreen() {
         const cached = await getCachedWeeklyForLinkToken(
           activeWeeklySyncLink.weeklySync.linkToken,
         );
-        nextWeeklyDoc = cached?.weekly ?? null;
         nextWeeklyFetchedAt = cached?.fetchedAt ?? null;
         nextWeeklyFromCache = true;
+        setWeeklySessionSnapshot({
+          weekly: cached?.weekly ?? null,
+          weeklyByAthleteId: cached?.weeklyByAthleteId ?? {},
+        });
       }
+    } else {
+      setWeeklySessionSnapshot(null);
     }
 
-    setWeeklySyncDoc(nextWeeklyDoc);
     setWeeklySyncFetchFailed(nextWeeklyFetchFailed);
     setWeeklySyncFetchedAt(nextWeeklyFetchedAt);
     setWeeklySyncFromCache(nextWeeklyFromCache);
@@ -463,11 +476,11 @@ export default function CoachesScreen() {
     const strictWeeklyForParent =
       role === "parent" ? parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks) : [];
     const activeWeeklyInviteTokenNorm =
-      isDev() && role === "parent" && strictWeeklyForParent[0]?.weeklySync?.linkToken
+      role === "parent" && strictWeeklyForParent[0]?.weeklySync?.linkToken
         ? normalizeInviteLinkToken(strictWeeklyForParent[0].weeklySync.linkToken)
         : "";
     const rosterKidId =
-      isDev() && role === "parent" && activeWeeklyInviteTokenNorm
+      role === "parent" && activeWeeklyInviteTokenNorm
         ? resolveParentWeeklyInviteFilteredFamilyCompKidId(
             loadedKidsById,
             storedFamilyCompKidId,
@@ -641,18 +654,32 @@ export default function CoachesScreen() {
   const useWeeklySyncHero = Boolean(weeklySyncLink);
 
   useEffect(() => {
+    if (!weeklySessionSnapshot) {
+      setWeeklySyncDoc(null);
+      return;
+    }
+    const kidIdRaw = familyCompetition.kidId;
+    const kidId = typeof kidIdRaw === "string" ? kidIdRaw.trim() : "";
+    const sharedRaw = kidId ? kidsByIdState[kidId]?.sharedAthleteId : undefined;
+    const selectedSharedAthleteId =
+      typeof sharedRaw === "string" && sharedRaw.trim() ? sharedRaw.trim() : null;
+    const resolved = resolveWeeklyDoc(weeklySessionSnapshot, selectedSharedAthleteId);
+    setWeeklySyncDoc(resolved);
+  }, [weeklySessionSnapshot, familyCompetition.kidId, kidsByIdState]);
+
+  useEffect(() => {
     if (!isDev() || role !== "parent" || !ready) return;
-    if (!weeklySyncDoc?.updatedAt || !weeklySyncNetworkOk) return;
+    const inviteUpdatedAt = weeklySessionSnapshot?.weekly?.updatedAt;
+    if (!inviteUpdatedAt?.trim() || !weeklySyncNetworkOk) return;
     const raw = weeklySyncLink?.weeklySync?.linkToken;
     if (!raw?.trim()) return;
-    void setLastSeenUpdatedAt(raw, weeklySyncDoc.updatedAt);
+    void setLastSeenUpdatedAt(raw, inviteUpdatedAt);
   }, [
     ready,
     role,
-    weeklySyncDoc,
+    weeklySessionSnapshot?.weekly?.updatedAt,
     weeklySyncNetworkOk,
     weeklySyncLink?.weeklySync?.linkToken,
-    weeklySyncDoc?.updatedAt,
   ]);
 
   const firstCoach = allCoaches[0];
@@ -1035,7 +1062,7 @@ export default function CoachesScreen() {
       .sort((a, b) =>
         (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }),
       );
-    if (!isDev() || role !== "parent") return base;
+    if (role !== "parent") return base;
     const tokenNorm = normalizeInviteLinkToken(weeklySyncLink?.weeklySync?.linkToken ?? "");
     if (!tokenNorm) return base;
     return base.filter((kid) =>
@@ -1050,11 +1077,12 @@ export default function CoachesScreen() {
     async (kid: Kid) => {
       if (!kid?.id || kid.id === familyCompetition.kidId) return;
       const today = todayYMD();
+      const freshKidsById = await getKidsById();
       await setFamilyCompetitionSelectedKidId(kid.id);
       const compApplyGen = ++applyFamilyCompGenRef.current;
       const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
         kid.id,
-        kidsByIdState,
+        freshKidsById,
         today,
       );
       setFamilyCompetition((prev) => {
@@ -1062,12 +1090,13 @@ export default function CoachesScreen() {
         return nextFamily;
       });
       setPracticeSummary(nextPracticeSummary);
+      setKidsByIdState(freshKidsById);
     },
-    [computeParentKidScopedState, familyCompetition.kidId, kidsByIdState],
+    [computeParentKidScopedState, familyCompetition.kidId],
   );
 
   useEffect(() => {
-    if (!isDev() || role !== "parent" || !ready) return;
+    if (role !== "parent" || !ready) return;
     const tokenNorm = normalizeInviteLinkToken(weeklySyncLink?.weeklySync?.linkToken ?? "");
     if (!tokenNorm) return;
     const kidId = familyCompetition.kidId;
