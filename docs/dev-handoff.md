@@ -1,3 +1,46 @@
+## 🔄 EOD UPDATE — 2026-04-17
+
+### What changed (UI + UX)
+- **This Week tab (parent lane)** — `app/(tabs)/this-week/index.tsx`: editorial layout (design tokens); weekly story as primary hero; **Keep refining** when `familyCoachRecapNote` is present; **Instant insights**; tighter **training + competition** presentation. **Presentation only**—no intentional business-logic or data-source changes in this slice.
+- **Link athletes** — `app/(tabs)/this-week/parent-athletes.tsx`: success strip **“You're connected to [coach]”**; optional **“This week's focus:”** from cached weekly **`headline`** via `getCachedWeeklyForLinkToken` (existing cache + storage only).
+
+### What was fixed (paste / editability)
+- **Join** — `app/(tabs)/this-week/join.tsx`: invite `TextInput` **`editable={!busy}`** so **paste** works when the field should accept input.
+
+### Connect blocked: build / environment, not product logic
+The **connect flow is blocked** because the **running build does not have the coach sync base URL embedded**.
+
+- `isCoachSyncConfigured()` resolves from:
+  - `EXPO_PUBLIC_COACH_SYNC_BASE_URL` (env)
+  - `extra.coachSyncBaseUrl` (app.config)
+
+- If neither is present in the **actual binary running on device**, the Join screen shows:
+  **“Coach sync URL missing”** and Connect cannot proceed.
+
+This is a **build/environment mismatch**, NOT a regression in:
+- sync logic
+- API
+- storage
+- navigation
+
+Until one of these resolves to a non-empty URL in the **binary you run**, `isCoachSyncConfigured()` stays false and Join cannot call the worker. **This is a BUILD / ENVIRONMENT mismatch—not redeem logic, not sync architecture.**
+
+### What is NOT broken (unchanged today)
+- API contracts, navigation, storage schemas, and worker/sync wiring were **not** changed in this slice.
+
+### Current focus (next session)
+1. **Fix environment (non-negotiable)**  
+   - Confirm the coach sync base URL exists in the **RUNNING** app.  
+   - Rebuild the **correct** variant so env / `extra` match how you install and launch.
+
+2. **Validate connect flow end-to-end**  
+   - Paste → Connect → Parent-athletes → Success strip → **This Week**.
+
+3. **QA redesigned This Week tab**  
+   - Confirm no regression in: **weekly sync**, **training**, **competition**.
+
+---
+
 ## 🔄 EOD UPDATE — 2026-04-01 (Build 22 QA Launch)
 
 ### What we did
@@ -108,8 +151,10 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
 **Branch:** `dev`  
 **Repo:** `israelortizsoto-BJJ/bjj-tracker`  
-**Date:** 2026-04-01  
+**Date:** 2026-04-17  
 **Status:** **Build 21 bridge QA is complete** in Dev: multi-kid **invite truth** is confirmed end-to-end for parent and coach, and the **shared Family Huddle** model is confirmed as **invite-scoped** with **last publish wins** (still a **known product limitation** until Option B). A **critical training bleed bug** is **fixed**—coach-logged kid training sessions **no longer incorrectly surface on the parent side**. **Competition video** support is **shipped coach-side only**: up to **three** videos per competition entry. **Family Huddle** remains **invite-scoped**, not per-athlete. The **build is ready for the release flow** (cut Build 21 → internal testers / coaches); **TestFlight / external tester truth** updates only after upload and verification as documented here.
+
+**2026-04-17 (latest session):** Parent **This Week** UI pass (hero, **Keep refining**, **Instant insights**, compressed training/competition); Join **paste** fix; parent-athletes **connected** strip + optional **This week's focus** from cache. **Connect is blocked when the coach sync base URL is missing from the running build**—**environment**, not product logic. No API, navigation, storage schema, or sync-architecture changes in this slice.
 
 **2026-04-01 (latest):** Final **Build 21 bridge QA pass** closed: multi-kid invite truth across parent and coach verified; shared **Family Huddle** behavior (invite-scoped, last publish wins) explicitly confirmed. **Training bleed fix:** sessions logged by the coach for a linked kid no longer appear on the parent training surface. **Competition:** coach-side entries support up to **three** competition videos per entry (parent-side competition video archive **not** in this build). Release posture: **ready to cut Build 21** and ship to internal testers/coaches.
 
@@ -427,15 +472,16 @@ Validated:
 - Black Belt testing should focus on comprehension and flow quality, not assume all cross-device data types sync
 
 ## Best next-session recommendation
-1. **Cut Build 21**
-2. **Ship to internal testers / coaches**
-3. **Begin Option B design + worker contract**
+1. **Fix environment (non-negotiable)** — coach sync base URL present in the **RUNNING** app; rebuild the **correct** variant.
+2. **Validate connect end-to-end** — Paste → Connect → Parent-athletes → Success strip → **This Week**.
+3. **QA redesigned This Week tab** — no regression in weekly sync, training, or competition.
 
 ## Suggested restart commands for next session
 - `git status -sb`
 - `git log -8 --oneline`
 - `sed -n '1,280p' "docs/dev-handoff.md"`
 - `sed -n '1,220p' "docs/recaps/2026-03-31_dev-recap.md"`
+- `sed -n '1,220p' "docs/recaps/2026-04-17_dev-recap.md"`
 
 ## Assumptions
 - Kyle internal **Coach Share + kid pilot** usability remains the highest-ROI signal for this lane.
