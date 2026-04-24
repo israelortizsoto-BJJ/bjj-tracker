@@ -1127,7 +1127,7 @@ export default function CoachesScreen() {
     isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
       ? "When you’re ready, tap Log practice for this week on This week."
       : useWeeklySyncHero
-        ? "When you’re ready, refresh This week for the latest note, or open Training to log practice together."
+        ? "When you’re ready, open Training to log practice."
         : !isLinked
           ? "When you’re ready, tap Connect with your coach on This week."
           : "When you’re ready, refresh This week for the latest update.";
@@ -1466,19 +1466,6 @@ export default function CoachesScreen() {
                       {currentCoach.displayName.trim()}
                     </Text>
                   ) : null}
-                  {useWeeklySyncHero ? (
-                    <Text
-                      style={[
-                        tokens.type.caption,
-                        {
-                          color: tokens.colors.text.muted,
-                          marginTop: currentCoach?.displayName?.trim() ? tokens.space[2] : 0,
-                        },
-                      ]}
-                    >
-                      Same note for every family on this coach link.
-                    </Text>
-                  ) : null}
                 </View>
                 <View
                   style={{
@@ -1566,6 +1553,17 @@ export default function CoachesScreen() {
                   tokens.type.body,
                   {
                     marginTop: tokens.space[3],
+                    color: tokens.colors.text.secondary,
+                  },
+                ]}
+              >
+                This is what your child is working on this week.
+              </Text>
+              <Text
+                style={[
+                  tokens.type.body,
+                  {
+                    marginTop: tokens.space[2],
                     color: tokens.colors.text.secondary,
                   },
                 ]}
@@ -1669,7 +1667,7 @@ export default function CoachesScreen() {
                   <Pressable
                     onPress={() => void openPublishedWebUrl(weeklySyncDoc?.missionResourceUrl)}
                     accessibilityRole="button"
-                    accessibilityLabel="Practice This Week’s Move"
+                    accessibilityLabel="Watch this week’s move"
                     style={({ pressed }) => ({
                       marginTop: tokens.space[4],
                       paddingVertical: tokens.space[3],
@@ -1688,7 +1686,7 @@ export default function CoachesScreen() {
                         { color: tokens.colors.text.onBrand },
                       ]}
                     >
-                      Practice This Week’s Move
+                      ▶ Watch the move
                     </Text>
                   </Pressable>
                   <Text
@@ -1701,7 +1699,7 @@ export default function CoachesScreen() {
                       },
                     ]}
                   >
-                    Tap to watch the technique your coach wants you to focus on this week.
+                    Your child will practice this during the week. Log sessions in Training.
                   </Text>
                 </>
               ) : null}
@@ -1744,7 +1742,7 @@ export default function CoachesScreen() {
                   },
                 ]}
               >
-                Click here to begin
+                Talk about this week’s training
               </Text>
               <Text
                 style={[
@@ -1755,7 +1753,7 @@ export default function CoachesScreen() {
                   },
                 ]}
               >
-                First action: read this week&apos;s mission together, then log practice.
+                Record what your child worked on this week.
               </Text>
             </Pressable>
 
