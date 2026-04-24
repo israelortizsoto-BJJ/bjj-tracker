@@ -47,6 +47,10 @@ export function ReadTogetherStoryModal({
   const card = total > 0 ? cards[safeIndex]! : null;
   const textPrimary = "#111827";
   const textSecondary = "#4b5563";
+  const missionLinkUrl = card?.key === "mission" ? card.missionLinkUrl : undefined;
+  const familyLinkUrl = card?.key === "study_move" ? card.familyLinkUrl : undefined;
+  const hasMission = Boolean(missionLinkUrl);
+  const hasFamily = Boolean(familyLinkUrl);
 
   return (
     <Modal
@@ -179,11 +183,31 @@ export function ReadTogetherStoryModal({
               <Text style={{ fontSize: 16, color: textSecondary, lineHeight: 24 }}>
                 {card.body}
               </Text>
-              {card.familyLinkUrl ? (
+              {hasMission && missionLinkUrl ? (
                 <Pressable
-                  onPress={() => onOpenPublishedUrl(card.familyLinkUrl!)}
+                  onPress={() => onOpenPublishedUrl(missionLinkUrl)}
                   style={({ pressed }) => ({
                     marginTop: 18,
+                    paddingVertical: 14,
+                    paddingHorizontal: 16,
+                    borderRadius: CARD_RADIUS,
+                    borderWidth: 1,
+                    borderColor: accentBorder,
+                    backgroundColor: pressed ? accentBgPressed : accentBg,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: primaryFill }}>
+                    {(card.missionLinkLabel ?? "").trim() || "Open link"}
+                  </Text>
+                </Pressable>
+              ) : null}
+              {hasFamily && familyLinkUrl ? (
+                <Pressable
+                  onPress={() => onOpenPublishedUrl(familyLinkUrl)}
+                  style={({ pressed }) => ({
+                    marginTop: hasMission ? 12 : 18,
                     paddingVertical: 14,
                     paddingHorizontal: 16,
                     borderRadius: CARD_RADIUS,

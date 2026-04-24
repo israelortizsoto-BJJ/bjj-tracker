@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import type { SyncedWeeklyMessagePayload } from "../types/coachWeeklySync";
+import type { SyncedSharedAthlete, SyncedWeeklyMessagePayload } from "../types/coachWeeklySync";
 import { StorageKeys } from "./storageKeys";
 
 /** Same validation as `resolveWeeklyDoc` / invite-level `weekly` (not exported from there). */
@@ -20,13 +20,16 @@ export type CoachWeeklySyncCacheEntry = {
   weekly: SyncedWeeklyMessagePayload | null;
   fetchedAt: string;
   weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
+  /** Session GET roster; older cache entries may omit. */
+  athletes: SyncedSharedAthlete[];
 };
 
-/** Persisted shape; older entries may omit `weeklyByAthleteId`. */
+/** Persisted shape; older entries may omit `weeklyByAthleteId` / `athletes`. */
 type StoredCoachWeeklySyncCacheEntry = {
   weekly: SyncedWeeklyMessagePayload | null;
   fetchedAt: string;
   weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null>;
+  athletes?: unknown;
 };
 
 type CacheMap = Record<string, StoredCoachWeeklySyncCacheEntry>;
@@ -47,6 +50,18 @@ function normalizeWeeklyByAthleteId(
   return out;
 }
 
+function normalizeAthletes(raw: unknown): SyncedSharedAthlete[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (a): a is SyncedSharedAthlete =>
+      Boolean(a) &&
+      typeof a === "object" &&
+      typeof (a as { id?: unknown }).id === "string" &&
+      typeof (a as { name?: unknown }).name === "string" &&
+      typeof (a as { createdAt?: unknown }).createdAt === "string",
+  );
+}
+
 function normalizeReadEntry(entry: unknown): CoachWeeklySyncCacheEntry | null {
   if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
     return null;
@@ -62,6 +77,7 @@ function normalizeReadEntry(entry: unknown): CoachWeeklySyncCacheEntry | null {
     weekly,
     fetchedAt,
     weeklyByAthleteId: normalizeWeeklyByAthleteId(e.weeklyByAthleteId),
+    athletes: normalizeAthletes("athletes" in e ? e.athletes : []),
   };
 }
 
@@ -83,6 +99,14 @@ async function writeMap(map: CacheMap): Promise<void> {
   await AsyncStorage.setItem(StorageKeys.coachWeeklySyncCacheByToken, JSON.stringify(map));
 }
 
+export function cacheEntryHasUsableWeeklyDoc(
+  entry: CoachWeeklySyncCacheEntry | null,
+): boolean {
+  if (!entry) return false;
+  if (entry.weekly) return true;
+  return Object.values(entry.weeklyByAthleteId).some((v) => v != null);
+}
+
 export async function getCachedWeeklyForLinkToken(
   linkToken: string,
 ): Promise<CoachWeeklySyncCacheEntry | null> {
@@ -97,12 +121,14 @@ export async function setCachedWeeklyForLinkToken(
   weekly: SyncedWeeklyMessagePayload | null,
   fetchedAtIso: string,
   weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null>,
+  athletes?: SyncedSharedAthlete[] | null,
 ): Promise<void> {
   const map = await readMap();
   map[linkToken] = {
     weekly: isValidWeeklyDoc(weekly) ? weekly : null,
     fetchedAt: fetchedAtIso,
     weeklyByAthleteId: normalizeWeeklyByAthleteId(weeklyByAthleteId),
+    athletes: athletes && athletes.length > 0 ? athletes : undefined,
   };
   await writeMap(map);
 }

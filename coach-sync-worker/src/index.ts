@@ -14,8 +14,10 @@ type WeeklyDoc = {
   body: string;
   classLine?: string;
   programLine?: string;
-  familyResourceUrl?: string;
-  familyResourceLabel?: string;
+  missionResourceUrl?: string | null;
+  missionResourceLabel?: string | null;
+  familyResourceUrl?: string | null;
+  familyResourceLabel?: string | null;
   familyCoachRecapNote?: string;
   updatedAt: string;
 };
@@ -144,6 +146,61 @@ function parseSharedCompetitions(raw: unknown): SharedCompetition[] {
   return out;
 }
 
+/** Trims only; rejects obvious non-URLs. No scheme injection, `URL` parsing, or slicing. */
+function parseOptionalPublishedUrl(urlRaw: string): string | undefined {
+  const t = urlRaw.trim();
+  if (!t) return undefined;
+  if (/\s/.test(t)) return undefined;
+  if (/^javascript:/i.test(t) || /^data:/i.test(t)) return undefined;
+  return t;
+}
+
+/** Canonical + alias keys; never cross-map (e.g. study → mission). */
+function readMissionUrlFromWeeklyPutBody(
+  b: Record<string, unknown>,
+): { raw: string; hasInBody: boolean } {
+  if ("missionResourceUrl" in b) {
+    return {
+      raw: typeof b.missionResourceUrl === "string" ? b.missionResourceUrl.trim() : "",
+      hasInBody: true,
+    };
+  }
+  if ("mission" in b) {
+    return { raw: typeof b.mission === "string" ? b.mission.trim() : "", hasInBody: true };
+  }
+  return { raw: "", hasInBody: false };
+}
+
+function readFamilyUrlFromWeeklyPutBody(
+  b: Record<string, unknown>,
+): { raw: string; hasInBody: boolean } {
+  if ("familyResourceUrl" in b) {
+    return {
+      raw: typeof b.familyResourceUrl === "string" ? b.familyResourceUrl.trim() : "",
+      hasInBody: true,
+    };
+  }
+  if ("study" in b) {
+    return { raw: typeof b.study === "string" ? b.study.trim() : "", hasInBody: true };
+  }
+  return { raw: "", hasInBody: false };
+}
+
+/** Same key precedence as PUT (`familyResourceUrl` then `study`). */
+function readFamilyFromStoredWeeklyDoc(o: Record<string, unknown>): { raw: string; hasKey: boolean } {
+  if ("familyResourceUrl" in o) {
+    const v = o.familyResourceUrl;
+    if (v === null) return { raw: "", hasKey: true };
+    return { raw: typeof v === "string" ? v.trim() : "", hasKey: true };
+  }
+  if ("study" in o) {
+    const v = o.study;
+    if (v === null) return { raw: "", hasKey: true };
+    return { raw: typeof v === "string" ? v.trim() : "", hasKey: true };
+  }
+  return { raw: "", hasKey: false };
+}
+
 function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
@@ -161,31 +218,8 @@ function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
     typeof o.programLine === "string" && o.programLine.trim()
       ? o.programLine.trim().slice(0, 500)
       : undefined;
-  const familyResourceUrlRaw =
-    typeof o.familyResourceUrl === "string" ? o.familyResourceUrl.trim().slice(0, 500) : "";
-  let familyResourceUrl: string | undefined;
-  if (familyResourceUrlRaw) {
-    const withScheme =
-      familyResourceUrlRaw.startsWith("http://") || familyResourceUrlRaw.startsWith("https://")
-        ? familyResourceUrlRaw
-        : `https://${familyResourceUrlRaw}`;
-    try {
-      const u = new URL(withScheme);
-      if (u.protocol === "http:" || u.protocol === "https:") {
-        familyResourceUrl = u.toString().slice(0, 500);
-      }
-    } catch {
-      const head = withScheme.slice(0, 24).toLowerCase();
-      if (
-        !head.startsWith("javascript:") &&
-        !head.startsWith("data:") &&
-        /^https?:\/\//i.test(withScheme) &&
-        !/\s/.test(withScheme)
-      ) {
-        familyResourceUrl = withScheme.slice(0, 500);
-      }
-    }
-  }
+  const familyRead = readFamilyFromStoredWeeklyDoc(o);
+  const familyResourceUrl = parseOptionalPublishedUrl(familyRead.raw);
   const familyResourceLabel =
     typeof o.familyResourceLabel === "string" && o.familyResourceLabel.trim()
       ? o.familyResourceLabel.trim().slice(0, 120)
@@ -194,16 +228,35 @@ function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
   const familyCoachRecapNote = familyCoachRecapRaw
     ? familyCoachRecapRaw.slice(0, 2000)
     : undefined;
-  return {
+  const weekly: WeeklyDoc = {
     weekStartYMD,
     headline,
     body: bodyText,
     ...(classLine ? { classLine } : {}),
     ...(programLine ? { programLine } : {}),
-    ...(familyResourceUrl ? { familyResourceUrl, ...(familyResourceLabel ? { familyResourceLabel } : {}) } : {}),
     ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
     updatedAt,
   };
+  const missionRaw =
+    typeof o.missionResourceUrl === "string"
+      ? o.missionResourceUrl
+      : typeof o.mission === "string"
+        ? o.mission
+        : null;
+
+  if ("missionResourceUrl" in o || "mission" in o) {
+    const parsed = typeof missionRaw === "string" ? parseOptionalPublishedUrl(missionRaw) : null;
+
+    weekly.missionResourceUrl = parsed ?? null;
+    weekly.missionResourceLabel =
+      typeof o.missionResourceLabel === "string" ? o.missionResourceLabel : null;
+  }
+  if (familyRead.hasKey) {
+    weekly.familyResourceUrl = familyResourceUrl ?? null;
+    weekly.familyResourceLabel =
+      familyResourceUrl !== undefined ? (familyResourceLabel ?? null) : null;
+  }
+  return weekly;
 }
 
 function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
@@ -212,6 +265,16 @@ function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     const id = k.trim();
     if (!id || id.length > 64) continue;
+    const entry = v as Record<string, unknown>;
+    console.log("[PRE PARSE RAW WEEKLY]", {
+      athleteId: id,
+      hasMissionResourceUrl: typeof entry.missionResourceUrl === "string",
+      hasMissionAlias: typeof entry.mission === "string",
+      missionResourceUrl: entry.missionResourceUrl ?? null,
+      missionAlias: entry.mission ?? null,
+      familyResourceUrl: entry.familyResourceUrl ?? null,
+      studyAlias: entry.study ?? null,
+    });
     const doc = parseWeeklyDoc(v);
     if (doc) out[id] = doc;
   }
@@ -370,6 +433,30 @@ export default {
             });
           }
         }
+        console.log("[WORKER GET VERIFY]", {
+          weeklyByAthleteId: Object.fromEntries(
+            Object.entries(rec.weeklyByAthleteId ?? {}).map(([k, v]) => [
+              k,
+              {
+                mission: v?.missionResourceUrl ?? null,
+                family: v?.familyResourceUrl ?? null,
+              },
+            ]),
+          ),
+        });
+        const apiWeekly = weeklyByAthleteIdForStorageAndApi(rec);
+
+        console.log("[WORKER GET VERIFY - API SHAPE]", {
+          weeklyByAthleteId: Object.fromEntries(
+            Object.entries(apiWeekly ?? {}).map(([k, v]) => [
+              k,
+              {
+                mission: v?.missionResourceUrl ?? null,
+                family: v?.familyResourceUrl ?? null,
+              },
+            ]),
+          ),
+        });
         return json(
           {
             schemaVersion: rec.schemaVersion,
@@ -379,7 +466,7 @@ export default {
               ...(rec.academyName ? { academyName: rec.academyName } : {}),
             },
             weekly: rec.weekly,
-            weeklyByAthleteId: weeklyByAthleteIdForStorageAndApi(rec),
+            weeklyByAthleteId: apiWeekly,
             athletes: rec.athletes,
             competitions: rec.competitions,
           },
@@ -518,31 +605,14 @@ export default {
           typeof b.programLine === "string" && b.programLine.trim()
             ? b.programLine.trim().slice(0, 500)
             : undefined;
-        const familyResourceUrlRaw =
-          typeof b.familyResourceUrl === "string" ? b.familyResourceUrl.trim().slice(0, 500) : "";
-        let familyResourceUrl: string | undefined;
-        if (familyResourceUrlRaw) {
-          const withScheme =
-            familyResourceUrlRaw.startsWith("http://") || familyResourceUrlRaw.startsWith("https://")
-              ? familyResourceUrlRaw
-              : `https://${familyResourceUrlRaw}`;
-          try {
-            const u = new URL(withScheme);
-            if (u.protocol === "http:" || u.protocol === "https:") {
-              familyResourceUrl = u.toString().slice(0, 500);
-            }
-          } catch {
-            const head = withScheme.slice(0, 24).toLowerCase();
-            if (
-              !head.startsWith("javascript:") &&
-              !head.startsWith("data:") &&
-              /^https?:\/\//i.test(withScheme) &&
-              !/\s/.test(withScheme)
-            ) {
-              familyResourceUrl = withScheme.slice(0, 500);
-            }
-          }
-        }
+        const missionIn = readMissionUrlFromWeeklyPutBody(b);
+        const missionResourceUrl = parseOptionalPublishedUrl(missionIn.raw);
+        const missionResourceLabel =
+          typeof b.missionResourceLabel === "string" && b.missionResourceLabel.trim()
+            ? b.missionResourceLabel.trim().slice(0, 120)
+            : undefined;
+        const familyIn = readFamilyUrlFromWeeklyPutBody(b);
+        const familyResourceUrl = parseOptionalPublishedUrl(familyIn.raw);
         const familyResourceLabel =
           typeof b.familyResourceLabel === "string" && b.familyResourceLabel.trim()
             ? b.familyResourceLabel.trim().slice(0, 120)
@@ -589,16 +659,60 @@ export default {
         }
 
         const now = new Date().toISOString();
-        const weekly: WeeklyDoc = {
+        const weeklyFromPut: WeeklyDoc = {
           weekStartYMD,
           headline,
           body: bodyText,
           ...(classLine ? { classLine } : {}),
           ...(programLine ? { programLine } : {}),
-          ...(familyResourceUrl ? { familyResourceUrl, ...(familyResourceLabel ? { familyResourceLabel } : {}) } : {}),
           ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
           updatedAt: now,
         };
+        if (missionIn.hasInBody) {
+          if (missionResourceUrl !== undefined) {
+            weeklyFromPut.missionResourceUrl = missionResourceUrl;
+            weeklyFromPut.missionResourceLabel = missionResourceLabel ?? null;
+          } else {
+            console.log("[WORKER WARNING] missionResourceUrl rejected but existing value preserved", {
+              weekStartYMD,
+              sharedAthleteId: sharedAthleteIdRaw || null,
+            });
+          }
+        }
+        if (familyIn.hasInBody) {
+          if (familyResourceUrl !== undefined) {
+            weeklyFromPut.familyResourceUrl = familyResourceUrl;
+            weeklyFromPut.familyResourceLabel = familyResourceLabel ?? null;
+          } else {
+            console.log("[WORKER WARNING] familyResourceUrl rejected but existing value preserved", {
+              weekStartYMD,
+              sharedAthleteId: sharedAthleteIdRaw || null,
+            });
+          }
+        }
+
+        const existingWeeklyForMerge: Partial<WeeklyDoc> | null =
+          sharedAthleteIdRaw
+            ? (rec.weeklyByAthleteId[sharedAthleteIdRaw] ?? null)
+            : (rec.weekly ?? null);
+        const mergedWeekly: WeeklyDoc = {
+          ...(existingWeeklyForMerge && typeof existingWeeklyForMerge === "object"
+            ? { ...existingWeeklyForMerge }
+            : {}),
+          ...weeklyFromPut,
+          updatedAt: now,
+        };
+        if (hasFamilyCoachRecapKey) {
+          if (familyCoachRecapNote) {
+            mergedWeekly.familyCoachRecapNote = familyCoachRecapNote;
+          } else {
+            delete mergedWeekly.familyCoachRecapNote;
+          }
+        } else {
+          delete mergedWeekly.familyCoachRecapNote;
+        }
+
+        console.log("[WORKER FINAL WRITE]", mergedWeekly);
 
         // Targeted debug to diagnose "clear doesn't propagate" for Card 2.
         // Logs only when coach sent empty or omitted the recap field.
@@ -609,14 +723,15 @@ export default {
           const prevRecapRaw = sharedAthleteIdRaw
             ? rec.weeklyByAthleteId[sharedAthleteIdRaw]?.familyCoachRecapNote
             : rec.weekly?.familyCoachRecapNote;
-          const chosenHasKey = Object.prototype.hasOwnProperty.call(weekly, "familyCoachRecapNote");
+          const storedHasKey = Object.prototype.hasOwnProperty.call(mergedWeekly, "familyCoachRecapNote");
+          const finalRecap = mergedWeekly.familyCoachRecapNote;
           console.log("[coach-sync-weekly-put familyCoachRecapNote]", {
             hasFamilyCoachRecapKey,
             incomingRecapLen:
               typeof b.familyCoachRecapNote === "string" ? b.familyCoachRecapNote.length : null,
             prevRecapLen: typeof prevRecapRaw === "string" ? prevRecapRaw.length : null,
-            storedRecapLen: familyCoachRecapNote ? familyCoachRecapNote.length : 0,
-            storedHasKey: chosenHasKey,
+            storedRecapLen: typeof finalRecap === "string" ? finalRecap.length : 0,
+            storedHasKey,
             weekStartYMD,
             sharedAthleteId: sharedAthleteIdRaw || null,
           });
@@ -627,10 +742,10 @@ export default {
               ...rec,
               weeklyByAthleteId: {
                 ...(rec.weeklyByAthleteId || {}),
-                [sharedAthleteIdRaw]: weekly,
+                [sharedAthleteIdRaw]: mergedWeekly,
               },
             }
-          : { ...rec, weekly };
+          : { ...rec, weekly: mergedWeekly };
         await writeSession(env.SESSIONS, token, next);
 
         return json({ ok: true }, 200);

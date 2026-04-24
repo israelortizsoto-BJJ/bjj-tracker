@@ -131,10 +131,25 @@ export async function coachSyncFetchSession(
 ): Promise<CoachWeeklySyncSessionResponse> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
-  const res = await fetch(joinUrl(base, `/v1/sessions/${enc}`), {
-    method: "GET",
-    headers: { Accept: "application/json" },
+  const url = joinUrl(base, `/v1/sessions/${enc}`);
+  const method = "GET";
+  const body = undefined;
+  console.log("[API CALL]", {
+    url,
+    method,
+    body,
   });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { Accept: "application/json" },
+    });
+  } catch (err) {
+    console.error("[API FETCH FAILED]", err);
+    throw err;
+  }
+  console.log("[API RESPONSE STATUS]", res.status);
   const payload = await parseJsonOrText(res);
   if (res.status === 404) {
     throw new CoachWeeklySyncApiError("That invite code was not found. Check for typos.", 404);
@@ -197,11 +212,26 @@ export async function coachSyncRedeemParentWriter(
 ): Promise<CoachWeeklySyncRedeemParentWriterResponse> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
-  const res = await fetch(joinUrl(base, `/v1/sessions/${enc}/parent-redeem`), {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: "{}",
+  const url = joinUrl(base, `/v1/sessions/${enc}/parent-redeem`);
+  const method = "POST";
+  const body = "{}";
+  console.log("[API CALL]", {
+    url,
+    method,
+    body,
   });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body,
+    });
+  } catch (err) {
+    console.error("[API FETCH FAILED]", err);
+    throw err;
+  }
+  console.log("[API RESPONSE STATUS]", res.status);
   const payload = await parseJsonOrText(res);
   if (!res.ok) {
     const msg =

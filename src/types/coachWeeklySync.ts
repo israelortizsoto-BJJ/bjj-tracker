@@ -12,7 +12,10 @@ export type SyncedWeeklyMessagePayload = {
   classLine?: string;
   /** Optional line for Read together “program” step */
   programLine?: string;
-  /** Optional family-facing link from the coach (publish lane only). */
+  /** Optional link for “Mission of the week” on parent Read together (publish lane only). */
+  missionResourceUrl?: string;
+  missionResourceLabel?: string;
+  /** Optional link for “Study the move” on parent Read together (publish lane only). */
   familyResourceUrl?: string;
   familyResourceLabel?: string;
   /** Optional parent-safe recap of what coach emphasized with the athlete (not private check-ins). */
@@ -77,8 +80,10 @@ export type CoachWeeklySyncPublishBody = {
   body: string;
   classLine?: string;
   programLine?: string;
-  familyResourceUrl?: string;
-  familyResourceLabel?: string;
+  missionResourceUrl?: string | null;
+  missionResourceLabel?: string | null;
+  familyResourceUrl?: string | null;
+  familyResourceLabel?: string | null;
   /** App sends `""` to clear; omitting the key is treated as “keep previous” on the worker. */
   familyCoachRecapNote?: string;
   /** When set, worker stores this snapshot under that athlete id instead of invite-level `weekly`. */

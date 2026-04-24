@@ -39,14 +39,22 @@ import {
 import { isDev } from "../../../src/config/runtime";
 import {
   activeCoachLinksForParentLinkedUi,
+  applyParentWeeklyPrimaryToStrictOrder,
   buildDevParentWeeklyLinkedStateTrace,
   parentKidCoherentlyLinkedToInviteToken,
   parentStrictWeeklyLinkedCoachLinksForUi,
 } from "../../../src/coachShare/coachLinkBinding";
+import { pickParentPrimaryWeeklySessionLink } from "../../../src/coachShare/pickParentPrimaryWeeklySession";
 import { normalizeInviteLinkToken } from "../../../src/coachShare/inviteLinkToken";
-import { resolveWeeklyDoc } from "../../../src/coach/resolveWeeklyDoc";
+import {
+  resolveWeeklyDoc,
+  sharedAthleteIdFromRosterForSession,
+} from "../../../src/coach/resolveWeeklyDoc";
 import { coachSyncFetchSession } from "../../../src/services/coachWeeklySyncApi";
-import type { SyncedWeeklyMessagePayload } from "../../../src/types/coachWeeklySync";
+import type {
+  SyncedSharedAthlete,
+  SyncedWeeklyMessagePayload,
+} from "../../../src/types/coachWeeklySync";
 import type { CoachPilotPreviewItem } from "../../../src/storage/coachShareStore";
 import type {
   AssignmentMap,
@@ -87,9 +95,8 @@ import {
   type KidId,
   type KidsById,
 } from "../../../src/types/coachKid";
-import {
-  familyResourceUrlForLinking,
-} from "../../../src/coach/familyResourceUrl";
+import { normalizeFamilyResourceUrl } from "../../../src/coach/familyResourceUrl";
+import { tokens } from "../../../src/theme/tokens";
 import { buildReadTogetherStoryCards } from "../../../src/family/readTogetherStoryCards";
 import { ReadTogetherStoryModal } from "../../../src/family/ReadTogetherStoryModal";
 
@@ -290,7 +297,14 @@ export default function CoachesScreen() {
   const [weeklySessionSnapshot, setWeeklySessionSnapshot] = useState<{
     weekly: SyncedWeeklyMessagePayload | null;
     weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
+    athletes: SyncedSharedAthlete[];
   } | null>(null);
+  /** Set with `weeklySessionSnapshot` from the same `loadCoachShareData` pass (`loadedKidsById` + session athletes). */
+  const [weeklySyncSelectedSharedAthleteId, setWeeklySyncSelectedSharedAthleteId] = useState<
+    string | null
+  >(null);
+  const weeklySessionSnapshotRef = useRef(weeklySessionSnapshot);
+  weeklySessionSnapshotRef.current = weeklySessionSnapshot;
   const [weeklySyncFetchFailed, setWeeklySyncFetchFailed] = useState(false);
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
   const [weeklySyncFromCache, setWeeklySyncFromCache] = useState(false);
@@ -301,6 +315,9 @@ export default function CoachesScreen() {
     INITIAL_PRACTICE_SUMMARY,
   );
   const [kidsByIdState, setKidsByIdState] = useState<KidsById>({});
+  /** Stable parent primary row id after `pickParentPrimaryWeeklySessionLink` in `loadCoachShareData` (see `applyParentWeeklyPrimaryToStrictOrder`). */
+  const [parentWeeklyPrimaryLinkId, setParentWeeklyPrimaryLinkId] = useState<string | null>(null);
+  const lastParentWeeklyFetchTokenRef = useRef<string | null>(null);
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
 
@@ -388,9 +405,35 @@ export default function CoachesScreen() {
 
     let nextShowNewCoachUpdateBanner = false;
 
+    let parentStrictOrderedForLoad: CoachLink[] = [];
+    if (role === "parent") {
+      const strictBase = parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks);
+      const pick = await pickParentPrimaryWeeklySessionLink(strictBase, {
+        lastPrimaryLinkToken: lastParentWeeklyFetchTokenRef.current,
+        memoryWeeklySnapshot: weeklySessionSnapshotRef.current,
+      });
+      console.log("[SESSION PICK]", {
+        chosen: pick.tokenTail,
+        hasWeekly: !!pick.hasWeekly,
+      });
+      setParentWeeklyPrimaryLinkId(pick.primaryLink?.id ?? null);
+      if (pick.primaryLink?.weeklySync?.linkToken?.trim()) {
+        lastParentWeeklyFetchTokenRef.current = pick.primaryLink.weeklySync.linkToken.trim();
+      } else {
+        lastParentWeeklyFetchTokenRef.current = null;
+      }
+      parentStrictOrderedForLoad = applyParentWeeklyPrimaryToStrictOrder(
+        strictBase,
+        pick.primaryLink,
+      );
+    } else {
+      setParentWeeklyPrimaryLinkId(null);
+      lastParentWeeklyFetchTokenRef.current = null;
+    }
+
     const linksForParentWeeklyFetch =
       role === "parent"
-        ? parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks)
+        ? parentStrictOrderedForLoad
         : loadedCoachLinks.filter((l) => l.status === "active");
     const activeWeeklySyncLink =
       role === "parent"
@@ -400,6 +443,12 @@ export default function CoachesScreen() {
     let nextWeeklyFetchedAt: string | null = null;
     let nextWeeklyFromCache = false;
     let nextWeeklyNetworkOk = false;
+    let nextWeeklySnapshot: {
+      weekly: SyncedWeeklyMessagePayload | null;
+      weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
+      athletes: SyncedSharedAthlete[];
+    } | null = null;
+    let parentMergedWeekly: SyncedWeeklyMessagePayload | null = null;
 
     if (activeWeeklySyncLink?.weeklySync) {
       try {
@@ -408,11 +457,25 @@ export default function CoachesScreen() {
           activeWeeklySyncLink.weeklySync.apiBaseUrl,
         );
         if (__DEV__) {
-          const recap = (session.weekly?.familyCoachRecapNote ?? "").trim();
+          const invite = session.weekly;
+          const map = session.weeklyByAthleteId ?? {};
+          const mapKeys = Object.keys(map);
+          const firstKey = mapKeys[0];
+          const firstAthlete = firstKey ? map[firstKey] : null;
+          const recap = (invite?.familyCoachRecapNote ?? "").trim();
           console.log("[bjj-parent-weekly-sync-doc]", {
-            familyResourceUrl: (session.weekly?.familyResourceUrl ?? "").trim() || null,
-            familyResourceLabel: (session.weekly?.familyResourceLabel ?? "").trim() || null,
+            inviteLevelMission: (invite?.missionResourceUrl ?? "").trim() || null,
+            inviteLevelFamily: (invite?.familyResourceUrl ?? "").trim() || null,
+            familyResourceLabel: (invite?.familyResourceLabel ?? "").trim() || null,
             fetchedFamilyCoachRecapNoteLen: recap.length,
+            weeklyByAthleteIdKeys: mapKeys,
+            sampleAthleteLinks:
+              firstAthlete && typeof firstAthlete === "object"
+                ? {
+                    mission: (firstAthlete.missionResourceUrl ?? "").trim() || null,
+                    family: (firstAthlete.familyResourceUrl ?? "").trim() || null,
+                  }
+                : null,
           });
         }
         nextWeeklyFetchFailed = false;
@@ -420,16 +483,53 @@ export default function CoachesScreen() {
         nextWeeklyNetworkOk = true;
         const nowIso = new Date().toISOString();
         nextWeeklyFetchedAt = nowIso;
-        await setCachedWeeklyForLinkToken(
-          activeWeeklySyncLink.weeklySync.linkToken,
-          session.weekly,
-          nowIso,
-          session.weeklyByAthleteId ?? {},
-        );
-        setWeeklySessionSnapshot({
-          weekly: session.weekly,
-          weeklyByAthleteId: session.weeklyByAthleteId ?? {},
-        });
+        if (role === "parent") {
+          const incoming = session.weekly;
+          const byAthlete = session.weeklyByAthleteId ?? {};
+          if (incoming) {
+            parentMergedWeekly = incoming;
+            nextWeeklySnapshot = {
+              weekly: incoming,
+              weeklyByAthleteId: byAthlete,
+              athletes: session.athletes,
+            };
+            await setCachedWeeklyForLinkToken(
+              activeWeeklySyncLink.weeklySync.linkToken,
+              incoming,
+              nowIso,
+              byAthlete,
+              session.athletes,
+            );
+          } else {
+            // Coach publish with `sharedAthleteId` stores only `weeklyByAthleteId`; invite-level `weekly` stays null.
+            // We must still persist the map or `resolveWeeklyDoc` never sees athlete docs (snapshot was only updated when `weekly` was non-null).
+            nextWeeklySnapshot = {
+              weekly: null,
+              weeklyByAthleteId: byAthlete,
+              athletes: session.athletes,
+            };
+            await setCachedWeeklyForLinkToken(
+              activeWeeklySyncLink.weeklySync.linkToken,
+              null,
+              nowIso,
+              byAthlete,
+              session.athletes,
+            );
+          }
+        } else {
+          await setCachedWeeklyForLinkToken(
+            activeWeeklySyncLink.weeklySync.linkToken,
+            session.weekly,
+            nowIso,
+            session.weeklyByAthleteId ?? {},
+            session.athletes,
+          );
+          nextWeeklySnapshot = {
+            weekly: session.weekly,
+            weeklyByAthleteId: session.weeklyByAthleteId ?? {},
+            athletes: session.athletes,
+          };
+        }
         const c = session.coach;
         const merged: typeof loadedCoachesById = {
           ...loadedCoachesById,
@@ -443,12 +543,6 @@ export default function CoachesScreen() {
         };
         loadedCoachesById = merged;
         await persistCoachesById(merged);
-        if (isDev() && role === "parent" && session.weekly?.updatedAt) {
-          const lastSeen = await getLastSeenUpdatedAt(activeWeeklySyncLink.weeklySync.linkToken);
-          if (lastSeen === null || session.weekly.updatedAt > lastSeen) {
-            nextShowNewCoachUpdateBanner = true;
-          }
-        }
       } catch {
         nextWeeklyFetchFailed = true;
         nextWeeklyNetworkOk = false;
@@ -457,24 +551,21 @@ export default function CoachesScreen() {
         );
         nextWeeklyFetchedAt = cached?.fetchedAt ?? null;
         nextWeeklyFromCache = true;
-        setWeeklySessionSnapshot({
+        nextWeeklySnapshot = {
           weekly: cached?.weekly ?? null,
           weeklyByAthleteId: cached?.weeklyByAthleteId ?? {},
-        });
+          athletes: cached?.athletes ?? [],
+        };
       }
-    } else {
-      setWeeklySessionSnapshot(null);
     }
 
     setWeeklySyncFetchFailed(nextWeeklyFetchFailed);
     setWeeklySyncFetchedAt(nextWeeklyFetchedAt);
     setWeeklySyncFromCache(nextWeeklyFromCache);
     setWeeklySyncNetworkOk(nextWeeklyNetworkOk);
-    setShowNewCoachUpdateBanner(nextShowNewCoachUpdateBanner);
 
     const today = todayYMD();
-    const strictWeeklyForParent =
-      role === "parent" ? parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks) : [];
+    const strictWeeklyForParent = role === "parent" ? parentStrictOrderedForLoad : [];
     const activeWeeklyInviteTokenNorm =
       role === "parent" && strictWeeklyForParent[0]?.weeklySync?.linkToken
         ? normalizeInviteLinkToken(strictWeeklyForParent[0].weeklySync.linkToken)
@@ -498,6 +589,30 @@ export default function CoachesScreen() {
         await setFamilyCompetitionSelectedKidId(rosterKidId);
       }
     }
+
+    const nextWeeklySelectedSharedAthleteId = nextWeeklySnapshot
+      ? sharedAthleteIdFromRosterForSession(
+          rosterKidId,
+          rosterKidId ? loadedKidsById[rosterKidId]?.sharedAthleteId : undefined,
+          nextWeeklySnapshot.athletes,
+        )
+      : null;
+    setWeeklySessionSnapshot(nextWeeklySnapshot);
+    setWeeklySyncSelectedSharedAthleteId(nextWeeklySelectedSharedAthleteId);
+
+    if (
+      activeWeeklySyncLink?.weeklySync &&
+      isDev() &&
+      role === "parent" &&
+      parentMergedWeekly?.updatedAt
+    ) {
+      const lastSeen = await getLastSeenUpdatedAt(activeWeeklySyncLink.weeklySync.linkToken);
+      if (lastSeen === null || parentMergedWeekly.updatedAt > lastSeen) {
+        nextShowNewCoachUpdateBanner = true;
+      }
+    }
+    setShowNewCoachUpdateBanner(nextShowNewCoachUpdateBanner);
+
     const compApplyGen = ++applyFamilyCompGenRef.current;
     const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
       rosterKidId,
@@ -642,6 +757,15 @@ export default function CoachesScreen() {
   const allPacks = Object.values(packsById);
   const allAssignments = Object.values(assignmentsById);
 
+  const parentStrictOrderForUi = useMemo(() => {
+    if (role !== "parent") return [] as CoachLink[];
+    const strict = parentStrictWeeklyLinkedCoachLinksForUi(coachLinks);
+    const primary = parentWeeklyPrimaryLinkId
+      ? (strict.find((l) => l.id === parentWeeklyPrimaryLinkId) ?? null)
+      : null;
+    return applyParentWeeklyPrimaryToStrictOrder(strict, primary);
+  }, [role, coachLinks, parentWeeklyPrimaryLinkId]);
+
   const activeCoachLinks =
     role === "parent"
       ? activeCoachLinksForParentLinkedUi(coachLinks)
@@ -649,7 +773,7 @@ export default function CoachesScreen() {
   const isLinked = activeCoachLinks.length > 0;
   const weeklySyncLink =
     role === "parent"
-      ? parentStrictWeeklyLinkedCoachLinksForUi(coachLinks)[0]
+      ? parentStrictOrderForUi[0]
       : activeCoachLinks.find((l) => l.weeklySync);
   const useWeeklySyncHero = Boolean(weeklySyncLink);
 
@@ -658,14 +782,12 @@ export default function CoachesScreen() {
       setWeeklySyncDoc(null);
       return;
     }
-    const kidIdRaw = familyCompetition.kidId;
-    const kidId = typeof kidIdRaw === "string" ? kidIdRaw.trim() : "";
-    const sharedRaw = kidId ? kidsByIdState[kidId]?.sharedAthleteId : undefined;
-    const selectedSharedAthleteId =
-      typeof sharedRaw === "string" && sharedRaw.trim() ? sharedRaw.trim() : null;
-    const resolved = resolveWeeklyDoc(weeklySessionSnapshot, selectedSharedAthleteId);
+    const resolved = resolveWeeklyDoc(
+      weeklySessionSnapshot,
+      weeklySyncSelectedSharedAthleteId,
+    );
     setWeeklySyncDoc(resolved);
-  }, [weeklySessionSnapshot, familyCompetition.kidId, kidsByIdState]);
+  }, [weeklySessionSnapshot, weeklySyncSelectedSharedAthleteId]);
 
   useEffect(() => {
     if (!isDev() || role !== "parent" || !ready) return;
@@ -826,16 +948,11 @@ export default function CoachesScreen() {
     if (!raw) return false;
     const trimmed = raw.trim();
     if (!trimmed) return false;
-    const hasProtocol =
-      trimmed.startsWith("http://") || trimmed.startsWith("https://");
-    const candidate = hasProtocol ? trimmed : `https://${trimmed}`;
-    const lower = candidate.toLowerCase();
-
+    const lower = trimmed.toLowerCase();
     const looksLikeYoutube =
       lower.includes("youtube.com") || lower.includes("youtu.be");
     const looksLikeInstagram =
       lower.includes("instagram.com") || lower.includes("instagr.am");
-
     return looksLikeYoutube || looksLikeInstagram;
   };
 
@@ -843,16 +960,10 @@ export default function CoachesScreen() {
     if (!isUsableYoutubeUrl(rawUrl)) {
       return;
     }
-
-    const trimmed = rawUrl!.trim();
-
-    const normalized =
-      trimmed.startsWith("http://") || trimmed.startsWith("https://")
-        ? trimmed
-        : `https://${trimmed}`;
-
+    const url = normalizeFamilyResourceUrl(rawUrl);
+    if (!url) return;
     try {
-      const canOpen = await Linking.canOpenURL(normalized);
+      const canOpen = await Linking.canOpenURL(url);
       if (!canOpen) {
         Alert.alert(
           "Unable to open link",
@@ -860,8 +971,7 @@ export default function CoachesScreen() {
         );
         return;
       }
-
-      await Linking.openURL(normalized);
+      await Linking.openURL(url);
     } catch {
       Alert.alert(
         "Unable to open link",
@@ -871,10 +981,10 @@ export default function CoachesScreen() {
   }, []);
 
   const openPublishedWebUrl = useCallback(async (rawUrl: string | undefined) => {
-    const normalized = familyResourceUrlForLinking(rawUrl);
-    if (!normalized) return;
+    const url = normalizeFamilyResourceUrl(rawUrl);
+    if (!url) return;
     try {
-      const canOpen = await Linking.canOpenURL(normalized);
+      const canOpen = await Linking.canOpenURL(url);
       if (!canOpen) {
         Alert.alert(
           "Unable to open link",
@@ -882,7 +992,7 @@ export default function CoachesScreen() {
         );
         return;
       }
-      await Linking.openURL(normalized);
+      await Linking.openURL(url);
     } catch {
       Alert.alert("Unable to open link", "Something went wrong opening this link.");
     }
@@ -1048,13 +1158,7 @@ export default function CoachesScreen() {
     return `This week’s mission turns training into a family game: you both know what to practice, and ${childName} can feel proud when it clicks.`;
   }, [familyCompetition.kidName, focusTitle]);
   /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
-  const weeklyNoteHeroEyebrow = useWeeklySyncHero
-    ? currentCoach?.displayName
-      ? `Coach's weekly focus from ${currentCoach.displayName}`
-      : "Coach's weekly focus"
-    : currentCoach?.displayName
-      ? `Coach's weekly focus from ${currentCoach.displayName}`
-      : "Coach's weekly focus";
+  const weeklyNoteHeroEyebrow = "Coach's weekly focus";
 
   const relevantParentKids = useMemo(() => {
     const base = Object.values(kidsByIdState)
@@ -1199,9 +1303,20 @@ export default function CoachesScreen() {
     ],
   );
 
+  /** Primary CTA: connect → refresh (no coach weekly payload) → Start Training (same navigation as Track your training). */
+  const primaryActionIsStartTraining =
+    isLinked &&
+    (useWeeklySyncHero
+      ? Boolean(weeklySyncDoc)
+      : currentAssignment?.status === "assigned");
+
+
+  const missionUrlTrimmed = (weeklySyncDoc?.missionResourceUrl ?? "").trim();
+  const hasMissionResource = missionUrlTrimmed.length > 0;
+
   return (
     <>
-      <Stack.Screen options={{ title: "This week" }} />
+      <Stack.Screen options={{ title: "This Week" }} />
       {role === "coach" ? (
         <KeyboardAwareScrollView
           enableOnAndroid
@@ -1271,169 +1386,130 @@ export default function CoachesScreen() {
         enableOnAndroid
         extraScrollHeight={80}
         keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: UI.screenBg }}
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+        style={{ flex: 1, backgroundColor: tokens.colors.surface.app }}
+        contentContainerStyle={{
+          paddingHorizontal: tokens.layout.screenPaddingX,
+          paddingBottom: tokens.space[8],
+        }}
       >
-        <Text
-          onLongPress={
-            __DEV__ ? () => setShowDebugData((prev) => !prev) : undefined
-          }
-          style={{ fontSize: 26, fontWeight: "700", color: UI.textPrimary, marginBottom: 6 }}
-        >
-          This week together
-        </Text>
-        <View style={{ height: 14 }} />
+        <View style={{ paddingTop: tokens.space[2] }}>
+          <Text
+            onLongPress={
+              __DEV__ ? () => setShowDebugData((prev) => !prev) : undefined
+            }
+            style={[
+              tokens.type.h1,
+              { color: tokens.colors.text.primary, marginBottom: tokens.space[1] },
+            ]}
+          >
+            This Week
+          </Text>
+          <Text style={[tokens.type.body, { color: tokens.colors.text.muted }]}>
+            MatMind
+          </Text>
+        </View>
 
         {!ready ? (
-          <Text style={{ marginTop: 4, fontSize: 15, color: UI.textSecondary }}>
+          <Text
+            style={{
+              marginTop: tokens.space[3],
+              ...tokens.type.body,
+              color: tokens.colors.text.secondary,
+            }}
+          >
             Loading…
           </Text>
         ) : (
           <>
             <View
               style={{
-                padding: 20,
-                borderRadius: CARD_RADIUS,
+                marginTop: tokens.layout.sectionGap,
+                padding: tokens.layout.cardPadding,
+                borderRadius: tokens.radius.lg,
                 borderWidth: 1,
-                borderColor: UI.heroBorder,
-                backgroundColor: UI.bgHero,
+                borderColor: tokens.colors.border.default,
+                backgroundColor: tokens.colors.surface.card,
                 overflow: "hidden",
+                ...tokens.elevation.card,
               }}
             >
               <View
                 pointerEvents="none"
                 style={{
                   position: "absolute",
-                  right: -70,
-                  top: -70,
-                  width: 170,
-                  height: 170,
+                  right: -40,
+                  top: -40,
+                  width: 120,
+                  height: 120,
                   borderRadius: 999,
-                  backgroundColor: UI.heroBlob1,
+                  backgroundColor: tokens.colors.surface.accent,
+                  opacity: 0.9,
                 }}
               />
               <View
-                pointerEvents="none"
                 style={{
-                  position: "absolute",
-                  left: -65,
-                  bottom: -75,
-                  width: 170,
-                  height: 170,
-                  borderRadius: 999,
-                  backgroundColor: UI.heroBlob2,
-                }}
-              />
-              <Pressable
-                onPress={openWeeklyStory}
-                accessibilityRole="button"
-                accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
-                style={({ pressed }) => ({
-                  marginTop: 0,
-                  marginBottom: 16,
-                  paddingVertical: 16,
-                  paddingHorizontal: 16,
-                  borderRadius: CARD_RADIUS,
-                  borderWidth: 1,
-                  borderColor: role === "parent" ? UI.primaryFill : UI.addCompetitionBorder,
-                  backgroundColor:
-                    role === "parent"
-                      ? pressed
-                        ? UI.primaryFillPressed
-                        : UI.primaryFill
-                      : pressed
-                        ? UI.addCompetitionBgPressed
-                        : "#f5f3ff",
-                  alignSelf: "stretch",
+                  flexDirection: "row",
                   alignItems: "flex-start",
-                })}
-              >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "900",
-                    letterSpacing: 0.8,
-                    color: role === "parent" ? UI.primaryTextOnFill : "#6d28d9",
-                  }}
-                >
-                  Start Family Huddle
-                </Text>
-                <Text
-                  style={{
-                    marginTop: 6,
-                    fontSize: 18,
-                    fontWeight: "800",
-                    color: role === "parent" ? UI.primaryTextOnFill : UI.textPrimary,
-                    lineHeight: 24,
-                  }}
-                >
-                  Click here to begin
-                </Text>
-                <Text
-                  style={{
-                    marginTop: 8,
-                    fontSize: 15,
-                    color: role === "parent" ? "#e0e7ff" : UI.textSecondary,
-                    lineHeight: 22,
-                  }}
-                >
-                  First action: read this week&apos;s mission together, then log practice.
-                </Text>
-              </Pressable>
-              <Text
-                style={{
-                  fontSize: 12,
-                  letterSpacing: 1,
-                  fontWeight: "800",
-                  color: "#7c3aed",
-                  marginBottom: 6,
+                  justifyContent: "space-between",
+                  gap: tokens.space[3],
+                  marginBottom: tokens.space[3],
                 }}
               >
-                Family Mission
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  color: UI.textSecondary,
-                  lineHeight: 20,
-                  marginBottom: 12,
-                }}
-              >
-                Same note for every family on this coach link.
-              </Text>
-              <View
-                style={{
-                  alignSelf: "flex-start",
-                  marginBottom: 14,
-                  paddingVertical: 6,
-                  paddingHorizontal: 10,
-                  borderRadius: 999,
-                  backgroundColor: isLinked
-                    ? "#a7f3d0"
-                    : isPreviewOnlyOnDevice
-                      ? "#fde68a"
-                      : "#ede9fe",
-                }}
-              >
-                <Text
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {currentCoach?.displayName?.trim() ? (
+                    <Text
+                      style={[
+                        tokens.type.caption,
+                        { fontWeight: "700", color: tokens.colors.text.primary },
+                      ]}
+                    >
+                      {currentCoach.displayName.trim()}
+                    </Text>
+                  ) : null}
+                  {useWeeklySyncHero ? (
+                    <Text
+                      style={[
+                        tokens.type.caption,
+                        {
+                          color: tokens.colors.text.muted,
+                          marginTop: currentCoach?.displayName?.trim() ? tokens.space[2] : 0,
+                        },
+                      ]}
+                    >
+                      Same note for every family on this coach link.
+                    </Text>
+                  ) : null}
+                </View>
+                <View
                   style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: isLinked
-                      ? "#065f46"
+                    paddingVertical: tokens.space[1],
+                    paddingHorizontal: tokens.space[2],
+                    borderRadius: tokens.radius.pill,
+                    borderWidth: 1,
+                    borderColor: tokens.colors.border.default,
+                    backgroundColor: isLinked
+                      ? tokens.colors.semantic.successBg
                       : isPreviewOnlyOnDevice
-                        ? "#b45309"
-                        : "#5b21b6",
+                        ? tokens.colors.semantic.warningBg
+                        : tokens.colors.surface.accent,
                   }}
                 >
-                  {useWeeklySyncHero
-                    ? "Linked — weekly note sync"
-                    : isLinked
-                      ? "Linked to your coach"
-                      : isPreviewOnlyOnDevice
-                        ? "On this phone only — not linked yet"
-                        : "Not linked yet"}
-                </Text>
+                  <Text
+                    style={[
+                      tokens.type.caption,
+                      {
+                        fontWeight: "700",
+                        color: isLinked
+                          ? tokens.colors.semantic.successText
+                          : isPreviewOnlyOnDevice
+                            ? tokens.colors.semantic.warningText
+                            : tokens.colors.brand[600],
+                      },
+                    ]}
+                  >
+                    {isLinked ? "Linked" : isPreviewOnlyOnDevice ? "Preview" : "Not linked"}
+                  </Text>
+                </View>
               </View>
 
               {isDev() &&
@@ -1443,45 +1519,89 @@ export default function CoachesScreen() {
                 <View
                   style={{
                     alignSelf: "stretch",
-                    marginBottom: 12,
-                    paddingVertical: 10,
-                    paddingHorizontal: 12,
-                    borderRadius: 10,
-                    backgroundColor: "#e0e7ff",
+                    marginBottom: tokens.space[3],
+                    paddingVertical: tokens.space[2],
+                    paddingHorizontal: tokens.space[3],
+                    borderRadius: tokens.radius.sm,
+                    backgroundColor: tokens.colors.semantic.infoBg,
                     borderWidth: 1,
-                    borderColor: "#c7d2fe",
+                    borderColor: tokens.colors.border.default,
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: "#312e81" }}>
+                  <Text
+                    style={[
+                      tokens.type.bodyStrong,
+                      { color: tokens.colors.semantic.infoText },
+                    ]}
+                  >
                     New coach update
                   </Text>
-                  <Text style={{ marginTop: 4, fontSize: 13, color: "#4338ca" }}>
+                  <Text
+                    style={[
+                      tokens.type.caption,
+                      { marginTop: tokens.space[1], color: tokens.colors.text.secondary },
+                    ]}
+                  >
                     Updated {new Date(weeklySyncDoc.updatedAt).toLocaleString()}
                   </Text>
                 </View>
               ) : null}
 
-              <Text style={[SECTION_LABEL, { marginBottom: 8, color: "#6d28d9" }]}>
+              <Text
+                style={[
+                  tokens.type.label,
+                  {
+                    marginBottom: tokens.space[2],
+                    color: tokens.colors.text.muted,
+                  },
+                ]}
+              >
                 {weeklyNoteHeroEyebrow.toUpperCase()}
               </Text>
-              <Text style={{ fontSize: 20, fontWeight: "700", color: UI.textPrimary, lineHeight: 28 }}>
+              <Text style={[tokens.type.h2, { color: tokens.colors.text.primary }]}>
                 {focusTitle}
               </Text>
-              <Text style={{ marginTop: 10, fontSize: 15, color: UI.textSecondary, lineHeight: 23 }}>
+              <Text
+                style={[
+                  tokens.type.body,
+                  {
+                    marginTop: tokens.space[3],
+                    color: tokens.colors.text.secondary,
+                  },
+                ]}
+              >
                 {focusNotes}
               </Text>
 
               {useWeeklySyncHero && weeklySyncFetchFailed && weeklySyncDoc ? (
-                <Text style={{ marginTop: 10, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    {
+                      marginTop: tokens.space[3],
+                      color: tokens.colors.semantic.warningText,
+                      lineHeight: 18,
+                    },
+                  ]}
+                >
                   Showing last saved note — could not reach the sync service. Pull to refresh or try again
                   shortly.
                 </Text>
               ) : null}
 
               {!useWeeklySyncHero && currentModule?.title ? (
-                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: UI.heroBorder }}>
-                  <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
-                    <Text style={{ fontWeight: "700", color: UI.textPrimary }}>In class, look for: </Text>
+                <View
+                  style={{
+                    marginTop: tokens.space[4],
+                    paddingTop: tokens.space[4],
+                    borderTopWidth: 1,
+                    borderTopColor: tokens.colors.border.default,
+                  }}
+                >
+                  <Text style={[tokens.type.body, { color: tokens.colors.text.secondary }]}>
+                    <Text style={{ fontWeight: "700", color: tokens.colors.text.primary }}>
+                      In class, look for:{" "}
+                    </Text>
                     {currentModule.title}
                     {currentModule.summary ? ` — ${currentModule.summary}` : ""}
                   </Text>
@@ -1489,122 +1609,266 @@ export default function CoachesScreen() {
               ) : null}
 
               {!useWeeklySyncHero && currentPack?.title && isLinked ? (
-                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
-                  Program: <Text style={{ fontWeight: "600", color: UI.textPrimary }}>{currentPack.title}</Text>
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    { marginTop: tokens.space[3], color: tokens.colors.text.secondary },
+                  ]}
+                >
+                  Program:{" "}
+                  <Text style={{ fontWeight: "600", color: tokens.colors.text.primary }}>
+                    {currentPack.title}
+                  </Text>
                   {currentPack.description ? ` · ${currentPack.description}` : ""}
                 </Text>
               ) : null}
 
               {assignmentStatusLine ? (
-                <Text style={{ marginTop: 10, fontSize: 13, color: UI.textSecondary }}>
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    { marginTop: tokens.space[3], color: tokens.colors.text.secondary },
+                  ]}
+                >
                   {assignmentStatusLine}
                 </Text>
               ) : null}
 
               {!isLinked && hasCoachPilotPreviewOnDevice ? (
-                <Text style={{ marginTop: 12, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    {
+                      marginTop: tokens.space[3],
+                      color: tokens.colors.semantic.warningText,
+                      lineHeight: 18,
+                    },
+                  ]}
+                >
                   Preview items on this phone are not shared with families until you connect with your coach’s invite.
                 </Text>
               ) : null}
 
               {!isLinked && hasSeededOrLocalShareData && !hasCoachPilotPreviewOnDevice ? (
-                <Text style={{ marginTop: 12, fontSize: 13, color: "#92400e", lineHeight: 19 }}>
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    {
+                      marginTop: tokens.space[3],
+                      color: tokens.colors.semantic.warningText,
+                      lineHeight: 18,
+                    },
+                  ]}
+                >
                   Sample or local data on this phone only — connect to use your coach’s real weekly note.
                 </Text>
               ) : null}
 
-              {isLinked && currentAssignment?.status === "assigned" ? (
-                <Pressable
-                  onPress={() => void handleMarkCurrentAssignmentComplete()}
-                  style={({ pressed }) => ({
-                    marginTop: 18,
-                    paddingVertical: 14,
-                    paddingHorizontal: 20,
-                    borderRadius: CARD_RADIUS,
-                    backgroundColor:
-                      role === "parent"
-                        ? pressed
-                          ? UI.addCompetitionBgPressed
-                          : UI.addCompetitionBg
-                        : pressed
-                          ? UI.primaryFillPressed
-                          : UI.primaryFill,
-                    alignSelf: "stretch",
-                    alignItems: "center",
-                  })}
-                >
-                  <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "700",
-                      color: role === "parent" ? UI.primaryFill : "#ffffff",
-                    }}
+              {hasMissionResource ? (
+                <>
+                  <Pressable
+                    onPress={() => void openPublishedWebUrl(weeklySyncDoc?.missionResourceUrl)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Practice This Week’s Move"
+                    style={({ pressed }) => ({
+                      marginTop: tokens.space[4],
+                      paddingVertical: tokens.space[3],
+                      paddingHorizontal: tokens.space[5],
+                      borderRadius: tokens.radius.md,
+                      backgroundColor: pressed
+                        ? tokens.colors.brand[600]
+                        : tokens.colors.brand[500],
+                      alignSelf: "stretch",
+                      alignItems: "center",
+                    })}
                   >
-                    Log practice for this week
+                    <Text
+                      style={[
+                        tokens.type.title,
+                        { color: tokens.colors.text.onBrand },
+                      ]}
+                    >
+                      Practice This Week’s Move
+                    </Text>
+                  </Pressable>
+                  <Text
+                    style={[
+                      tokens.type.caption,
+                      {
+                        marginTop: tokens.space[2],
+                        color: tokens.colors.text.secondary,
+                        lineHeight: 18,
+                      },
+                    ]}
+                  >
+                    Tap to watch the technique your coach wants you to focus on this week.
                   </Text>
-                </Pressable>
-              ) : !isLinked ? (
+                </>
+              ) : null}
+
+            </View>
+
+            <Pressable
+              onPress={openWeeklyStory}
+              accessibilityRole="button"
+              accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
+              style={({ pressed }) => ({
+                marginTop: tokens.layout.sectionGap,
+                paddingVertical: tokens.space[4],
+                paddingHorizontal: tokens.space[4],
+                borderRadius: tokens.radius.lg,
+                borderWidth: 1,
+                borderColor: tokens.colors.border.accent,
+                backgroundColor: pressed
+                  ? tokens.colors.surface.accent
+                  : tokens.colors.surface.cardMuted,
+                alignSelf: "stretch",
+                alignItems: "flex-start",
+                ...tokens.elevation.card,
+              })}
+            >
+              <Text
+                style={[
+                  tokens.type.label,
+                  { color: tokens.colors.brand[600] },
+                ]}
+              >
+                Start Family Huddle
+              </Text>
+              <Text
+                style={[
+                  tokens.type.h2,
+                  {
+                    marginTop: tokens.space[2],
+                    color: tokens.colors.text.primary,
+                  },
+                ]}
+              >
+                Click here to begin
+              </Text>
+              <Text
+                style={[
+                  tokens.type.body,
+                  {
+                    marginTop: tokens.space[2],
+                    color: tokens.colors.text.secondary,
+                  },
+                ]}
+              >
+                First action: read this week&apos;s mission together, then log practice.
+              </Text>
+            </Pressable>
+
+            <View style={{ marginTop: tokens.layout.sectionGap, gap: tokens.space[3] }}>
+              {!isLinked ? (
                 <Pressable
                   onPress={() => router.push("/this-week/join")}
+                  accessibilityRole="button"
                   style={({ pressed }) => ({
-                    marginTop: 18,
-                    paddingVertical: 14,
-                    paddingHorizontal: 20,
-                    borderRadius: CARD_RADIUS,
-                    backgroundColor:
-                      role === "parent"
-                        ? pressed
-                          ? UI.addCompetitionBgPressed
-                          : UI.addCompetitionBg
-                        : pressed
-                          ? UI.primaryFillPressed
-                          : UI.primaryFill,
+                    paddingVertical: tokens.space[3],
+                    paddingHorizontal: tokens.space[5],
+                    borderRadius: tokens.radius.md,
+                    backgroundColor: pressed
+                      ? tokens.colors.brand[600]
+                      : tokens.colors.brand[500],
                     alignSelf: "stretch",
                     alignItems: "center",
                   })}
                 >
                   <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "700",
-                      color: role === "parent" ? UI.primaryFill : "#ffffff",
-                    }}
+                    style={[
+                      tokens.type.title,
+                      { color: tokens.colors.text.onBrand },
+                    ]}
                   >
                     Connect with your coach
                   </Text>
                 </Pressable>
-              ) : (
+              ) : !primaryActionIsStartTraining ? (
                 <Pressable
                   onPress={() => void loadCoachShareData()}
+                  accessibilityRole="button"
                   style={({ pressed }) => ({
-                    marginTop: 18,
-                    paddingVertical: 14,
-                    paddingHorizontal: 20,
-                    borderRadius: CARD_RADIUS,
-                    backgroundColor:
-                      role === "parent"
-                        ? pressed
-                          ? UI.addCompetitionBgPressed
-                          : UI.addCompetitionBg
-                        : pressed
-                          ? UI.primaryFillPressed
-                          : UI.primaryFill,
+                    paddingVertical: tokens.space[3],
+                    paddingHorizontal: tokens.space[5],
+                    borderRadius: tokens.radius.md,
+                    backgroundColor: pressed
+                      ? tokens.colors.brand[600]
+                      : tokens.colors.brand[500],
                     alignSelf: "stretch",
                     alignItems: "center",
                   })}
                 >
                   <Text
-                    style={{
-                      fontSize: 16,
-                      fontWeight: "700",
-                      color: role === "parent" ? UI.primaryFill : "#ffffff",
-                    }}
+                    style={[
+                      tokens.type.title,
+                      { color: tokens.colors.text.onBrand },
+                    ]}
                   >
-                    Refresh this week’s update
+                    Refresh coach data
+                  </Text>
+                </Pressable>
+              ) : (
+                <Pressable
+                  onPress={() => {
+                    const d = todayYMD();
+                    const k = familyCompetition.kidId;
+                    router.push(
+                      k
+                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
+                        : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
+                    );
+                  }}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    paddingVertical: tokens.space[3],
+                    paddingHorizontal: tokens.space[5],
+                    borderRadius: tokens.radius.md,
+                    backgroundColor: pressed
+                      ? tokens.colors.brand[600]
+                      : tokens.colors.brand[500],
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text
+                    style={[
+                      tokens.type.title,
+                      { color: tokens.colors.text.onBrand },
+                    ]}
+                  >
+                    Start Training
                   </Text>
                 </Pressable>
               )}
 
+              {isLinked && currentAssignment?.status === "assigned" ? (
+                <Pressable
+                  onPress={() => void handleMarkCurrentAssignmentComplete()}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    paddingVertical: tokens.space[3],
+                    paddingHorizontal: tokens.space[5],
+                    borderRadius: tokens.radius.md,
+                    borderWidth: 1,
+                    borderColor: tokens.colors.border.accent,
+                    backgroundColor: pressed
+                      ? tokens.colors.surface.accent
+                      : tokens.colors.surface.card,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                  })}
+                >
+                  <Text
+                    style={[
+                      tokens.type.title,
+                      { color: tokens.colors.brand[600] },
+                    ]}
+                  >
+                    Log practice for this week
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
 
             {showParentKidSelector ? (
@@ -1676,233 +1940,93 @@ export default function CoachesScreen() {
             ) : null}
 
             {role === "parent" && ready ? (
-              <Section title="Training progress" tone="family">
+              <View style={{ marginTop: tokens.layout.sectionGap }}>
+                <Text
+                  style={[
+                    tokens.type.label,
+                    { marginBottom: tokens.space[2], color: tokens.colors.text.muted },
+                  ]}
+                >
+                  INSTANT INSIGHTS
+                </Text>
                 <View
                   style={{
-                    marginBottom: 12,
-                    padding: 14,
-                    borderRadius: CARD_RADIUS,
+                    flexDirection: "row",
+                    gap: tokens.space[3],
+                    padding: tokens.space[4],
+                    borderRadius: tokens.radius.lg,
                     borderWidth: 1,
-                    borderColor: UI.addCompetitionBorder,
-                    backgroundColor: "#f5f3ff",
+                    borderColor: tokens.colors.border.default,
+                    backgroundColor: tokens.colors.surface.card,
                   }}
                 >
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "900", color: "#6d28d9" }}>
-                        SESSIONS THIS WEEK
-                      </Text>
-                      <Text style={{ marginTop: 6, fontSize: 34, fontWeight: "900", color: UI.textPrimary }}>
-                        {practiceSummary.sessionCountThisWeek}
-                      </Text>
-                      <Text style={{ marginTop: 2, fontSize: 13, fontWeight: "800", color: UI.textSecondary }}>
-                        {practiceSummary.sessionCountThisWeek === 1 ? "session logged" : "sessions logged"}
-                      </Text>
-                      <Text style={{ marginTop: 6, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-                        For{" "}
-                        <Text style={{ fontWeight: "900", color: UI.textPrimary }}>
-                          {activeAthleteLabel}
-                        </Text>
-                      </Text>
-                    </View>
-
-                    <View
-                      style={{
-                        alignSelf: "flex-start",
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: 999,
-                        borderWidth: 1,
-                        borderColor:
-                          practiceSummary.sessionCountThisWeek >= 3 ? "#34d399" : UI.progressRailActive,
-                        backgroundColor:
-                          practiceSummary.sessionCountThisWeek >= 3 ? "#dcfce7" : UI.progressRailActive,
-                      }}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          fontWeight: "900",
-                          color:
-                            practiceSummary.sessionCountThisWeek >= 3 ? "#065f46" : "#3730a3",
-                        }}
-                      >
-                        {practiceSummary.sessionCountThisWeek >= 3 ? "Goal reached" : "Keep building"}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ marginTop: 14 }}>
-                    <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.8, color: "#6d28d9" }}>
-                      3-step progress
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[tokens.type.caption, { color: tokens.colors.text.muted }]}>
+                      Sessions this week
                     </Text>
-                    <View style={{ flexDirection: "row", alignItems: "center", marginTop: 10 }}>
-                      <View
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          borderColor:
-                            practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryFill : UI.border,
-                          backgroundColor:
-                            practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryFill : UI.progressDotInactive,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "900",
-                            color:
-                              practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryTextOnFill : UI.textPrimary,
-                          }}
-                        >
-                          1
-                        </Text>
-                      </View>
-                      <View
-                        style={{
-                          flex: 1,
-                          height: 8,
-                          borderRadius: 999,
-                          marginHorizontal: 6,
-                          backgroundColor:
-                            practiceSummary.sessionCountThisWeek >= 2 ? UI.progressRailActive : UI.progressRail,
-                        }}
-                      />
-                      <View
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          borderColor:
-                            practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryFill : UI.border,
-                          backgroundColor:
-                            practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryFill : UI.progressDotInactive,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "900",
-                            color:
-                              practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryTextOnFill : UI.textPrimary,
-                          }}
-                        >
-                          2
-                        </Text>
-                      </View>
-                      <View
-                        style={{
-                          flex: 1,
-                          height: 8,
-                          borderRadius: 999,
-                          marginHorizontal: 6,
-                          backgroundColor:
-                            practiceSummary.sessionCountThisWeek >= 3 ? UI.progressRailActive : UI.progressRail,
-                        }}
-                      />
-                      <View
-                        style={{
-                          width: 34,
-                          height: 34,
-                          borderRadius: 999,
-                          borderWidth: 1,
-                          borderColor:
-                            practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryFill : UI.border,
-                          backgroundColor:
-                            practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryFill : UI.progressDotInactive,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            fontWeight: "900",
-                            color:
-                              practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryTextOnFill : UI.textPrimary,
-                          }}
-                        >
-                          3
-                        </Text>
-                      </View>
-                    </View>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "space-between",
-                        marginTop: 8,
-                      }}
+                    <Text
+                      style={[
+                        tokens.type.display,
+                        { marginTop: tokens.space[1], color: tokens.colors.text.primary },
+                      ]}
                     >
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "900",
-                          color:
-                            practiceSummary.sessionCountThisWeek >= 1 ? UI.primaryFill : UI.textSecondary,
-                          width: 90,
-                        }}
-                      >
-                        1 practice
+                      {practiceSummary.sessionCountThisWeek}
+                    </Text>
+                    <Text
+                      style={[
+                        tokens.type.caption,
+                        {
+                          marginTop: tokens.space[1],
+                          color: tokens.colors.text.secondary,
+                        },
+                      ]}
+                    >
+                      {practiceSummary.sessionCountThisWeek === 1 ? "session logged" : "sessions logged"}{" "}
+                      ·{" "}
+                      <Text style={{ fontWeight: "700", color: tokens.colors.text.primary }}>
+                        {activeAthleteLabel}
                       </Text>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "900",
-                          color:
-                            practiceSummary.sessionCountThisWeek >= 2 ? UI.primaryFill : UI.textSecondary,
-                          width: 90,
-                          textAlign: "center",
-                        }}
-                      >
-                        2 practices
-                      </Text>
-                      <Text
-                        style={{
-                          fontSize: 11,
-                          fontWeight: "900",
-                          color:
-                            practiceSummary.sessionCountThisWeek >= 3 ? UI.primaryFill : UI.textSecondary,
-                          width: 90,
-                          textAlign: "right",
-                        }}
-                      >
-                        3+ practices
-                      </Text>
-                    </View>
+                    </Text>
                   </View>
-
                   <View
                     style={{
-                      marginTop: 14,
-                      paddingVertical: 12,
-                      paddingHorizontal: 14,
-                      borderRadius: 14,
-                      borderWidth: 1,
-                      borderColor: UI.border,
-                      backgroundColor: "#ffffff",
+                      width: 1,
+                      alignSelf: "stretch",
+                      backgroundColor: tokens.colors.border.default,
                     }}
-                  >
-                    <Text style={{ fontSize: 12, fontWeight: "900", letterSpacing: 0.6, color: "#6d28d9" }}>
+                  />
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={[tokens.type.caption, { color: tokens.colors.text.muted }]}>
                       Latest session
                     </Text>
                     {practiceSummary.latestSession ? (
-                      <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-                        <Text style={{ fontWeight: "900", color: UI.textPrimary }}>
+                      <Text
+                        style={[
+                          tokens.type.body,
+                          {
+                            marginTop: tokens.space[2],
+                            color: tokens.colors.text.secondary,
+                          },
+                        ]}
+                        numberOfLines={4}
+                      >
+                        <Text style={{ fontWeight: "700", color: tokens.colors.text.primary }}>
                           {sessionSummaryTitle(practiceSummary.latestSession)}
                         </Text>
-                        {" · "}
+                        {"\n"}
                         {new Date(practiceSummary.latestSession.createdAt).toLocaleDateString()}
                       </Text>
                     ) : (
-                      <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-                        No sessions logged yet. Open Training to add your first one.
+                      <Text
+                        style={[
+                          tokens.type.body,
+                          {
+                            marginTop: tokens.space[2],
+                            color: tokens.colors.text.secondary,
+                          },
+                        ]}
+                      >
+                        No sessions logged yet.
                       </Text>
                     )}
                   </View>
@@ -1918,33 +2042,41 @@ export default function CoachesScreen() {
                         : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
                     );
                   }}
+                  accessibilityRole="button"
                   style={({ pressed }) => ({
-                    paddingVertical: 14,
-                    paddingHorizontal: 18,
-                    borderRadius: CARD_RADIUS,
-                    borderWidth: 1,
-                    borderColor: UI.addCompetitionBorder,
-                    backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
-                    alignSelf: "stretch",
+                    marginTop: tokens.space[3],
+                    flexDirection: "row",
                     alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: tokens.space[3],
+                    paddingHorizontal: tokens.space[4],
+                    borderRadius: tokens.radius.md,
+                    borderWidth: 1,
+                    borderColor: tokens.colors.border.accent,
+                    backgroundColor: pressed
+                      ? tokens.colors.surface.accent
+                      : tokens.colors.surface.cardMuted,
                   })}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: "700", color: UI.primaryFill }}>
-                    Track your training
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 4,
-                      fontSize: 13,
-                      color: UI.textSecondary,
-                      textAlign: "center",
-                      lineHeight: 19,
-                    }}
-                  >
-                    Add a new session or review what’s already logged this week.
-                  </Text>
+                  <View style={{ flex: 1, paddingRight: tokens.space[3] }}>
+                    <Text style={[tokens.type.title, { color: tokens.colors.brand[600] }]}>
+                      Track your training
+                    </Text>
+                    <Text
+                      style={[
+                        tokens.type.caption,
+                        {
+                          marginTop: tokens.space[1],
+                          color: tokens.colors.text.secondary,
+                        },
+                      ]}
+                    >
+                      Add a session or review what’s logged this week.
+                    </Text>
+                  </View>
+                  <Text style={[tokens.type.title, { color: tokens.colors.brand[500] }]}>→</Text>
                 </Pressable>
-              </Section>
+              </View>
             ) : null}
 
             <Section title="Competition" tone="family">
@@ -2720,6 +2852,19 @@ export default function CoachesScreen() {
                 </Pressable>
               </Section>
             ) : null}
+
+            <Text
+              style={[
+                tokens.type.caption,
+                {
+                  marginTop: tokens.layout.sectionGap,
+                  color: tokens.colors.text.muted,
+                  lineHeight: 18,
+                },
+              ]}
+            >
+              {weeklyStoryPrimaryHint}
+            </Text>
 
             {showCoachOperationalTools ? (
               <>
