@@ -1806,39 +1806,7 @@ export default function CoachesScreen() {
                     Refresh coach data
                   </Text>
                 </Pressable>
-              ) : (
-                <Pressable
-                  onPress={() => {
-                    const d = todayYMD();
-                    const k = familyCompetition.kidId;
-                    router.push(
-                      k
-                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
-                        : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
-                    );
-                  }}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({
-                    paddingVertical: tokens.space[3],
-                    paddingHorizontal: tokens.space[5],
-                    borderRadius: tokens.radius.md,
-                    backgroundColor: pressed
-                      ? tokens.colors.brand[600]
-                      : tokens.colors.brand[500],
-                    alignSelf: "stretch",
-                    alignItems: "center",
-                  })}
-                >
-                  <Text
-                    style={[
-                      tokens.type.title,
-                      { color: tokens.colors.text.onBrand },
-                    ]}
-                  >
-                    Start Training
-                  </Text>
-                </Pressable>
-              )}
+              ) : null}
 
               {isLinked && currentAssignment?.status === "assigned" ? (
                 <Pressable
@@ -2116,14 +2084,14 @@ export default function CoachesScreen() {
                     }}
                   />
 
-                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <View style={{ flex: 1, paddingRight: 12 }}>
+                  <View style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}>
+                    <View>
                       <Text
                         style={{
-                          fontSize: 12,
-                          letterSpacing: 1,
-                          fontWeight: "900",
-                          color: "#3730a3",
+                          fontSize: 13,
+                          letterSpacing: 0.5,
+                          fontWeight: "800",
+                          color: UI.textSecondary,
                         }}
                       >
                         NEXT COMPETITION
@@ -2140,7 +2108,7 @@ export default function CoachesScreen() {
                               lineHeight: 24,
                             }}
                           >
-                            {nextUpcomingCompetitionEntry.tournamentName}
+                            {cleanedTournamentName}
                           </Text>
                           {nextUpcomingCompetitionDateLabel ? (
                             <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
@@ -2177,7 +2145,14 @@ export default function CoachesScreen() {
                       )}
                     </View>
 
-                    <View style={{ alignItems: "flex-end" }}>
+                    <View
+                      style={{
+                        marginTop: 14,
+                        flexDirection: "column",
+                        alignItems: "stretch",
+                        gap: 10,
+                      }}
+                    >
                       <Pressable
                         onPress={() => {
                           setCompetitionCalendarExpanded((v) => {
@@ -2196,6 +2171,8 @@ export default function CoachesScreen() {
                           borderWidth: 1,
                           borderColor: UI.nextUpcomingBorder,
                           backgroundColor: pressed ? "rgba(99, 102, 241, 0.18)" : "#eef2ff",
+                          alignSelf: "stretch",
+                          alignItems: "center",
                         })}
                         accessibilityRole="button"
                         accessibilityLabel="View competitions"
@@ -2215,18 +2192,21 @@ export default function CoachesScreen() {
                             );
                           }}
                           style={({ pressed }) => ({
-                            marginTop: 10,
                             paddingVertical: 10,
                             paddingHorizontal: 12,
                             borderRadius: 999,
                             borderWidth: 1,
-                            borderColor: UI.addCompetitionBorder,
-                            backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
+                            borderColor: UI.nextUpcomingBorder,
+                            backgroundColor: pressed
+                              ? "rgba(99, 102, 241, 0.08)"
+                              : "transparent",
+                            alignSelf: "stretch",
+                            alignItems: "center",
                           })}
                           accessibilityRole="button"
                           accessibilityLabel="Add competition"
                         >
-                          <Text style={{ fontSize: 12, fontWeight: "900", color: UI.primaryFill }}>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary }}>
                             Add competition
                           </Text>
                         </Pressable>
@@ -2851,18 +2831,20 @@ export default function CoachesScreen() {
               </Section>
             ) : null}
 
-            <Text
-              style={[
-                tokens.type.caption,
-                {
-                  marginTop: tokens.layout.sectionGap,
-                  color: tokens.colors.text.muted,
-                  lineHeight: 18,
-                },
-              ]}
-            >
-              {weeklyStoryPrimaryHint}
-            </Text>
+            {!useWeeklySyncHero && weeklyStoryPrimaryHint ? (
+              <Text
+                style={[
+                  tokens.type.caption,
+                  {
+                    marginTop: tokens.layout.sectionGap,
+                    color: tokens.colors.text.muted,
+                    lineHeight: 18,
+                  },
+                ]}
+              >
+                {weeklyStoryPrimaryHint}
+              </Text>
+            ) : null}
 
             {showCoachOperationalTools ? (
               <>
