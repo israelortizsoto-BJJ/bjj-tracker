@@ -1,12 +1,11 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Keyboard, Platform, Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import { useFocusEffect } from "@react-navigation/native";
-
+import StableTextInput from "../../../../../src/components/inputs/StableTextInput";
 import {
-  appendKidWeeklyFocus,
   getKidWeeklyFocusEntryById,
+  getOrCreateWeeklyFocusState,
   startOfWeekMondayYMD,
   todayYMD,
   updateKidWeeklyFocusFocusById,
@@ -22,6 +21,83 @@ const UI = {
 };
 
 const CARD_RADIUS = 16;
+
+const weeklyFocusInputStyles = {
+  customTitle: {
+    marginTop: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
+    color: UI.textPrimary,
+  },
+  customFamilyNote: {
+    marginTop: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
+    color: UI.textPrimary,
+    minHeight: 92,
+    textAlignVertical: "top" as const,
+  },
+  missionUrl: {
+    marginTop: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#6ee7b7",
+    backgroundColor: "#f0fdf4",
+    color: UI.textPrimary,
+  },
+  missionLabel: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#6ee7b7",
+    backgroundColor: "#f0fdf4",
+    color: UI.textPrimary,
+  },
+  coachRecap: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#6ee7b7",
+    backgroundColor: "#f0fdf4",
+    color: UI.textPrimary,
+    minHeight: 88,
+    textAlignVertical: "top" as const,
+  },
+  studyUrl: {
+    marginTop: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#6ee7b7",
+    backgroundColor: "#f0fdf4",
+    color: UI.textPrimary,
+  },
+  studyLabel: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#6ee7b7",
+    backgroundColor: "#f0fdf4",
+    color: UI.textPrimary,
+  },
+};
 
 type Tab = "templates" | "custom";
 
@@ -51,27 +127,41 @@ export default function KidWeeklyFocusScreen() {
   const [tab, setTab] = useState<Tab>("templates");
 
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
+  const bumpScrollDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bumpScrollToFocusedInput = useCallback(() => {
-    const run = () => {
+    if (bumpScrollDebounceRef.current != null) {
+      clearTimeout(bumpScrollDebounceRef.current);
+    }
+    bumpScrollDebounceRef.current = setTimeout(() => {
+      bumpScrollDebounceRef.current = null;
       (keyboardAwareRef.current as { update?: () => void } | null)?.update?.();
-    };
-    requestAnimationFrame(run);
-    setTimeout(run, 120);
-    setTimeout(run, 340);
+    }, 100);
   }, []);
 
   useEffect(() => {
     if (Platform.OS === "ios") {
       const sub = Keyboard.addListener("keyboardWillChangeFrame", bumpScrollToFocusedInput);
-      return () => sub.remove();
+      return () => {
+        sub.remove();
+        if (bumpScrollDebounceRef.current != null) {
+          clearTimeout(bumpScrollDebounceRef.current);
+        }
+      };
     }
     const sub = Keyboard.addListener("keyboardDidShow", bumpScrollToFocusedInput);
-    return () => sub.remove();
+    return () => {
+      sub.remove();
+      if (bumpScrollDebounceRef.current != null) {
+        clearTimeout(bumpScrollDebounceRef.current);
+      }
+    };
   }, [bumpScrollToFocusedInput]);
 
   // Templates selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [referenceUrl, setReferenceUrl] = useState<string>("");
+  const [missionResourceUrl, setMissionResourceUrl] = useState<string>("");
+  const [missionResourceLabel, setMissionResourceLabel] = useState<string>("");
   const [familyResourceUrl, setFamilyResourceUrl] = useState<string>("");
   const [familyResourceLabel, setFamilyResourceLabel] = useState<string>("");
   const [familyCoachRecapNote, setFamilyCoachRecapNote] = useState<string>("");
@@ -104,6 +194,8 @@ export default function KidWeeklyFocusScreen() {
           setTab("templates");
           setSelectedTemplateId(existing.templateId);
           setReferenceUrl(existing.youtubeUrl ?? "");
+          setMissionResourceUrl(existing.missionResourceUrl ?? "");
+          setMissionResourceLabel(existing.missionResourceLabel ?? "");
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
           setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
@@ -112,6 +204,8 @@ export default function KidWeeklyFocusScreen() {
           setCustomTitle(existing.title);
           setCustomNote(existing.note ?? "");
           setCustomYoutubeUrl(existing.youtubeUrl ?? "");
+          setMissionResourceUrl(existing.missionResourceUrl ?? "");
+          setMissionResourceLabel(existing.missionResourceLabel ?? "");
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
           setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
@@ -120,6 +214,8 @@ export default function KidWeeklyFocusScreen() {
         setTab("templates");
         setSelectedTemplateId("guard-pull-defense-knee-middle");
         setReferenceUrl("");
+        setMissionResourceUrl("");
+        setMissionResourceLabel("");
         setFamilyResourceUrl("");
         setFamilyResourceLabel("");
         setFamilyCoachRecapNote("");
@@ -132,11 +228,11 @@ export default function KidWeeklyFocusScreen() {
     }
   }, [kidId, weekStartYMD, editEntryId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
+  // Load when kid/week/entry target changes — not on every navigation focus, so in-progress edits
+  // and URL fields are not reset while the screen stays mounted, and we avoid refetch races.
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const onSave = useCallback(async () => {
     if (!kidId || !weekStartYMD) {
@@ -146,6 +242,12 @@ export default function KidWeeklyFocusScreen() {
 
     try {
       if (editEntryId) {
+        const rowForMerge = await getKidWeeklyFocusEntryById(editEntryId);
+        if (!rowForMerge || rowForMerge.kidId !== kidId) {
+          Alert.alert("Not found", "This weekly focus entry is missing or belongs to another kid.");
+          return;
+        }
+
         if (tab === "templates") {
           if (!selectedTemplateId) {
             Alert.alert("Pick a template", "Select a weekly focus template before saving.");
@@ -157,15 +259,21 @@ export default function KidWeeklyFocusScreen() {
             return;
           }
           const trimmedUrl = referenceUrl.trim();
+          const mUrl = missionResourceUrl.trim();
+          const mLabel = missionResourceLabel.trim();
           const famUrl = familyResourceUrl.trim();
           const famLabel = familyResourceLabel.trim();
+          const missionOut = mUrl;
+          const familyOut = famUrl;
           await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
             focusType: "template",
             templateId: selectedTemplateId,
             title: t.title,
             metadata: t.metadata,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
-            familyResourceUrl: famUrl ? famUrl : undefined,
+            missionResourceUrl: missionOut,
+            missionResourceLabel: mLabel ? mLabel : undefined,
+            familyResourceUrl: familyOut,
             familyResourceLabel: famLabel ? famLabel : undefined,
             familyCoachRecapNote,
           });
@@ -177,14 +285,20 @@ export default function KidWeeklyFocusScreen() {
           }
           const trimmedNote = customNote.trim();
           const trimmedUrl = customYoutubeUrl.trim();
+          const mUrl = missionResourceUrl.trim();
+          const mLabel = missionResourceLabel.trim();
           const famUrl = familyResourceUrl.trim();
           const famLabel = familyResourceLabel.trim();
+          const missionOut = mUrl;
+          const familyOut = famUrl;
           await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
             focusType: "custom",
             title: trimmedTitle,
             note: trimmedNote ? trimmedNote : undefined,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
-            familyResourceUrl: famUrl ? famUrl : undefined,
+            missionResourceUrl: missionOut,
+            missionResourceLabel: mLabel ? mLabel : undefined,
+            familyResourceUrl: familyOut,
             familyResourceLabel: famLabel ? famLabel : undefined,
             familyCoachRecapNote,
           });
@@ -197,19 +311,24 @@ export default function KidWeeklyFocusScreen() {
 
         const t = TEMPLATE_CONTENT[selectedTemplateId];
         const trimmedUrl = referenceUrl.trim();
+        const mUrl = missionResourceUrl.trim();
+        const mLabel = missionResourceLabel.trim();
         const famUrl = familyResourceUrl.trim();
         const famLabel = familyResourceLabel.trim();
         const recap = familyCoachRecapNote.trim();
 
-        await appendKidWeeklyFocus({
-          kidId,
-          weekStartYMD,
+        const existing = await getOrCreateWeeklyFocusState(kidId, weekStartYMD);
+        const missionOut = mUrl;
+        const familyOut = famUrl;
+        await updateKidWeeklyFocusFocusById(existing.id, kidId, {
           focusType: "template",
           templateId: selectedTemplateId,
           title: t.title,
           metadata: t.metadata,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
-          familyResourceUrl: famUrl ? famUrl : undefined,
+          missionResourceUrl: missionOut,
+          missionResourceLabel: mLabel ? mLabel : undefined,
+          familyResourceUrl: familyOut,
           familyResourceLabel: famLabel ? famLabel : undefined,
           familyCoachRecapNote: recap ? recap : undefined,
         });
@@ -222,18 +341,23 @@ export default function KidWeeklyFocusScreen() {
 
         const trimmedNote = customNote.trim();
         const trimmedUrl = customYoutubeUrl.trim();
+        const mUrl = missionResourceUrl.trim();
+        const mLabel = missionResourceLabel.trim();
         const famUrl = familyResourceUrl.trim();
         const famLabel = familyResourceLabel.trim();
         const recap = familyCoachRecapNote.trim();
 
-        await appendKidWeeklyFocus({
-          kidId,
-          weekStartYMD,
+        const existing = await getOrCreateWeeklyFocusState(kidId, weekStartYMD);
+        const missionOut = mUrl;
+        const familyOut = famUrl;
+        await updateKidWeeklyFocusFocusById(existing.id, kidId, {
           focusType: "custom",
           title: trimmedTitle,
           note: trimmedNote ? trimmedNote : undefined,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
-          familyResourceUrl: famUrl ? famUrl : undefined,
+          missionResourceUrl: missionOut,
+          missionResourceLabel: mLabel ? mLabel : undefined,
+          familyResourceUrl: familyOut,
           familyResourceLabel: famLabel ? famLabel : undefined,
           familyCoachRecapNote: recap ? recap : undefined,
         });
@@ -254,6 +378,8 @@ export default function KidWeeklyFocusScreen() {
     customTitle,
     customNote,
     customYoutubeUrl,
+    missionResourceUrl,
+    missionResourceLabel,
     familyResourceUrl,
     familyResourceLabel,
     familyCoachRecapNote,
@@ -275,6 +401,14 @@ export default function KidWeeklyFocusScreen() {
     textAlign: "center" as const,
     fontSize: 13,
   });
+
+  const studyLabelPlaceholder = useMemo(
+    () =>
+      tab === "templates"
+        ? "Short label (e.g. Drill video, Academy schedule)"
+        : "Short label for parents (optional)",
+    [tab],
+  );
 
   return (
     <>
@@ -316,7 +450,7 @@ export default function KidWeeklyFocusScreen() {
           ) : (
             <>
               Log a focus for this kid (week of <Text style={{ fontWeight: "800" }}>{weekStartYMD}</Text>
-              ). Each save adds a new entry.
+              ). Saving updates this week’s single focus (created if needed).
             </>
           )}
         </Text>
@@ -346,299 +480,187 @@ export default function KidWeeklyFocusScreen() {
 
         <View style={{ height: 14 }} />
 
-        {tab === "templates" ? (
-          <View
-            style={{
-              padding: 16,
-              borderRadius: CARD_RADIUS,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              gap: 10,
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
-              Mission of the week
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Pilot catalog · title + template detail · publishes into the shared weekly note for this invite.
-            </Text>
-
-            <View style={{ gap: 10 }}>
-              {templateEntries.map((t) => {
-                const active = t.templateId === selectedTemplateId;
-                return (
-                  <Pressable
-                    key={t.templateId}
-                    onPress={() => {
-                      setSelectedTemplateId(t.templateId);
-                      setReferenceUrl("");
-                    }}
-                    style={({ pressed }) => ({
-                      padding: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: active ? "#1d4ed8" : UI.border,
-                      backgroundColor: active ? "#edf2ff" : UI.bgCard,
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Text style={{ fontSize: 14, fontWeight: "900", color: UI.textPrimary }}>
-                      {t.title}
-                    </Text>
-                    <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
-                      {t.metadata}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <TextInput
-              value={referenceUrl}
-              onChangeText={setReferenceUrl}
-              placeholder="Reference video URL — coach only, not published"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                color: UI.textPrimary,
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              What we sharpened with Coach
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for
-              this invite.
-            </Text>
-            <TextInput
-              value={familyCoachRecapNote}
-              onChangeText={setFamilyCoachRecapNote}
-              onFocus={bumpScrollToFocusedInput}
-              onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="e.g. We drilled base and one clean stand-up escape…"
-              placeholderTextColor={UI.textSecondary}
-              multiline
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-                minHeight: 88,
-                textAlignVertical: "top",
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              Study the move
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional family link · https only · publishes after you publish from the kid screen.
-            </Text>
-            <TextInput
-              value={familyResourceUrl}
-              onChangeText={setFamilyResourceUrl}
-              placeholder="https://…"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <TextInput
-              value={familyResourceLabel}
-              onChangeText={setFamilyResourceLabel}
-              placeholder="Short label (e.g. Drill video, Academy schedule)"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="sentences"
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-          </View>
-        ) : (
-          <View
-            style={{
-              padding: 16,
-              borderRadius: CARD_RADIUS,
-              borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              gap: 10,
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
-              Mission of the week
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Title + note · publishes into the shared weekly note for this invite.
-            </Text>
-
-            <View>
-              <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>TITLE</Text>
-              <TextInput
-                value={customTitle}
-                onChangeText={setCustomTitle}
-                placeholder="e.g. Grip fighting + stance"
-                placeholderTextColor={UI.textSecondary}
-                style={{
-                  marginTop: 6,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  color: UI.textPrimary,
-                }}
-              />
-            </View>
-
-            <View>
-              <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>
-                FAMILY NOTE (OPTIONAL)
+        <View
+          style={{
+            padding: 16,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
+            gap: 10,
+          }}
+        >
+          <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>Mission of the week</Text>
+          {tab === "templates" ? (
+            <>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Pilot catalog · title + template detail · publishes into the shared weekly note for this invite.
               </Text>
-              <TextInput
-                value={customNote}
-                onChangeText={setCustomNote}
-                placeholder="Optional short note for this kid’s emphasis"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                onFocus={bumpScrollToFocusedInput}
-                onContentSizeChange={bumpScrollToFocusedInput}
-                style={{
-                  marginTop: 6,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  color: UI.textPrimary,
-                  minHeight: 92,
-                  textAlignVertical: "top",
-                }}
-              />
-            </View>
+              <View style={{ gap: 10 }} collapsable={false}>
+                {templateEntries.map((t) => {
+                  const active = t.templateId === selectedTemplateId;
+                  return (
+                    <Pressable
+                      key={t.templateId}
+                      onPress={() => {
+                        setSelectedTemplateId(t.templateId);
+                        setReferenceUrl("");
+                      }}
+                      style={({ pressed }) => ({
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? "#1d4ed8" : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text style={{ fontSize: 14, fontWeight: "900", color: UI.textPrimary }}>{t.title}</Text>
+                      <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+                        {t.metadata}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Title + note · publishes into the shared weekly note for this invite.
+              </Text>
+              <View collapsable={false}>
+                <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>TITLE</Text>
+                <StableTextInput
+                  value={customTitle}
+                  onChangeText={setCustomTitle}
+                  placeholder="e.g. Grip fighting + stance"
+                  placeholderTextColor={UI.textSecondary}
+                  style={weeklyFocusInputStyles.customTitle}
+                />
+              </View>
+              <View collapsable={false}>
+                <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>FAMILY NOTE (OPTIONAL)</Text>
+                <StableTextInput
+                  value={customNote}
+                  onChangeText={setCustomNote}
+                  placeholder="Optional short note for this kid’s emphasis"
+                  placeholderTextColor={UI.textSecondary}
+                  multiline
+                  scrollEnabled={false}
+                  style={weeklyFocusInputStyles.customFamilyNote}
+                />
+              </View>
+            </>
+          )}
 
-            <TextInput
-              value={customYoutubeUrl}
-              onChangeText={setCustomYoutubeUrl}
-              placeholder="Reference video URL — coach only, not published"
+          <View key="mission-section" collapsable={false} style={{ gap: 0 }}>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 6 }}>
+              Mission link for families (optional)
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              YouTube / Instagram / https — publishes to parents on Read together “Mission of the week.” Separate from
+              Study the move below.
+            </Text>
+            <StableTextInput
+              value={missionResourceUrl}
+              onChangeText={setMissionResourceUrl}
+              placeholder="https://…"
               placeholderTextColor={UI.textSecondary}
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
-              style={{
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
+              style={weeklyFocusInputStyles.missionUrl}
+            />
+            <Pressable
+              onPress={() => setMissionResourceUrl("")}
+              style={({ pressed }) => ({
+                marginTop: 6,
+                alignSelf: "flex-start",
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
                 borderWidth: 1,
                 borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                color: UI.textPrimary,
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              What we sharpened with Coach
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for
-              this invite.
-            </Text>
-            <TextInput
-              value={familyCoachRecapNote}
-              onChangeText={setFamilyCoachRecapNote}
-              onFocus={bumpScrollToFocusedInput}
-              onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="e.g. We drilled base and one clean stand-up escape…"
+                backgroundColor: pressed ? "#f3f4f6" : UI.bgCard,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "600" }}>Clear</Text>
+            </Pressable>
+            <StableTextInput
+              value={missionResourceLabel}
+              onChangeText={setMissionResourceLabel}
+              placeholder="Short label (optional)"
               placeholderTextColor={UI.textSecondary}
-              multiline
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-                minHeight: 88,
-                textAlignVertical: "top",
-              }}
+              autoCapitalize="sentences"
+              style={weeklyFocusInputStyles.missionLabel}
             />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              Study the move
-            </Text>
+          </View>
+
+          <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+            What we sharpened with coach
+          </Text>
+          <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+            Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for this
+            invite.
+          </Text>
+          <StableTextInput
+            value={familyCoachRecapNote}
+            onChangeText={setFamilyCoachRecapNote}
+            placeholder="e.g. We drilled base and one clean stand-up escape…"
+            placeholderTextColor={UI.textSecondary}
+            multiline
+            scrollEnabled={false}
+            style={weeklyFocusInputStyles.coachRecap}
+          />
+          <View key="study-section" collapsable={false} style={{ gap: 0 }}>
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>Study the move</Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
               Optional family link · https only · publishes after you publish from the kid screen.
             </Text>
-            <TextInput
+            <StableTextInput
               value={familyResourceUrl}
               onChangeText={setFamilyResourceUrl}
               placeholder="https://…"
               placeholderTextColor={UI.textSecondary}
+              autoComplete="off"
+              textContentType="none"
+              importantForAutofill="no"
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
+              style={weeklyFocusInputStyles.studyUrl}
             />
-            <TextInput
+            <Pressable
+              onPress={() => setFamilyResourceUrl("")}
+              style={({ pressed }) => ({
+                marginTop: 6,
+                alignSelf: "flex-start",
+                paddingVertical: 6,
+                paddingHorizontal: 10,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: pressed ? "#f3f4f6" : UI.bgCard,
+                opacity: pressed ? 0.9 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "600" }}>Clear</Text>
+            </Pressable>
+            <StableTextInput
               value={familyResourceLabel}
               onChangeText={setFamilyResourceLabel}
-              placeholder="Short label for parents (optional)"
+              placeholder={studyLabelPlaceholder}
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="sentences"
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
+              style={weeklyFocusInputStyles.studyLabel}
             />
           </View>
-        )}
+        </View>
 
         <Pressable
           disabled={!ready}
