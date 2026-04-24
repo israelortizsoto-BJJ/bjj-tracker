@@ -1,4 +1,56 @@
-## 🔄 EOD UPDATE — 2026-04-17
+## 🔄 EOD UPDATE — 2026-04-23
+
+### What changed (Parent clarity + action hierarchy)
+
+- **This Week tab (parent lane)** — `app/(tabs)/this-week/index.tsx`
+  - Shifted from multi-option UI → **single guided flow**
+  - Defined clear sequence:
+    - **Watch → Go to Training → Log practice**
+
+#### Action hierarchy fixed
+- Removed **duplicate training CTAs**
+- Eliminated competing actions on screen
+- Parent now has **one obvious next step at a time**
+
+#### Competition card redesign
+- Layout changed from **row → full-width column**
+- Tournament title now:
+  - uses full width
+  - capped to 2 lines
+  - truncates cleanly
+- Buttons:
+  - stacked vertically
+  - full width
+  - clear primary vs secondary hierarchy
+
+#### Noise removed
+- Removed redundant "open Training…" helper
+- Reduced instructional copy that duplicated UI meaning
+- Family Huddle reframed as **support**, not primary action
+
+### What this means (product direction)
+
+- Moving from **feature exposure → guided behavior**
+- Product now tells the parent:
+  - what matters
+  - what to do next
+- Reduced decision-making required from parent
+
+### Current focus (next session)
+
+1. Validate flow on device
+   - Can parent move Watch → Training → Log without confusion?
+
+2. Strengthen coaching signal
+   - Ensure weekly focus is obvious without explanation
+
+3. QA competition card
+   - Narrow screens
+   - Multi-kid states
+
+---
+
+## 🔄 EOD UPDATE — 2026-04-16
 
 ### What changed (UI + UX)
 - **This Week tab (parent lane)** — `app/(tabs)/this-week/index.tsx`: editorial layout (design tokens); weekly story as primary hero; **Keep refining** when `familyCoachRecapNote` is present; **Instant insights**; tighter **training + competition** presentation. **Presentation only**—no intentional business-logic or data-source changes in this slice.
