@@ -780,7 +780,10 @@ export default function KidsRosterScreen() {
                   {sectionKids.map((kid) => (
                     <Swipeable
                       key={kid.id}
-                      overshootRight={false}
+                      friction={1.1}
+                      rightThreshold={24}
+                      overshootRight
+                      dragOffsetFromRightEdge={10}
                       renderRightActions={() => (
                         <Pressable
                           onPress={() => requestDeleteKid(kid)}

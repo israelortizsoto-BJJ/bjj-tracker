@@ -1,8 +1,9 @@
-import { Stack, router, useFocusEffect } from "expo-router";
+import { Stack, router, useFocusEffect, type Href } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Alert,
+  FlatList,
   Linking,
   Pressable,
   Text,
@@ -10,10 +11,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
-import {
-  Swipeable,
-  TouchableOpacity as GestureTouchableOpacity,
-} from "react-native-gesture-handler";
 
 import {
   getAssignmentsById,
@@ -39,12 +36,10 @@ import {
 import { isDev } from "../../../src/config/runtime";
 import {
   activeCoachLinksForParentLinkedUi,
-  applyParentWeeklyPrimaryToStrictOrder,
   buildDevParentWeeklyLinkedStateTrace,
   parentKidCoherentlyLinkedToInviteToken,
   parentStrictWeeklyLinkedCoachLinksForUi,
 } from "../../../src/coachShare/coachLinkBinding";
-import { pickParentPrimaryWeeklySessionLink } from "../../../src/coachShare/pickParentPrimaryWeeklySession";
 import { normalizeInviteLinkToken } from "../../../src/coachShare/inviteLinkToken";
 import {
   resolveWeeklyDoc,
@@ -67,14 +62,10 @@ import type {
 import {
   familyCompetitionChipForEntry,
   familyCompetitionPromoterFormatLine,
-  familyCompetitionResultLabel,
   formatFamilyCompetitionDate,
-  formatFamilyCompetitionMonthHeading,
-  groupFamilyCompetitionEntriesByMonth,
   kidDisplayNameForId,
   partitionFamilyCompetitionEntries,
   resolveFamilyCompetitionKidId,
-  shouldShowFamilyCompetitionResult,
 } from "../../../src/family/coachShareCompetitionBuckets";
 import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
 import {
@@ -85,11 +76,10 @@ import {
   todayYMD,
 } from "../../../src/storage/coachKidStore";
 import { StorageKeys } from "../../../src/storage/storageKeys";
-import { deleteParentKidCompetitionEntry } from "../../../src/family/parentKidCompetitionDelete";
+import { getCompetitionMediaPresenceForEntryIds } from "../../../src/storage/competitionStore";
 import { getKidCompetitionEntriesForKid } from "../../../src/storage/kidCompetitionStore";
 import type { Session } from "../../../src/types";
 import {
-  kidCompetitionEntryIsSyncedFromWorker,
   type Kid,
   type KidCompetitionEntry,
   type KidId,
@@ -222,6 +212,8 @@ type FamilyCompetitionLoadState = {
   multiKidOnRoster: boolean;
   upcoming: KidCompetitionEntry[];
   recent: KidCompetitionEntry[];
+  /** Per entry id: any match in local detail store has imageUri / videoUri. */
+  mediaByEntryId: Record<string, { hasVideo: boolean; hasImage: boolean }>;
 };
 
 type ParentWeeklyPracticeSummary = {
@@ -236,7 +228,51 @@ const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
   multiKidOnRoster: false,
   upcoming: [],
   recent: [],
+  mediaByEntryId: {},
 };
+
+/** Training / kid detail list: compact media label (parent This Week competition cards). */
+function CompetitionMediaPills({
+  hasVideo,
+  hasImage,
+}: {
+  hasVideo: boolean;
+  hasImage: boolean;
+}) {
+  if (!hasVideo && !hasImage) return null;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 }}>
+      {hasVideo ? (
+        <View
+          style={{
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 999,
+            backgroundColor: UI.bgCardActive,
+            borderWidth: 1,
+            borderColor: UI.border,
+          }}
+        >
+          <Text style={{ color: UI.textSecondary, fontSize: 10, fontWeight: "700" }}>VID</Text>
+        </View>
+      ) : null}
+      {hasImage ? (
+        <View
+          style={{
+            paddingHorizontal: 6,
+            paddingVertical: 2,
+            borderRadius: 999,
+            backgroundColor: UI.bgCardActive,
+            borderWidth: 1,
+            borderColor: UI.border,
+          }}
+        >
+          <Text style={{ color: UI.textSecondary, fontSize: 10, fontWeight: "700" }}>IMG</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
 
 const INITIAL_PRACTICE_SUMMARY: ParentWeeklyPracticeSummary = {
   sessionCountThisWeek: 0,
@@ -315,9 +351,6 @@ export default function CoachesScreen() {
     INITIAL_PRACTICE_SUMMARY,
   );
   const [kidsByIdState, setKidsByIdState] = useState<KidsById>({});
-  /** Stable parent primary row id after `pickParentPrimaryWeeklySessionLink` in `loadCoachShareData` (see `applyParentWeeklyPrimaryToStrictOrder`). */
-  const [parentWeeklyPrimaryLinkId, setParentWeeklyPrimaryLinkId] = useState<string | null>(null);
-  const lastParentWeeklyFetchTokenRef = useRef<string | null>(null);
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
 
@@ -331,14 +364,20 @@ export default function CoachesScreen() {
         multiKidOnRoster: rosterCount > 1,
         upcoming: [],
         recent: [],
+        mediaByEntryId: {},
       };
       if (kidId) {
         const compEntries = await getKidCompetitionEntriesForKid(kidId);
         const part = partitionFamilyCompetitionEntries(compEntries, today);
+        const competitionIds = Array.from(
+          new Set([...part.upcoming, ...part.recent].map((e) => e.id).filter(Boolean)),
+        );
+        const mediaByEntryId = await getCompetitionMediaPresenceForEntryIds(competitionIds);
         nextFamily = {
           ...nextFamily,
           upcoming: part.upcoming,
           recent: part.recent,
+          mediaByEntryId,
         };
       }
 
@@ -407,28 +446,7 @@ export default function CoachesScreen() {
 
     let parentStrictOrderedForLoad: CoachLink[] = [];
     if (role === "parent") {
-      const strictBase = parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks);
-      const pick = await pickParentPrimaryWeeklySessionLink(strictBase, {
-        lastPrimaryLinkToken: lastParentWeeklyFetchTokenRef.current,
-        memoryWeeklySnapshot: weeklySessionSnapshotRef.current,
-      });
-      console.log("[SESSION PICK]", {
-        chosen: pick.tokenTail,
-        hasWeekly: !!pick.hasWeekly,
-      });
-      setParentWeeklyPrimaryLinkId(pick.primaryLink?.id ?? null);
-      if (pick.primaryLink?.weeklySync?.linkToken?.trim()) {
-        lastParentWeeklyFetchTokenRef.current = pick.primaryLink.weeklySync.linkToken.trim();
-      } else {
-        lastParentWeeklyFetchTokenRef.current = null;
-      }
-      parentStrictOrderedForLoad = applyParentWeeklyPrimaryToStrictOrder(
-        strictBase,
-        pick.primaryLink,
-      );
-    } else {
-      setParentWeeklyPrimaryLinkId(null);
-      lastParentWeeklyFetchTokenRef.current = null;
+      parentStrictOrderedForLoad = parentStrictWeeklyLinkedCoachLinksForUi(loadedCoachLinks);
     }
 
     const linksForParentWeeklyFetch =
@@ -652,28 +670,8 @@ export default function CoachesScreen() {
     });
   }, [coachLinks, role]);
 
-  const familyUpcomingMonthGroups = useMemo(
-    () =>
-      groupFamilyCompetitionEntriesByMonth(familyCompetition.upcoming, {
-        monthOrder: "asc",
-        entryOrder: "asc",
-      }),
-    [familyCompetition.upcoming],
-  );
-  const familyRecentMonthGroups = useMemo(
-    () =>
-      groupFamilyCompetitionEntriesByMonth(familyCompetition.recent, {
-        monthOrder: "desc",
-        entryOrder: "desc",
-      }),
-    [familyCompetition.recent],
-  );
-
-  const nextFamilyUpcomingEntryId = useMemo(
-    () =>
-      familyCompetition.upcoming.length > 0
-        ? familyCompetition.upcoming[0]!.id
-        : null,
+  const familyUpcomingExcludingHero = useMemo(
+    () => familyCompetition.upcoming.slice(1),
     [familyCompetition.upcoming],
   );
 
@@ -702,56 +700,10 @@ export default function CoachesScreen() {
     return formatFamilyCompetitionDate(nextUpcomingCompetitionEntry.eventDate);
   }, [nextUpcomingCompetitionEntry]);
 
-  const [familyUpcomingMonthsExpanded, setFamilyUpcomingMonthsExpanded] = useState(
-    () => new Set<string>(),
-  );
-  const [familyRecentMonthsExpanded, setFamilyRecentMonthsExpanded] = useState(
-    () => new Set<string>(),
-  );
-
   // Parent-focused redesign: keep the competition calendar collapsed by default
   // (we show a dedicated "Next competition" card instead).
   const [competitionCalendarExpanded, setCompetitionCalendarExpanded] = useState(false);
-
-  useEffect(() => {
-    if (!familyUpcomingMonthGroups.length) return;
-    if (role === "parent" && !competitionCalendarExpanded) return;
-    setFamilyUpcomingMonthsExpanded((prev) => {
-      if (prev.size > 0) return prev;
-      const cur = familyCompetition.todayYMD.slice(0, 7);
-      const hasCur = familyUpcomingMonthGroups.some((g) => g.monthKey === cur);
-      return new Set([hasCur ? cur : familyUpcomingMonthGroups[0]!.monthKey]);
-    });
-  }, [familyUpcomingMonthGroups, familyCompetition.todayYMD, role, competitionCalendarExpanded]);
-
-  useEffect(() => {
-    if (!familyRecentMonthGroups.length) return;
-    if (role === "parent" && !competitionCalendarExpanded) return;
-    setFamilyRecentMonthsExpanded((prev) => {
-      if (prev.size > 0) return prev;
-      const cur = familyCompetition.todayYMD.slice(0, 7);
-      const hasCur = familyRecentMonthGroups.some((g) => g.monthKey === cur);
-      return new Set([hasCur ? cur : familyRecentMonthGroups[0]!.monthKey]);
-    });
-  }, [familyRecentMonthGroups, familyCompetition.todayYMD, role, competitionCalendarExpanded]);
-
-  const toggleFamilyUpcomingMonth = useCallback((monthKey: string) => {
-    setFamilyUpcomingMonthsExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(monthKey)) next.delete(monthKey);
-      else next.add(monthKey);
-      return next;
-    });
-  }, []);
-
-  const toggleFamilyRecentMonth = useCallback((monthKey: string) => {
-    setFamilyRecentMonthsExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(monthKey)) next.delete(monthKey);
-      else next.add(monthKey);
-      return next;
-    });
-  }, []);
+  const [linkRefreshExpanded, setLinkRefreshExpanded] = useState(false);
 
   const allCoaches = Object.values(coachesById);
   const allPacks = Object.values(packsById);
@@ -759,18 +711,25 @@ export default function CoachesScreen() {
 
   const parentStrictOrderForUi = useMemo(() => {
     if (role !== "parent") return [] as CoachLink[];
-    const strict = parentStrictWeeklyLinkedCoachLinksForUi(coachLinks);
-    const primary = parentWeeklyPrimaryLinkId
-      ? (strict.find((l) => l.id === parentWeeklyPrimaryLinkId) ?? null)
-      : null;
-    return applyParentWeeklyPrimaryToStrictOrder(strict, primary);
-  }, [role, coachLinks, parentWeeklyPrimaryLinkId]);
+    return parentStrictWeeklyLinkedCoachLinksForUi(coachLinks);
+  }, [role, coachLinks]);
 
   const activeCoachLinks =
     role === "parent"
       ? activeCoachLinksForParentLinkedUi(coachLinks)
       : coachLinks.filter((link) => link.status === "active");
   const isLinked = activeCoachLinks.length > 0;
+  const previousIsLinkedRef = useRef(isLinked);
+
+  useEffect(() => {
+    if (!isLinked) {
+      setLinkRefreshExpanded(true);
+    } else if (!previousIsLinkedRef.current && isLinked) {
+      setLinkRefreshExpanded(false);
+    }
+    previousIsLinkedRef.current = isLinked;
+  }, [isLinked]);
+
   const weeklySyncLink =
     role === "parent"
       ? parentStrictOrderForUi[0]
@@ -820,6 +779,12 @@ export default function CoachesScreen() {
       ? coachesById[weeklySyncLink.coachId]
       : undefined;
   const currentCoach = weeklySyncCoach ?? currentCoachFromAssignment ?? firstCoach;
+  const linkedCoachName = currentCoach?.displayName?.trim() ?? "";
+  const linkRefreshStatusLabel = isLinked
+    ? linkedCoachName
+      ? `Coach: ${linkedCoachName}`
+      : "Coach connected"
+    : "No coach connected";
 
   const currentPackFromAssignment = currentAssignment
     ? packsById[currentAssignment.packId]
@@ -1056,72 +1021,6 @@ export default function CoachesScreen() {
   const familyCompetitionGlobalEmpty =
     familyCompetition.upcoming.length === 0 &&
     familyCompetition.recent.length === 0;
-
-  const onConfirmDeleteFamilyCompetitionEntry = useCallback(
-    async (entry: KidCompetitionEntry) => {
-      const outcome = await deleteParentKidCompetitionEntry(
-        entry.id,
-        entry.kidId,
-        getKidsById,
-      );
-      if (!outcome.ok) {
-        Alert.alert(outcome.alertTitle, outcome.alertMessage);
-        return;
-      }
-      applyFamilyCompGenRef.current += 1;
-      setFamilyCompetition((prev) => ({
-        ...prev,
-        upcoming: prev.upcoming.filter((e) => e.id !== entry.id),
-        recent: prev.recent.filter((e) => e.id !== entry.id),
-      }));
-    },
-    [],
-  );
-
-  const requestDeleteFamilyCompetitionEntry = useCallback(
-    (entry: KidCompetitionEntry) => {
-      const label = entry.tournamentName.trim() || "this competition";
-      Alert.alert(
-        "Delete this competition?",
-        `This removes “${label}” from your calendar on this phone. If your coach added notes or a video to this entry, those will be deleted too. This cannot be undone.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: "Delete",
-            style: "destructive",
-            onPress: () => void onConfirmDeleteFamilyCompetitionEntry(entry),
-          },
-        ],
-      );
-    },
-    [onConfirmDeleteFamilyCompetitionEntry],
-  );
-
-  const familyCompetitionSwipeDeleteAction = (entry: KidCompetitionEntry) => (
-    <Pressable
-      onPress={() => requestDeleteFamilyCompetitionEntry(entry)}
-      accessibilityLabel="Delete competition entry"
-      accessibilityRole="button"
-      style={({ pressed }) => ({
-        justifyContent: "center",
-        backgroundColor: pressed ? "#b91c1c" : UI.deleteBg,
-        borderRadius: 12,
-        marginLeft: 8,
-        paddingHorizontal: 22,
-        minWidth: 88,
-      })}
-    >
-      <Text
-        style={{
-          color: UI.deleteText,
-          fontWeight: "800",
-          fontSize: 15,
-        }}
-      >
-        Delete
-      </Text>
-    </Pressable>
-  );
 
   const weeklyStoryPrimaryHint =
     isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
@@ -2049,7 +1948,7 @@ export default function CoachesScreen() {
               {role === "parent" ? (
                 <View
                   style={{
-                    marginBottom: 12,
+                    marginBottom: tokens.layout.sectionGap,
                     paddingVertical: 16,
                     paddingHorizontal: 16,
                     borderRadius: CARD_RADIUS,
@@ -2085,65 +1984,107 @@ export default function CoachesScreen() {
                   />
 
                   <View style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}>
-                    <View>
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          letterSpacing: 0.5,
-                          fontWeight: "800",
-                          color: UI.textSecondary,
+                    {nextUpcomingCompetitionEntry ? (
+                      <Pressable
+                        onPress={() => {
+                          router.push(
+                            `/competition/${encodeURIComponent(nextUpcomingCompetitionEntry.id)}` as Href,
+                          );
                         }}
+                        style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
+                        accessibilityRole="button"
+                        accessibilityLabel="Open next competition"
                       >
-                        NEXT COMPETITION
-                      </Text>
-
-                      {nextUpcomingCompetitionEntry ? (
-                        <>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            letterSpacing: 0.5,
+                            fontWeight: "800",
+                            color: UI.textSecondary,
+                          }}
+                        >
+                          NEXT COMPETITION
+                        </Text>
+                        <View
+                          style={{
+                            marginTop: 8,
+                            flexDirection: "row",
+                            alignItems: "flex-start",
+                            gap: 8,
+                          }}
+                        >
                           <Text
+                            numberOfLines={3}
+                            ellipsizeMode="tail"
                             style={{
-                              marginTop: 8,
-                              fontSize: 18,
+                              flex: 1,
+                              minWidth: 0,
+                              fontSize: 20,
                               fontWeight: "900",
                               color: UI.textPrimary,
-                              lineHeight: 24,
+                              lineHeight: 26,
                             }}
                           >
-                            {cleanedTournamentName}
+                            {(nextUpcomingCompetitionEntry.tournamentName ?? "").trim() || "Competition"}
                           </Text>
-                          {nextUpcomingCompetitionDateLabel ? (
-                            <Text style={{ marginTop: 6, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-                              {nextUpcomingCompetitionDateLabel}
-                            </Text>
-                          ) : null}
-                          {nextUpcomingCompetitionPromoterFmt ? (
-                            <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-                              {nextUpcomingCompetitionPromoterFmt}
-                            </Text>
-                          ) : null}
+                          <CompetitionMediaPills
+                            {...(familyCompetition.mediaByEntryId[nextUpcomingCompetitionEntry.id] ?? {
+                              hasVideo: false,
+                              hasImage: false,
+                            })}
+                          />
+                        </View>
+                        {nextUpcomingCompetitionDateLabel ? (
+                          <Text
+                            style={{ marginTop: 6, fontSize: 15, color: UI.textSecondary, lineHeight: 20 }}
+                          >
+                            {nextUpcomingCompetitionDateLabel}
+                          </Text>
+                        ) : null}
+                        {nextUpcomingCompetitionPromoterFmt ? (
+                          <Text
+                            style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}
+                          >
+                            {nextUpcomingCompetitionPromoterFmt}
+                          </Text>
+                        ) : null}
 
-                          {nextUpcomingCompetitionChip ? (
-                            <View
-                              style={{
-                                marginTop: 10,
-                                alignSelf: "flex-start",
-                                paddingVertical: 6,
-                                paddingHorizontal: 10,
-                                borderRadius: 999,
-                                backgroundColor: nextUpcomingCompetitionChip.backgroundColor,
-                              }}
+                        {nextUpcomingCompetitionChip ? (
+                          <View
+                            style={{
+                              marginTop: 10,
+                              alignSelf: "flex-start",
+                              paddingVertical: 6,
+                              paddingHorizontal: 10,
+                              borderRadius: 999,
+                              backgroundColor: nextUpcomingCompetitionChip.backgroundColor,
+                            }}
+                          >
+                            <Text
+                              style={{ fontSize: 11, fontWeight: "900", color: nextUpcomingCompetitionChip.textColor }}
                             >
-                              <Text style={{ fontSize: 11, fontWeight: "900", color: nextUpcomingCompetitionChip.textColor }}>
-                                {nextUpcomingCompetitionChip.label}
-                              </Text>
-                            </View>
-                          ) : null}
-                        </>
-                      ) : (
+                              {nextUpcomingCompetitionChip.label}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    ) : (
+                      <View>
+                        <Text
+                          style={{
+                            fontSize: 13,
+                            letterSpacing: 0.5,
+                            fontWeight: "800",
+                            color: UI.textSecondary,
+                          }}
+                        >
+                          NEXT COMPETITION
+                        </Text>
                         <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
                           No upcoming dates right now.
                         </Text>
-                      )}
-                    </View>
+                      </View>
+                    )}
 
                     <View
                       style={{
@@ -2155,14 +2096,7 @@ export default function CoachesScreen() {
                     >
                       <Pressable
                         onPress={() => {
-                          setCompetitionCalendarExpanded((v) => {
-                            const next = !v;
-                            if (!next) {
-                              setFamilyUpcomingMonthsExpanded(new Set<string>());
-                              setFamilyRecentMonthsExpanded(new Set<string>());
-                            }
-                            return next;
-                          });
+                          setCompetitionCalendarExpanded((v) => !v);
                         }}
                         style={({ pressed }) => ({
                           paddingVertical: 10,
@@ -2226,9 +2160,9 @@ export default function CoachesScreen() {
                     }}
                   >
                     {familyCompetition.kidName
-                      ? `${familyCompetition.kidName}: tap a competition to edit, swipe left to delete.`
+                      ? `${familyCompetition.kidName}: tap a competition to open it.`
                       : familyCompetition.kidId
-                        ? "Tap a competition to edit, swipe left to delete."
+                        ? "Tap a competition to open it."
                         : "Add an athlete below to start this calendar."}
                   </Text>
                 ) : null}
@@ -2312,198 +2246,81 @@ export default function CoachesScreen() {
                           at past events.
                         </Text>
                       </View>
-                    ) : (
-                      <View style={{ marginBottom: 18, gap: 10 }}>
-                        {familyUpcomingMonthGroups.map(({ monthKey, entries }) => {
-                          const expanded = familyUpcomingMonthsExpanded.has(monthKey);
-                          const chevron = expanded ? "▼" : "▶";
-                          return (
-                            <View
-                              key={monthKey}
-                              style={{
-                                borderRadius: 14,
-                                borderWidth: 1,
-                                borderColor: UI.monthGroupBorder,
-                                overflow: "hidden",
-                                backgroundColor: UI.bgCard,
-                              }}
-                            >
+                    ) : familyUpcomingExcludingHero.length > 0 ? (
+                      <View style={{ marginBottom: tokens.layout.sectionGap }}>
+                        <FlatList
+                          data={familyUpcomingExcludingHero}
+                          keyExtractor={(e) => e.id}
+                          horizontal={true}
+                          showsHorizontalScrollIndicator={false}
+                          nestedScrollEnabled={true}
+                          contentContainerStyle={{ paddingRight: tokens.space[2] }}
+                          renderItem={({ item }) => {
+                            const t = (item.tournamentName ?? "").trim() || "Competition";
+                            const media = familyCompetition.mediaByEntryId[item.id] ?? {
+                              hasVideo: false,
+                              hasImage: false,
+                            };
+                            return (
                               <Pressable
-                                onPress={() => toggleFamilyUpcomingMonth(monthKey)}
-                                hitSlop={{ top: 6, bottom: 6 }}
-                                accessibilityRole="button"
-                                accessibilityState={{ expanded }}
+                                onPress={() => {
+                                  router.push(
+                                    `/competition/${encodeURIComponent(item.id)}` as Href,
+                                  );
+                                }}
                                 style={({ pressed }) => ({
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  gap: 12,
-                                  minHeight: 52,
-                                  paddingVertical: 14,
-                                  paddingHorizontal: 14,
-                                  backgroundColor: pressed ? UI.monthBannerPressed : UI.monthBannerBg,
-                                  borderBottomWidth: expanded ? 1 : 0,
-                                  borderBottomColor: UI.monthGroupBorder,
+                                  width: 208,
+                                  marginRight: tokens.space[3],
+                                  paddingVertical: tokens.space[3],
+                                  paddingHorizontal: tokens.space[3],
+                                  borderRadius: tokens.radius.md,
+                                  borderWidth: 1,
+                                  borderColor: UI.competitionRowBorder,
+                                  backgroundColor: pressed ? UI.bgCard : UI.competitionRowBg,
                                 })}
+                                accessibilityRole="button"
+                                accessibilityLabel={t}
                               >
-                                <Text
+                                <View
                                   style={{
-                                    fontSize: 14,
-                                    color: UI.textSecondary,
-                                    width: 22,
-                                    textAlign: "center",
-                                    fontWeight: "600",
+                                    flexDirection: "row",
+                                    alignItems: "flex-start",
+                                    gap: 8,
                                   }}
                                 >
-                                  {chevron}
-                                </Text>
-                                <View style={{ flex: 1 }}>
                                   <Text
+                                    numberOfLines={2}
+                                    ellipsizeMode="tail"
                                     style={{
+                                      flex: 1,
+                                      minWidth: 0,
                                       fontSize: 15,
                                       fontWeight: "700",
                                       color: UI.textPrimary,
-                                      letterSpacing: 0.15,
+                                      lineHeight: 21,
                                     }}
                                   >
-                                    {formatFamilyCompetitionMonthHeading(monthKey)}
+                                    {t}
                                   </Text>
-                                  <Text style={{ marginTop: 3, fontSize: 12, color: UI.textSecondary }}>
-                                    {entries.length} {entries.length === 1 ? "event" : "events"}
-                                  </Text>
+                                  <CompetitionMediaPills {...media} />
                                 </View>
-                              </Pressable>
-                              {expanded ? (
-                                <View
+                                <Text
                                   style={{
-                                    paddingHorizontal: 10,
-                                    paddingVertical: 12,
-                                    gap: 10,
-                                    backgroundColor: UI.monthListWellBg,
+                                    marginTop: tokens.space[2],
+                                    fontSize: 13,
+                                    color: UI.textSecondary,
+                                    lineHeight: 18,
                                   }}
                                 >
-                                  {entries.map((entry) => {
-                                    const chipBase = familyCompetitionChipForEntry(
-                                      entry,
-                                      familyCompetition.todayYMD,
-                                    );
-                                    const chip = {
-                                      ...chipBase,
-                                      ...familyFacingCompetitionChipStyle(chipBase),
-                                    };
-                                    const promoterFmt = familyCompetitionPromoterFormatLine(
-                                      entry,
-                                      72,
-                                    );
-                                    const isNextUpcoming = entry.id === nextFamilyUpcomingEntryId;
-                                    return (
-                                      <Swipeable
-                                        key={entry.id}
-                                        overshootRight={false}
-                                        enabled={
-                                          Boolean(familyCompetition.kidId) &&
-                                          !kidCompetitionEntryIsSyncedFromWorker(entry)
-                                        }
-                                        renderRightActions={() =>
-                                          familyCompetitionSwipeDeleteAction(entry)
-                                        }
-                                      >
-                                        <GestureTouchableOpacity
-                                          disabled={!familyCompetition.kidId}
-                                          activeOpacity={familyCompetition.kidId ? 0.85 : 1}
-                                          onPress={() => {
-                                            const k = familyCompetition.kidId;
-                                            if (!k) return;
-                                            router.push(
-                                              `/this-week/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
-                                            );
-                                          }}
-                                          style={{
-                                            borderRadius: 12,
-                                            borderWidth: 1,
-                                            borderColor: isNextUpcoming
-                                              ? UI.nextUpcomingBorder
-                                              : UI.competitionRowBorder,
-                                            backgroundColor: isNextUpcoming
-                                              ? UI.nextUpcomingFill
-                                              : UI.competitionRowBg,
-                                            paddingVertical: 14,
-                                            paddingHorizontal: 14,
-                                          }}
-                                        >
-                                          <View
-                                            style={{
-                                              flexDirection: "row",
-                                              justifyContent: "space-between",
-                                              alignItems: "flex-start",
-                                              gap: 12,
-                                            }}
-                                          >
-                                            <View style={{ flex: 1, minWidth: 0 }}>
-                                              <Text
-                                                numberOfLines={2}
-                                                ellipsizeMode="tail"
-                                                style={{
-                                                  fontSize: 16,
-                                                  fontWeight: "700",
-                                                  color: UI.textPrimary,
-                                                  lineHeight: 22,
-                                                }}
-                                              >
-                                                {entry.tournamentName}
-                                              </Text>
-                                              <Text
-                                                style={{
-                                                  fontSize: 14,
-                                                  color: UI.textSecondary,
-                                                  marginTop: 6,
-                                                }}
-                                              >
-                                                {formatFamilyCompetitionDate(entry.eventDate)}
-                                              </Text>
-                                              {promoterFmt ? (
-                                                <Text
-                                                  numberOfLines={1}
-                                                  ellipsizeMode="tail"
-                                                  style={{
-                                                    fontSize: 13,
-                                                    color: UI.textSecondary,
-                                                    marginTop: 4,
-                                                  }}
-                                                >
-                                                  {promoterFmt}
-                                                </Text>
-                                              ) : null}
-                                            </View>
-                                            <View
-                                              style={{
-                                                paddingVertical: 5,
-                                                paddingHorizontal: 10,
-                                                borderRadius: 999,
-                                                backgroundColor: chip.backgroundColor,
-                                              }}
-                                            >
-                                              <Text
-                                                style={{
-                                                  fontSize: 11,
-                                                  fontWeight: "700",
-                                                  color: chip.textColor,
-                                                }}
-                                              >
-                                                {chip.label}
-                                              </Text>
-                                            </View>
-                                          </View>
-                                        </GestureTouchableOpacity>
-                                      </Swipeable>
-                                    );
-                                  })}
-                                </View>
-                              ) : null}
-                            </View>
-                          );
-                        })}
+                                  {formatFamilyCompetitionDate(item.eventDate)}
+                                </Text>
+                              </Pressable>
+                            );
+                          }}
+                        />
                       </View>
-                    )}
+                    ) : null}
+
 
                     <Text
                       style={{
@@ -2535,210 +2352,81 @@ export default function CoachesScreen() {
                         </Text>
                       </View>
                     ) : (
-                      <View style={{ gap: 10 }}>
-                        {familyRecentMonthGroups.map(({ monthKey, entries }) => {
-                          const expanded = familyRecentMonthsExpanded.has(monthKey);
-                          const chevron = expanded ? "▼" : "▶";
-                          return (
-                            <View
-                              key={monthKey}
-                              style={{
-                                borderRadius: 14,
-                                borderWidth: 1,
-                                borderColor: UI.monthGroupBorder,
-                                overflow: "hidden",
-                                backgroundColor: UI.bgCard,
-                              }}
-                            >
+                      <View>
+                        <FlatList
+                          data={familyCompetition.recent}
+                          keyExtractor={(e) => e.id}
+                          horizontal={true}
+                          showsHorizontalScrollIndicator={false}
+                          nestedScrollEnabled={true}
+                          contentContainerStyle={{ paddingRight: tokens.space[2] }}
+                          renderItem={({ item }) => {
+                            const t = (item.tournamentName ?? "").trim() || "Competition";
+                            const media = familyCompetition.mediaByEntryId[item.id] ?? {
+                              hasVideo: false,
+                              hasImage: false,
+                            };
+                            return (
                               <Pressable
-                                onPress={() => toggleFamilyRecentMonth(monthKey)}
-                                hitSlop={{ top: 6, bottom: 6 }}
-                                accessibilityRole="button"
-                                accessibilityState={{ expanded }}
+                                onPress={() => {
+                                  router.push(
+                                    `/competition/${encodeURIComponent(item.id)}` as Href,
+                                  );
+                                }}
                                 style={({ pressed }) => ({
-                                  flexDirection: "row",
-                                  alignItems: "center",
-                                  gap: 12,
-                                  minHeight: 52,
-                                  paddingVertical: 14,
-                                  paddingHorizontal: 14,
-                                  backgroundColor: pressed ? UI.monthBannerPressed : UI.monthBannerBg,
-                                  borderBottomWidth: expanded ? 1 : 0,
-                                  borderBottomColor: UI.monthGroupBorder,
+                                  width: 208,
+                                  marginRight: tokens.space[3],
+                                  paddingVertical: tokens.space[3],
+                                  paddingHorizontal: tokens.space[3],
+                                  borderRadius: tokens.radius.md,
+                                  borderWidth: 1,
+                                  borderColor: UI.competitionRowBorder,
+                                  backgroundColor: pressed ? UI.bgCard : UI.competitionRowBg,
                                 })}
+                                accessibilityRole="button"
+                                accessibilityLabel={t}
                               >
-                                <Text
+                                <View
                                   style={{
-                                    fontSize: 14,
-                                    color: UI.textSecondary,
-                                    width: 22,
-                                    textAlign: "center",
-                                    fontWeight: "600",
+                                    flexDirection: "row",
+                                    alignItems: "flex-start",
+                                    gap: 8,
                                   }}
                                 >
-                                  {chevron}
-                                </Text>
-                                <View style={{ flex: 1 }}>
                                   <Text
+                                    numberOfLines={2}
+                                    ellipsizeMode="tail"
                                     style={{
+                                      flex: 1,
+                                      minWidth: 0,
                                       fontSize: 15,
                                       fontWeight: "700",
                                       color: UI.textPrimary,
-                                      letterSpacing: 0.15,
+                                      lineHeight: 21,
                                     }}
                                   >
-                                    {formatFamilyCompetitionMonthHeading(monthKey)}
+                                    {t}
                                   </Text>
-                                  <Text style={{ marginTop: 3, fontSize: 12, color: UI.textSecondary }}>
-                                    {entries.length} {entries.length === 1 ? "event" : "events"}
-                                  </Text>
+                                  <CompetitionMediaPills {...media} />
                                 </View>
-                              </Pressable>
-                              {expanded ? (
-                                <View
+                                <Text
                                   style={{
-                                    paddingHorizontal: 10,
-                                    paddingVertical: 12,
-                                    gap: 10,
-                                    backgroundColor: UI.monthListWellBg,
+                                    marginTop: tokens.space[2],
+                                    fontSize: 13,
+                                    color: UI.textSecondary,
+                                    lineHeight: 18,
                                   }}
                                 >
-                                  {entries.map((entry) => {
-                                    const chipBase = familyCompetitionChipForEntry(
-                                      entry,
-                                      familyCompetition.todayYMD,
-                                    );
-                                    const chip = {
-                                      ...chipBase,
-                                      ...familyFacingCompetitionChipStyle(chipBase),
-                                    };
-                                    const promoterFmt = familyCompetitionPromoterFormatLine(
-                                      entry,
-                                      72,
-                                    );
-                                    const showResult = shouldShowFamilyCompetitionResult(
-                                      entry,
-                                      "recent",
-                                      familyCompetition.todayYMD,
-                                    );
-                                    return (
-                                      <Swipeable
-                                        key={entry.id}
-                                        overshootRight={false}
-                                        enabled={
-                                          Boolean(familyCompetition.kidId) &&
-                                          !kidCompetitionEntryIsSyncedFromWorker(entry)
-                                        }
-                                        renderRightActions={() =>
-                                          familyCompetitionSwipeDeleteAction(entry)
-                                        }
-                                      >
-                                        <GestureTouchableOpacity
-                                          disabled={!familyCompetition.kidId}
-                                          activeOpacity={familyCompetition.kidId ? 0.85 : 1}
-                                          onPress={() => {
-                                            const k = familyCompetition.kidId;
-                                            if (!k) return;
-                                            router.push(
-                                              `/this-week/family-competition/edit?kidId=${encodeURIComponent(k)}&entryId=${encodeURIComponent(entry.id)}`,
-                                            );
-                                          }}
-                                          style={{
-                                            borderRadius: 12,
-                                            borderWidth: 1,
-                                            borderColor: UI.competitionRowBorder,
-                                            backgroundColor: UI.competitionRowBg,
-                                            paddingVertical: 14,
-                                            paddingHorizontal: 14,
-                                          }}
-                                        >
-                                          <View
-                                            style={{
-                                              flexDirection: "row",
-                                              justifyContent: "space-between",
-                                              alignItems: "flex-start",
-                                              gap: 12,
-                                            }}
-                                          >
-                                            <View style={{ flex: 1, minWidth: 0 }}>
-                                              <Text
-                                                numberOfLines={2}
-                                                ellipsizeMode="tail"
-                                                style={{
-                                                  fontSize: 16,
-                                                  fontWeight: "700",
-                                                  color: UI.textPrimary,
-                                                  lineHeight: 22,
-                                                }}
-                                              >
-                                                {entry.tournamentName}
-                                              </Text>
-                                              <Text
-                                                style={{
-                                                  fontSize: 14,
-                                                  color: UI.textSecondary,
-                                                  marginTop: 6,
-                                                }}
-                                              >
-                                                {formatFamilyCompetitionDate(entry.eventDate)}
-                                              </Text>
-                                              {promoterFmt ? (
-                                                <Text
-                                                  numberOfLines={1}
-                                                  ellipsizeMode="tail"
-                                                  style={{
-                                                    fontSize: 13,
-                                                    color: UI.textSecondary,
-                                                    marginTop: 4,
-                                                  }}
-                                                >
-                                                  {promoterFmt}
-                                                </Text>
-                                              ) : null}
-                                              {showResult && entry.result ? (
-                                                <Text
-                                                  style={{
-                                                    fontSize: 13,
-                                                    color: UI.textSecondary,
-                                                    marginTop: 8,
-                                                  }}
-                                                >
-                                                  Result:{" "}
-                                                  {familyCompetitionResultLabel(entry.result)}
-                                                </Text>
-                                              ) : null}
-                                            </View>
-                                            <View
-                                              style={{
-                                                paddingVertical: 5,
-                                                paddingHorizontal: 10,
-                                                borderRadius: 999,
-                                                backgroundColor: chip.backgroundColor,
-                                              }}
-                                            >
-                                              <Text
-                                                style={{
-                                                  fontSize: 11,
-                                                  fontWeight: "700",
-                                                  color: chip.textColor,
-                                                }}
-                                              >
-                                                {chip.label}
-                                              </Text>
-                                            </View>
-                                          </View>
-                                        </GestureTouchableOpacity>
-                                      </Swipeable>
-                                    );
-                                  })}
-                                </View>
-                              ) : null}
-                            </View>
-                          );
-                        })}
+                                  {formatFamilyCompetitionDate(item.eventDate)}
+                                </Text>
+                              </Pressable>
+                            );
+                          }}
+                        />
                       </View>
                     )}
-                  </>
+
+                    </>
                 ) : null}
               </Section>
 
@@ -2774,62 +2462,104 @@ export default function CoachesScreen() {
               </Section>
             ) : null}
 
-            {isLinked ? (
-              <Section title="Link & refresh" tone="default">
-                <Text
-                  style={{
-                    fontSize: 15,
-                    color: UI.textSecondary,
-                    lineHeight: 23,
-                    marginBottom: 12,
-                  }}
-                >
-                  Manage your coach link (athletes + invite), then refresh anytime for the latest weekly note.
-                </Text>
-                <Pressable
-                  onPress={() => router.push("/this-week/manage")}
-                  style={({ pressed }) => ({
-                    paddingVertical: 14,
-                    paddingHorizontal: 18,
-                    borderRadius: CARD_RADIUS,
-                    borderWidth: 1,
-                    borderColor: UI.addCompetitionBorder,
-                    backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
-                    alignSelf: "stretch",
-                    alignItems: "center",
-                    marginBottom: 10,
-                  })}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
-                    Manage coach link
+            <View style={{ gap: 8, marginBottom: 10 }}>
+              <Pressable
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                pressRetentionOffset={12}
+                onPress={() => {
+                  if (!isLinked) return;
+                  setLinkRefreshExpanded((value) => !value);
+                }}
+                style={{
+                  marginTop: 14,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  opacity: (!isLinked || linkRefreshExpanded) ? 1 : 0.92,
+                  justifyContent: "space-between",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <View
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: 999,
+                      backgroundColor: isLinked
+                        ? tokens.colors.semantic.successText
+                        : tokens.colors.text.muted,
+                    }}
+                  />
+                  <Text style={{ color: UI.textPrimary, fontWeight: "800", fontSize: 14 }}>
+                    {linkRefreshStatusLabel}
                   </Text>
+                </View>
+
+                <Text style={{ color: UI.textSecondary, fontWeight: "800" }}>
+                  {!isLinked || linkRefreshExpanded ? "▴" : "▾"}
+                </Text>
+              </Pressable>
+
+              {(!isLinked || linkRefreshExpanded) ? (
+                <>
                   <Text
                     style={{
-                      marginTop: 4,
-                      fontSize: 13,
+                      fontSize: 15,
                       color: UI.textSecondary,
-                      textAlign: "center",
-                      lineHeight: 19,
+                      lineHeight: 23,
+                      marginBottom: 12,
                     }}
                   >
-                    Add or remove athletes, or remove this invite from this device only.
+                    Manage your coach link (athletes + invite), then refresh anytime for the latest weekly note.
                   </Text>
-                </Pressable>
-                <Pressable
-                  onPress={() => void loadCoachShareData()}
-                  style={({ pressed }) => ({
-                    paddingVertical: 12,
-                    paddingHorizontal: 14,
-                    alignSelf: "flex-start",
-                    opacity: pressed ? 0.85 : 1,
-                  })}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: UI.primaryFill }}>
-                    {useWeeklySyncHero ? "Refresh weekly note now" : "Refresh shared updates"}
-                  </Text>
-                </Pressable>
-              </Section>
-            ) : null}
+                  <Pressable
+                    onPress={() => router.push("/this-week/manage")}
+                    style={({ pressed }) => ({
+                      paddingVertical: 14,
+                      paddingHorizontal: 18,
+                      borderRadius: CARD_RADIUS,
+                      borderWidth: 1,
+                      borderColor: UI.addCompetitionBorder,
+                      backgroundColor: pressed ? UI.addCompetitionBgPressed : UI.addCompetitionBg,
+                      alignSelf: "stretch",
+                      alignItems: "center",
+                    })}
+                  >
+                    <Text style={{ fontSize: 16, fontWeight: "800", color: UI.primaryFill }}>
+                      Manage coach link
+                    </Text>
+                    <Text
+                      style={{
+                        marginTop: 4,
+                        fontSize: 13,
+                        color: UI.textSecondary,
+                        textAlign: "center",
+                        lineHeight: 19,
+                      }}
+                    >
+                      Add or remove athletes, or remove this invite from this device only.
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => void loadCoachShareData()}
+                    style={({ pressed }) => ({
+                      marginTop: 10,
+                      alignSelf: "flex-start",
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: UI.primaryFill }}>
+                      {useWeeklySyncHero ? "Refresh weekly note now" : "Refresh shared updates"}
+                    </Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
 
             {!useWeeklySyncHero && weeklyStoryPrimaryHint ? (
               <Text

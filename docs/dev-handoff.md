@@ -1,3 +1,122 @@
+## 🔄 EOD UPDATE — 2026-04-27
+
+### What changed (competition flow + UI alignment)
+- **Competition media persistence is verified and stable:** replay for video/image entries works after save and hydration, and media pills render/behave correctly on return.
+- **Competition match delete UX is now stable and predictable:** swipe-to-delete behavior was implemented and validated for multi-match delete paths, single-match reset behavior, no index reordering side effects, stronger swipe responsiveness, and full-height delete action alignment.
+- **Submission outcome now supports conditional time input:** submission time was added as a conditional input for submission outcomes, normalized to `m:ss`, and verified for persistence + hydration.
+- **Outcome UX is locked to chip-based selection with contextual input:** tile-grid outcome selection is removed in favor of chip-only outcome controls with context-sensitive fields.
+- **Coach link row was converted into a Training-style collapsible status row:** linked-state indicator is shown directly in the row, and default state is collapsed to reduce visual noise.
+- **Coach actions were restructured for clearer hierarchy:** **Refresh weekly note now** now lives under **Manage coach link** as a secondary action instead of sitting as a peer-level action.
+
+### Remaining polish (explicitly still open)
+- **Coach label bug:** `Coach: Coach` must resolve to real coach name when available, with a safe fallback when not.
+- **Submission time visual integration:** conditional time input still needs tighter visual cohesion with the outcome chips.
+- **Coach row hierarchy/chevron polish:** minor visual hierarchy refinement and chevron treatment are still pending.
+
+### Scope guardrails (unchanged systems)
+- No API changes in this slice.
+- No storage schema/contract changes in this slice.
+- No navigation architecture changes in this slice.
+- No training tab logic changes in this slice.
+
+### Product direction reinforced
+- Competition remains a key upstream input into the upcoming **Summary** tab.
+- Coach-parent clarity remains a top UX priority and continues to drive UI hierarchy decisions.
+
+### Next steps (ordered)
+1. Validate coach-side flows end-to-end.
+2. Test multi-kid behavior to confirm clean data separation.
+3. Begin Summary tab build.
+
+---
+
+## 🔄 EOD UPDATE — 2026-04-26
+
+### 1. What broke (facts only)
+
+- **Missing module:** `pickParentPrimaryWeeklySession`
+- **Broken navigation:** Family Huddle, Competition
+- **Summary UI divergence** from intended design
+- **Overwriting of working components**
+- **Tab leakage:** `family-huddle` route exposed
+
+### 2. Root cause
+
+- Cursor executed wide-scope edits without guardrails
+- No read-first discipline
+- Multiple domains edited simultaneously (Summary + This Week + Competition)
+- Expo Router + architecture rules not respected
+
+### 3. Recovery actions
+
+- Rolled back to commit `2b54cc2`
+- `git reset --hard`
+- `git clean -fd`
+- Created branch `summary-rebuild-v2`
+- Verified app boots
+
+### 4. Product clarity regained
+
+**This Week = ACTION ENGINE**
+
+- Mission (watch + practice)
+- Family Huddle (coach → parent)
+- Training CTA
+- Competition visibility
+
+**Summary = REFLECTION ENGINE**
+
+- Sessions
+- Competition stats
+- Trends over time
+- Customizable tiles (comp record, submission rate, fastest sub, top submission)
+
+### 5. Competition system (LOCKED)
+
+- **Hero** = next competition
+- **Upcoming** = horizontal swipe cards
+- **Past** = horizontal swipe cards
+- All competitions editable post-event
+
+**Inside competition**
+
+- **Result types:** submission, points, ref decision, DQ, injury stoppage
+- **Submission** → time input + technique picker
+- Match uploads via camera roll
+
+**Coach side**
+
+- Must be editable (currently broken)
+
+### 6. QA findings
+
+- Bland UI
+- Misplaced "no sessions logged"
+- Linked state unclear
+- Family Huddle broken
+- Competition detail broken
+- Summary header safe area issue
+- Edit Summary mismatch (toggles vs tiles)
+
+### 7. Non-negotiables
+
+- No multi-scope edits
+- Always read before edit
+- No deleting modules without verification
+- UI cannot break data layer
+- Validate navigation per tap
+- Hidden routes stay hidden
+- Cursor = plan → approve → execute only
+
+### 8. Next session plan
+
+1. Fix competition system
+2. Restore This Week hierarchy
+3. Rebuild Summary (aligned to Stitch)
+4. Full navigation QA
+
+---
+
 ## 🔄 EOD UPDATE — 2026-04-17
 
 ### What changed (UI + UX)

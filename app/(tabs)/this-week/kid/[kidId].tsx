@@ -1605,7 +1605,10 @@ export default function KidDetailScreen() {
                   return (
                     <Swipeable
                       key={r.id}
-                      overshootRight={false}
+                      friction={1.1}
+                      rightThreshold={24}
+                      overshootRight
+                      dragOffsetFromRightEdge={10}
                       renderRightActions={() => (
                         <Pressable
                           onPress={() => requestDeleteReflection(r.id)}
@@ -2011,7 +2014,10 @@ export default function KidDetailScreen() {
                 return (
                   <Swipeable
                     key={s.id}
-                    overshootRight={false}
+                    friction={1.1}
+                    rightThreshold={24}
+                    overshootRight
+                    dragOffsetFromRightEdge={10}
                     renderRightActions={() => (
                       <Pressable
                         onPress={() => requestDeleteSession(s.id)}
@@ -2228,7 +2234,10 @@ export default function KidDetailScreen() {
                           return (
                           <Swipeable
                             key={row.id}
-                            overshootRight={false}
+                            friction={1.1}
+                            rightThreshold={24}
+                            overshootRight
+                            dragOffsetFromRightEdge={10}
                             enabled={!isSyncedRow}
                             renderRightActions={() => (
                               <Pressable
