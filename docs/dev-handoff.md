@@ -607,3 +607,50 @@ Validated:
 - Broader external feedback triage can stay tabled until this pilot lane is stable enough for internal use.
 - **Gates** were last fully documented for an older snapshot (**`83588d7`**); latest `dev` includes **`9d805a6`** — **re-run both** gates on the current tree before trust; the **dirty** sync tree (if any) still needs a fresh run before trust.
 - **Spouse / external tester device** build age is **unknown** — assume **no sync features** until a matching dev/client build is installed.
+
+### 🔒 Coding Discipline Update — Operator Spec Mode
+
+## 🧠 Operator Spec Mode (Preferred Coding Prompt Style)
+
+Operator Spec Mode is the required prompt format for all coding-related instructions.
+
+This style enforces:
+- zero ambiguity
+- zero scope drift
+- surgical implementation only
+
+Structure:
+
+1. GOAL  
+Clear statement of what needs to be done
+
+2. FILE  
+Exact file path(s) to be modified
+
+3. PROBLEM  
+Precise description of the issue
+
+4. GOAL STATE  
+What success looks like
+
+5. IMPLEMENTATION  
+Step-by-step numbered actions (no interpretation required)
+
+6. RULES  
+Explicit constraints:
+- Do NOT expand scope  
+- Do NOT refactor unrelated code  
+- Do NOT modify architecture unless explicitly instructed  
+
+7. VALIDATION  
+Clear pass/fail criteria:
+- No errors  
+- No regressions  
+- Behavior matches expectations  
+
+Usage trigger:
+
+When the user says:
+"Operator Spec Mode"
+
+All responses must follow this structure exactly.

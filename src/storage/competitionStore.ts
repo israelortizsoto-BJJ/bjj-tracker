@@ -11,6 +11,7 @@ export type CompetitionDetailMatchSnapshot = {
   outcome: "Submission" | "Points" | "Ref Decision" | "DQ" | "Injury" | null;
   /** Free-form (e.g. seconds as number or mm:ss); only surfaced in UI when outcome is Submission */
   submissionTime: string | null;
+  coachNote?: string;
   imageUri: string | null;
   videoUri: string | null;
   imageAssetId: string | null;

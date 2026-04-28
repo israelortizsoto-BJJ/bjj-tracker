@@ -69,8 +69,8 @@ export function resolveWeeklyDoc(
       });
 
       if (!(id in map)) {
-        console.error("[INVALID ATHLETE ID — KEY MISSING]", {
-          sharedAthleteId: id,
+        console.log("[weekly-doc-missing-athlete]", {
+          requested: id,
           available: Object.keys(map),
         });
       } else if (map[id] == null) {

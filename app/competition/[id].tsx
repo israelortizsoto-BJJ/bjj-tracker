@@ -1,6 +1,17 @@
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useId, useState } from "react";
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Audio } from "expo-av";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  type LayoutChangeEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MatchMediaAttachments } from "../../src/components/MatchMediaAttachments";
@@ -46,7 +57,7 @@ const RESULT_OPTIONS = [
   { value: "other" as const, label: "Other" },
 ];
 
-const HOW_ENDED_OPTIONS = [
+export const HOW_ENDED_OPTIONS = [
   "Submission",
   "Points",
   "Ref Decision",
@@ -54,28 +65,30 @@ const HOW_ENDED_OPTIONS = [
   "Injury",
 ] as const;
 
-const MATCH_RESULT_OPTIONS = [
+export const MATCH_RESULT_OPTIONS = [
   { value: "win" as const, label: "Win" },
   { value: "loss" as const, label: "Loss" },
 ] as const;
 
-type LocalMatch = {
+export type LocalMatch = {
   id: string;
   matchResult: (typeof MATCH_RESULT_OPTIONS)[number]["value"] | null;
   outcome: (typeof HOW_ENDED_OPTIONS)[number] | null;
   submissionTime: string | null;
+  coachNote?: string;
   imageUri: string | null;
   videoUri: string | null;
   imageAssetId: string | null;
   videoAssetId: string | null;
 };
 
-function createEmptyMatch(idSuffix: string): LocalMatch {
+export function createEmptyMatch(idSuffix: string): LocalMatch {
   return {
     id: `match-${idSuffix}`,
     matchResult: null,
     outcome: null,
     submissionTime: null,
+    coachNote: "",
     imageUri: null,
     videoUri: null,
     imageAssetId: null,
@@ -83,16 +96,21 @@ function createEmptyMatch(idSuffix: string): LocalMatch {
   };
 }
 
-function snapshotFromLocal(m: LocalMatch): CompetitionDetailMatchSnapshot {
+export function snapshotFromLocal(m: LocalMatch): CompetitionDetailMatchSnapshot {
   const submissionTime =
     typeof m.submissionTime === "string" && m.submissionTime.trim().length > 0
       ? m.submissionTime.trim()
       : null;
+  const coachNote =
+    typeof m.coachNote === "string" && m.coachNote.trim().length > 0
+      ? m.coachNote.trim()
+      : undefined;
   return {
     id: m.id,
     matchResult: m.matchResult,
     outcome: m.outcome,
     submissionTime,
+    coachNote,
     imageUri: m.imageUri,
     videoUri: m.videoUri,
     imageAssetId: m.imageAssetId,
@@ -114,21 +132,24 @@ function submissionTimeDigitsToMmSs(digits: string): string | null {
   return `${mm}:${ss}`;
 }
 
-function normalizeSubmissionTimeInput(raw: string): string | null {
+export function normalizeSubmissionTimeInput(raw: string): string | null {
   return submissionTimeDigitsToMmSs(raw);
 }
 
-function localMatchFromSnapshot(m: CompetitionDetailMatchSnapshot): LocalMatch {
+export function localMatchFromSnapshot(m: CompetitionDetailMatchSnapshot): LocalMatch {
   const raw = (m as { submissionTime?: unknown }).submissionTime;
   let submissionTime: string | null = null;
   if (typeof raw === "string" && raw.trim().length > 0) {
     submissionTime = normalizeSubmissionTimeInput(raw.trim());
   }
+  const rawCoachNote = (m as { coachNote?: unknown }).coachNote;
+  const coachNote = typeof rawCoachNote === "string" ? rawCoachNote : "";
   return {
     id: m.id,
     matchResult: m.matchResult,
     outcome: m.outcome,
     submissionTime,
+    coachNote,
     imageUri: m.imageUri,
     videoUri: m.videoUri,
     imageAssetId: m.imageAssetId,
@@ -137,7 +158,7 @@ function localMatchFromSnapshot(m: CompetitionDetailMatchSnapshot): LocalMatch {
 }
 
 /** Per-match detail in competitionStore, or a single match hydrated from `KidCompetitionEntry` video fields. */
-function deriveInitialMatches(
+export function deriveInitialMatches(
   entry: KidCompetitionEntry,
   detail: Awaited<ReturnType<typeof getCompetitionDetailByEntryId>>,
   idSuffix: string,
@@ -154,6 +175,7 @@ function deriveInitialMatches(
         matchResult: null,
         outcome: null,
         submissionTime: null,
+        coachNote: "",
         imageUri: null,
         videoUri: u,
         videoAssetId: aid,
@@ -181,12 +203,15 @@ const chipPressable = (active: boolean) =>
     opacity: pressed ? 0.9 : 1,
   });
 
-function MatchBlock({
+export function MatchBlock({
   index,
   match,
   onToggleMatchResult,
   onToggleOutcome,
   onSubmissionTimeChange,
+  onCoachNoteChange,
+  onCoachNoteFocus,
+  onCoachNoteLayout,
   onImageChange,
   onVideoChange,
 }: {
@@ -195,9 +220,142 @@ function MatchBlock({
   onToggleMatchResult: (v: (typeof MATCH_RESULT_OPTIONS)[number]["value"]) => void;
   onToggleOutcome: (label: (typeof HOW_ENDED_OPTIONS)[number]) => void;
   onSubmissionTimeChange: (text: string) => void;
+  onCoachNoteChange: (text: string) => void;
+  onCoachNoteFocus?: () => void;
+  onCoachNoteLayout?: (y: number) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
 }) {
+  type RecordingState = "idle" | "recording" | "processing" | "done";
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [recordingState, setRecordingState] = useState<RecordingState>("idle");
+  const recordingRef = useRef<Audio.Recording | null>(null);
+
+  useEffect(() => {
+    if (match.videoUri) return;
+    setIsPlaying(false);
+  }, [match.videoUri]);
+
+  useEffect(() => {
+    console.log("[RECORDING STATE]", recordingState);
+  }, [recordingState]);
+
+  useEffect(() => {
+    console.log("[NOTE SET]", (match.coachNote ?? "").length);
+  }, [match.coachNote]);
+
+  useEffect(() => {
+    return () => {
+      const activeRecording = recordingRef.current;
+      recordingRef.current = null;
+      if (!activeRecording) return;
+      void activeRecording.stopAndUnloadAsync().catch(() => {
+        // No-op cleanup on unmount.
+      });
+    };
+  }, []);
+
+  const transcribeAudio = useCallback(async (uri: string): Promise<string> => {
+    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("Missing EXPO_PUBLIC_OPENAI_API_KEY");
+    }
+
+    const formData = new FormData();
+    formData.append("file", {
+      uri,
+      name: "audio.m4a",
+      type: "audio/m4a",
+    } as unknown as Blob);
+    formData.append("model", "whisper-1");
+
+    const res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: formData,
+    });
+
+    const json = (await res.json()) as { text?: string; error?: { message?: string } };
+    if (!res.ok) {
+      const message = json?.error?.message ?? "Transcription request failed";
+      throw new Error(message);
+    }
+    const text = typeof json.text === "string" ? json.text.trim() : "";
+    if (!text) {
+      throw new Error("No transcription text returned");
+    }
+    return text;
+  }, []);
+
+  const startRecording = useCallback(async () => {
+    if (recordingState === "recording" || recordingState === "processing") return;
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Microphone access needed", "Allow microphone access to record a coach note.");
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await recording.startAsync();
+      recordingRef.current = recording;
+
+      // Force media UI back to non-playing to avoid overlap with recording.
+      setIsPlaying(false);
+      setRecordingState("recording");
+    } catch (error) {
+      console.error("Recording start failed", error);
+      Alert.alert("Recording failed", "Could not start recording. Try again.");
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+    }
+  }, [recordingState]);
+
+  const stopRecording = useCallback(async () => {
+    if (recordingState !== "recording") return;
+    setRecordingState("processing");
+
+    const recording = recordingRef.current;
+    recordingRef.current = null;
+
+    try {
+      if (!recording) {
+        throw new Error("No active recording");
+      }
+
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      console.log("AUDIO URI:", uri);
+      if (!uri) {
+        throw new Error("Missing recording URI");
+      }
+
+      const text = await transcribeAudio(uri);
+      onCoachNoteChange(text);
+      setRecordingState("done");
+    } catch (error) {
+      console.error("Transcription failed", error);
+      onCoachNoteChange("Could not transcribe. Try again.");
+      setRecordingState("done");
+    } finally {
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+      });
+    }
+  }, [onCoachNoteChange, recordingState, transcribeAudio]);
+
+  const controlsDisabled = recordingState === "processing";
+  const showRecordingOverlay = recordingState === "recording";
+
   return (
     <View
       style={{
@@ -212,14 +370,148 @@ function MatchBlock({
     >
       <Text style={{ fontSize: 11, fontWeight: "800", color: UI.textSecondary }}>Match {index + 1}</Text>
 
-      <MatchMediaAttachments
-        imageUri={match.imageUri}
-        videoUri={match.videoUri}
-        onImageChange={onImageChange}
-        onVideoChange={onVideoChange}
-      />
+      <View style={{ position: "relative" }}>
+        <View pointerEvents={controlsDisabled ? "none" : "auto"} style={controlsDisabled ? { opacity: 0.6 } : undefined}>
+          <MatchMediaAttachments
+            imageUri={match.imageUri}
+            videoUri={match.videoUri}
+            onPlay={() => setIsPlaying(true)}
+            onPause={() => setIsPlaying(false)}
+            onReplay={() => setIsPlaying(true)}
+            onImageChange={onImageChange}
+            onVideoChange={onVideoChange}
+            shouldPausePlayback={recordingState === "recording"}
+          />
+        </View>
+        {showRecordingOverlay ? (
+          <View
+            pointerEvents="box-none"
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              justifyContent: "center",
+              alignItems: "center",
+              backgroundColor: "rgba(17, 24, 39, 0.5)",
+              borderRadius: 10,
+              padding: 16,
+            }}
+          >
+            <View
+              style={{
+                alignItems: "center",
+                gap: 10,
+                borderRadius: 12,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                backgroundColor: "rgba(17, 24, 39, 0.7)",
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#ffffff" }}>Recording...</Text>
+              <Pressable
+                onPress={stopRecording}
+                style={({ pressed }) => ({
+                  paddingVertical: 8,
+                  paddingHorizontal: 14,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: "#dc2626",
+                  backgroundColor: pressed ? "#b91c1c" : "#dc2626",
+                })}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>Stop</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+      </View>
 
-      <View style={{ marginTop: 4, gap: 6 }}>
+      <View
+        onLayout={(event) => onCoachNoteLayout?.(event.nativeEvent.layout.y)}
+        style={{ marginTop: 10 }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+          <Text
+            style={{
+              fontSize: 12,
+              letterSpacing: 0.6,
+              fontWeight: "700",
+              color: UI.textSecondary,
+            }}
+          >
+            Coach note (optional)
+          </Text>
+          <Pressable
+            onPress={startRecording}
+            disabled={controlsDisabled || recordingState === "recording"}
+            style={({ pressed }) => ({
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 10,
+              borderWidth: 1,
+              borderColor: UI.accent,
+              backgroundColor: pressed ? "#1e40af" : UI.accent,
+              opacity: controlsDisabled || recordingState === "recording" ? 0.6 : 1,
+            })}
+          >
+            <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
+              {recordingState === "done" ? "Re-record" : "Record"}
+            </Text>
+          </Pressable>
+        </View>
+        {recordingState === "processing" ? (
+          <Text style={{ marginTop: 6, fontSize: 11, fontWeight: "700", color: UI.textSecondary }}>
+            Transcribing...
+          </Text>
+        ) : null}
+        <TextInput
+          value={match.coachNote ?? ""}
+          onChangeText={onCoachNoteChange}
+          onFocus={onCoachNoteFocus}
+          placeholder="What went well, what to improve..."
+          placeholderTextColor={UI.textSecondary}
+          editable={recordingState === "idle" || recordingState === "done"}
+          autoFocus={false}
+          multiline={true}
+          minHeight={120}
+          maxHeight={120}
+          scrollEnabled={true}
+          style={{
+            marginTop: 8,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: UI.bgCard,
+            padding: 12,
+            minHeight: 120,
+            maxHeight: 120,
+            color: UI.textPrimary,
+            textAlignVertical: "top",
+          }}
+        />
+        <Text
+          style={{
+            marginTop: 6,
+            fontSize: 11,
+            color: UI.textSecondary,
+            opacity: 0.9,
+          }}
+        >
+          {recordingState === "processing"
+            ? "Transcription in progress"
+            : recordingState === "recording"
+              ? "Recording in progress"
+              : isPlaying
+                ? "Video playing"
+                : "Video paused"}
+        </Text>
+      </View>
+
+      <View
+        pointerEvents={controlsDisabled ? "none" : "auto"}
+        style={[
+          { marginTop: 4, gap: 6 },
+          controlsDisabled ? { opacity: 0.55 } : null,
+        ]}
+      >
         <Text
           style={{
             fontSize: 12,
@@ -250,7 +542,13 @@ function MatchBlock({
         </View>
       </View>
 
-      <View style={{ marginTop: 6, gap: 4 }}>
+      <View
+        pointerEvents={controlsDisabled ? "none" : "auto"}
+        style={[
+          { marginTop: 6, gap: 4 },
+          controlsDisabled ? { opacity: 0.55 } : null,
+        ]}
+      >
         <Text
           style={{
             fontSize: 12,
@@ -378,6 +676,7 @@ function MatchBlock({
           })}
         </View>
       </View>
+
     </View>
   );
 }
@@ -399,6 +698,9 @@ export default function CompetitionDetailScreen() {
   const [result, setResult] = useState<(typeof RESULT_OPTIONS)[number]["value"]>("participated");
 
   const [matches, setMatches] = useState<LocalMatch[]>([]);
+  const scrollRef = useRef<ScrollView | null>(null);
+  const positionsRef = useRef<Record<number, number>>({});
+  const matchTopRef = useRef<Record<number, number>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -478,6 +780,15 @@ export default function CompetitionDetailScreen() {
     );
   }, []);
 
+  const setMatchCoachNote = useCallback((matchIndex: number, text: string) => {
+    setMatches((prev) =>
+      prev.map((m, i) => {
+        if (i !== matchIndex) return m;
+        return { ...m, coachNote: text };
+      }),
+    );
+  }, []);
+
   const updateMatchMedia = useCallback(
     (
       matchIndex: number,
@@ -490,6 +801,42 @@ export default function CompetitionDetailScreen() {
 
   const addMatch = useCallback(() => {
     setMatches((prev) => [...prev, createEmptyMatch(`${Date.now()}`)]);
+  }, []);
+
+  const registerCoachNotePosition = useCallback((index: number, y: number) => {
+    positionsRef.current[index] = y;
+  }, []);
+
+  const registerMatchTopPosition = useCallback((index: number, y: number) => {
+    matchTopRef.current[index] = y;
+  }, []);
+
+  useEffect(() => {
+    const maxIndex = matches.length - 1;
+    Object.keys(positionsRef.current).forEach((key) => {
+      const index = Number(key);
+      if (index > maxIndex) delete positionsRef.current[index];
+    });
+    Object.keys(matchTopRef.current).forEach((key) => {
+      const index = Number(key);
+      if (index > maxIndex) delete matchTopRef.current[index];
+    });
+  }, [matches.length]);
+
+  const scrollToCoachNote = useCallback((matchIndex: number) => {
+    const tryScroll = (hasRetried: boolean) => {
+      const measuredY = positionsRef.current[matchIndex];
+      if (typeof measuredY !== "number") {
+        if (!hasRetried) {
+          setTimeout(() => {
+            tryScroll(true);
+          }, 50);
+        }
+        return;
+      }
+      scrollRef.current?.scrollTo({ y: Math.max(0, measuredY - 20), animated: true });
+    };
+    tryScroll(false);
   }, []);
 
   const handleDeleteMatch = useCallback(
@@ -513,6 +860,7 @@ export default function CompetitionDetailScreen() {
                         matchResult: null,
                         outcome: null,
                         submissionTime: null,
+                        coachNote: "",
                       }
                     : m,
                 ),
@@ -627,6 +975,7 @@ export default function CompetitionDetailScreen() {
       />
       <View style={{ flex: 1, backgroundColor: UI.screenBg }}>
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1, backgroundColor: UI.screenBg }}
           contentContainerStyle={{
             padding: 20,
@@ -852,6 +1201,9 @@ export default function CompetitionDetailScreen() {
           {matches.map((m, i) => (
             <View
               key={m.id}
+              onLayout={(event: LayoutChangeEvent) =>
+                registerMatchTopPosition(i, event.nativeEvent.layout.y)
+              }
               style={{
                 alignSelf: "stretch",
                 marginTop: i === 0 ? 10 : 12,
@@ -872,6 +1224,11 @@ export default function CompetitionDetailScreen() {
                   onToggleMatchResult={(v) => setMatchResult(i, v)}
                   onToggleOutcome={(label) => setMatchOutcome(i, label)}
                   onSubmissionTimeChange={(text) => setMatchSubmissionTime(i, text)}
+                  onCoachNoteChange={(text) => setMatchCoachNote(i, text)}
+                  onCoachNoteFocus={() => scrollToCoachNote(i)}
+                  onCoachNoteLayout={(relativeY) =>
+                    registerCoachNotePosition(i, (matchTopRef.current[i] ?? 0) + relativeY)
+                  }
                   onImageChange={(uri, assetId) =>
                     updateMatchMedia(i, { imageUri: uri, imageAssetId: assetId })
                   }

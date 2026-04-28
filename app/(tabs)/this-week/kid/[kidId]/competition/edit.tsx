@@ -1,76 +1,39 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { ResizeMode, Video } from "expo-av";
-import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
+import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  persistMediaFromCameraRoll,
-  requestMediaLibraryPermission,
-} from "../../../../../../src/media/persistCameraRollMedia";
 import {
   createKidCompetitionEntry,
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
   updateKidCompetitionEntry,
 } from "../../../../../../src/storage/kidCompetitionStore";
+import {
+  competitionVideoRefsFromMatches,
+  getCompetitionDetailByEntryId,
+  setCompetitionDetailForEntryId,
+} from "../../../../../../src/storage/competitionStore";
 import { todayYMD } from "../../../../../../src/storage/coachKidStore";
 import type {
   KidCompetitionEventStatus,
   KidCompetitionFormat,
-  KidCompetitionOutcomeKind,
   KidCompetitionResult,
-  KidCompetitionVideoRef,
 } from "../../../../../../src/types/coachKid";
-
-const MAX_COMPETITION_VIDEOS = 3;
-
-type VideoSlotTuple = [
-  KidCompetitionVideoRef | null,
-  KidCompetitionVideoRef | null,
-  KidCompetitionVideoRef | null,
-];
-
-const EMPTY_VIDEO_SLOTS: VideoSlotTuple = [null, null, null];
-
-function videoSlotsFromEntry(entry: {
-  competitionVideos?: KidCompetitionVideoRef[];
-  videoUri?: string;
-  videoAssetId?: string;
-}): VideoSlotTuple {
-  const list =
-    entry.competitionVideos && entry.competitionVideos.length > 0
-      ? entry.competitionVideos
-      : entry.videoUri?.trim()
-        ? [
-            {
-              uri: entry.videoUri.trim(),
-              ...(entry.videoAssetId?.trim()
-                ? { assetId: entry.videoAssetId.trim() }
-                : {}),
-            },
-          ]
-        : [];
-  const capped = list.slice(0, MAX_COMPETITION_VIDEOS);
-  return [
-    capped[0] ?? null,
-    capped[1] ?? null,
-    capped[2] ?? null,
-  ];
-}
-
-function compactVideoSlots(slots: VideoSlotTuple): KidCompetitionVideoRef[] {
-  const out: KidCompetitionVideoRef[] = [];
-  for (let i = 0; i < MAX_COMPETITION_VIDEOS; i++) {
-    const s = slots[i];
-    if (s) out.push(s);
-  }
-  return out;
-}
+import {
+  createEmptyMatch,
+  deriveInitialMatches,
+  HOW_ENDED_OPTIONS,
+  MatchBlock,
+  MATCH_RESULT_OPTIONS,
+  normalizeSubmissionTimeInput,
+  snapshotFromLocal,
+  type LocalMatch,
+} from "../../../../../competition/[id]";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -95,16 +58,6 @@ const EVENT_STATUSES: KidCompetitionEventStatus[] = [
   "upcoming",
   "completed",
   "cancelled",
-  "unknown",
-];
-
-const OUTCOME_KINDS: KidCompetitionOutcomeKind[] = [
-  "points",
-  "submission",
-  "decision",
-  "disqualification",
-  "medical",
-  "other",
   "unknown",
 ];
 
@@ -140,25 +93,6 @@ function eventStatusLabel(s: KidCompetitionEventStatus): string {
   }
 }
 
-function outcomeKindLabel(k: KidCompetitionOutcomeKind): string {
-  switch (k) {
-    case "points":
-      return "Points";
-    case "submission":
-      return "Submission";
-    case "decision":
-      return "Decision";
-    case "disqualification":
-      return "DQ";
-    case "medical":
-      return "Medical";
-    case "other":
-      return "Other";
-    case "unknown":
-      return "Unknown";
-  }
-}
-
 function formatChipLabel(f: KidCompetitionFormat): string {
   switch (f) {
     case "gi":
@@ -181,6 +115,7 @@ export default function KidCompetitionEditScreen() {
   const kidId = params.kidId ? String(params.kidId) : "";
   const entryId = params.entryId ? String(params.entryId) : "";
   const isNew = !entryId;
+  const reactId = useId();
 
   const [loading, setLoading] = useState(!isNew);
   const [nameDraft, setNameDraft] = useState("");
@@ -190,17 +125,12 @@ export default function KidCompetitionEditScreen() {
     KidCompetitionEventStatus | undefined
   >(undefined);
   const [promoterDraft, setPromoterDraft] = useState("");
-  const [outcomeKindDraft, setOutcomeKindDraft] = useState<
-    KidCompetitionOutcomeKind | undefined
-  >(undefined);
   const [formatDraft, setFormatDraft] = useState<KidCompetitionFormat | undefined>(
     undefined,
   );
   const [notesDraft, setNotesDraft] = useState("");
-  const [videoSlots, setVideoSlots] = useState<VideoSlotTuple>(EMPTY_VIDEO_SLOTS);
-  const [videoSlotKeys, setVideoSlotKeys] = useState<[number, number, number]>([0, 0, 0]);
+  const [matches, setMatches] = useState<LocalMatch[]>([]);
   const [saving, setSaving] = useState(false);
-  const videoSlotRefs = useRef<(Video | null)[]>([null, null, null]);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
@@ -228,14 +158,13 @@ export default function KidCompetitionEditScreen() {
       setEventStatusDraft(found.eventStatus);
       setPromoterDraft(found.organizationOrPromoter ?? "");
       setFormatDraft(found.format);
-      setOutcomeKindDraft(found.outcomeKind);
       setNotesDraft(found.coachNotes ?? "");
-      setVideoSlots(videoSlotsFromEntry(found));
-      setVideoSlotKeys([0, 0, 0]);
+      const detail = await getCompetitionDetailByEntryId(found.id);
+      setMatches(deriveInitialMatches(found, detail, reactId));
     } finally {
       setLoading(false);
     }
-  }, [entryId, kidId]);
+  }, [entryId, kidId, reactId]);
 
   useEffect(() => {
     if (!kidId) {
@@ -253,10 +182,8 @@ export default function KidCompetitionEditScreen() {
         setEventStatusDraft(undefined);
         setPromoterDraft("");
         setFormatDraft(undefined);
-        setOutcomeKindDraft(undefined);
         setNotesDraft("");
-        setVideoSlots(EMPTY_VIDEO_SLOTS);
-        setVideoSlotKeys([0, 0, 0]);
+        setMatches([createEmptyMatch(`new-${Date.now()}`)]);
         setLoading(false);
         return;
       }
@@ -279,58 +206,100 @@ export default function KidCompetitionEditScreen() {
     return "Use a valid event date (YYYY-MM-DD) to enable Save.";
   }, [canSave, nameDraft, dateDraft]);
 
-  async function ensureMediaPermissions() {
-    const ok = await requestMediaLibraryPermission();
-    if (!ok) {
-      Alert.alert("Permission needed", "Allow Photos access to attach a video.");
-      return false;
-    }
-    return true;
-  }
+  const setMatchOutcome = useCallback((matchIndex: number, label: (typeof HOW_ENDED_OPTIONS)[number]) => {
+    setMatches((prev) =>
+      prev.map((m, i) => (i === matchIndex ? { ...m, outcome: m.outcome === label ? null : label } : m)),
+    );
+  }, []);
 
-  async function pickVideoForSlot(slotIndex: number) {
-    if (!(await ensureMediaPermissions())) return;
+  const setMatchResult = useCallback((matchIndex: number, v: (typeof MATCH_RESULT_OPTIONS)[number]["value"]) => {
+    setMatches((prev) =>
+      prev.map((m, i) => (i === matchIndex ? { ...m, matchResult: m.matchResult === v ? null : v } : m)),
+    );
+  }, []);
 
-    try {
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-      });
+  const setMatchSubmissionTime = useCallback((matchIndex: number, text: string) => {
+    setMatches((prev) =>
+      prev.map((m, i) => (i === matchIndex ? { ...m, submissionTime: normalizeSubmissionTimeInput(text) } : m)),
+    );
+  }, []);
 
-      if (!result.canceled && result.assets?.[0]?.uri) {
-        const asset = result.assets[0];
-        const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
-        const ref: KidCompetitionVideoRef = asset.assetId
-          ? { uri: persisted, assetId: asset.assetId }
-          : { uri: persisted };
-        setVideoSlots((prev) => {
-          const next: VideoSlotTuple = [prev[0], prev[1], prev[2]];
-          next[slotIndex] = ref;
-          return next;
-        });
-        setVideoSlotKeys((prev) => {
-          const next: [number, number, number] = [prev[0], prev[1], prev[2]];
-          next[slotIndex] += 1;
-          return next;
-        });
+  const setMatchCoachNote = useCallback((matchIndex: number, text: string) => {
+    setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, coachNote: text } : m)));
+  }, []);
+
+  const updateMatchMedia = useCallback(
+    (matchIndex: number, patch: Partial<Pick<LocalMatch, "imageUri" | "videoUri" | "imageAssetId" | "videoAssetId">>) => {
+      setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, ...patch } : m)));
+    },
+    [],
+  );
+
+  const addMatch = useCallback(() => {
+    setMatches((prev) => [...prev, createEmptyMatch(`${Date.now()}`)]);
+  }, []);
+
+  const handleDeleteMatch = useCallback(
+    (matchId: string) => {
+      if (matches.length === 1) {
+        Alert.alert("Clear match?", "This will reset this match.", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Clear",
+            style: "destructive",
+            onPress: () =>
+              setMatches((prev) =>
+                prev.map((m) =>
+                  m.id === matchId
+                    ? {
+                        ...m,
+                        videoUri: null,
+                        imageUri: null,
+                        imageAssetId: null,
+                        videoAssetId: null,
+                        matchResult: null,
+                        outcome: null,
+                        submissionTime: null,
+                        coachNote: "",
+                      }
+                    : m,
+                ),
+              ),
+          },
+        ]);
+        return;
       }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      Alert.alert("Could not attach video", msg || "Try another clip or check storage space.");
-    }
-  }
+      Alert.alert("Delete match?", "This will delete this match and its media.", [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => setMatches((prev) => (prev.length <= 1 ? prev : prev.filter((m) => m.id !== matchId))),
+        },
+      ]);
+    },
+    [matches.length],
+  );
 
-  function clearVideoSlot(slotIndex: number) {
-    setVideoSlots((prev) => {
-      const next: VideoSlotTuple = [prev[0], prev[1], prev[2]];
-      next[slotIndex] = null;
-      return next;
-    });
-    setVideoSlotKeys((prev) => {
-      const next: [number, number, number] = [prev[0], prev[1], prev[2]];
-      next[slotIndex] += 1;
-      return next;
-    });
-  }
+  const renderDeleteAction = useCallback(
+    (matchId: string) => (
+      <View style={{ flex: 1 }}>
+        <Pressable
+          onPress={() => handleDeleteMatch(matchId)}
+          style={{
+            height: "100%",
+            width: 80,
+            justifyContent: "center",
+            alignItems: "center",
+            backgroundColor: "#dc2626",
+          }}
+        >
+          <Text style={{ color: "#ffffff", fontWeight: "bold" }}>Delete</Text>
+        </Pressable>
+      </View>
+    ),
+    [handleDeleteMatch],
+  );
 
   async function onSave() {
     if (!canSave || !kidId) return;
@@ -341,12 +310,13 @@ export default function KidCompetitionEditScreen() {
       return;
     }
 
-    const competitionVideos = compactVideoSlots(videoSlots);
+    const snapshots = matches.map((m) => snapshotFromLocal(m));
+    const competitionVideos = competitionVideoRefsFromMatches(snapshots);
 
     setSaving(true);
     try {
       if (isNew) {
-        await createKidCompetitionEntry({
+        const created = await createKidCompetitionEntry({
           kidId,
           tournamentName: name,
           eventDate,
@@ -356,10 +326,10 @@ export default function KidCompetitionEditScreen() {
             ? promoterDraft.trim()
             : undefined,
           format: formatDraft,
-          outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
           ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
         });
+        await setCompetitionDetailForEntryId(created.id, { matches: snapshots });
       } else {
         await updateKidCompetitionEntry(entryId, {
           tournamentName: name,
@@ -370,10 +340,10 @@ export default function KidCompetitionEditScreen() {
             ? promoterDraft.trim()
             : undefined,
           format: formatDraft,
-          outcomeKind: outcomeKindDraft,
           coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
           competitionVideos,
         });
+        await setCompetitionDetailForEntryId(entryId, { matches: snapshots });
       }
       router.replace(`/this-week/kid/${kidId}`);
     } catch (e) {
@@ -404,17 +374,6 @@ export default function KidCompetitionEditScreen() {
         },
       },
     ]);
-  }
-
-  async function replayVideoSlot(slotIndex: number) {
-    try {
-      const r = videoSlotRefs.current[slotIndex];
-      if (!r) return;
-      await r.setPositionAsync(0);
-      await r.playAsync();
-    } catch {
-      // ignore
-    }
   }
 
   return (
@@ -638,53 +597,6 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textSecondary,
               }}
             >
-              HOW IT ENDED (OPTIONAL)
-            </Text>
-            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
-              Match outcome type. Tap again to clear.
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-              {OUTCOME_KINDS.map((k) => {
-                const active = outcomeKindDraft === k;
-                return (
-                  <Pressable
-                    key={k}
-                    onPress={() =>
-                      setOutcomeKindDraft((prev) => (prev === k ? undefined : k))
-                    }
-                    style={({ pressed }) => ({
-                      paddingVertical: 10,
-                      paddingHorizontal: 12,
-                      borderRadius: 12,
-                      borderWidth: 1,
-                      borderColor: active ? UI.accent : UI.border,
-                      backgroundColor: active ? "#edf2ff" : UI.bgCard,
-                      opacity: pressed ? 0.9 : 1,
-                    })}
-                  >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: active ? "800" : "600",
-                        color: UI.textPrimary,
-                      }}
-                    >
-                      {outcomeKindLabel(k)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Text
-              style={{
-                marginTop: 16,
-                fontSize: 12,
-                letterSpacing: 0.6,
-                fontWeight: "700",
-                color: UI.textSecondary,
-              }}
-            >
               RESULT
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
@@ -752,131 +664,61 @@ export default function KidCompetitionEditScreen() {
 
             <Text
               style={{
-                marginTop: 16,
+                marginTop: 20,
                 fontSize: 12,
                 letterSpacing: 0.6,
                 fontWeight: "700",
                 color: UI.textSecondary,
               }}
             >
-              VIDEOS (OPTIONAL, MAX {MAX_COMPETITION_VIDEOS})
+              MATCHES
             </Text>
-            <Text style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
-              Three slots; empty middle slots are dropped when you save.
-            </Text>
-
-            {([0, 1, 2] as const).map((slotIndex) => {
-              const clip = videoSlots[slotIndex];
-              const slotLabel = `Clip ${slotIndex + 1}`;
-              return (
-                <View
-                  key={slotIndex}
-                  style={{
-                    marginTop: 10,
-                    padding: 10,
-                    borderRadius: 12,
-                    borderWidth: 1,
-                    borderColor: UI.border,
-                    backgroundColor: UI.bgCard,
-                    gap: 8,
-                  }}
+            {matches.map((m, i) => (
+              <View
+                key={m.id}
+                style={{
+                  alignSelf: "stretch",
+                  marginTop: i === 0 ? 10 : 12,
+                  borderRadius: 12,
+                  overflow: "hidden",
+                }}
+              >
+                <Swipeable
+                  renderRightActions={() => renderDeleteAction(m.id)}
+                  friction={1.1}
+                  rightThreshold={24}
+                  overshootRight
+                  dragOffsetFromRightEdge={10}
                 >
-                  <Text style={{ fontSize: 11, fontWeight: "800", color: UI.textSecondary }}>
-                    {slotLabel}
-                  </Text>
-                  {clip ? (
-                    <>
-                      <Video
-                        key={videoSlotKeys[slotIndex]}
-                        ref={(r) => {
-                          videoSlotRefs.current[slotIndex] = r;
-                        }}
-                        source={{ uri: clip.uri }}
-                        style={{ width: "100%", height: 140, borderRadius: 10 }}
-                        useNativeControls
-                        resizeMode={ResizeMode.CONTAIN}
-                        isLooping={false}
-                        onPlaybackStatusUpdate={(status) => {
-                          if (!status || typeof status !== "object") return;
-                          // @ts-ignore expo-av playback status
-                          if (status.didJustFinish) {
-                            setVideoSlotKeys((prev) => {
-                              const next: [number, number, number] = [prev[0], prev[1], prev[2]];
-                              next[slotIndex] += 1;
-                              return next;
-                            });
-                          }
-                        }}
-                      />
-                      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-                        <Pressable
-                          onPress={() => void replayVideoSlot(slotIndex)}
-                          style={({ pressed }) => ({
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            borderColor: UI.border,
-                            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                          })}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
-                            Replay
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => void pickVideoForSlot(slotIndex)}
-                          style={({ pressed }) => ({
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            borderColor: UI.border,
-                            backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
-                          })}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
-                            Replace
-                          </Text>
-                        </Pressable>
-                        <Pressable
-                          onPress={() => clearVideoSlot(slotIndex)}
-                          style={({ pressed }) => ({
-                            paddingVertical: 8,
-                            paddingHorizontal: 12,
-                            borderRadius: 10,
-                            borderWidth: 1,
-                            borderColor: UI.border,
-                            backgroundColor: pressed ? "#fef2f2" : UI.bgCard,
-                          })}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: UI.danger }}>
-                            Remove
-                          </Text>
-                        </Pressable>
-                      </View>
-                    </>
-                  ) : (
-                    <Pressable
-                      onPress={() => void pickVideoForSlot(slotIndex)}
-                      style={({ pressed }) => ({
-                        paddingVertical: 10,
-                        paddingHorizontal: 12,
-                        borderRadius: 10,
-                        borderWidth: 1,
-                        borderColor: UI.border,
-                        backgroundColor: pressed ? "#edf2ff" : "#f9fafb",
-                        alignSelf: "flex-start",
-                      })}
-                    >
-                      <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>
-                        🎥 Add from library
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
+                  <MatchBlock
+                    index={i}
+                    match={m}
+                    onToggleMatchResult={(v) => setMatchResult(i, v)}
+                    onToggleOutcome={(label) => setMatchOutcome(i, label)}
+                    onSubmissionTimeChange={(text) => setMatchSubmissionTime(i, text)}
+                    onCoachNoteChange={(text) => setMatchCoachNote(i, text)}
+                    onImageChange={(uri, assetId) => updateMatchMedia(i, { imageUri: uri, imageAssetId: assetId })}
+                    onVideoChange={(uri, assetId) => updateMatchMedia(i, { videoUri: uri, videoAssetId: assetId })}
+                  />
+                </Swipeable>
+              </View>
+            ))}
+
+            <Pressable
+              onPress={addMatch}
+              style={({ pressed }) => ({
+                marginTop: 16,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.accent,
+                backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                alignItems: "center",
+              })}
+            >
+              <Text style={{ fontSize: 15, color: UI.accent, fontWeight: "800" }}>+ Add Match</Text>
+            </Pressable>
 
             <Pressable
               disabled={!canSave || saving || loading}

@@ -1,6 +1,6 @@
 import { ResizeMode, Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import {
   persistMediaFromCameraRoll,
@@ -19,6 +19,10 @@ const UI = {
 export type MatchMediaCallbacks = {
   imageUri: string | null;
   videoUri: string | null;
+  shouldPausePlayback?: boolean;
+  onPlay?: () => void;
+  onPause?: () => void;
+  onReplay?: () => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
 };
@@ -27,9 +31,17 @@ export type MatchMediaCallbacks = {
  * Camera-roll image + video attachments (training session pattern): pick, preview, replay, remove.
  * No YouTube. Uses persisted document URIs via persistMediaFromCameraRoll.
  */
-export function MatchMediaAttachments({ imageUri, videoUri, onImageChange, onVideoChange }: MatchMediaCallbacks) {
+export function MatchMediaAttachments({
+  imageUri,
+  videoUri,
+  shouldPausePlayback,
+  onPlay,
+  onPause,
+  onReplay,
+  onImageChange,
+  onVideoChange,
+}: MatchMediaCallbacks) {
   const videoRef = useRef<Video>(null);
-  const [videoKey, setVideoKey] = useState(0);
 
   async function ensureMediaPermissions() {
     const ok = await requestMediaLibraryPermission();
@@ -74,10 +86,36 @@ export function MatchMediaAttachments({ imageUri, videoUri, onImageChange, onVid
       if (!videoRef.current) return;
       await videoRef.current.setPositionAsync(0);
       await videoRef.current.playAsync();
+      onReplay?.();
     } catch {
       // ignore
     }
   }
+
+  async function playVideo() {
+    try {
+      if (!videoRef.current) return;
+      await videoRef.current.playAsync();
+      onPlay?.();
+    } catch {
+      // ignore
+    }
+  }
+
+  async function pauseVideo() {
+    try {
+      if (!videoRef.current) return;
+      await videoRef.current.pauseAsync();
+      onPause?.();
+    } catch {
+      // ignore
+    }
+  }
+
+  useEffect(() => {
+    if (!shouldPausePlayback) return;
+    void pauseVideo();
+  }, [shouldPausePlayback]);
 
   return (
     <View>
@@ -104,19 +142,29 @@ export function MatchMediaAttachments({ imageUri, videoUri, onImageChange, onVid
         <View style={styles.attachmentPreview}>
           <Text style={styles.sectionTitle}>Video Preview</Text>
           <Video
-            key={videoKey}
             ref={videoRef}
             source={{ uri: videoUri }}
             style={styles.previewImg}
-            useNativeControls
+            useNativeControls={false}
             resizeMode={ResizeMode.CONTAIN}
             isLooping={false}
             onPlaybackStatusUpdate={(status) => {
               if (!status || typeof status !== "object") return;
               // @ts-ignore didJustFinish on playback status
-              if (status.didJustFinish) setVideoKey((k) => k + 1);
+              if (status.didJustFinish) {
+                onPause?.();
+              }
             }}
           />
+          <View style={styles.attachmentButtonsRow}>
+            <TouchableOpacity style={styles.attachmentButton} onPress={playVideo}>
+              <Text style={styles.attachmentButtonText}>▶ Play</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.attachmentButton} onPress={pauseVideo}>
+              <Text style={styles.attachmentButtonText}>⏸ Pause</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.attachmentButtonsRow}>
             <TouchableOpacity style={styles.attachmentButton} onPress={replayVideo}>
               <Text style={styles.attachmentButtonText}>↻ Replay</Text>

@@ -1724,8 +1724,8 @@ export default function KidDetailScreen() {
             >
               Shared family note
             </Text>
-            {familyHuddleSourceMapRows.map((row) => (
-              <View key={row.heading} style={{ gap: 4 }}>
+            {familyHuddleSourceMapRows.map((row, index) => (
+              <View key={`${row.heading}-${index}`} style={{ gap: 4 }}>
                 <View
                   style={{
                     flexDirection: "row",
