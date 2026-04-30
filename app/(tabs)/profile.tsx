@@ -88,7 +88,31 @@ async function loadProfile(): Promise<Profile> {
 }
 
 async function saveProfile(p: Profile) {
-  await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(p));
+  let existing: Record<string, unknown> = {};
+  const raw = await AsyncStorage.getItem(StorageKeys.profile);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        existing = parsed as Record<string, unknown>;
+      }
+    } catch {
+      existing = {};
+    }
+  }
+
+  await AsyncStorage.setItem(
+    StorageKeys.profile,
+    JSON.stringify({
+      ...existing,
+      belt: p.belt,
+      stripes: p.stripes,
+      academy: p.academy,
+      professor: p.professor,
+      lastPromotionDate: p.lastPromotionDate,
+      weight: p.weight,
+    }),
+  );
 }
 
 const UI = {

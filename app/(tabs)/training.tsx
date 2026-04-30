@@ -24,6 +24,7 @@ import {
 import { Calendar } from "react-native-calendars";
 import { toDateKey } from "../../src/_domain/dateKey";
 import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
+import { useActiveKidId } from "../../src/state/activeKidStore";
 
 import { buildTechniqueIndex, getTechniqueById } from "../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
@@ -98,7 +99,36 @@ function resolveTechniqueLabelById(
   return selected?.label ?? id;
 }
 
+/** Resolved once for session technique labels (matches list card / insight resolution). */
+const SESSION_TECHNIQUE_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
 
+/**
+ * All technique labels for a session: from `techniques[]` when present, else legacy `technique`.
+ */
+function getTechniqueLabelsFromSession(session: Session): string[] {
+  if (Array.isArray(session.techniques) && session.techniques.length > 0) {
+    const labels: string[] = [];
+    for (const t of session.techniques) {
+      const tid = (t.techniqueId ?? "").trim();
+      if (tid) {
+        const resolved =
+          getTechniqueById(SESSION_TECHNIQUE_INDEX, tid)?.label ?? tid;
+        if ((resolved ?? "").trim()) labels.push(resolved.trim());
+        continue;
+      }
+      const tech = (t.technique ?? "").trim();
+      if (tech) {
+        labels.push(tech);
+        continue;
+      }
+      const custom = (t.customTechnique ?? "").trim();
+      if (custom) labels.push(custom);
+    }
+    return labels;
+  }
+  const legacy = (session.technique ?? "").trim();
+  return legacy ? [legacy] : [];
+}
 
 // ------------------------------
 // 2) Pure helper functions
@@ -300,6 +330,8 @@ export default function Training() {
 
   const kidIdParam =
     typeof params.kidId === "string" && params.kidId.trim() ? params.kidId.trim() : undefined;
+  const activeKidId = useActiveKidId();
+  const effectiveKidId = kidIdParam ?? activeKidId;
   const cameFromWeekly =
     typeof params.fromWeekly === "string" &&
     (params.fromWeekly === "1" || params.fromWeekly === "true");
@@ -320,10 +352,7 @@ export default function Training() {
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
 // Technique index (for resolving techniqueId -> label)
-const TECH_INDEX = useMemo<TechniqueIndexItem[]>(
-  () => buildTechniqueIndex(FUNDAMENTALS_TAXONOMY),
-  []
-);
+const TECH_INDEX = SESSION_TECHNIQUE_INDEX satisfies TechniqueIndexItem[];
 // 3D) Gestures / interaction (week swipe)
 // tweakable
 const swipeThreshold = 40;
@@ -392,9 +421,9 @@ const refresh = useCallback(async () => {
     // Kid-scoped view:
     // - when kidId is provided: show only sessions for that kid
     // - when kidId is absent: show only account-level sessions (no kidId)
-    const scoped = kidIdParam
+    const scoped = effectiveKidId
       ? normalized.filter((s) => {
-          if ((s.kidId ?? "").trim() !== kidIdParam) return false;
+          if ((s.kidId ?? "").trim() !== effectiveKidId) return false;
           if (deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
           return true;
         })
@@ -404,7 +433,7 @@ const refresh = useCallback(async () => {
   } finally {
     setIsLoadingSessions(false);
   }
-}, [kidIdParam, deviceRole]);
+}, [effectiveKidId, deviceRole]);
 
 useEffect(() => {
   if (typeof params.date === "string" && params.date) {
@@ -420,9 +449,9 @@ useEffect(() => {
 
   router.setParams({
     date: "",
-    ...(kidIdParam ? { kidId: kidIdParam } : {}),
+    ...(effectiveKidId ? { kidId: effectiveKidId } : {}),
   });
-}, [params.date, selectedDate, router, kidIdParam]);
+}, [params.date, selectedDate, router, effectiveKidId]);
 
 useFocusEffect(
   useCallback(() => {
@@ -432,7 +461,7 @@ useFocusEffect(
 
 useEffect(() => {
   void refresh();
-}, [kidIdParam, refresh]);
+}, [effectiveKidId, refresh]);
 useEffect(() => {
   let cancelled = false;
 
@@ -799,7 +828,7 @@ const filterAndSort = useCallback(
         const haystack = [
           s.system,
           resolveSystemLabel(s.system),
-          s.technique,
+          ...getTechniqueLabelsFromSession(s),
           s.drill,
           s.notes,
           s.youtubeUrl,
@@ -826,7 +855,7 @@ const searchedSessions = useMemo(() => {
     const haystack = [
       s.system,
       resolveSystemLabel(s.system),
-      s.technique,
+      ...getTechniqueLabelsFromSession(s),
       s.drill,
       s.notes,
       s.youtubeUrl,
@@ -973,9 +1002,9 @@ const renderNewSessionCTA = () => (
   <Pressable
     onPress={() =>
       router.push(
-        kidIdParam
+        effectiveKidId
           ? `/training/new?date=${encodeURIComponent(selectedDate)}&kidId=${encodeURIComponent(
-              kidIdParam,
+              effectiveKidId ?? "",
             )}`
           : `/training/new?date=${encodeURIComponent(selectedDate)}`
       )
@@ -1150,8 +1179,8 @@ const renderNewSessionCTA = () => (
   // If a child handled the tap (YT pill), don’t navigate.
   if ((e as any)?.defaultPrevented) return;
   router.push(
-    kidIdParam
-      ? `/training/${s.id}?kidId=${encodeURIComponent(kidIdParam)}`
+    effectiveKidId
+      ? `/training/${s.id}?kidId=${encodeURIComponent(effectiveKidId)}`
       : `/training/${s.id}`
   );
 }}
@@ -1292,8 +1321,8 @@ const renderNewSessionCTA = () => (
           // If a child already handled the tap (YT pill), don't navigate.
           if ((e as any)?.defaultPrevented) return;
           router.push(
-            kidIdParam
-              ? `/training/${s.id}?kidId=${encodeURIComponent(kidIdParam)}`
+            effectiveKidId
+              ? `/training/${s.id}?kidId=${encodeURIComponent(effectiveKidId)}`
               : `/training/${s.id}`
           );
         }}

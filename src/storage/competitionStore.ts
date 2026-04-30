@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { emitCompetitionChange } from "./kidCompetitionStore";
 import type { KidCompetitionVideoRef } from "../types/coachKid";
 
 const STORAGE_KEY = "competitions" as const;
@@ -90,6 +91,7 @@ export async function setCompetitionDetailForEntryId(
   const all = safeParseStore(await AsyncStorage.getItem(STORAGE_KEY));
   all[entryId] = detail;
   await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  emitCompetitionChange();
 }
 
 /** Up to 3 video refs in match order, for `KidCompetitionEntry.competitionVideos`. */

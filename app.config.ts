@@ -1,4 +1,4 @@
-import appJson from "./app.json";
+import appJson from "./app.json" assert { type: "json" };
 import type { ExpoConfig } from "expo/config";
 
 const base = appJson.expo as ExpoConfig;

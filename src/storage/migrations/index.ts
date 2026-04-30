@@ -1,6 +1,8 @@
 // app/storage/migrations/index.ts
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { SUMMARY_IDENTITY_ACCOUNT_SCOPE } from "../../types/summaryIdentityScope";
 import { STORAGE_VERSION, StorageKeys } from "../storageKeys";
 
 /**
@@ -43,6 +45,42 @@ export async function ensureStorageUpToDate(): Promise<void> {
           await AsyncStorage.setItem(StorageKeys.profile, legacy);
           break;
         }
+      }
+    }
+  }
+
+  // v2 -> v3: move legacy `summaryIdentity*` on profile JSON into `summaryIdentityByScope.__account__` only.
+  if (currentVersion < 3) {
+    const profileRaw = await AsyncStorage.getItem(StorageKeys.profile);
+    if (profileRaw) {
+      try {
+        const parsed = JSON.parse(profileRaw) as Record<string, unknown>;
+        const rawMap = parsed.summaryIdentityByScope;
+        const scopeMapShell =
+          rawMap &&
+          typeof rawMap === "object" &&
+          !Array.isArray(rawMap)
+            ? ({ ...(rawMap as Record<string, unknown>) } as Record<string, unknown>)
+            : {};
+
+        const accountBucketPresent = scopeMapShell[SUMMARY_IDENTITY_ACCOUNT_SCOPE] !== undefined;
+
+        const legacyInputs = parsed.summaryIdentityInputs;
+        const legacyMode = parsed.summaryIdentityMode;
+        const hasLegacyIdentity = legacyInputs !== undefined || legacyMode !== undefined;
+
+        if (!accountBucketPresent && hasLegacyIdentity) {
+          const nextAccount: Record<string, unknown> = {};
+          if (legacyInputs !== undefined) nextAccount.summaryIdentityInputs = legacyInputs;
+          if (legacyMode !== undefined) nextAccount.summaryIdentityMode = legacyMode;
+
+          scopeMapShell[SUMMARY_IDENTITY_ACCOUNT_SCOPE] = nextAccount;
+          parsed.summaryIdentityByScope = scopeMapShell;
+
+          await AsyncStorage.setItem(StorageKeys.profile, JSON.stringify(parsed));
+        }
+      } catch {
+        // Ignore corrupt profile blob; stamping version still proceeds.
       }
     }
   }

@@ -78,6 +78,7 @@ import {
 import { StorageKeys } from "../../../src/storage/storageKeys";
 import { getCompetitionMediaPresenceForEntryIds } from "../../../src/storage/competitionStore";
 import { getKidCompetitionEntriesForKid } from "../../../src/storage/kidCompetitionStore";
+import { setActiveKidId } from "../../../src/state/activeKidStore";
 import type { Session } from "../../../src/types";
 import {
   type Kid,
@@ -353,6 +354,11 @@ export default function CoachesScreen() {
   const [kidsByIdState, setKidsByIdState] = useState<KidsById>({});
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
+
+  useEffect(() => {
+    if (role !== "parent") return;
+    setActiveKidId(familyCompetition.kidId);
+  }, [role, familyCompetition.kidId]);
 
   const computeParentKidScopedState = useCallback(
     async (kidId: string | null, loadedKidsById: KidsById, today: string) => {

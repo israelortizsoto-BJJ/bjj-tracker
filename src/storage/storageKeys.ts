@@ -1,9 +1,11 @@
 // src/storage/storageKeys.ts.
-export const STORAGE_VERSION = 2 as const;
+/** Bump when `ensureStorageUpToDate` adds steps; v3 introduces `summaryIdentityByScope` on profile JSON. */
+export const STORAGE_VERSION = 3 as const;
 
 export const StorageKeys = {
   storageVersion: "bjj.storage.version",
   sessions: "bjj.sessions.v2",
+  /** JSON may include nested `summaryIdentityByScope` (see `SUMMARY_IDENTITY_ACCOUNT_SCOPE`) and legacy summary fields. */
   profile: "bjj.profile.v2",
 
   coachLinks: "mm:v1:coachLinks",

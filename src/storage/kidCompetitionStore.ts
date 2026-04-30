@@ -26,6 +26,24 @@ function newEntryId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+const listeners = new Set<() => void>();
+let competitionVersion = 0;
+
+export function emitCompetitionChange() {
+  console.log("[COMPETITION EMIT]");
+  competitionVersion += 1;
+  for (const l of listeners) l();
+}
+
+export function subscribeCompetition(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function getCompetitionVersion(): number {
+  return competitionVersion;
+}
+
 const EVENT_STATUS_SET = new Set<KidCompetitionEventStatus>([
   "upcoming",
   "completed",
@@ -253,6 +271,7 @@ async function setRaw(entries: KidCompetitionEntry[]): Promise<void> {
     StorageKeys.kidCompetitionEntries,
     JSON.stringify(sanitized),
   );
+  emitCompetitionChange();
 }
 
 export async function getKidCompetitionEntriesForKid(

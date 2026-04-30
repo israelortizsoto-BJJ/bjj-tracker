@@ -17,6 +17,7 @@ const HIDDEN = { href: null } as const;
 export default function TabLayout() {
   return (
     <Tabs screenOptions={{ headerShown: true }}>
+      <Tabs.Screen name="summary" options={{ title: "Summary" }} />
       <Tabs.Screen name="this-week" options={{ title: "This Week", headerShown: false }} />
       <Tabs.Screen name="training" options={{ title: "Training" }} />
       <Tabs.Screen name="learn" options={{ title: "Learn", headerShown: false }} />
