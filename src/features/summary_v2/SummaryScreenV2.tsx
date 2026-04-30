@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import type { SummaryIdentityInputsShape } from "../../domain/metrics";
@@ -44,10 +44,8 @@ import { setActiveKidId, useActiveKidId } from "../../state/activeKidStore";
 
 import AthleteSwitcher, { type AthleteOption } from "./components/AthleteSwitcher";
 import CompetitionCard from "./components/CompetitionCard";
-import GameIdentityCard from "./components/GameIdentityCard";
 import IdentityCard from "./components/IdentityCard";
 import MetricTile from "./components/MetricTile";
-import SectionTitle from "./components/SectionTitle";
 
 /** Second chip when no roster kid exists yet (sessions stay empty until real athletes are added). */
 const MOCK_SECOND_ATHLETE_KEY = "__summary_v2_mock_second__";
@@ -162,33 +160,68 @@ export default function SummaryScreenV2() {
     };
   }, []);
 
-  // TODO(summary_v2): Surface a second real athlete when >1 kid exists on the roster (today: Account + first kid, or Athlete B mock).
   const athleteOptions: AthleteOption[] = useMemo(() => {
     const kidsSorted = Object.values(kidsByIdSnapshot)
       .filter((k) => (k?.name ?? "").trim().length > 0)
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    const primary: AthleteOption = {
-      key: SUMMARY_IDENTITY_ACCOUNT_SCOPE,
-      label: "Account",
-    };
+    const defaults: AthleteOption[] = [
+      {
+        key: SUMMARY_IDENTITY_ACCOUNT_SCOPE,
+        name: "Ava",
+        belt: "Blue Belt",
+        avatar: "A",
+      },
+      {
+        key: MOCK_SECOND_ATHLETE_KEY,
+        name: "Mia",
+        belt: "White Belt",
+        avatar: "M",
+      },
+      {
+        key: "__summary_v2_mock_third__",
+        name: "Jin",
+        belt: "Gray Belt",
+        avatar: "J",
+      },
+    ];
 
-    const second: AthleteOption = kidsSorted[0]
-      ? { key: kidsSorted[0].id, label: kidsSorted[0].name.trim() }
-      : { key: MOCK_SECOND_ATHLETE_KEY, label: "Athlete B" };
+    if (kidsSorted.length <= 0) {
+      return defaults;
+    }
 
-    return [primary, second];
+    const dynamic = kidsSorted.slice(0, 3).map((kid, index) => {
+      const fallback = defaults[index] ?? defaults[defaults.length - 1];
+      return {
+        key: kid.id,
+        name: kid.name.trim() || fallback.name,
+        belt: fallback.belt,
+        avatar: (kid.name.trim().charAt(0) || fallback.avatar).toUpperCase(),
+      };
+    });
+
+    if (dynamic.length < 3) {
+      return [...dynamic, ...defaults.slice(dynamic.length)];
+    }
+
+    return dynamic;
   }, [kidsByIdSnapshot]);
 
   const effectiveScope = useMemo(() => {
-    if (selectedAthleteKey === MOCK_SECOND_ATHLETE_KEY) return MOCK_SECOND_ATHLETE_KEY;
+    if (selectedAthleteKey === MOCK_SECOND_ATHLETE_KEY || selectedAthleteKey === "__summary_v2_mock_third__") {
+      return MOCK_SECOND_ATHLETE_KEY;
+    }
     return selectedAthleteKey;
   }, [selectedAthleteKey]);
 
   const selectedKidIdForCompetition = useMemo(() => {
-    if (effectiveScope === SUMMARY_IDENTITY_ACCOUNT_SCOPE || effectiveScope === MOCK_SECOND_ATHLETE_KEY)
+    if (
+      effectiveScope === SUMMARY_IDENTITY_ACCOUNT_SCOPE ||
+      effectiveScope === MOCK_SECOND_ATHLETE_KEY
+    ) {
       return null;
+    }
     return effectiveScope;
   }, [effectiveScope]);
 
@@ -335,11 +368,11 @@ export default function SummaryScreenV2() {
   const onSelectAthlete = useCallback(
     (key: string) => {
       setSelectedAthleteKey(key);
-      if (key === SUMMARY_IDENTITY_ACCOUNT_SCOPE) {
-        setActiveKidId(null);
-        return;
-      }
-      if (key === MOCK_SECOND_ATHLETE_KEY) {
+      if (
+        key === SUMMARY_IDENTITY_ACCOUNT_SCOPE ||
+        key === MOCK_SECOND_ATHLETE_KEY ||
+        key === "__summary_v2_mock_third__"
+      ) {
         setActiveKidId(null);
         return;
       }
@@ -355,17 +388,21 @@ export default function SummaryScreenV2() {
         contentContainerStyle={styles.scrollInner}
         showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.screenTitle}>Summary</Text>
+
         <AthleteSwitcher
           athletes={athleteOptions}
           selectedKey={selectedAthleteKey}
           onSelect={onSelectAthlete}
         />
 
-        <IdentityCard title={identityTitle} score={identityScore} />
+        <View style={styles.identityWrap}>
+          <View style={styles.identityGlowBlue} />
+          <View style={styles.identityGlowTeal} />
+          <IdentityCard title={identityTitle} score={identityScore} />
+        </View>
 
-        <GameIdentityCard />
-
-        <SectionTitle title="System Dashboard" />
+        <Text style={styles.sectionTitle}>System Dashboard</Text>
 
         <View style={styles.grid}>
           <MetricTile
@@ -380,7 +417,7 @@ export default function SummaryScreenV2() {
           <MetricTile accent="blue" iconSource={ICON_GI} label="Gi vs No-Gi" value={metricValues.gi} />
         </View>
 
-        <SectionTitle title="Competition" />
+        <Text style={styles.sectionTitle}>Competition</Text>
 
         <CompetitionCard
           recordLabel={competitionView.recordLabel}
@@ -402,14 +439,52 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollInner: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     paddingBottom: 32,
-    paddingTop: 16,
+    paddingTop: 8,
+  },
+  screenTitle: {
+    color: "#F8FAFC",
+    fontSize: 28,
+    fontWeight: "900",
+    marginBottom: 18,
+  },
+  identityWrap: {
+    marginBottom: 16,
+    borderRadius: 24,
+    overflow: "visible",
+  },
+  identityGlowBlue: {
+    position: "absolute",
+    top: -28,
+    right: 8,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "#2563EB",
+    opacity: 0.12,
+  },
+  identityGlowTeal: {
+    position: "absolute",
+    bottom: -16,
+    left: 8,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#14B8A6",
+    opacity: 0.1,
+  },
+  sectionTitle: {
+    color: "#E2E8F0",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 10,
+    marginTop: 4,
   },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    marginBottom: 24,
+    marginBottom: 14,
   },
 });
