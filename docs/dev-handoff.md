@@ -1,3 +1,180 @@
+## Dev handoff — 2026-04-30
+
+--- START HANDOFF ---
+
+# 📦 DEV HANDOFF — MATMIND / ODS  
+**Date:** 2026-04-30  
+**Phase:** Codex Builder System Activation  
+**Status:** 🔄 In Progress (Architecture Locked, Build Started)
+
+## 🚨 TODAY’S SHIFT (CRITICAL)
+
+Transition completed:
+
+FROM
+- Manual dev (Cursor-led)
+- Fragmented architecture
+- UI-first thinking
+
+TO
+- Codex = Primary Builder (Design + Code)
+- Repo-aware generation pipeline
+- Architecture-first execution
+
+## 🏗️ SYSTEM ARCHITECTURE (LOCKED)
+
+### 1. Identity + Summary Layer
+- Modal onboarding (skippable)
+- Identity snapshot (user-defined + data-driven)
+- Summary reflects:
+  - training
+  - competition
+  - coaching (conditional)
+
+### 2. Coach Feed Layer (Conditional)
+Appears only if coach is linked.
+
+Includes:
+- Weekly coach message
+- Mission/resource
+- Family recap (historical tracking needed)
+- Practice summary
+- Connection state (UI visibility to be reduced)
+
+### 3. Execution Layer (CORE ENGINE — PROTECTED)
+- Training tab (critical system)
+- Competition tab
+- Session logging system
+
+Non-negotiable: Do not break Training system
+
+## 🔁 CORE USER LOOP
+Identity → Train → Log → Process → Summary Updates
+
+## 🧠 PRODUCT DECISIONS
+
+### Identity
+- 1–3 minute onboarding target
+- Fast path for advanced users
+- States:
+  - Let’s build your game
+  - Your game is emerging
+
+### Performance Metrics
+- Sessions this week
+- Top 2 focus areas
+- Consistency trend
+
+Removed:
+- mat time
+- rounds
+
+### Competition
+- Overall record
+- Win rate
+- Submission rate
+- Fastest submission
+- Avg match time
+- Medal gallery
+
+### Media System (LOCKED)
+
+Local:
+- Device only
+- Not shared
+
+Shared:
+- URLs only (YouTube / IG)
+- Cross-visible
+
+Must always be clearly labeled
+
+### Coach System
+- Already exists — DO NOT MODIFY
+- Weekly publish → worker → parent fetch
+- Athlete-specific weekly data
+- Recap system
+
+## 🧩 REPO STATE
+
+app/(tabs)/training currently only contains:
+- [id].tsx
+
+Missing:
+- calendar.tsx
+- session-builder.tsx
+
+## 🛠️ CODEX CLI STATUS
+
+Completed:
+- CLI setup
+- API key working
+- codex-run.js functional
+- Repo context injection working
+- Template string bug resolved
+
+## 📦 CODEX OUTPUT
+
+Generated:
+- Calendar screen
+- Session Builder screen
+- Training entry CTA
+- Storage using existing system
+
+## ⚠️ REQUIRED FIXES
+
+Routing:
+Use:
+router.push("/(tabs)/training/...")
+
+NOT:
+router.push("/training/...")
+
+Navigation return:
+Use:
+router.back()
+
+NOT:
+router.replace("/training")
+
+Technique duplication:
+Prevent duplicates in multi-add
+
+Media clarity:
+Add UI labels:
+- Saved on this device
+- Shared with coach/athlete
+
+## 🚀 NEXT STEPS
+
+1. Create:
+app/(tabs)/training/calendar.tsx  
+app/(tabs)/training/session-builder.tsx  
+
+2. Apply routing fixes  
+3. Run Expo  
+4. Validate flow  
+5. Fix runtime issues  
+6. Run Codex micro-patch  
+
+## 🧠 NOTES
+
+- Training system is foundation
+- Coach system already built
+- Codex builds, Cursor patches
+- Always align to repo
+
+## 🔥 SUMMARY
+
+Today established:
+- Architecture
+- Identity model
+- Data flow clarity
+- Codex build pipeline
+
+--- END HANDOFF ---
+
+
 ## 🔄 EOD UPDATE — 2026-04-27
 
 ### What changed (competition flow + UI alignment)
