@@ -166,7 +166,15 @@ function collectKidCompetitionVideoUris(entry: KidCompetitionEntry): string[] {
 }
 
 function persistKidCompetitionEntryShape(entry: KidCompetitionEntry): KidCompetitionEntry {
-  return { ...entry, ...normalizeKidCompetitionEntryMedia(entry) };
+  const eventStatus = normalizeEventStatus(entry.eventStatus);
+  const status = normalizeEventStatus(entry.status) ?? eventStatus;
+  const { status: _omitStatus, eventStatus: _omitEventStatus, ...rest } = entry;
+  return {
+    ...rest,
+    ...(status ? { status } : {}),
+    ...(eventStatus ? { eventStatus } : {}),
+    ...normalizeKidCompetitionEntryMedia(entry),
+  };
 }
 
 /** Local rows mirrored from the worker use `id` `shared-comp-<workerCompetitionId>`. */
@@ -211,14 +219,21 @@ export function getWorkerCompetitionIdForEntry(entry: KidCompetitionEntry): stri
 function normalizeKidCompetitionEntry(
   raw: KidCompetitionEntry,
 ): KidCompetitionEntry {
-  const { sharedAthleteId: _omitAthlete, sharedCompetitionId: _omitComp, ...rest } =
-    raw;
+  const {
+    sharedAthleteId: _omitAthlete,
+    sharedCompetitionId: _omitComp,
+    status: _omitStatus,
+    ...rest
+  } = raw;
   const linkage = normalizeSharedLinkageFields(raw);
   const media = normalizeKidCompetitionEntryMedia(raw);
+  const eventStatus = normalizeEventStatus(raw.eventStatus);
+  const status = normalizeEventStatus(raw.status) ?? eventStatus;
   return {
     ...rest,
     ...linkage,
-    eventStatus: normalizeEventStatus(raw.eventStatus),
+    ...(status ? { status } : {}),
+    eventStatus,
     format: normalizeFormat(raw.format),
     organizationOrPromoter: normalizeOrganizationOrPromoter(
       raw.organizationOrPromoter,
@@ -286,6 +301,11 @@ export async function getKidCompetitionEntriesForKid(
         b.eventDate.localeCompare(a.eventDate) ||
         b.createdAt.localeCompare(a.createdAt),
     );
+}
+
+export async function getKidCompetitionEntries(): Promise<KidCompetitionEntry[]> {
+  const all = await getRaw();
+  return all.slice();
 }
 
 /**
@@ -404,6 +424,7 @@ export async function upsertSharedCompetitionsForKid(
       tournamentName: r.tournamentName,
       eventDate: r.eventDate,
       result: r.result,
+      status: r.eventStatus,
       eventStatus: r.eventStatus,
       format: r.format,
       organizationOrPromoter: r.organizationOrPromoter,
@@ -520,6 +541,7 @@ export type KidCompetitionCreateInput = {
   tournamentName: string;
   eventDate: string;
   result?: KidCompetitionResult;
+  status?: KidCompetitionEventStatus;
   eventStatus?: KidCompetitionEventStatus;
   format?: KidCompetitionFormat;
   organizationOrPromoter?: string;
@@ -550,6 +572,7 @@ export async function createKidCompetitionEntry(
     videoSlots = aid ? [{ uri: u, assetId: aid }] : [{ uri: u }];
   }
   const videoFields = mediaFromSlots(videoSlots);
+  const status = input.status ?? input.eventStatus;
 
   const created: KidCompetitionEntry = {
     id,
@@ -559,6 +582,7 @@ export async function createKidCompetitionEntry(
     tournamentName: input.tournamentName.trim(),
     eventDate: input.eventDate,
     ...(input.result ? { result: input.result } : {}),
+    ...(status ? { status } : {}),
     ...(input.eventStatus ? { eventStatus: input.eventStatus } : {}),
     ...(input.format ? { format: input.format } : {}),
     ...(org ? { organizationOrPromoter: org } : {}),
@@ -591,6 +615,7 @@ export type KidCompetitionUpdateInput = Partial<{
   tournamentName: string;
   eventDate: string;
   result: KidCompetitionResult | undefined;
+  status: KidCompetitionEventStatus | undefined;
   eventStatus: KidCompetitionEventStatus | undefined;
   format: KidCompetitionFormat | undefined;
   organizationOrPromoter: string | undefined;
@@ -690,6 +715,13 @@ export async function updateKidCompetitionEntry(
     nextEventStatus = patch.eventStatus;
   }
 
+  let nextStatus = existing.status ?? existing.eventStatus;
+  if (Object.prototype.hasOwnProperty.call(patch, "status")) {
+    nextStatus = patch.status;
+  } else if (Object.prototype.hasOwnProperty.call(patch, "eventStatus")) {
+    nextStatus = nextEventStatus;
+  }
+
   let nextFormat = existing.format;
   if (Object.prototype.hasOwnProperty.call(patch, "format")) {
     nextFormat = patch.format;
@@ -738,6 +770,7 @@ export async function updateKidCompetitionEntry(
     result: Object.prototype.hasOwnProperty.call(patch, "result")
       ? patch.result
       : existing.result,
+    status: nextStatus,
     eventStatus: nextEventStatus,
     format: nextFormat,
     organizationOrPromoter: nextOrganizationOrPromoter,

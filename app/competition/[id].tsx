@@ -719,7 +719,7 @@ export default function CompetitionDetailScreen() {
       setPromoter(found.organizationOrPromoter ?? "");
       setDateDraft(found.eventDate);
       setFormat(found.format);
-      setEventStatus(found.eventStatus);
+      setEventStatus(found.status ?? found.eventStatus);
       setResult(found.result ?? "participated");
       const detail = await getCompetitionDetailByEntryId(idText);
       if (cancelled) return;
@@ -923,6 +923,7 @@ export default function CompetitionDetailScreen() {
           organizationOrPromoter: promoter.trim() ? promoter.trim() : undefined,
           eventDate: dateDraft.trim() || existing.eventDate,
           format,
+          status: eventStatus,
           eventStatus,
           result,
           competitionVideos: videoRefs,

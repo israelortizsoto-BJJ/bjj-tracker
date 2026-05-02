@@ -123,6 +123,7 @@ export default function SummaryScreen() {
         <SummaryHeroCard
           alignment={signals.alignment}
           confidence={signals.confidence}
+          hasData={signals.hasData}
           topSystem={signals.patterns.topSystem}
           topTechnique={signals.patterns.topTechnique}
         />
@@ -137,6 +138,7 @@ export default function SummaryScreen() {
 
       <View style={styles.section}>
         <SummaryPatternsCard
+          gear={signals.gear}
           topSystem={signals.patterns.topSystem}
           topTechnique={signals.patterns.topTechnique}
           topTechniques={signals.techniques.topTechniques}
@@ -152,8 +154,16 @@ export default function SummaryScreen() {
 
       <View style={styles.lastSection}>
         <SummaryCompetitionCard
+          averageMatchTime={signals.competition.averageMatchTime}
+          competitionCount={signals.competition.competitionCount}
+          fastestSubmission={signals.competition.fastestSubmission}
+          lastCompetitionDate={signals.competition.lastCompetitionDate}
+          lastCompetitionResult={signals.competition.lastCompetitionResult}
+          record={signals.competition.record}
+          submissionRate={signals.competition.submissionRate}
           totalMatches={signals.competition.totalMatches}
           winRate={signals.competition.winRate}
+          winStyle={signals.competition.winStyle}
         />
       </View>
     </ScrollView>

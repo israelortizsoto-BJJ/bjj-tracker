@@ -23,6 +23,8 @@ export type Session = {
    * - When missing, the Training tab treats the session as account-level.
    */
   kidId?: string;
+  /** Shared athlete id from the coach/parent weekly sync session. Used for athlete-scoped summaries. */
+  sharedAthleteId?: string;
   /** Who logged this kid-linked session on-device (parent weekly vs coach planning). Omit on account-level sessions. */
   trainingLoggedByRole?: "parent" | "coach";
 
@@ -50,4 +52,3 @@ export type Session = {
   videoAssetId?: string | null;
   customTechnique?: string;
 };
-

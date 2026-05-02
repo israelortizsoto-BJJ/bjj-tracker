@@ -598,7 +598,7 @@ const topTechniqueThisWeek = topTechniqueSignal
 
 
 const displayWeekStreak =
-  signals.consistency.streak + (signals.consistency.goalMet ? 1 : 0);
+  (signals.consistency.streak ?? 0) + (signals.consistency.goalMet ? 1 : 0);
 
 
 const thisWeekTotal = signals.frequency.weeklySessionCount;

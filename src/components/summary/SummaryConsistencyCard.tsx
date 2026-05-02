@@ -2,16 +2,22 @@ import { StyleSheet, Text, View } from "react-native";
 
 type SummaryConsistencyProps = {
   weeklySessionCount: number;
-  streak: number;
+  streak: number | null;
 };
 
 export default function SummaryConsistencyCard(props: SummaryConsistencyProps) {
   const { weeklySessionCount, streak } = props;
   const WEEKLY_GOAL = 3;
-  const progressLabel = `${weeklySessionCount}/${WEEKLY_GOAL}`;
-  const streakLabel = `${streak} week${streak === 1 ? "" : "s"} streak`;
+  const hasTraining = weeklySessionCount > 0;
+  const progressLabel = `${weeklySessionCount} session${
+    weeklySessionCount === 1 ? "" : "s"
+  } (goal: ${WEEKLY_GOAL})`;
+  const streakLabel =
+    streak === null ? "No streak yet" : `Streak: ${streak} week${streak === 1 ? "" : "s"}`;
   const goalStatus =
-    weeklySessionCount >= WEEKLY_GOAL
+    !hasTraining
+      ? "No sessions logged"
+      : weeklySessionCount >= WEEKLY_GOAL
       ? "Goal met"
       : `${WEEKLY_GOAL - weeklySessionCount} session${
           WEEKLY_GOAL - weeklySessionCount === 1 ? "" : "s"
@@ -26,18 +32,30 @@ export default function SummaryConsistencyCard(props: SummaryConsistencyProps) {
         </View>
       </View>
 
-      <View style={styles.row}>
-        <View style={[styles.metricBox, styles.primaryMetricBox]}>
-          <Text style={styles.itemValue}>{progressLabel}</Text>
-          <Text style={styles.itemLabel}>Weekly Goal</Text>
-          <Text style={styles.itemSubtext}>{goalStatus}</Text>
+      {!hasTraining ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No consistency signal yet</Text>
+          <Text style={styles.emptyText}>Weekly progress starts after the first saved session.</Text>
         </View>
+      ) : (
+        <View style={styles.row}>
+          <View style={[styles.metricBox, styles.primaryMetricBox]}>
+            <Text style={styles.itemValue}>{progressLabel}</Text>
+            <Text style={styles.itemLabel}>Weekly Goal</Text>
+            <Text style={styles.itemSubtext}>{goalStatus}</Text>
+          </View>
 
-        <View style={styles.metricBox}>
-          <Text style={styles.secondaryValue}>{streakLabel}</Text>
-          <Text style={styles.itemLabel}>Streak</Text>
+          <View style={styles.metricBox}>
+            <Text style={streak === null ? styles.emptyValue : styles.secondaryValue}>
+              {streakLabel}
+            </Text>
+            <Text style={styles.itemLabel}>Streak</Text>
+            {streak === null ? (
+              <Text style={styles.itemSubtextMuted}>Complete a week to start one</Text>
+            ) : null}
+          </View>
         </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -89,6 +107,24 @@ const styles = StyleSheet.create({
     borderColor: "#28313c",
     justifyContent: "center",
   },
+  emptyState: {
+    backgroundColor: "#20252b",
+    borderRadius: 6,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#28313c",
+  },
+  emptyTitle: {
+    color: "#d1d5db",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: "#9ca3af",
+    fontSize: 13,
+    lineHeight: 18,
+  },
   primaryMetricBox: {
     borderColor: "#28313c",
   },
@@ -108,9 +144,19 @@ const styles = StyleSheet.create({
     color: "#c7f36b",
     fontSize: 13,
   },
+  itemSubtextMuted: {
+    color: "#9ca3af",
+    fontSize: 13,
+  },
   secondaryValue: {
     color: "#ffffff",
     fontSize: 20,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  emptyValue: {
+    color: "#9ca3af",
+    fontSize: 18,
     fontWeight: "600",
     marginBottom: 4,
   },

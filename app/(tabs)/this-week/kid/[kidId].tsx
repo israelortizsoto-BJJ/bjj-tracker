@@ -260,7 +260,7 @@ function compareCoachCompYMD(a: string, b: string): number {
  * Coach list: always show a clear lifecycle label even when the family left `eventStatus` unset.
  */
 function coachCompetitionRowStatusLabel(row: KidCompetitionEntry, todayYMD: string): string {
-  const st = row.eventStatus;
+  const st = row.status ?? row.eventStatus;
   const dateOk = COACH_COMP_YMD_RE.test(row.eventDate);
   const isFutureOrToday =
     dateOk && compareCoachCompYMD(row.eventDate, todayYMD) >= 0;

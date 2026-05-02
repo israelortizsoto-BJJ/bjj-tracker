@@ -122,6 +122,8 @@ export type KidCompetitionEntry = {
   eventDate: string;
   /** Omitted until the family or coach sets an outcome. */
   result?: KidCompetitionResult;
+  /** UI/state lifecycle alias; `eventStatus` remains the existing storage/sync field. */
+  status?: KidCompetitionEventStatus;
   eventStatus?: KidCompetitionEventStatus;
   format?: KidCompetitionFormat;
   organizationOrPromoter?: string;
@@ -145,4 +147,3 @@ export function kidCompetitionEntryIsSyncedFromWorker(entry: KidCompetitionEntry
   if (sid) return true;
   return entry.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX);
 }
-

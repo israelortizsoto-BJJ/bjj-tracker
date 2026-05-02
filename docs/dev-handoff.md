@@ -1,178 +1,163 @@
-## Dev handoff — 2026-04-30
+# BJJ Tracker — Dev Handoff
+## Date: 2026-05-01
 
---- START HANDOFF ---
+---
 
-# 📦 DEV HANDOFF — MATMIND / ODS  
-**Date:** 2026-04-30  
-**Phase:** Codex Builder System Activation  
-**Status:** 🔄 In Progress (Architecture Locked, Build Started)
+## 🔥 Executive Summary
 
-## 🚨 TODAY’S SHIFT (CRITICAL)
+Today we completed a **major architectural correction**:
 
-Transition completed:
+We moved from:
+- UI-driven summaries
+- implicit/global data assumptions
 
-FROM
-- Manual dev (Cursor-led)
-- Fragmented architecture
-- UI-first thinking
+To:
+- **athlete-scoped data**
+- **strict signal computation**
+- **truthful UI expression**
 
-TO
-- Codex = Primary Builder (Design + Code)
-- Repo-aware generation pipeline
-- Architecture-first execution
+This is not a feature.
+This is a **system integrity milestone**.
 
-## 🏗️ SYSTEM ARCHITECTURE (LOCKED)
+---
 
-### 1. Identity + Summary Layer
-- Modal onboarding (skippable)
-- Identity snapshot (user-defined + data-driven)
-- Summary reflects:
-  - training
-  - competition
-  - coaching (conditional)
+## 🧠 What Actually Changed (Real Truth)
 
-### 2. Coach Feed Layer (Conditional)
-Appears only if coach is linked.
+### 1. Athlete Context Became Real
 
-Includes:
-- Weekly coach message
-- Mission/resource
-- Family recap (historical tracking needed)
-- Practice summary
-- Connection state (UI visibility to be reduced)
+Before:
+- Summary read from global sessions
+- Athlete switcher was cosmetic
 
-### 3. Execution Layer (CORE ENGINE — PROTECTED)
-- Training tab (critical system)
-- Competition tab
-- Session logging system
+Now:
+- `useAthleteData(activeAthleteId)`
+- Sessions + competitions filtered at source
+- No fallback to global data
 
-Non-negotiable: Do not break Training system
+👉 Athlete = data boundary
 
-## 🔁 CORE USER LOOP
-Identity → Train → Log → Process → Summary Updates
+---
 
-## 🧠 PRODUCT DECISIONS
+### 2. Signals Are Now STRICT (No Lies)
 
-### Identity
-- 1–3 minute onboarding target
-- Fast path for advanced users
-- States:
-  - Let’s build your game
-  - Your game is emerging
-
-### Performance Metrics
-- Sessions this week
-- Top 2 focus areas
-- Consistency trend
+Inside `computeSignals.ts`:
 
 Removed:
-- mat time
-- rounds
+- fake weekly windows
+- fallback counts
+- “0 instead of null”
+- pattern generation from empty data
 
-### Competition
-- Overall record
-- Win rate
-- Submission rate
-- Fastest submission
-- Avg match time
-- Medal gallery
+Now:
+- `weeklySessionCount = sessions.length`
+- `streak = null` if no sessions
+- `topSystem / topTechnique = null` if no signal
+- `winRate = null` if unknown
+- `competitionCount` independent of match arrays
 
-### Media System (LOCKED)
+👉 Signals now represent reality, not assumptions
 
-Local:
-- Device only
-- Not shared
+---
 
-Shared:
-- URLs only (YouTube / IG)
-- Cross-visible
+### 3. UI Now Reflects Data Truth
 
-Must always be clearly labeled
+Summary cards now:
 
-### Coach System
-- Already exists — DO NOT MODIFY
-- Weekly publish → worker → parent fetch
-- Athlete-specific weekly data
-- Recap system
+State | Behavior
+------|--------
+No data | Minimal / empty state
+Low data | “Early signal” state
+Real data | Full expression
 
-## 🧩 REPO STATE
+Removed:
+- fake populated cards
+- misleading “Start logging” inside metrics
+- masked empty values
 
-app/(tabs)/training currently only contains:
-- [id].tsx
+👉 UI no longer lies to the user
 
-Missing:
-- calendar.tsx
-- session-builder.tsx
+---
 
-## 🛠️ CODEX CLI STATUS
+## 🧱 Architecture Now (LOCK THIS)
+Athlete Switch
+↓
+useAthleteData (source of truth)
+↓
+useSignals (pure compute)
+↓
+Summary UI (expression only)
+Rules:
+- UI does NOT compute
+- Signals do NOT fetch
+- Data layer does NOT guess
 
-Completed:
-- CLI setup
-- API key working
-- codex-run.js functional
-- Repo context injection working
-- Template string bug resolved
+---
 
-## 📦 CODEX OUTPUT
+## ⚠️ Known Gaps
 
-Generated:
-- Calendar screen
-- Session Builder screen
-- Training entry CTA
-- Storage using existing system
+1. Competition card still under-expressive
+2. GI vs No-GI not clearly surfaced
+3. Pattern confidence not visible
+4. Small datasets limit insight clarity
 
-## ⚠️ REQUIRED FIXES
+---
 
-Routing:
-Use:
-router.push("/(tabs)/training/...")
+## 🎯 Tomorrow Focus (2026-05-02)
 
-NOT:
-router.push("/training/...")
+### Priority 1 — Competition Card
+- Make competition the strongest signal when present
+- Show:
+  - last result
+  - matches (if exist)
+  - visual emphasis
 
-Navigation return:
-Use:
-router.back()
+### Priority 2 — Pattern Confidence
+- Add:
+  - “early signal”
+  - “emerging pattern”
+  - “strong pattern”
 
-NOT:
-router.replace("/training")
+### Priority 3 — GI vs No-GI
+- Must become a visible signal (not hidden in system)
 
-Technique duplication:
-Prevent duplicates in multi-add
+### Priority 4 — Visual Hierarchy
+- Primary vs Secondary cards
+- Reduce noise
+- Increase signal clarity
 
-Media clarity:
-Add UI labels:
-- Saved on this device
-- Shared with coach/athlete
+---
 
-## 🚀 NEXT STEPS
+## 🔒 Non-Negotiables Going Forward
 
-1. Create:
-app/(tabs)/training/calendar.tsx  
-app/(tabs)/training/session-builder.tsx  
+- No fallback logic
+- No default values masking truth
+- No UI pretending data exists
+- Every feature must respect:
+  **Athlete → Data → Signals → UI**
 
-2. Apply routing fixes  
-3. Run Expo  
-4. Validate flow  
-5. Fix runtime issues  
-6. Run Codex micro-patch  
+---
 
-## 🧠 NOTES
+## 🧠 Big Realization Today
 
-- Training system is foundation
-- Coach system already built
-- Codex builds, Cursor patches
-- Always align to repo
+The problem was NOT:
+- reactivity
+- hooks
+- memoization
 
-## 🔥 SUMMARY
+The problem was:
+👉 **lack of a strict data boundary (athlete)**
 
-Today established:
-- Architecture
-- Identity model
-- Data flow clarity
-- Codex build pipeline
+---
 
---- END HANDOFF ---
+## 🧭 Status
+
+System is now:
+- stable
+- predictable
+- debuggable
+- extensible
+
+This is the foundation for everything next.
 
 
 ## 🔄 EOD UPDATE — 2026-04-27

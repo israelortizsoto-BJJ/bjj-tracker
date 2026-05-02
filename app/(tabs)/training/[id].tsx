@@ -26,6 +26,7 @@ import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../../../src/media/persistCameraRollMedia";
+import { getKidsById } from "../../../src/storage/coachKidStore";
 import { getSessions, setSessions } from "../../../src/storage/sessionsStore";
 import type { Session, TechniqueEntry } from "../../../src/types";
 
@@ -669,12 +670,27 @@ if (primaryPersisted?.techniqueId) {
 
 // 3) Build payload with dual-write: techniques[] + mirrored top-level fields from first entry
 const effectiveKidId = (kidIdParam ?? existingSession?.kidId ?? "").trim() || undefined;
+let sharedAthleteId = existingSession?.sharedAthleteId?.trim() || undefined;
+
+if (effectiveKidId) {
+  const kidsById = await getKidsById();
+  const linkedSharedAthleteId = kidsById[effectiveKidId]?.sharedAthleteId?.trim();
+  if (linkedSharedAthleteId) {
+    sharedAthleteId = linkedSharedAthleteId;
+  }
+}
+
+if (__DEV__) {
+  console.log("SAVING SESSION FOR ATHLETE", sharedAthleteId ?? null);
+}
+
 const payload: Session = {
   id: realId,
   createdAt: isNew ? now : existingSession?.createdAt || now,
   date: finalDate,
 
   kidId: effectiveKidId,
+  sharedAthleteId,
 
   trainingLoggedByRole: effectiveKidId
     ? deviceRole === "coach"

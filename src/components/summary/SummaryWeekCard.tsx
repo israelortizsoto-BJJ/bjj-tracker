@@ -15,6 +15,8 @@ export default function SummaryWeekCard(props: SummaryWeekProps) {
   const { weeklySessionCount, topTechniques } = props;
   const focusPrimary = topTechniques[0] || null;
   const focusSecondary = topTechniques[1] || null;
+  const hasSessions = weeklySessionCount > 0;
+  const isRich = weeklySessionCount >= 3;
 
   const formatLabel = (value: string) => {
     return value
@@ -27,34 +29,52 @@ export default function SummaryWeekCard(props: SummaryWeekProps) {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <Text style={styles.title}>This Week</Text>
-        <Text style={styles.meta}>7-14 days</Text>
-      </View>
-      <View style={styles.grid}>
-        <View style={styles.gridItem}>
-          <Text style={styles.itemValue}>{weeklySessionCount}</Text>
-          <Text style={styles.itemLabel}>Sessions</Text>
-        </View>
-        <View style={styles.gridItem}>
-          <Text style={styles.itemLabel}>Focus 1</Text>
-          {focusPrimary ? (
-            <Text style={styles.itemValue}>{formatLabel(focusPrimary.label)}</Text>
-          ) : (
-            <Text style={styles.itemValue}>Start logging</Text>
-          )}
-        </View>
-        <View style={styles.gridItem}>
-          <Text style={styles.itemLabel}>Focus 2</Text>
-          <Text style={styles.itemValue}>
-            {focusSecondary ? formatLabel(focusSecondary.label) : "Start logging"}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.systemBanner}>
-        <Text style={styles.systemBannerText}>
-          Updated after Session Builder Save → local Training Data → processing.
+        <Text style={styles.meta}>
+          {hasSessions ? `${weeklySessionCount} active` : "No activity"}
         </Text>
       </View>
+
+      {!hasSessions ? (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyTitle}>No training yet</Text>
+          <Text style={styles.emptyText}>Saved sessions will appear here.</Text>
+        </View>
+      ) : (
+        <View style={styles.grid}>
+          <View style={styles.gridItem}>
+            <Text style={styles.itemValue}>{weeklySessionCount}</Text>
+            <Text style={styles.itemLabel}>Sessions this week</Text>
+            <Text style={styles.itemSubtext}>
+              {isRich ? "Goal pace is active" : "Early signal"}
+            </Text>
+          </View>
+          <View style={styles.gridItem}>
+            <Text style={styles.itemLabel}>Focus 1</Text>
+            {focusPrimary ? (
+              <>
+                <Text style={styles.itemValue}>{formatLabel(focusPrimary.label)}</Text>
+                <Text style={styles.itemSubtext}>{focusPrimary.count} logged</Text>
+              </>
+            ) : (
+              <Text style={styles.itemSubtext}>No focus logged yet</Text>
+            )}
+          </View>
+          <View style={styles.gridItem}>
+            <Text style={styles.itemLabel}>Focus 2</Text>
+            {focusSecondary ? (
+              <>
+                <Text style={styles.itemValue}>{formatLabel(focusSecondary.label)}</Text>
+                <Text style={styles.itemSubtext}>{focusSecondary.count} logged</Text>
+              </>
+            ) : (
+              <Text style={styles.itemSubtext}>
+                {isRich ? "No secondary focus yet" : "Needs more sessions"}
+              </Text>
+            )}
+          </View>
+        </View>
+      )}
+
     </View>
   );
 }
@@ -99,6 +119,24 @@ const styles = StyleSheet.create({
     borderColor: "#28313c",
     justifyContent: "center",
   },
+  emptyState: {
+    backgroundColor: "#20252b",
+    borderRadius: 6,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#28313c",
+  },
+  emptyTitle: {
+    color: "#d1d5db",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 4,
+  },
+  emptyText: {
+    color: "#9ca3af",
+    fontSize: 13,
+    lineHeight: 18,
+  },
   itemLabel: {
     color: "#c7cbd1",
     fontSize: 12,
@@ -114,20 +152,5 @@ const styles = StyleSheet.create({
   itemSubtext: {
     color: "#9ca3af",
     fontSize: 14,
-  },
-  systemBanner: {
-    backgroundColor: "#252f18",
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: "#465623",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginTop: 2,
-  },
-  systemBannerText: {
-    color: "#d8ff75",
-    fontSize: 11,
-    fontWeight: "800",
-    lineHeight: 16,
   },
 });

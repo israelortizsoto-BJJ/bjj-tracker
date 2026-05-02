@@ -36,9 +36,17 @@ export type SignalOutput = {
     topSystem: string | null;
     systemFrequency: Record<string, number>;
   };
+  gear: {
+    giCount: number;
+    nogiCount: number;
+    giPercentage: number | null;
+    nogiPercentage: number | null;
+    total: number;
+    hasLowData: boolean;
+  };
   consistency: {
     currentWeekCount: number;
-    streak: number;
+    streak: number | null;
     goalMet: boolean;
   };
   patterns: {
@@ -47,10 +55,23 @@ export type SignalOutput = {
   };
   competition: {
     totalMatches: number;
-    winRate: number;
+    competitionCount: number;
+    completedMatchCount: number;
+    wins: number;
+    losses: number;
+    record: { wins: number; losses: number };
+    winRate: number | null;
+    submissionRate: number | null;
+    fastestSubmission: string | null;
+    averageMatchTime: string | null;
+    winStyle: "submission-heavy" | "points-heavy" | "mixed" | null;
+    methodFrequency: Record<string, number>;
+    lastCompetitionDate: string | null;
+    lastCompetitionResult: string | null;
   };
   confidence: number;
   alignment: number;
+  hasData: boolean;
 };
 
 const WEEKLY_SESSION_GOAL = 3;
@@ -116,13 +137,17 @@ function rankFrequency(frequency: Record<string, number>): RankedSignalItem[] {
 }
 
 function techniqueKeyFromEntry(entry: Partial<TechniqueEntry>): string {
-  return (
-    cleanText(entry.techniqueId) ||
-    cleanText(entry.technique) ||
-    cleanText(entry.customTechnique) ||
-    cleanText(entry.finish) ||
-    cleanText(entry.position)
-  );
+  const candidates = [
+    cleanText(entry.customTechnique),
+    cleanText(entry.technique),
+    cleanText(entry.techniqueId),
+    cleanText(entry.finish),
+    cleanText(entry.grips),
+    cleanText(entry.position),
+  ];
+
+  const selected = candidates.find((candidate) => candidate.length > 0);
+  return selected ? selected : "";
 }
 
 function collectTechniqueFrequency(sessions: readonly Session[]): Record<string, number> {
@@ -132,10 +157,14 @@ function collectTechniqueFrequency(sessions: readonly Session[]): Record<string,
     const entries = Array.isArray(session.techniques) ? session.techniques : [];
 
     if (entries.length > 0) {
+      let addedEntryTechnique = false;
       for (const entry of entries) {
-        increment(frequency, techniqueKeyFromEntry(entry));
+        const key = techniqueKeyFromEntry(entry);
+        if (!key) continue;
+        increment(frequency, key);
+        addedEntryTechnique = true;
       }
-      continue;
+      if (addedEntryTechnique) continue;
     }
 
     increment(
@@ -163,10 +192,28 @@ function collectSystemFrequency(sessions: readonly Session[]): Record<string, nu
   return frequency;
 }
 
-function isInCurrentWeek(session: Session, weekStart: string, weekEnd: string): boolean {
-  const dateKey = toDateKey(session.date);
-  if (!dateKey || !weekStart || !weekEnd) return false;
-  return dateKey >= weekStart && dateKey <= weekEnd;
+function computeGearSignal(sessions: readonly Session[]): SignalOutput["gear"] {
+  let giCount = 0;
+  let nogiCount = 0;
+  const total = sessions.length;
+
+  for (const session of sessions) {
+    giCount += session.gear === "gi" ? 1 : 0;
+    nogiCount += session.gear === "nogi" ? 1 : 0;
+  }
+
+  const giPercentage = total === 0 ? null : Math.round((giCount / total) * 100);
+  const nogiPercentage = total === 0 ? null : Math.round((nogiCount / total) * 100);
+  const hasLowData = total > 0 && total < 3;
+
+  return {
+    giCount,
+    nogiCount,
+    giPercentage,
+    nogiPercentage,
+    total,
+    hasLowData,
+  };
 }
 
 function collectWeeklySessionCounts(sessions: readonly Session[]): Record<string, number> {
@@ -217,6 +264,90 @@ function collectMatches(competitions: readonly CompetitionEntry[]) {
   );
 }
 
+function normalizeMatchResult(value: unknown): "win" | "loss" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "win") return "win";
+  if (normalized === "loss") return "loss";
+  return null;
+}
+
+function normalizeMatchOutcome(value: unknown): string {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function isSubmissionOutcome(value: unknown): boolean {
+  return normalizeMatchOutcome(value) === "submission";
+}
+
+function isPointsStyleOutcome(value: unknown): boolean {
+  const outcome = normalizeMatchOutcome(value);
+  return outcome === "points" || outcome === "ref decision";
+}
+
+function parseMatchTimeSeconds(value: unknown): number | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!text) return null;
+
+  const parts = text.split(":");
+  if (parts.length === 1) {
+    const seconds = Number(parts[0]);
+    return Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds) : null;
+  }
+  if (parts.length !== 2) return null;
+
+  const minutes = Number(parts[0]);
+  const seconds = Number(parts[1]);
+  if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) return null;
+  if (minutes < 0 || seconds < 0 || seconds >= 60) return null;
+  return Math.round(minutes * 60 + seconds);
+}
+
+function formatMatchTime(totalSeconds: number | null): string | null {
+  if (totalSeconds === null || !Number.isFinite(totalSeconds) || totalSeconds < 0) {
+    return null;
+  }
+  const rounded = Math.round(totalSeconds);
+  const minutes = Math.floor(rounded / 60);
+  const seconds = rounded % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function resolveWinStyle(input: {
+  submissionWins: number;
+  pointsStyleWins: number;
+}): "submission-heavy" | "points-heavy" | "mixed" | null {
+  const { submissionWins, pointsStyleWins } = input;
+  const categorizedWins = submissionWins + pointsStyleWins;
+  if (categorizedWins === 0) return null;
+  if (submissionWins > pointsStyleWins) return "submission-heavy";
+  if (pointsStyleWins > submissionWins) return "points-heavy";
+  return "mixed";
+}
+
+function resolveLastCompetition(competitions: readonly CompetitionEntry[]): {
+  date: string;
+  result: string | null;
+} | null {
+  let latest: { date: string; result: string | null } | null = null;
+
+  for (const competition of competitions) {
+    const date = toDateKey(competition.eventDate);
+    if (!date) continue;
+
+    if (latest && date <= latest.date) continue;
+
+    const result = cleanText(competition.result);
+    latest = {
+      date,
+      result: result.length > 0 ? result : null,
+    };
+  }
+
+  return latest;
+}
+
 function hasMeaningfulValue(value: unknown): boolean {
   if (value == null) return false;
   if (typeof value === "string") return value.trim().length > 0;
@@ -230,32 +361,84 @@ function hasMeaningfulValue(value: unknown): boolean {
 export function computeSignals(input: SignalInput = {}): SignalOutput {
   const sessions = Array.isArray(input.sessions) ? input.sessions : [];
   const competitions = Array.isArray(input.competitions) ? input.competitions : [];
+  const hasData = sessions.length > 0 || competitions.length > 0;
 
   const referenceDate = resolveReferenceDate(input.referenceDate);
   const weekStart = startOfWeekMondayYMD(referenceDate);
-  const weekEnd = weekStart ? addDaysYMD(weekStart, 6) : "";
-  const weeklySessionCount = sessions.filter((session) =>
-    isInCurrentWeek(session, weekStart, weekEnd),
-  ).length;
+  const weeklySessionCount = sessions.length;
   const weeklySessionCounts = collectWeeklySessionCounts(sessions);
   const weekTotals4w = Array.from({ length: 4 }, (_, index) => {
     const weekKey = addDaysYMD(weekStart, -7 * index);
     return weekKey ? (weeklySessionCounts[weekKey] ?? 0) : 0;
   });
   const trendDelta = weekTotals4w[0] - weekTotals4w[1];
-  const streak = computeCompletedWeeklyStreak(weeklySessionCounts, weekStart);
+  const streak =
+    sessions.length === 0 ? null : computeCompletedWeeklyStreak(weeklySessionCounts, weekStart);
 
   const techniqueFrequency = collectTechniqueFrequency(sessions);
   const topTechniques = rankFrequency(techniqueFrequency).slice(0, 3);
 
   const systemFrequency = collectSystemFrequency(sessions);
-  const topSystem = rankFrequency(systemFrequency)[0]?.label ?? null;
-  const topTechnique = topTechniques[0]?.label ?? null;
+  const rankedSystems = rankFrequency(systemFrequency);
+  const topSystem = rankedSystems.length > 0 ? rankedSystems[0].label : null;
+  const topTechnique = topTechniques.length > 0 ? topTechniques[0].label : null;
+  const gear = computeGearSignal(sessions);
 
   const matches = collectMatches(competitions);
+  console.log("[MATCHES RAW]", matches);
+  const normalizedMatches = matches.map((match) => ({
+    ...match,
+    matchResult: normalizeMatchResult(match.matchResult),
+  }));
+  const validMatches = normalizedMatches.filter(
+    (match) => match.matchResult === "win" || match.matchResult === "loss",
+  );
+  console.log("[MATCHES VALID]", validMatches);
+  const competitionCount = competitions.length;
   const totalMatches = matches.length;
-  const wins = matches.filter((match) => match.matchResult === "win").length;
-  const winRate = totalMatches > 0 ? clampPercent((wins / totalMatches) * 100) : 0;
+  const wins = validMatches.filter((match) => match.matchResult === "win").length;
+  const losses = validMatches.filter((match) => match.matchResult === "loss").length;
+  const completedMatchCount = validMatches.length;
+  const methodFrequency: Record<string, number> = {};
+  for (const match of normalizedMatches) {
+    increment(methodFrequency, normalizeMatchOutcome(match.outcome));
+  }
+
+  const winningMatches = validMatches.filter((match) => match.matchResult === "win");
+  const submissionWins = winningMatches.filter((match) =>
+    isSubmissionOutcome(match.outcome),
+  ).length;
+  const pointsStyleWins = winningMatches.filter((match) =>
+    isPointsStyleOutcome(match.outcome),
+  ).length;
+  const submissionRate =
+    wins === 0 ? null : clampPercent((submissionWins / wins) * 100);
+  const submissionWinTimes = winningMatches
+    .filter((match) => isSubmissionOutcome(match.outcome))
+    .map((match) => parseMatchTimeSeconds(match.submissionTime))
+    .filter((seconds): seconds is number => seconds !== null);
+  const fastestSubmission =
+    submissionWinTimes.length === 0
+      ? null
+      : formatMatchTime(Math.min(...submissionWinTimes));
+  const timedMatchSeconds = validMatches
+    .map((match) => parseMatchTimeSeconds(match.submissionTime))
+    .filter((seconds): seconds is number => seconds !== null);
+  const averageMatchTime =
+    timedMatchSeconds.length === 0
+      ? null
+      : formatMatchTime(
+          timedMatchSeconds.reduce((sum, seconds) => sum + seconds, 0) /
+            timedMatchSeconds.length,
+        );
+  const winStyle = resolveWinStyle({ submissionWins, pointsStyleWins });
+  const winRate =
+    completedMatchCount === 0 ? null : Math.round((wins / completedMatchCount) * 100);
+  const lastCompetition = resolveLastCompetition(competitions);
+  const lastCompetitionDate =
+    competitionCount === 0 ? null : lastCompetition ? lastCompetition.date : null;
+  const lastCompetitionResult =
+    competitionCount === 0 ? null : lastCompetition ? lastCompetition.result : null;
 
   const goalMet = weeklySessionCount >= WEEKLY_SESSION_GOAL;
   const confidence = clampPercent(
@@ -264,8 +447,21 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   );
 
   const hasDeclaredInput = hasMeaningfulValue(input.declaredInput);
-  const hasActivity = sessions.length > 0 || totalMatches > 0;
-  const alignment = clampPercent((hasDeclaredInput ? 50 : 0) + (hasActivity ? 50 : 0));
+  const alignment = clampPercent((hasDeclaredInput ? 50 : 0) + (hasData ? 50 : 0));
+
+  if (__DEV__) {
+    console.log("[SIGNAL GEAR]", gear);
+    console.log("[SIGNAL COMPUTE]", {
+      sessionCount: sessions.length,
+      competitionCount,
+      totalMatches,
+      completedMatchCount,
+      topSystem,
+      topTechnique,
+      weeklySessionCount,
+      winRate,
+    });
+  }
 
   return {
     frequency: {
@@ -281,6 +477,7 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
       topSystem,
       systemFrequency,
     },
+    gear,
     consistency: {
       currentWeekCount: weeklySessionCount,
       streak,
@@ -292,9 +489,22 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
     },
     competition: {
       totalMatches,
+      competitionCount,
+      completedMatchCount,
+      wins,
+      losses,
+      record: { wins, losses },
       winRate,
+      submissionRate,
+      fastestSubmission,
+      averageMatchTime,
+      winStyle,
+      methodFrequency,
+      lastCompetitionDate,
+      lastCompetitionResult,
     },
     confidence,
     alignment,
+    hasData,
   };
 }

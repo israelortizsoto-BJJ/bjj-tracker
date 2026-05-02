@@ -180,7 +180,7 @@ export default function FamilyCompetitionEditScreen() {
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
       setResultDraft(found.result);
-      setEventStatusDraft(found.eventStatus);
+      setEventStatusDraft(found.status ?? found.eventStatus);
       setFormatDraft(found.format);
       setPromoterDraft(found.organizationOrPromoter ?? "");
     } finally {
@@ -302,6 +302,7 @@ export default function FamilyCompetitionEditScreen() {
               tournamentName: name,
               eventDate,
               ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+              status: eventStatusDraft,
               eventStatus: eventStatusDraft,
               organizationOrPromoter: promoterDraft.trim()
                 ? promoterDraft.trim()
@@ -318,6 +319,7 @@ export default function FamilyCompetitionEditScreen() {
             tournamentName: name,
             eventDate,
             ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+            status: eventStatusDraft,
             eventStatus: eventStatusDraft,
             organizationOrPromoter: promoterDraft.trim()
               ? promoterDraft.trim()
@@ -378,6 +380,7 @@ export default function FamilyCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          status: eventStatusDraft,
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim()
             ? promoterDraft.trim()

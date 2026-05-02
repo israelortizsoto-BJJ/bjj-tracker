@@ -195,7 +195,7 @@ export function familyCompetitionChipForEntry(
   entry: KidCompetitionEntry,
   todayYMD: string,
 ): FamilyCompetitionChip {
-  const st = entry.eventStatus;
+  const st = entry.status ?? entry.eventStatus;
   const dateOk = YMD_RE.test(entry.eventDate);
   const isFutureOrToday =
     dateOk && compareYMD(entry.eventDate, todayYMD) >= 0;
@@ -211,6 +211,13 @@ export function familyCompetitionChipForEntry(
   if (st === "completed") {
     return {
       label: "Completed",
+      backgroundColor: "#f3f4f6",
+      textColor: "#4b5563",
+    };
+  }
+  if (entry.result) {
+    return {
+      label: "Result saved",
       backgroundColor: "#f3f4f6",
       textColor: "#4b5563",
     };
@@ -256,12 +263,10 @@ export function shouldShowFamilyCompetitionResult(
   bucket: "upcoming" | "recent",
   todayYMD: string,
 ): boolean {
-  if (bucket !== "recent") return false;
-  if (entry.eventStatus === "cancelled") return false;
-  if (entry.eventStatus === "completed") return true;
-  if (!entry.result) return false;
-  if (!YMD_RE.test(entry.eventDate)) return false;
-  return compareYMD(entry.eventDate, todayYMD) < 0;
+  void bucket;
+  void todayYMD;
+  if ((entry.status ?? entry.eventStatus) === "cancelled") return false;
+  return Boolean(entry.result);
 }
 
 /**
@@ -277,8 +282,8 @@ export function partitionFamilyCompetitionEntries(
   const recent: KidCompetitionEntry[] = [];
 
   for (const e of entries) {
-    const st = e.eventStatus;
-    if (st === "completed" || st === "cancelled") {
+    const st = e.status ?? e.eventStatus;
+    if (st === "completed" || st === "cancelled" || e.result) {
       recent.push(e);
       continue;
     }

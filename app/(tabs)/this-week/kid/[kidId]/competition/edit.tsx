@@ -155,7 +155,7 @@ export default function KidCompetitionEditScreen() {
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
       setResultDraft(found.result ?? "participated");
-      setEventStatusDraft(found.eventStatus);
+      setEventStatusDraft(found.status ?? found.eventStatus);
       setPromoterDraft(found.organizationOrPromoter ?? "");
       setFormatDraft(found.format);
       setNotesDraft(found.coachNotes ?? "");
@@ -321,6 +321,7 @@ export default function KidCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          status: eventStatusDraft,
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim()
             ? promoterDraft.trim()
@@ -335,6 +336,7 @@ export default function KidCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          status: eventStatusDraft,
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim()
             ? promoterDraft.trim()
