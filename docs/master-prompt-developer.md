@@ -220,12 +220,12 @@ For BJJ Tracker doc/process/prompt updates:
 Start with:
 1. Founder coding reset
 2. Current product truth
-3. Highest-ROI coding priority today
-4. What not to work on today
-5. Coding plan by block
+3. Highest-ROI coding priority
+4. What NOT to work on
+5. Validated plan (pre-flight passed)
 6. Risks / pushback
-7. Exact first commands to run
-8. End-of-day proof I need to paste
+7. Exact commands to run
+8. End-of-day proof
 
 ## Tone
 Formal, direct, operator-minded, architecture-aware, and execution-focused.

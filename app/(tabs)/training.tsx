@@ -16,6 +16,7 @@ import {
   PanResponder,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
@@ -31,18 +32,7 @@ import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
 import type { TechniqueIndexItem } from "../../src/fundamentals/types";
 
 import type { Session } from "../../src/types";
-
-import {
-  computeCompletedWeekStreak,
-  computeCurrentFocus14d,
-  computeGiNoGi14d,
-  computeTopSystemThisWeek,
-  computeTopTechniqueThisWeek,
-  computeWeekCount,
-  computeWeekTotals,
-} from "../../src/domain/metrics";
-
-
+import { useSignals } from "../../src/hooks/useSignals";
 
 type PreviewState =
   | null
@@ -315,6 +305,38 @@ const INSIGHT_CARD_CONTAINER = {
   borderColor: UI.border,
   backgroundColor: UI.bgCard,
 } as const;
+
+const styles = StyleSheet.create({
+  trainingFilterRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 2,
+  },
+  trainingFilterButton: {
+    flex: 1,
+    minHeight: 42,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  trainingFilterButtonActive: {
+    backgroundColor: "#edf2ff",
+    borderColor: "#d1d5db",
+  },
+  trainingFilterButtonInactive: {
+    backgroundColor: "#ffffff",
+    borderColor: "#e5e7eb",
+  },
+  trainingFilterButtonText: {
+    color: "#111827",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+});
 // ------------------------------
 // 3) Component setup (state + navigation + derived constants)
 // ------------------------------
@@ -554,51 +576,60 @@ const weekSessionsRaw = useMemo(() => {
   );
 
 }, [weekDates, sessionsByDate]);
-    const topSystemThisWeek = useMemo(() => {
-  return computeTopSystemThisWeek(weekSessionsRaw);
-}, [weekSessionsRaw]);
+const signals = useSignals({
+  sessions: weekSessionsRaw,
+});
 
-  const topTechniqueThisWeek = useMemo(() => {
-  return computeTopTechniqueThisWeek(weekSessionsRaw);
-}, [weekSessionsRaw]);
-  const WEEKLY_GOAL = 3;
-  const currentWeekStartYMD = dateToYMD(startOfWeekMonday(today));
-  const completedWeekStreak = useMemo(() => {
-  return computeCompletedWeekStreak(
-    sessionsByDate,
-    currentWeekStartYMD,
-    WEEKLY_GOAL
-  );
-}, [sessionsByDate, currentWeekStartYMD]);
+const topSystemThisWeek = signals.systems.topSystem
+  ? {
+      systemId: signals.systems.topSystem,
+      count: signals.systems.systemFrequency[signals.systems.topSystem] ?? 0,
+    }
+  : null;
 
- const currentWeekCount = useMemo(() => {
-  return computeWeekCount(sessionsByDate, currentWeekStartYMD);
-}, [sessionsByDate, currentWeekStartYMD]);
+const topTechniqueSignal = signals.techniques.topTechniques[0];
+
+const topTechniqueThisWeek = topTechniqueSignal
+  ? {
+      techniqueId: topTechniqueSignal.key,
+      count: topTechniqueSignal.count,
+    }
+  : null;
 
 
 const displayWeekStreak =
-  completedWeekStreak + (currentWeekCount >= WEEKLY_GOAL ? 1 : 0);
+  signals.consistency.streak + (signals.consistency.goalMet ? 1 : 0);
 
 
-const thisWeekTotal = useMemo(() => {
-  return weekSessionsRaw.length;
-}, [weekSessionsRaw]);
-const currentFocusSystem14d = useMemo(() => {
-  return computeCurrentFocus14d(sessionsByDate, today);
-}, [sessionsByDate, today]);
+const thisWeekTotal = signals.frequency.weeklySessionCount;
 
-const giNoGi14d = useMemo(() => {
-  return computeGiNoGi14d(sessionsByDate, today);
-}, [sessionsByDate, today]);
-const weekTotals4w = useMemo(() => {
-  return computeWeekTotals(sessionsByDate, currentWeekStartYMD, 4);
-}, [sessionsByDate, currentWeekStartYMD]);
+useEffect(() => {
+  console.log("[SIGNAL VALIDATION]", {
+    old_topSystem: topSystemThisWeek?.systemId ?? null,
+    new_topSystem: signals.systems.topSystem ?? null,
+    old_topTechnique: topTechniqueThisWeek?.techniqueId ?? null,
+    new_topTechnique: signals.techniques.topTechniques[0]?.key ?? null,
+    old_weekCount: thisWeekTotal ?? null,
+    new_weekCount: signals.frequency.weeklySessionCount ?? null,
+    old_goalMet: displayWeekStreak > 0,
+    new_goalMet: signals.consistency.goalMet,
+  });
+}, [signals]);
 
-const trendDelta = useMemo(() => {
-  const thisW = weekTotals4w[0] ?? 0;
-  const lastW = weekTotals4w[1] ?? 0;
-  return thisW - lastW;
-}, [weekTotals4w]);
+const currentFocusSignal = signals.patterns.topSystem;
+
+const currentFocusSystem14d = currentFocusSignal
+  ? {
+      systemId: currentFocusSignal,
+      count: signals.systems.systemFrequency[currentFocusSignal] ?? 0,
+    }
+  : null;
+
+const giNoGi14d = null as { primary: string; gi: number; nogi: number } | null;
+
+const weekTotals4w = [signals.consistency.currentWeekCount, 0];
+
+const trendDelta = weekTotals4w[0] - weekTotals4w[1];
 
 const insightCards = [
   // Card 0: Narrative Intro
@@ -882,11 +913,11 @@ const weekHasVisibleSessions = useMemo(() => {
 
 const renderTitleAndIntro = () => (
   <>
-    <Text style={{ fontSize: 24, fontWeight: "700", color: UI.textPrimary, letterSpacing: 0.3 }}>
-      Training Calendar
+    <Text style={{ fontSize: 24, fontWeight: "800", color: UI.textPrimary, letterSpacing: 0 }}>
+      Day-based session log
     </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 15, marginTop: 4 }}>
-      Tap a date to view sessions, or add a new one for that day.
+    <Text style={{ color: UI.textSecondary, fontSize: 15, marginTop: 4, lineHeight: 21 }}>
+      Record one session with multiple techniques, notes, and media.
     </Text>
   </>
 );
@@ -1055,6 +1086,23 @@ const renderNewSessionCTA = () => (
   </Text>
 </Pressable>    
       {renderTitleAndIntro()}
+
+      <View style={styles.trainingFilterRow}>
+        {(["Gi", "No-Gi", "System"] as const).map((label, index) => (
+          <Pressable
+            key={label}
+            onPress={() => {}}
+            style={[
+              styles.trainingFilterButton,
+              index === 0
+                ? styles.trainingFilterButtonActive
+                : styles.trainingFilterButtonInactive,
+            ]}
+          >
+            <Text style={styles.trainingFilterButtonText}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
 
       <Text style={[SECTION_LABEL, { marginTop: 4 }]}>
         LOG TRAINING
@@ -1597,4 +1645,3 @@ const renderNewSessionCTA = () => (
 </View>
 );
 }
-

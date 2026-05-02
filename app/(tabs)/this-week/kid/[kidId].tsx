@@ -910,6 +910,10 @@ export default function KidDetailScreen() {
     const journeyLine =
       "From class or program notes when you add them, otherwise a short encouragement line.";
 
+    const getSafeHeading = (index: number) => {
+      return READ_TOGETHER_TITLE_ORDER[index] ?? "Additional focus";
+    };
+
     return [
       {
         heading: READ_TOGETHER_TITLE_ORDER[0],
@@ -927,12 +931,12 @@ export default function KidDetailScreen() {
         status: matsLine,
       },
       {
-        heading: READ_TOGETHER_TITLE_ORDER[3],
+        heading: getSafeHeading(3),
         badge: "Optional" as const,
         status: studyLine,
       },
       {
-        heading: READ_TOGETHER_TITLE_ORDER[4],
+        heading: getSafeHeading(4),
         badge: "Auto" as const,
         status: journeyLine,
       },
@@ -2447,4 +2451,3 @@ export default function KidDetailScreen() {
     </>
   );
 }
-

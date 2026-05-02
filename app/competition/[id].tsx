@@ -471,8 +471,6 @@ export function MatchBlock({
           editable={recordingState === "idle" || recordingState === "done"}
           autoFocus={false}
           multiline={true}
-          minHeight={120}
-          maxHeight={120}
           scrollEnabled={true}
           style={{
             marginTop: 8,

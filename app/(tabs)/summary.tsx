@@ -1,1 +1,1 @@
-export { default } from "@/src/features/summary_v2/SummaryScreenV2";
+export { default } from "@/src/features/summary/SummaryScreen";

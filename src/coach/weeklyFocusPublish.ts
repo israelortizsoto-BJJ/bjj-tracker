@@ -28,7 +28,7 @@ export function kidWeeklyFocusToPublishPayload(
   weekStartYMD: string,
 ): CoachWeeklySyncPublishBody {
   console.log("[PAYLOAD INPUT ENTRY]", {
-    mission: entry.missionResourceUrl,
+    mission: entry.familyResourceUrl,
     family: entry.familyResourceUrl,
   });
 
@@ -41,13 +41,13 @@ export function kidWeeklyFocusToPublishPayload(
     bodyRaw ||
     "Your coach highlighted this week’s focus in class. Use the title above as the main cue, and ask your coach if you want more detail.";
 
-  const publishedMissionUrl = normalizeFamilyResourceUrl(entry.missionResourceUrl);
+  const publishedMissionUrl = normalizeFamilyResourceUrl(entry.familyResourceUrl);
   const publishedMissionLabel = publishedMissionUrl
-    ? normalizePublishedLabel(entry.missionResourceLabel) ??
+    ? normalizePublishedLabel(entry.familyResourceLabel) ??
       defaultFamilyLinkButtonLabel(publishedMissionUrl)
     : undefined;
   console.log("[MISSION DEBUG FIX]", {
-    rawMission: entry.missionResourceUrl,
+    rawMission: entry.familyResourceUrl,
     publishedMissionUrl,
   });
   const publishedFamilyUrl = normalizeFamilyResourceUrl(entry.familyResourceUrl);
@@ -68,7 +68,7 @@ export function kidWeeklyFocusToPublishPayload(
   });
 
   if (__DEV__) {
-    const rawMission = (entry.missionResourceUrl ?? "").trim();
+    const rawMission = (entry.familyResourceUrl ?? "").trim();
     const rawFam = (entry.familyResourceUrl ?? "").trim();
     const rawRecap = (entry.familyCoachRecapNote ?? "").trim();
     console.log("[bjj-weekly-publish-payload]", {
