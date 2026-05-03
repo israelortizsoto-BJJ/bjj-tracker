@@ -1,4 +1,212 @@
-# BJJ Tracker — Dev Handoff
+# BJJ Tracker - Dev Handoff Notes
+
+## Date: 2026-05-02
+
+------------------------------------------------------------------------
+
+## 🚨 CONTEXT (CRITICAL)
+
+Today's work was NOT a bug fix.
+
+We changed the **data model and system contract** between: - Coach
+Editor - Publish Payload - Worker - Parent Render
+
+Core shift: 👉 **Mission and Study are now independent fields**
+
+------------------------------------------------------------------------
+
+## ✅ WHAT WAS DONE
+
+### 1. MOCK (Design Truth)
+
+-   Defined separation:
+    -   Mission = primary intent
+    -   Study = supporting content
+
+------------------------------------------------------------------------
+
+### 2. TRANSLATION SPEC (System Contract)
+
+-   No fallback between Mission and Study
+-   No shared source fields
+-   Payload must reflect:
+    -   missionResourceUrl
+    -   familyResourceUrl
+
+------------------------------------------------------------------------
+
+### 3. SURFACE DECOMPOSITION
+
+-   Editor: new Mission inputs
+-   Store: extended data model
+-   Publish layer: corrected mapping
+
+------------------------------------------------------------------------
+
+### 4. 🔍 REPO VERIFICATION
+
+Confirmed: - weeklyFocusPublish.ts fixed - coachKidStore persists both
+fields - types updated correctly
+
+------------------------------------------------------------------------
+
+### 5. ISOLATED BUILD
+
+-   Mission inputs added independently
+-   No reuse of Study logic
+
+------------------------------------------------------------------------
+
+### 6. INTEGRATION LAYER
+
+-   Publish payload now clean:
+    -   Mission comes ONLY from missionResourceUrl
+    -   Study comes ONLY from familyResourceUrl
+
+------------------------------------------------------------------------
+
+### 7. VALIDATION (Partial --- QA pending)
+
+-   TypeScript passes
+-   Logs confirm separation
+-   UI wired correctly
+
+------------------------------------------------------------------------
+
+### 8. CLEANUP / MIGRATION
+
+-   Removed implicit fallback behavior
+
+------------------------------------------------------------------------
+
+### 9. DEAD CODE VALIDATION
+
+-   Old coupling paths effectively neutralized
+-   Need follow-up scan to confirm zero references
+
+------------------------------------------------------------------------
+
+## ⚠️ CURRENT RISK
+
+1.  Parent rendering behavior not fully controlled
+2.  Clear behavior relies on omission (not explicit clear signal)
+3.  Editor allows empty Mission → must verify no stale data
+
+------------------------------------------------------------------------
+
+## 🧪 QA REQUIRED (BLOCKER FOR COMMIT)
+
+Run:
+
+1.  Study only
+2.  Mission only
+3.  Both
+4.  Clear Mission after set
+
+Validate: - Payload correctness - Parent UI accuracy - No stale values
+
+------------------------------------------------------------------------
+
+## 🎯 NEXT STEPS (5/3/26)
+
+### 🔥 PRIORITY 1 --- QA + COMMIT
+
+-   Run all 4 QA cases
+-   Validate logs
+-   Commit ONLY if clean
+
+------------------------------------------------------------------------
+
+### 🔥 PRIORITY 2 --- PARENT DISPLAY LOGIC
+
+Define explicitly: - If Mission exists → show Mission - If not → show
+Study - No ambiguity
+
+------------------------------------------------------------------------
+
+### 🔥 PRIORITY 3 --- CLEAR BEHAVIOR (HARDEN)
+
+Decide: - Omit field vs explicit null - Align worker + client behavior
+
+------------------------------------------------------------------------
+
+### 🔥 PRIORITY 4 --- WORKER VALIDATION
+
+-   Confirm KV behavior:
+    -   Does omission retain old value?
+    -   Do we need explicit clearing?
+
+------------------------------------------------------------------------
+
+### 🔥 PRIORITY 5 --- DEAD CODE SWEEP
+
+-   Search for any:
+    -   familyResourceUrl used as mission
+    -   fallback logic
+-   Remove safely
+
+------------------------------------------------------------------------
+
+## 📋 ASANA STYLE RECAP
+
+### Completed
+
+-   Separate Mission vs Study data model
+-   Update publish payload mapping
+-   Extend store + types
+-   Add Mission UI inputs
+
+------------------------------------------------------------------------
+
+### In Progress
+
+-   QA validation across flows
+-   Parent rendering consistency
+
+------------------------------------------------------------------------
+
+### Blocked
+
+-   Commit pending QA results
+
+------------------------------------------------------------------------
+
+### Next Actions
+
+-   Run QA scenarios
+-   Validate logs
+-   Commit + push
+-   Define parent display rule
+
+------------------------------------------------------------------------
+
+## 🧠 KEY PRINCIPLE
+
+This system now follows:
+
+👉 Intent (Mission) ≠ Content (Study)
+
+If this breaks again: → it will be from hidden coupling
+
+------------------------------------------------------------------------
+
+## END STATE GOAL
+
+-   Coach sets Mission intentionally
+-   Study supports it
+-   Parent sees correct priority
+-   No overwrite, no fallback, no ambiguity
+
+------------------------------------------------------------------------
+
+
+
+
+
+
+
+
+
 ## Date: 2026-05-01
 
 ---

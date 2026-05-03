@@ -1,6 +1,8 @@
+export type SyncedCoachOutcome = "not_yet" | "close" | "hit";
+
 /**
  * Remote weekly message published by coach devices; parents read-only in MVP.
- * Explicit fields only — no coach private notes / outcomes.
+ * Explicit fields only — no coach private notes.
  */
 export type SyncedWeeklyMessagePayload = {
   weekStartYMD: string;
@@ -20,6 +22,8 @@ export type SyncedWeeklyMessagePayload = {
   familyResourceLabel?: string;
   /** Optional parent-safe recap of what coach emphasized with the athlete (not private check-ins). */
   familyCoachRecapNote?: string;
+  /** Parent-safe coach progress signal, mapped from the coach weekly check-in. */
+  coachOutcome?: SyncedCoachOutcome;
   updatedAt: string;
 };
 
@@ -86,6 +90,8 @@ export type CoachWeeklySyncPublishBody = {
   familyResourceLabel?: string | null;
   /** App sends `""` to clear; omitting the key is treated as “keep previous” on the worker. */
   familyCoachRecapNote?: string;
+  /** Parent-safe coach progress signal, mapped from the coach weekly check-in. */
+  coachOutcome?: SyncedCoachOutcome;
   /** When set, worker stores this snapshot under that athlete id instead of invite-level `weekly`. */
   sharedAthleteId?: string;
 };

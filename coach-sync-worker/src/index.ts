@@ -19,8 +19,11 @@ type WeeklyDoc = {
   familyResourceUrl?: string | null;
   familyResourceLabel?: string | null;
   familyCoachRecapNote?: string;
+  coachOutcome?: CoachOutcome;
   updatedAt: string;
 };
+
+type CoachOutcome = "not_yet" | "close" | "hit";
 
 type SharedAthlete = {
   id: string;
@@ -69,6 +72,7 @@ const MAX_COMPETITIONS_PER_SESSION = 400;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
 const EVENT_STATUS_SET = new Set<CompetitionEventStatus>(["upcoming", "completed", "cancelled", "unknown"]);
 const FORMAT_SET = new Set<CompetitionFormat>(["gi", "nogi", "both"]);
+const COACH_OUTCOME_SET = new Set<CoachOutcome>(["not_yet", "close", "hit"]);
 
 function json(data: unknown, status = 200, cors = true): Response {
   const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8" };
@@ -82,6 +86,15 @@ function json(data: unknown, status = 200, cors = true): Response {
 
 function error(message: string, status: number, cors = true): Response {
   return json({ error: message }, status, cors);
+}
+
+/** Prevents `{ ...existing, ...next }` from overwriting with `undefined` (which would drop stored link fields on merge). */
+function omitUndefinedShallow<T extends Record<string, unknown>>(obj: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as Partial<T>;
 }
 
 function randomHex(bytes: number): string {
@@ -228,6 +241,10 @@ function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
   const familyCoachRecapNote = familyCoachRecapRaw
     ? familyCoachRecapRaw.slice(0, 2000)
     : undefined;
+  const coachOutcome =
+    typeof o.coachOutcome === "string" && COACH_OUTCOME_SET.has(o.coachOutcome as CoachOutcome)
+      ? (o.coachOutcome as CoachOutcome)
+      : undefined;
   const weekly: WeeklyDoc = {
     weekStartYMD,
     headline,
@@ -235,6 +252,7 @@ function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
     ...(classLine ? { classLine } : {}),
     ...(programLine ? { programLine } : {}),
     ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
+    ...(coachOutcome ? { coachOutcome } : {}),
     updatedAt,
   };
   const missionRaw =
@@ -607,15 +625,26 @@ export default {
             : undefined;
         const missionIn = readMissionUrlFromWeeklyPutBody(b);
         const missionResourceUrl = parseOptionalPublishedUrl(missionIn.raw);
+        const hasMissionResourceLabelKey = Object.prototype.hasOwnProperty.call(b, "missionResourceLabel");
         const missionResourceLabel =
-          typeof b.missionResourceLabel === "string" && b.missionResourceLabel.trim()
+          hasMissionResourceLabelKey &&
+          typeof b.missionResourceLabel === "string" &&
+          b.missionResourceLabel.trim()
             ? b.missionResourceLabel.trim().slice(0, 120)
             : undefined;
         const familyIn = readFamilyUrlFromWeeklyPutBody(b);
         const familyResourceUrl = parseOptionalPublishedUrl(familyIn.raw);
+        const hasFamilyResourceLabelKey = Object.prototype.hasOwnProperty.call(b, "familyResourceLabel");
         const familyResourceLabel =
-          typeof b.familyResourceLabel === "string" && b.familyResourceLabel.trim()
+          hasFamilyResourceLabelKey &&
+          typeof b.familyResourceLabel === "string" &&
+          b.familyResourceLabel.trim()
             ? b.familyResourceLabel.trim().slice(0, 120)
+            : undefined;
+        const hasCoachOutcomeKey = Object.prototype.hasOwnProperty.call(b, "coachOutcome");
+        const coachOutcome =
+          typeof b.coachOutcome === "string" && COACH_OUTCOME_SET.has(b.coachOutcome as CoachOutcome)
+            ? (b.coachOutcome as CoachOutcome)
             : undefined;
 
         if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStartYMD)) {
@@ -626,6 +655,14 @@ export default {
         }
         if (bodyText.length > 8000) {
           return error("body too long (max 8000 chars)", 400);
+        }
+        if (
+          hasCoachOutcomeKey &&
+          b.coachOutcome != null &&
+          b.coachOutcome !== "" &&
+          !coachOutcome
+        ) {
+          return error("coachOutcome invalid", 400);
         }
 
         const rec = await readSession(env.SESSIONS, token);
@@ -666,12 +703,15 @@ export default {
           ...(classLine ? { classLine } : {}),
           ...(programLine ? { programLine } : {}),
           ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
+          ...(coachOutcome ? { coachOutcome } : {}),
           updatedAt: now,
         };
         if (missionIn.hasInBody) {
           if (missionResourceUrl !== undefined) {
             weeklyFromPut.missionResourceUrl = missionResourceUrl;
-            weeklyFromPut.missionResourceLabel = missionResourceLabel ?? null;
+            if (hasMissionResourceLabelKey) {
+              weeklyFromPut.missionResourceLabel = missionResourceLabel ?? null;
+            }
           } else {
             console.log("[WORKER WARNING] missionResourceUrl rejected but existing value preserved", {
               weekStartYMD,
@@ -682,7 +722,9 @@ export default {
         if (familyIn.hasInBody) {
           if (familyResourceUrl !== undefined) {
             weeklyFromPut.familyResourceUrl = familyResourceUrl;
-            weeklyFromPut.familyResourceLabel = familyResourceLabel ?? null;
+            if (hasFamilyResourceLabelKey) {
+              weeklyFromPut.familyResourceLabel = familyResourceLabel ?? null;
+            }
           } else {
             console.log("[WORKER WARNING] familyResourceUrl rejected but existing value preserved", {
               weekStartYMD,
@@ -699,7 +741,7 @@ export default {
           ...(existingWeeklyForMerge && typeof existingWeeklyForMerge === "object"
             ? { ...existingWeeklyForMerge }
             : {}),
-          ...weeklyFromPut,
+          ...omitUndefinedShallow(weeklyFromPut as Record<string, unknown>),
           updatedAt: now,
         };
         if (hasFamilyCoachRecapKey) {
@@ -710,6 +752,11 @@ export default {
           }
         } else {
           delete mergedWeekly.familyCoachRecapNote;
+        }
+        if (coachOutcome) {
+          mergedWeekly.coachOutcome = coachOutcome;
+        } else {
+          delete mergedWeekly.coachOutcome;
         }
 
         console.log("[WORKER FINAL WRITE]", mergedWeekly);

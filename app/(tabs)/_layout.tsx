@@ -19,6 +19,7 @@ export default function TabLayout() {
     <Tabs screenOptions={{ headerShown: true }}>
       <Tabs.Screen name="summary" options={{ title: "Summary" }} />
       <Tabs.Screen name="this-week" options={{ title: "This Week", headerShown: false }} />
+      <Tabs.Screen name="coach/index" options={{ title: "Coach", headerShown: false }} />
       <Tabs.Screen name="training" options={{ title: "Training" }} />
       <Tabs.Screen name="learn" options={{ title: "Learn", headerShown: false }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
@@ -27,9 +28,8 @@ export default function TabLayout() {
       <Tabs.Screen name="gear" options={HIDDEN} />
       <Tabs.Screen name="health" options={HIDDEN} />
       <Tabs.Screen name="training/[id]" options={HIDDEN} />
+      <Tabs.Screen name="coach/[athleteId]" options={HIDDEN} />
       <Tabs.Screen name="profile/dev-settings" options={HIDDEN} />
-      <Tabs.Screen name="profile/coaches" options={HIDDEN} />
-      <Tabs.Screen name="profile/coaches/index" options={HIDDEN} />
     </Tabs>
   );
 }

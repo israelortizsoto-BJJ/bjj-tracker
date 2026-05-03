@@ -29,9 +29,15 @@ export type KidWeeklyFocusEntry = {
   // Keep these optional and pilot-only; can be expanded later.
   coachOutcome?: CoachOutcome;
   coachNotes?: string;
-  /** Published with the weekly note when the coach taps Publish (https recommended). */
+  /**
+   * Mission card link (Read together) — published independently of Study.
+   * Must not be derived from `familyResourceUrl`.
+   */
+  missionResourceUrl?: string;
+  missionResourceLabel?: string;
+  /** Study-the-move / family resource link (https recommended). */
   familyResourceUrl?: string;
-  /** Short button label on parent phones (optional). */
+  /** Short button label on parent phones for Study (optional). */
   familyResourceLabel?: string;
   /**
    * Optional parent-safe summary of what the coach worked on with the kid (published with the weekly note).

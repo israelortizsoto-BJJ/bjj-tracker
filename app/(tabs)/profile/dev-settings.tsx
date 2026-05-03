@@ -1,6 +1,14 @@
 import { Stack, router, type Href } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Pressable, ScrollView, Switch, Text, View } from "react-native";
+import {
+  Alert,
+  Button,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 
 import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
 import {
@@ -8,7 +16,11 @@ import {
   type DevFlagKey,
   type DevFlags,
 } from "../../../src/config/flags";
-import { isDev } from "../../../src/config/runtime";
+import {
+  getAppVariant,
+  isDev,
+  showInternalProfileControls,
+} from "../../../src/config/runtime";
 import {
   clearCoachShareDemo,
   seedCoachShareDemo,
@@ -17,6 +29,8 @@ import {
   clearCoachKidsDemo,
   seedCoachKidsDemo,
 } from "../../../src/dev/seedCoachKids";
+import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
+import type { DeviceRole } from "../../../src/storage/deviceRoleStore";
 
 function FlagRow({
   label,
@@ -103,19 +117,62 @@ function DevActionButton({
 }
 
 export default function DevSettingsScreen() {
+  const canShowDevSettings = showInternalProfileControls();
+  const { role, setRole: setDeviceRole } = useDeviceRole();
   const [ready, setReady] = useState(false);
   const [flags, setFlags] = useState<DevFlags>(DEFAULT_DEV_FLAGS);
 
+  console.log("[DEV SETTINGS DEBUG]", {
+    isDev: isDev(),
+    showInternalProfileControls: showInternalProfileControls(),
+    appVariant: getAppVariant?.(),
+  });
+
   useEffect(() => {
     (async () => {
-      if (!isDev()) return;
+      if (!canShowDevSettings) {
+        setReady(true);
+        return;
+      }
       const loaded = await loadDevFlags();
       setFlags(loaded);
       setReady(true);
     })();
-  }, []);
+  }, [canShowDevSettings]);
 
-  if (!isDev()) return null;
+  if (!canShowDevSettings) {
+    return (
+      <>
+        <Stack.Screen options={{ title: "Developer Settings" }} />
+        <View style={{ padding: 16 }}>
+          <Text>
+            DEBUG:
+            {"\n"}isDev: {String(isDev())}
+            {"\n"}showInternal: {String(showInternalProfileControls())}
+          </Text>
+          <View style={{ marginTop: 20 }}>
+            <Text>FORCED ROLE CONTROLS (DEBUG)</Text>
+            <Button
+              title="Switch to Coach"
+              onPress={() => setDeviceRole("coach")}
+            />
+            <Button
+              title="Switch to Parent"
+              onPress={() => setDeviceRole("parent")}
+            />
+          </View>
+          <Text style={{ fontSize: 24, fontWeight: "700" }}>Dev Settings</Text>
+          <Text style={{ marginTop: 12, fontSize: 16, opacity: 0.7 }}>
+            Dev settings are not available
+          </Text>
+        </View>
+      </>
+    );
+  }
+
+  async function switchRole(next: DeviceRole) {
+    await setDeviceRole(next);
+  }
 
   async function setFlag(key: DevFlagKey, next: boolean) {
     const updated: DevFlags = { ...flags, [key]: next };
@@ -174,6 +231,43 @@ export default function DevSettingsScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
       >
+        <Text>
+          DEBUG:
+          {"\n"}isDev: {String(isDev())}
+          {"\n"}showInternal: {String(showInternalProfileControls())}
+        </Text>
+        <View style={{ marginTop: 20 }}>
+          <Text>FORCED ROLE CONTROLS (DEBUG)</Text>
+          <Button
+            title="Switch to Coach"
+            onPress={() => setDeviceRole("coach")}
+          />
+          <Button
+            title="Switch to Parent"
+            onPress={() => setDeviceRole("parent")}
+          />
+        </View>
+        <Text style={{ fontSize: 24, fontWeight: "700" }}>Dev Settings</Text>
+        <Text style={{ marginTop: 8, fontSize: 14, opacity: 0.7 }}>
+          Current role: {role ?? "not selected"}
+        </Text>
+
+        <View style={{ marginTop: 18 }}>
+          <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+            ROLE SWITCHER
+          </Text>
+          <DevActionButton
+            title="Switch to Coach"
+            subtitle="Use coach-facing navigation and tools"
+            onPress={() => switchRole("coach")}
+          />
+          <DevActionButton
+            title="Switch to Parent"
+            subtitle="Use parent-facing This Week experience"
+            onPress={() => switchRole("parent")}
+          />
+        </View>
+
         <Text style={{ fontSize: 14, opacity: 0.7, marginBottom: 12 }}>
           Dev-only toggles. These do not appear in TestFlight builds.
         </Text>

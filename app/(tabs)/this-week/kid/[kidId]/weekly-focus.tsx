@@ -4,6 +4,7 @@ import { Alert, Keyboard, Platform, Pressable, Text, TextInput, View } from "rea
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useFocusEffect } from "@react-navigation/native";
 
+import { normalizeFamilyResourceUrl } from "../../../../../src/coach/familyResourceUrl";
 import {
   appendKidWeeklyFocus,
   getKidWeeklyFocusEntryById,
@@ -12,6 +13,16 @@ import {
   updateKidWeeklyFocusFocusById,
 } from "../../../../../src/storage/coachKidStore";
 import { TEMPLATE_CONTENT } from "../../template-preview";
+
+function isHttpsMissionUrl(raw: string): boolean {
+  const n = normalizeFamilyResourceUrl(raw);
+  if (!n) return false;
+  try {
+    return new URL(n).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -72,6 +83,8 @@ export default function KidWeeklyFocusScreen() {
   // Templates selection
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [referenceUrl, setReferenceUrl] = useState<string>("");
+  const [missionResourceUrl, setMissionResourceUrl] = useState<string>("");
+  const [missionResourceLabel, setMissionResourceLabel] = useState<string>("");
   const [familyResourceUrl, setFamilyResourceUrl] = useState<string>("");
   const [familyResourceLabel, setFamilyResourceLabel] = useState<string>("");
   const [familyCoachRecapNote, setFamilyCoachRecapNote] = useState<string>("");
@@ -104,6 +117,8 @@ export default function KidWeeklyFocusScreen() {
           setTab("templates");
           setSelectedTemplateId(existing.templateId);
           setReferenceUrl(existing.youtubeUrl ?? "");
+          setMissionResourceUrl(existing.missionResourceUrl ?? "");
+          setMissionResourceLabel(existing.missionResourceLabel ?? "");
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
           setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
@@ -112,6 +127,8 @@ export default function KidWeeklyFocusScreen() {
           setCustomTitle(existing.title);
           setCustomNote(existing.note ?? "");
           setCustomYoutubeUrl(existing.youtubeUrl ?? "");
+          setMissionResourceUrl(existing.missionResourceUrl ?? "");
+          setMissionResourceLabel(existing.missionResourceLabel ?? "");
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
           setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
@@ -120,6 +137,8 @@ export default function KidWeeklyFocusScreen() {
         setTab("templates");
         setSelectedTemplateId("guard-pull-defense-knee-middle");
         setReferenceUrl("");
+        setMissionResourceUrl("");
+        setMissionResourceLabel("");
         setFamilyResourceUrl("");
         setFamilyResourceLabel("");
         setFamilyCoachRecapNote("");
@@ -145,6 +164,14 @@ export default function KidWeeklyFocusScreen() {
     }
 
     try {
+      const missionUrlTrim = missionResourceUrl.trim();
+      if (missionUrlTrim && !isHttpsMissionUrl(missionUrlTrim)) {
+        Alert.alert("Invalid Mission URL", "Mission links must be a valid https URL.");
+        return;
+      }
+      const missionUrl = missionUrlTrim ? missionUrlTrim : undefined;
+      const missionLabel = missionResourceLabel.trim() ? missionResourceLabel.trim() : undefined;
+
       if (editEntryId) {
         if (tab === "templates") {
           if (!selectedTemplateId) {
@@ -165,6 +192,8 @@ export default function KidWeeklyFocusScreen() {
             title: t.title,
             metadata: t.metadata,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+            missionResourceUrl: missionUrl,
+            missionResourceLabel: missionLabel,
             familyResourceUrl: famUrl ? famUrl : undefined,
             familyResourceLabel: famLabel ? famLabel : undefined,
             familyCoachRecapNote,
@@ -184,6 +213,8 @@ export default function KidWeeklyFocusScreen() {
             title: trimmedTitle,
             note: trimmedNote ? trimmedNote : undefined,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+            missionResourceUrl: missionUrl,
+            missionResourceLabel: missionLabel,
             familyResourceUrl: famUrl ? famUrl : undefined,
             familyResourceLabel: famLabel ? famLabel : undefined,
             familyCoachRecapNote,
@@ -209,6 +240,8 @@ export default function KidWeeklyFocusScreen() {
           title: t.title,
           metadata: t.metadata,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+          missionResourceUrl: missionUrl,
+          missionResourceLabel: missionLabel,
           familyResourceUrl: famUrl ? famUrl : undefined,
           familyResourceLabel: famLabel ? famLabel : undefined,
           familyCoachRecapNote: recap ? recap : undefined,
@@ -233,6 +266,8 @@ export default function KidWeeklyFocusScreen() {
           title: trimmedTitle,
           note: trimmedNote ? trimmedNote : undefined,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
+          missionResourceUrl: missionUrl,
+          missionResourceLabel: missionLabel,
           familyResourceUrl: famUrl ? famUrl : undefined,
           familyResourceLabel: famLabel ? famLabel : undefined,
           familyCoachRecapNote: recap ? recap : undefined,
@@ -254,6 +289,8 @@ export default function KidWeeklyFocusScreen() {
     customTitle,
     customNote,
     customYoutubeUrl,
+    missionResourceUrl,
+    missionResourceLabel,
     familyResourceUrl,
     familyResourceLabel,
     familyCoachRecapNote,
@@ -442,6 +479,53 @@ export default function KidWeeklyFocusScreen() {
               }}
             />
             <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+              Mission (Optional)
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Primary focus for the athlete this week.
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Optional family link · https only · publishes after you publish from the kid screen.
+            </Text>
+            <TextInput
+              value={missionResourceUrl}
+              onChangeText={setMissionResourceUrl}
+              onFocus={bumpScrollToFocusedInput}
+              placeholder="https://…"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={{
+                marginTop: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+              }}
+            />
+            <TextInput
+              value={missionResourceLabel}
+              onChangeText={setMissionResourceLabel}
+              onFocus={bumpScrollToFocusedInput}
+              placeholder="Short label (optional)"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="sentences"
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+              }}
+            />
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
               Study the move
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
@@ -450,6 +534,7 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={familyResourceUrl}
               onChangeText={setFamilyResourceUrl}
+              onFocus={bumpScrollToFocusedInput}
               placeholder="https://…"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="none"
@@ -469,6 +554,7 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={familyResourceLabel}
               onChangeText={setFamilyResourceLabel}
+              onFocus={bumpScrollToFocusedInput}
               placeholder="Short label (e.g. Drill video, Academy schedule)"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="sentences"
@@ -596,6 +682,53 @@ export default function KidWeeklyFocusScreen() {
               }}
             />
             <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
+              Mission (Optional)
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Primary focus for the athlete this week.
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Optional family link · https only · publishes after you publish from the kid screen.
+            </Text>
+            <TextInput
+              value={missionResourceUrl}
+              onChangeText={setMissionResourceUrl}
+              onFocus={bumpScrollToFocusedInput}
+              placeholder="https://…"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              style={{
+                marginTop: 6,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+              }}
+            />
+            <TextInput
+              value={missionResourceLabel}
+              onChangeText={setMissionResourceLabel}
+              onFocus={bumpScrollToFocusedInput}
+              placeholder="Short label (optional)"
+              placeholderTextColor={UI.textSecondary}
+              autoCapitalize="sentences"
+              style={{
+                marginTop: 8,
+                paddingVertical: 10,
+                paddingHorizontal: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#6ee7b7",
+                backgroundColor: "#f0fdf4",
+                color: UI.textPrimary,
+              }}
+            />
+            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
               Study the move
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
@@ -604,6 +737,7 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={familyResourceUrl}
               onChangeText={setFamilyResourceUrl}
+              onFocus={bumpScrollToFocusedInput}
               placeholder="https://…"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="none"
@@ -623,6 +757,7 @@ export default function KidWeeklyFocusScreen() {
             <TextInput
               value={familyResourceLabel}
               onChangeText={setFamilyResourceLabel}
+              onFocus={bumpScrollToFocusedInput}
               placeholder="Short label for parents (optional)"
               placeholderTextColor={UI.textSecondary}
               autoCapitalize="sentences"

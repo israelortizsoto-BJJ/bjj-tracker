@@ -26,6 +26,8 @@ type KidWeeklyFocusAppendInput =
       weekStartYMD: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
       coachNotes?: string;
+      missionResourceUrl?: string;
+      missionResourceLabel?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
       familyCoachRecapNote?: string;
@@ -35,6 +37,8 @@ type KidWeeklyFocusAppendInput =
       weekStartYMD: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
       coachNotes?: string;
+      missionResourceUrl?: string;
+      missionResourceLabel?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
       familyCoachRecapNote?: string;
@@ -614,6 +618,8 @@ export type KidWeeklyFocusFocusUpdate =
       title: string;
       metadata?: string;
       youtubeUrl?: string;
+      missionResourceUrl?: string;
+      missionResourceLabel?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
       familyCoachRecapNote?: string;
@@ -623,6 +629,8 @@ export type KidWeeklyFocusFocusUpdate =
       title: string;
       note?: string;
       youtubeUrl?: string;
+      missionResourceUrl?: string;
+      missionResourceLabel?: string;
       familyResourceUrl?: string;
       familyResourceLabel?: string;
       familyCoachRecapNote?: string;
@@ -653,6 +661,14 @@ export async function updateKidWeeklyFocusFocusById(
     coachNotes: existing.coachNotes,
   };
 
+  const missionUrl =
+    typeof focus.missionResourceUrl === "string" && focus.missionResourceUrl.trim()
+      ? focus.missionResourceUrl.trim()
+      : undefined;
+  const missionLabel =
+    typeof focus.missionResourceLabel === "string" && focus.missionResourceLabel.trim()
+      ? focus.missionResourceLabel.trim()
+      : undefined;
   const famUrl =
     typeof focus.familyResourceUrl === "string" && focus.familyResourceUrl.trim()
       ? focus.familyResourceUrl.trim()
@@ -677,6 +693,8 @@ export async function updateKidWeeklyFocusFocusById(
           title: focus.title,
           metadata: focus.metadata,
           youtubeUrl: focus.youtubeUrl,
+          missionResourceUrl: missionUrl,
+          missionResourceLabel: missionLabel,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
           familyCoachRecapNote: recap,
@@ -687,6 +705,8 @@ export async function updateKidWeeklyFocusFocusById(
           title: focus.title,
           note: focus.note,
           youtubeUrl: focus.youtubeUrl,
+          missionResourceUrl: missionUrl,
+          missionResourceLabel: missionLabel,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
           familyCoachRecapNote: recap,
@@ -708,6 +728,14 @@ export async function appendKidWeeklyFocus(
   const nowIso = new Date().toISOString();
   const id = newEntryId();
 
+  const missionUrl =
+    typeof input.missionResourceUrl === "string" && input.missionResourceUrl.trim()
+      ? input.missionResourceUrl.trim()
+      : undefined;
+  const missionLabel =
+    typeof input.missionResourceLabel === "string" && input.missionResourceLabel.trim()
+      ? input.missionResourceLabel.trim()
+      : undefined;
   const famUrl =
     typeof input.familyResourceUrl === "string" && input.familyResourceUrl.trim()
       ? input.familyResourceUrl.trim()
@@ -732,6 +760,8 @@ export async function appendKidWeeklyFocus(
           title: input.title,
           metadata: input.metadata,
           youtubeUrl: input.youtubeUrl,
+          missionResourceUrl: missionUrl,
+          missionResourceLabel: missionLabel,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
           familyCoachRecapNote: recap,
@@ -748,6 +778,8 @@ export async function appendKidWeeklyFocus(
           title: input.title,
           note: input.note,
           youtubeUrl: input.youtubeUrl,
+          missionResourceUrl: missionUrl,
+          missionResourceLabel: missionLabel,
           familyResourceUrl: famUrl,
           familyResourceLabel: famLabel,
           familyCoachRecapNote: recap,

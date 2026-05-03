@@ -18,20 +18,30 @@ function normalizePublishedCoachRecap(raw?: string | null): string | undefined {
   return t.length > MAX_FAMILY_COACH_RECAP ? t.slice(0, MAX_FAMILY_COACH_RECAP) : t;
 }
 
+function coachOutcomeForPublish(
+  outcome: KidWeeklyFocusEntry["coachOutcome"],
+): CoachWeeklySyncPublishBody["coachOutcome"] {
+  switch (outcome) {
+    case "not_yet":
+      return "not_yet";
+    case "developing":
+      return "close";
+    case "on_track":
+      return "hit";
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Maps a saved weekly focus row to the **family-facing** remote document.
- * Does not include coach check-in notes, outcomes, or the coach-only reference video URL (`youtubeUrl`).
+ * Does not include coach private notes or the coach-only reference video URL (`youtubeUrl`).
  * Publishes optional `missionResourceUrl` (Mission card) and `familyResourceUrl` (Study the move) independently.
  */
 export function kidWeeklyFocusToPublishPayload(
   entry: KidWeeklyFocusEntry,
   weekStartYMD: string,
 ): CoachWeeklySyncPublishBody {
-  console.log("[PAYLOAD INPUT ENTRY]", {
-    mission: entry.familyResourceUrl,
-    family: entry.familyResourceUrl,
-  });
-
   const headline = entry.title.trim().slice(0, 200);
   const bodyRaw =
     entry.focusType === "template"
@@ -41,34 +51,21 @@ export function kidWeeklyFocusToPublishPayload(
     bodyRaw ||
     "Your coach highlighted this week’s focus in class. Use the title above as the main cue, and ask your coach if you want more detail.";
 
-  const publishedMissionUrl = normalizeFamilyResourceUrl(entry.familyResourceUrl);
+  const publishedMissionUrl = normalizeFamilyResourceUrl(entry.missionResourceUrl);
   const publishedMissionLabel = publishedMissionUrl
-    ? normalizePublishedLabel(entry.familyResourceLabel) ??
+    ? normalizePublishedLabel(entry.missionResourceLabel) ??
       defaultFamilyLinkButtonLabel(publishedMissionUrl)
     : undefined;
-  console.log("[MISSION DEBUG FIX]", {
-    rawMission: entry.familyResourceUrl,
-    publishedMissionUrl,
-  });
   const publishedFamilyUrl = normalizeFamilyResourceUrl(entry.familyResourceUrl);
   const publishedFamilyLabel = publishedFamilyUrl
     ? normalizePublishedLabel(entry.familyResourceLabel) ??
       defaultFamilyLinkButtonLabel(publishedFamilyUrl)
     : undefined;
   const familyCoachRecapNote = normalizePublishedCoachRecap(entry.familyCoachRecapNote);
-
-  console.log("[PAYLOAD FINAL]", {
-    mission: publishedMissionUrl,
-    family: publishedFamilyUrl,
-  });
-
-  console.log("[PAYLOAD LINKS]", {
-    mission: publishedMissionUrl,
-    study: publishedFamilyUrl,
-  });
+  const coachOutcome = coachOutcomeForPublish(entry.coachOutcome);
 
   if (__DEV__) {
-    const rawMission = (entry.familyResourceUrl ?? "").trim();
+    const rawMission = (entry.missionResourceUrl ?? "").trim();
     const rawFam = (entry.familyResourceUrl ?? "").trim();
     const rawRecap = (entry.familyCoachRecapNote ?? "").trim();
     console.log("[bjj-weekly-publish-payload]", {
@@ -81,19 +78,30 @@ export function kidWeeklyFocusToPublishPayload(
       storedFamilyCoachRecapNoteLen: rawRecap.length,
       publishedFamilyCoachRecapNoteSentAsEmptyString: (familyCoachRecapNote ?? "") === "",
       publishedFamilyCoachRecapNoteLen: (familyCoachRecapNote ?? "").length,
+      publishedCoachOutcome: coachOutcome ?? null,
     });
   }
 
-  return {
+  const payload: CoachWeeklySyncPublishBody = {
     weekStartYMD,
     headline,
     body: body.slice(0, 8000),
-    missionResourceUrl: publishedMissionUrl ?? null,
-    missionResourceLabel: publishedMissionLabel ?? null,
-    familyResourceUrl: publishedFamilyUrl ?? null,
-    familyResourceLabel: publishedFamilyLabel ?? null,
     // Always send so JSON includes the key; empty string clears on the worker. Omitting the key
     // previously caused the worker to replace `weekly` without this field and drop stored recaps.
     familyCoachRecapNote: familyCoachRecapNote ?? "",
+    ...(coachOutcome ? { coachOutcome } : {}),
   };
+
+  // Omit link keys when there is nothing to publish so the worker keeps existing KV values
+  // (non-destructive partial publish). JSON.stringify drops undefined — never assign undefined.
+  if (publishedMissionUrl) {
+    payload.missionResourceUrl = publishedMissionUrl;
+    payload.missionResourceLabel = publishedMissionLabel ?? null;
+  }
+  if (publishedFamilyUrl) {
+    payload.familyResourceUrl = publishedFamilyUrl;
+    payload.familyResourceLabel = publishedFamilyLabel ?? null;
+  }
+
+  return payload;
 }
