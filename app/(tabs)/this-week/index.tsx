@@ -86,7 +86,7 @@ import {
 import { StorageKeys } from "../../../src/storage/storageKeys";
 import { getCompetitionMediaPresenceForEntryIds } from "../../../src/storage/competitionStore";
 import { getKidCompetitionEntriesForKid } from "../../../src/storage/kidCompetitionStore";
-import { setActiveKidId } from "../../../src/state/activeKidStore";
+import { setActiveKidId, useActiveKidId } from "../../../src/state/activeKidStore";
 import type { Session } from "../../../src/types";
 import {
   type Kid,
@@ -184,6 +184,35 @@ function resolveParentWeeklyInviteFilteredFamilyCompKidId(
   const trimmed = storedKidId?.trim();
   if (trimmed && allowed.some((k) => k.id === trimmed)) return trimmed;
   return allowed[0]!.id;
+}
+
+type WeeklySessionSnapshot = {
+  weekly: SyncedWeeklyMessagePayload | null;
+  weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
+  athletes: SyncedSharedAthlete[];
+};
+
+function resolveStrictWeeklySelectedSharedAthleteIdForKid(
+  kidId: string | null | undefined,
+  kidsById: KidsById,
+  weeklySessionSnapshot: WeeklySessionSnapshot | null,
+): string | null {
+  if (!kidId || !weeklySessionSnapshot) return null;
+
+  const weeklyMap = weeklySessionSnapshot.weeklyByAthleteId ?? {};
+  const candidate = sharedAthleteIdFromRosterForSession(
+    kidId,
+    kidsById[kidId]?.sharedAthleteId,
+    weeklySessionSnapshot.athletes,
+  );
+
+  return (
+    candidate != null &&
+    Object.prototype.hasOwnProperty.call(weeklyMap, candidate) &&
+    weeklyMap[candidate] != null
+  )
+    ? candidate
+    : null;
 }
 
 function Section({
@@ -368,6 +397,7 @@ function CoachThisWeekShell() {
 function ParentThisWeekScreen() {
   console.log("[RENDER_TRACE:PARENT_THIS_WEEK]");
   const { role } = useDeviceRole();
+  const activeKidIdFromStore = useActiveKidId();
   const roleRef = useRef(role);
   roleRef.current = role;
   const mountCountRef = useRef(0);
@@ -394,11 +424,7 @@ function ParentThisWeekScreen() {
     INITIAL_FAMILY_COMPETITION,
   );
   /** Invite-level `weekly` plus per-athlete map; `weeklySyncDoc` is derived via useMemo. */
-  const [weeklySessionSnapshot, setWeeklySessionSnapshot] = useState<{
-    weekly: SyncedWeeklyMessagePayload | null;
-    weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
-    athletes: SyncedSharedAthlete[];
-  } | null>(null);
+  const [weeklySessionSnapshot, setWeeklySessionSnapshot] = useState<WeeklySessionSnapshot | null>(null);
   /** Set with `weeklySessionSnapshot` from the same `loadCoachShareData` pass (`loadedKidsById` + session athletes). */
   const [weeklySyncSelectedSharedAthleteId, setWeeklySyncSelectedSharedAthleteId] = useState<
     string | null
@@ -435,7 +461,7 @@ function ParentThisWeekScreen() {
   );
 
   useEffect(() => {
-    if (role !== "parent") return;
+    if (role !== "parent" || !familyCompetition.kidId) return;
     setActiveKidId(familyCompetition.kidId);
   }, [role, familyCompetition.kidId]);
 
@@ -1319,20 +1345,12 @@ function ParentThisWeekScreen() {
       if (!kid?.id || kid.id === familyCompetition.kidId) return;
       const today = todayYMD();
       const freshKidsById = await getKidsById();
-      const weeklyMap = weeklySessionSnapshot?.weeklyByAthleteId ?? {};
-      const candidateSharedAthleteId = weeklySessionSnapshot
-        ? sharedAthleteIdFromRosterForSession(
-            kid.id,
-            freshKidsById[kid.id]?.sharedAthleteId,
-            weeklySessionSnapshot.athletes,
-          )
-        : null;
       const nextSelectedSharedAthleteId =
-        candidateSharedAthleteId != null &&
-        Object.prototype.hasOwnProperty.call(weeklyMap, candidateSharedAthleteId) &&
-        weeklyMap[candidateSharedAthleteId] != null
-          ? candidateSharedAthleteId
-          : null;
+        resolveStrictWeeklySelectedSharedAthleteIdForKid(
+          kid.id,
+          freshKidsById,
+          weeklySessionSnapshot,
+        );
       await setFamilyCompetitionSelectedKidId(kid.id);
       const compApplyGen = ++applyFamilyCompGenRef.current;
       const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
@@ -1351,6 +1369,68 @@ function ParentThisWeekScreen() {
     },
     [computeParentKidScopedState, familyCompetition.kidId, setStateIfJsonChanged, weeklySessionSnapshot],
   );
+
+  useEffect(() => {
+    if (
+      role !== "parent" ||
+      !ready ||
+      !activeKidIdFromStore ||
+      activeKidIdFromStore === familyCompetition.kidId
+    ) {
+      return;
+    }
+
+    const activeKidExists =
+      relevantParentKids.some((kid) => kid.id === activeKidIdFromStore) ||
+      Boolean(kidsByIdState[activeKidIdFromStore]);
+    if (!activeKidExists) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      await setFamilyCompetitionSelectedKidId(activeKidIdFromStore);
+      const today = todayYMD();
+      const nextSelectedSharedAthleteId =
+        resolveStrictWeeklySelectedSharedAthleteIdForKid(
+          activeKidIdFromStore,
+          kidsByIdState,
+          weeklySessionSnapshot,
+        );
+      const compApplyGen = ++applyFamilyCompGenRef.current;
+      const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
+        activeKidIdFromStore,
+        kidsByIdState,
+        today,
+      );
+      if (cancelled) return;
+
+      setFamilyCompetition((prev) => {
+        if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
+        if (JSON.stringify(prev) === JSON.stringify(nextFamily)) return prev;
+        return nextFamily;
+      });
+      setStateIfJsonChanged(
+        "activeKidStoreSync:practiceSummary",
+        setPracticeSummary,
+        nextPracticeSummary,
+      );
+      setWeeklySyncSelectedSharedAthleteId(nextSelectedSharedAthleteId);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeKidIdFromStore,
+    computeParentKidScopedState,
+    familyCompetition.kidId,
+    kidsByIdState,
+    ready,
+    relevantParentKids,
+    role,
+    setStateIfJsonChanged,
+    weeklySessionSnapshot,
+  ]);
 
   /** Derived relink intent (useMemo) so the async effect does not re-run on unrelated object identity churn. */
   const parentInviteAutoRelinkSignature = useMemo(() => {
