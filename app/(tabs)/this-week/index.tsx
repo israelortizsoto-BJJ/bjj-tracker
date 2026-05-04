@@ -735,13 +735,21 @@ function ParentThisWeekScreen() {
       if (!nextWeeklySnapshot) return null;
       const weeklyMap = nextWeeklySnapshot.weeklyByAthleteId ?? {};
       const keys = Object.keys(weeklyMap);
-      if (keys.length === 1) return keys[0] ?? null;
+      if (keys.length === 1) {
+        const onlyKey = keys[0] ?? null;
+        return onlyKey && weeklyMap[onlyKey] != null ? onlyKey : null;
+      }
       if (keys.length > 1) {
-        return sharedAthleteIdFromRosterForSession(
+        const candidate = sharedAthleteIdFromRosterForSession(
           rosterKidId,
           rosterKidId ? loadedKidsById[rosterKidId]?.sharedAthleteId : undefined,
           nextWeeklySnapshot.athletes,
         );
+        return (
+          candidate != null &&
+          Object.prototype.hasOwnProperty.call(weeklyMap, candidate) &&
+          weeklyMap[candidate] != null
+        ) ? candidate : null;
       }
       return null;
     })();
@@ -1311,6 +1319,20 @@ function ParentThisWeekScreen() {
       if (!kid?.id || kid.id === familyCompetition.kidId) return;
       const today = todayYMD();
       const freshKidsById = await getKidsById();
+      const weeklyMap = weeklySessionSnapshot?.weeklyByAthleteId ?? {};
+      const candidateSharedAthleteId = weeklySessionSnapshot
+        ? sharedAthleteIdFromRosterForSession(
+            kid.id,
+            freshKidsById[kid.id]?.sharedAthleteId,
+            weeklySessionSnapshot.athletes,
+          )
+        : null;
+      const nextSelectedSharedAthleteId =
+        candidateSharedAthleteId != null &&
+        Object.prototype.hasOwnProperty.call(weeklyMap, candidateSharedAthleteId) &&
+        weeklyMap[candidateSharedAthleteId] != null
+          ? candidateSharedAthleteId
+          : null;
       await setFamilyCompetitionSelectedKidId(kid.id);
       const compApplyGen = ++applyFamilyCompGenRef.current;
       const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
@@ -1325,8 +1347,9 @@ function ParentThisWeekScreen() {
       });
       setStateIfJsonChanged("handleSelectParentKid:practiceSummary", setPracticeSummary, nextPracticeSummary);
       setStateIfJsonChanged("handleSelectParentKid:kidsByIdState", setKidsByIdState, freshKidsById);
+      setWeeklySyncSelectedSharedAthleteId(nextSelectedSharedAthleteId);
     },
-    [computeParentKidScopedState, familyCompetition.kidId, setStateIfJsonChanged],
+    [computeParentKidScopedState, familyCompetition.kidId, setStateIfJsonChanged, weeklySessionSnapshot],
   );
 
   /** Derived relink intent (useMemo) so the async effect does not re-run on unrelated object identity churn. */

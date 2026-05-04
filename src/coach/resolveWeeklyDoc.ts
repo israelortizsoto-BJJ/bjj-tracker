@@ -47,8 +47,9 @@ function isValidWeeklyDoc(v: unknown): v is SyncedWeeklyMessagePayload {
 }
 
 /**
- * Resolves the weekly doc for a parent view: per-athlete doc first, else invite-level `weekly`.
- * No field-level merge between invite and athlete (avoids invite/null wiping athlete URLs).
+ * Resolves the weekly doc for a parent view using strict athlete scope.
+ * Invite-level `weekly` is legacy and is intentionally not used for parent weekly rendering.
+ * Missing, null, or invalid athlete docs resolve to null.
  * Never throws.
  */
 export function resolveWeeklyDoc(
@@ -91,10 +92,6 @@ export function resolveWeeklyDoc(
       }
     }
 
-    const inviteDoc = session.weekly;
-    if (inviteDoc != null && isValidWeeklyDoc(inviteDoc)) {
-      return inviteDoc;
-    }
     return null;
   } catch {
     return null;
