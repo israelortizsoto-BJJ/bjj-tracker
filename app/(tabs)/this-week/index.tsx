@@ -1235,6 +1235,13 @@ function ParentThisWeekScreen() {
       allCoaches.length > 0);
   const isPreviewOnlyOnDevice =
     !isLinked && (hasCoachPilotPreviewOnDevice || hasSeededOrLocalShareData);
+  const weeklyConnectionStatusLabel = isLinked
+    ? useWeeklySyncHero
+      ? "Weekly sync active"
+      : "Coach linked"
+    : isPreviewOnlyOnDevice
+      ? "Preview mode"
+      : "Not linked";
 
   const focusTitle = useWeeklySyncHero
     ? !weeklySyncNetworkOk && !weeklySyncDoc
@@ -1310,6 +1317,11 @@ function ParentThisWeekScreen() {
     : familyCompetition.kidId
       ? "Selected athlete"
       : "No athlete selected";
+  const weeklyDirectionSubtitle = familyCompetition.kidName
+    ? `Weekly direction for ${familyCompetition.kidName}`
+    : "Weekly direction for your athlete";
+  const weeklyDirectionAthleteLabel =
+    familyCompetition.kidName || "your athlete";
   const whyThisMattersText = useMemo(() => {
     const childName = familyCompetition.kidName?.trim() || "your kid";
     const mission = (focusTitle ?? "").trim();
@@ -1321,7 +1333,7 @@ function ParentThisWeekScreen() {
     return `This week’s mission turns training into a family game: you both know what to practice, and ${childName} can feel proud when it clicks.`;
   }, [familyCompetition.kidName, focusTitle]);
   /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
-  const weeklyNoteHeroEyebrow = "Coach's weekly focus";
+  const weeklyNoteHeroEyebrow = "Weekly coach message";
 
   const relevantParentKids = useMemo(() => {
     const base = Object.values(kidsByIdState)
@@ -1624,7 +1636,7 @@ function ParentThisWeekScreen() {
             This Week
           </Text>
           <Text style={[tokens.type.body, { color: tokens.colors.text.muted }]}>
-            MatMind
+            {weeklyDirectionSubtitle}
           </Text>
         </View>
 
@@ -1643,6 +1655,66 @@ function ParentThisWeekScreen() {
             <View
               style={{
                 marginTop: tokens.layout.sectionGap,
+                paddingVertical: tokens.space[2],
+                paddingHorizontal: tokens.space[3],
+                borderRadius: tokens.radius.pill,
+                borderWidth: 1,
+                borderColor: tokens.colors.border.default,
+                backgroundColor: tokens.colors.surface.card,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: tokens.space[3],
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  tokens.type.caption,
+                  {
+                    flex: 1,
+                    color: tokens.colors.text.secondary,
+                    fontWeight: "700",
+                  },
+                ]}
+              >
+                {linkedCoachName || "Coach connection"}
+              </Text>
+              <View
+                style={{
+                  paddingVertical: tokens.space[1],
+                  paddingHorizontal: tokens.space[2],
+                  borderRadius: tokens.radius.pill,
+                  borderWidth: 1,
+                  borderColor: tokens.colors.border.default,
+                  backgroundColor: isLinked
+                    ? tokens.colors.semantic.successBg
+                    : isPreviewOnlyOnDevice
+                      ? tokens.colors.semantic.warningBg
+                      : tokens.colors.surface.accent,
+                }}
+              >
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    {
+                      fontWeight: "800",
+                      color: isLinked
+                        ? tokens.colors.semantic.successText
+                        : isPreviewOnlyOnDevice
+                          ? tokens.colors.semantic.warningText
+                          : tokens.colors.brand[600],
+                    },
+                  ]}
+                >
+                  {weeklyConnectionStatusLabel}
+                </Text>
+              </View>
+            </View>
+
+            <View
+              style={{
+                marginTop: tokens.space[3],
                 padding: tokens.layout.cardPadding,
                 borderRadius: tokens.radius.lg,
                 borderWidth: 1,
@@ -1665,58 +1737,6 @@ function ParentThisWeekScreen() {
                   opacity: 0.9,
                 }}
               />
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  justifyContent: "space-between",
-                  gap: tokens.space[3],
-                  marginBottom: tokens.space[3],
-                }}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  {currentCoach?.displayName?.trim() ? (
-                    <Text
-                      style={[
-                        tokens.type.caption,
-                        { fontWeight: "700", color: tokens.colors.text.primary },
-                      ]}
-                    >
-                      {currentCoach.displayName.trim()}
-                    </Text>
-                  ) : null}
-                </View>
-                <View
-                  style={{
-                    paddingVertical: tokens.space[1],
-                    paddingHorizontal: tokens.space[2],
-                    borderRadius: tokens.radius.pill,
-                    borderWidth: 1,
-                    borderColor: tokens.colors.border.default,
-                    backgroundColor: isLinked
-                      ? tokens.colors.semantic.successBg
-                      : isPreviewOnlyOnDevice
-                        ? tokens.colors.semantic.warningBg
-                        : tokens.colors.surface.accent,
-                  }}
-                >
-                  <Text
-                    style={[
-                      tokens.type.caption,
-                      {
-                        fontWeight: "700",
-                        color: isLinked
-                          ? tokens.colors.semantic.successText
-                          : isPreviewOnlyOnDevice
-                            ? tokens.colors.semantic.warningText
-                            : tokens.colors.brand[600],
-                      },
-                    ]}
-                  >
-                    {isLinked ? "Linked" : isPreviewOnlyOnDevice ? "Preview" : "Not linked"}
-                  </Text>
-                </View>
-              </View>
 
               {isDev() &&
               role === "parent" &&
@@ -1776,7 +1796,7 @@ function ParentThisWeekScreen() {
                   },
                 ]}
               >
-                This is what your child is working on this week.
+                Coach direction for {weeklyDirectionAthleteLabel} this week.
               </Text>
               <Text
                 style={[
@@ -1964,57 +1984,6 @@ function ParentThisWeekScreen() {
 
             </View>
 
-            <Pressable
-              onPress={openWeeklyStory}
-              accessibilityRole="button"
-              accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
-              style={({ pressed }) => ({
-                marginTop: tokens.layout.sectionGap,
-                paddingVertical: tokens.space[4],
-                paddingHorizontal: tokens.space[4],
-                borderRadius: tokens.radius.lg,
-                borderWidth: 1,
-                borderColor: tokens.colors.border.accent,
-                backgroundColor: pressed
-                  ? tokens.colors.surface.accent
-                  : tokens.colors.surface.cardMuted,
-                alignSelf: "stretch",
-                alignItems: "flex-start",
-                ...tokens.elevation.card,
-              })}
-            >
-              <Text
-                style={[
-                  tokens.type.label,
-                  { color: tokens.colors.brand[600] },
-                ]}
-              >
-                Start Family Huddle
-              </Text>
-              <Text
-                style={[
-                  tokens.type.h2,
-                  {
-                    marginTop: tokens.space[2],
-                    color: tokens.colors.text.primary,
-                  },
-                ]}
-              >
-                Talk about this week’s training
-              </Text>
-              <Text
-                style={[
-                  tokens.type.body,
-                  {
-                    marginTop: tokens.space[2],
-                    color: tokens.colors.text.secondary,
-                  },
-                ]}
-              >
-                Record what your child worked on this week.
-              </Text>
-            </Pressable>
-
             <View style={{ marginTop: tokens.layout.sectionGap, gap: tokens.space[3] }}>
               {!isLinked ? (
                 <Pressable
@@ -2089,23 +2058,83 @@ function ParentThisWeekScreen() {
                       { color: tokens.colors.brand[600] },
                     ]}
                   >
-                    Log practice for this week
+                    Mark weekly focus complete
+                  </Text>
+                  <Text
+                    style={[
+                      tokens.type.caption,
+                      {
+                        marginTop: tokens.space[1],
+                        color: tokens.colors.text.secondary,
+                        textAlign: "center",
+                      },
+                    ]}
+                  >
+                    Use this only when your coach assigned a legacy focus.
                   </Text>
                 </Pressable>
               ) : null}
             </View>
 
+            {role === "parent" && ready ? (
+              <Pressable
+                onPress={() => {
+                  const d = todayYMD();
+                  const k = familyCompetition.kidId;
+                  router.push(
+                    k
+                      ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
+                      : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
+                  );
+                }}
+                accessibilityRole="button"
+                style={({ pressed }) => ({
+                  marginTop: tokens.layout.sectionGap,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingVertical: tokens.space[4],
+                  paddingHorizontal: tokens.space[4],
+                  borderRadius: tokens.radius.lg,
+                  borderWidth: 1,
+                  borderColor: tokens.colors.border.accent,
+                  backgroundColor: pressed
+                    ? tokens.colors.surface.accent
+                    : tokens.colors.surface.cardMuted,
+                  ...tokens.elevation.card,
+                })}
+              >
+                <View style={{ flex: 1, paddingRight: tokens.space[3] }}>
+                  <Text style={[tokens.type.title, { color: tokens.colors.brand[600] }]}>
+                    Log today’s training
+                  </Text>
+                  <Text
+                    style={[
+                      tokens.type.caption,
+                      {
+                        marginTop: tokens.space[1],
+                        color: tokens.colors.text.secondary,
+                      },
+                    ]}
+                  >
+                    Add a session for this athlete and keep the week moving.
+                  </Text>
+                </View>
+                <Text style={[tokens.type.title, { color: tokens.colors.brand[500] }]}>→</Text>
+              </Pressable>
+            ) : null}
+
             {showParentKidSelector ? (
               <>
                 <View
                   style={{
-                    marginTop: 18,
+                    marginTop: tokens.layout.sectionGap,
                     marginBottom: -2,
                     paddingHorizontal: 2,
                   }}
                 >
                   <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: "#6b7280" }}>
-                    View this week for
+                    Athlete
                   </Text>
                 </View>
                 <Text
@@ -2117,7 +2146,7 @@ function ParentThisWeekScreen() {
                     lineHeight: 20,
                   }}
                 >
-                  Choose which athlete controls training, insights, and competition below.
+                  This controls weekly direction, training, and snapshots below.
                 </Text>
                 <View
                   style={{
@@ -2163,61 +2192,66 @@ function ParentThisWeekScreen() {
               </>
             ) : null}
 
+            <Pressable
+              onPress={openWeeklyStory}
+              accessibilityRole="button"
+              accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
+              style={({ pressed }) => ({
+                marginTop: tokens.layout.sectionGap,
+                paddingVertical: tokens.space[4],
+                paddingHorizontal: tokens.space[4],
+                borderRadius: tokens.radius.lg,
+                borderWidth: 1,
+                borderColor: tokens.colors.border.accent,
+                backgroundColor: pressed
+                  ? tokens.colors.surface.accent
+                  : tokens.colors.surface.cardMuted,
+                alignSelf: "stretch",
+                alignItems: "flex-start",
+                ...tokens.elevation.card,
+              })}
+            >
+              <Text
+                style={[
+                  tokens.type.label,
+                  { color: tokens.colors.brand[600] },
+                ]}
+              >
+                FAMILY HUDDLE
+              </Text>
+              <Text
+                style={[
+                  tokens.type.h2,
+                  {
+                    marginTop: tokens.space[2],
+                    color: tokens.colors.text.primary,
+                  },
+                ]}
+              >
+                Talk through the week together
+              </Text>
+              <Text
+                style={[
+                  tokens.type.body,
+                  {
+                    marginTop: tokens.space[2],
+                    color: tokens.colors.text.secondary,
+                  },
+                ]}
+              >
+                Review the coach message, ask what clicked, and keep training simple.
+              </Text>
+            </Pressable>
+
             {role === "parent" && ready ? (
               <View style={{ marginTop: tokens.layout.sectionGap }}>
-                <Pressable
-                  onPress={() => {
-                    const d = todayYMD();
-                    const k = familyCompetition.kidId;
-                    router.push(
-                      k
-                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
-                        : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
-                    );
-                  }}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({
-                    marginTop: tokens.space[3],
-                    marginBottom: tokens.layout.sectionGap,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: tokens.space[3],
-                    paddingHorizontal: tokens.space[4],
-                    borderRadius: tokens.radius.md,
-                    borderWidth: 1,
-                    borderColor: tokens.colors.border.accent,
-                    backgroundColor: pressed
-                      ? tokens.colors.surface.accent
-                      : tokens.colors.surface.cardMuted,
-                  })}
-                >
-                  <View style={{ flex: 1, paddingRight: tokens.space[3] }}>
-                    <Text style={[tokens.type.title, { color: tokens.colors.brand[600] }]}>
-                      Track your training
-                    </Text>
-                    <Text
-                      style={[
-                        tokens.type.caption,
-                        {
-                          marginTop: tokens.space[1],
-                          color: tokens.colors.text.secondary,
-                        },
-                      ]}
-                    >
-                      Add a session or review what’s logged this week.
-                    </Text>
-                  </View>
-                  <Text style={[tokens.type.title, { color: tokens.colors.brand[500] }]}>→</Text>
-                </Pressable>
-
                 <Text
                   style={[
                     tokens.type.label,
                     { marginBottom: tokens.space[2], color: tokens.colors.text.muted },
                   ]}
                 >
-                  INSTANT INSIGHTS
+                  PRACTICE SUMMARY
                 </Text>
                 <View
                   style={{
@@ -2304,7 +2338,7 @@ function ParentThisWeekScreen() {
               </View>
             ) : null}
 
-            <Section title="Competition" tone="family">
+            <Section title="Competition snapshot" tone="family">
               {role === "parent" ? (
                 <View
                   style={{
@@ -2856,7 +2890,7 @@ function ParentThisWeekScreen() {
                     }}
                   />
                   <Text style={{ color: UI.textPrimary, fontWeight: "800", fontSize: 14 }}>
-                    {linkRefreshStatusLabel}
+                    Coach connection
                   </Text>
                 </View>
 
@@ -2875,7 +2909,8 @@ function ParentThisWeekScreen() {
                       marginBottom: 12,
                     }}
                   >
-                    Manage your coach link (athletes + invite), then refresh anytime for the latest weekly note.
+                    Manage your linked coach, athletes, and weekly refresh.
+                    {linkRefreshStatusLabel ? ` ${linkRefreshStatusLabel}.` : ""}
                   </Text>
                   <Pressable
                     onPress={() => router.push("/this-week/manage")}
