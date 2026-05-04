@@ -2025,7 +2025,7 @@ function ParentThisWeekScreen() {
                   }}
                 >
                   <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: "#6b7280" }}>
-                    Track this child
+                    View this week for
                   </Text>
                 </View>
                 <Text
@@ -2037,7 +2037,7 @@ function ParentThisWeekScreen() {
                     lineHeight: 20,
                   }}
                 >
-                  Choose a child for training, competition, and practice below.
+                  Choose which athlete controls training, insights, and competition below.
                 </Text>
                 <View
                   style={{
@@ -2085,6 +2085,52 @@ function ParentThisWeekScreen() {
 
             {role === "parent" && ready ? (
               <View style={{ marginTop: tokens.layout.sectionGap }}>
+                <Pressable
+                  onPress={() => {
+                    const d = todayYMD();
+                    const k = familyCompetition.kidId;
+                    router.push(
+                      k
+                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
+                        : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
+                    );
+                  }}
+                  accessibilityRole="button"
+                  style={({ pressed }) => ({
+                    marginTop: tokens.space[3],
+                    marginBottom: tokens.layout.sectionGap,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: tokens.space[3],
+                    paddingHorizontal: tokens.space[4],
+                    borderRadius: tokens.radius.md,
+                    borderWidth: 1,
+                    borderColor: tokens.colors.border.accent,
+                    backgroundColor: pressed
+                      ? tokens.colors.surface.accent
+                      : tokens.colors.surface.cardMuted,
+                  })}
+                >
+                  <View style={{ flex: 1, paddingRight: tokens.space[3] }}>
+                    <Text style={[tokens.type.title, { color: tokens.colors.brand[600] }]}>
+                      Track your training
+                    </Text>
+                    <Text
+                      style={[
+                        tokens.type.caption,
+                        {
+                          marginTop: tokens.space[1],
+                          color: tokens.colors.text.secondary,
+                        },
+                      ]}
+                    >
+                      Add a session or review what’s logged this week.
+                    </Text>
+                  </View>
+                  <Text style={[tokens.type.title, { color: tokens.colors.brand[500] }]}>→</Text>
+                </Pressable>
+
                 <Text
                   style={[
                     tokens.type.label,
@@ -2175,51 +2221,6 @@ function ParentThisWeekScreen() {
                     )}
                   </View>
                 </View>
-
-                <Pressable
-                  onPress={() => {
-                    const d = todayYMD();
-                    const k = familyCompetition.kidId;
-                    router.push(
-                      k
-                        ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
-                        : `/training?date=${encodeURIComponent(d)}&fromWeekly=1`,
-                    );
-                  }}
-                  accessibilityRole="button"
-                  style={({ pressed }) => ({
-                    marginTop: tokens.space[3],
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: tokens.space[3],
-                    paddingHorizontal: tokens.space[4],
-                    borderRadius: tokens.radius.md,
-                    borderWidth: 1,
-                    borderColor: tokens.colors.border.accent,
-                    backgroundColor: pressed
-                      ? tokens.colors.surface.accent
-                      : tokens.colors.surface.cardMuted,
-                  })}
-                >
-                  <View style={{ flex: 1, paddingRight: tokens.space[3] }}>
-                    <Text style={[tokens.type.title, { color: tokens.colors.brand[600] }]}>
-                      Track your training
-                    </Text>
-                    <Text
-                      style={[
-                        tokens.type.caption,
-                        {
-                          marginTop: tokens.space[1],
-                          color: tokens.colors.text.secondary,
-                        },
-                      ]}
-                    >
-                      Add a session or review what’s logged this week.
-                    </Text>
-                  </View>
-                  <Text style={[tokens.type.title, { color: tokens.colors.brand[500] }]}>→</Text>
-                </Pressable>
               </View>
             ) : null}
 
