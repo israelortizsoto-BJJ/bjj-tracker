@@ -51,13 +51,35 @@ function isMatMindDevBinary(): boolean {
   );
 }
 
+function normalizeAppVariant(value: unknown): AppVariant | undefined {
+  if (value === "dev") return "dev";
+  if (value === "prod") return "prod";
+  if (typeof value === "string") {
+    const t = value.trim().toLowerCase();
+    if (t === "dev") return "dev";
+    if (t === "prod") return "prod";
+  }
+  return undefined;
+}
+
 /**
- * Reads the app variant from app.config.ts -> extra.appVariant
+ * Resolves dev vs prod: inlined env (APP_VARIANT / EXPO_PUBLIC_APP_VARIANT), embedded `extra`,
+ * MatMind `.dev` bundle id, then `__DEV__` when env is absent, else prod.
  */
 export function getAppVariant(): AppVariant {
-  const raw = readExtraValue("appVariant");
+  const fromEnv =
+    normalizeAppVariant(process.env.APP_VARIANT) ??
+    normalizeAppVariant(process.env.EXPO_PUBLIC_APP_VARIANT);
+  if (fromEnv) return fromEnv;
 
-  return raw === "dev" ? "dev" : "prod";
+  const fromExtra = normalizeAppVariant(readExtraValue("appVariant"));
+  if (fromExtra) return fromExtra;
+
+  if (isMatMindDevBinary()) return "dev";
+
+  if (typeof __DEV__ !== "undefined" && __DEV__) return "dev";
+
+  return "prod";
 }
 
 export function isDev(): boolean {

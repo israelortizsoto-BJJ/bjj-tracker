@@ -2,6 +2,9 @@ export type KidId = string;
 
 export type CoachOutcome = "not_yet" | "developing" | "on_track";
 
+/** Coach input: whether the weekly focus is showing up in sparring (optional until set). */
+export type KidWeeklyFocusSparringApplication = "not_yet" | "sometimes" | "yes";
+
 export type KidWeeklyFocusEntryTemplate = {
   focusType: "template";
   templateId: string;
@@ -27,8 +30,10 @@ export type KidWeeklyFocusEntry = {
   updatedAt: string;
 
   // Keep these optional and pilot-only; can be expanded later.
+  // @deprecated — derived from sparringApplication
   coachOutcome?: CoachOutcome;
   coachNotes?: string;
+  sparringApplication?: KidWeeklyFocusSparringApplication;
   /**
    * Mission card link (Read together) — published independently of Study.
    * Must not be derived from `familyResourceUrl`.

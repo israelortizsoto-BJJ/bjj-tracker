@@ -1,4 +1,12 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type { DeviceRole } from "../storage/deviceRoleStore";
 import { getDeviceRole, persistDeviceRole } from "../storage/deviceRoleStore";
@@ -12,8 +20,14 @@ type DeviceRoleContextValue = {
 const DeviceRoleContext = createContext<DeviceRoleContextValue | null>(null);
 
 export function DeviceRoleProvider({ children }: { children: React.ReactNode }) {
+  const mountRef = useRef(0);
   const [role, setRoleState] = useState<DeviceRole | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    mountRef.current += 1;
+    console.log("[MOUNT_TRACE:ROLE_PROVIDER]", mountRef.current);
+  }, []);
 
   useEffect(() => {
     let alive = true;

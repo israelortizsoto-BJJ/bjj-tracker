@@ -1,5 +1,293 @@
 # BJJ Tracker - Dev Handoff Notes
 
+## Date: 2026-05-03
+
+---
+## 🔴 FIRST TASK TOMORROW
+Fix weekly selection logic so requested === available (no fallback, no guessing)
+## 🎯 Summary
+
+Today focused on **system correctness, not feature expansion**.
+
+We validated the full **coach → worker → parent weekly pipeline** and isolated the final blocking issue preventing reliable multi-athlete behavior.
+
+System is now structurally sound, but **parent weekly resolution is not yet stable in multi-athlete scenarios**.
+
+---
+
+## ✅ Completed
+
+### 1. Navigation Fix (Parent Route Gate)
+
+Updated:
+- src/deviceRole/coachRouteGate.ts
+
+Changes:
+- Allowed parent access to:
+  - /this-week/kids
+  - /this-week/kid/*
+
+Impact:
+- Eliminates forced `router.replace("/this-week")`
+- Fixes native/JS navigation mismatch warning
+- Stabilizes parent navigation stack
+
+Status: COMPLETE
+
+---
+
+### 2. Weekly Pipeline Audit (End-to-End)
+
+Verified:
+
+Coach:
+- `sharedAthleteId` correctly derived from kid row
+- included in publish payload
+
+Worker:
+- validates `sharedAthleteId`
+- writes to:
+  `weeklyByAthleteId[sharedAthleteId]`
+
+Parent:
+- fetches correct session snapshot
+- receives correct `weeklyByAthleteId`
+
+Conclusion:
+- Data layer is correct
+- No corruption in publish or worker
+
+Status: VERIFIED
+
+---
+
+### 3. Root Cause Identified — Weekly Mismatch
+
+Location:
+- app/(tabs)/this-week/index.tsx
+
+Problem:
+- Parent selects athlete via:
+  resolveParentWeeklyInviteFilteredFamilyCompKidId
+
+Failure behavior:
+- Multi-athlete scenario falls back to name-sorted kid
+- Selected athlete does NOT match published weekly athlete
+
+Observed logs:
+- requested ≠ available
+- [weekly-doc-missing-athlete]
+
+Conclusion:
+- Issue is NOT write or storage
+- Issue is parent-side athlete resolution
+
+Status: IDENTIFIED
+
+---
+
+### 4. Partial Fix Applied (Single Athlete Case)
+
+Logic added:
+- If exactly one weeklyByAthleteId key → use it
+
+Result:
+- Works for single-athlete scenarios
+- Still fails for multi-athlete scenarios
+
+Status: PARTIAL
+
+---
+
+### 5. Suggestion Engine (Stable)
+
+Created:
+- deriveWeeklyNarrative.ts
+- WeeklySuggestionCard.tsx
+
+Behavior:
+- Derives weekly suggestion from sparring + activity
+- Fills "Why this matters"
+- Hidden after edit
+
+Status: STABLE
+
+---
+
+### 6. Parent Feedback Loop
+
+Added:
+- viewedAt
+- acknowledgedAt
+
+Behavior:
+- Parent marks viewed on open
+- Parent can acknowledge
+- Coach sees status
+
+Status: COMPLETE
+
+---
+
+## ❌ Outstanding Issues
+
+### 1. Weekly Multi-Athlete Resolution (CRITICAL)
+
+Problem:
+- Multiple weekly entries exist
+- Parent selects athlete without verifying weekly exists
+
+Failure case:
+- weeklyByAthleteId = ["A", "B"]
+- selected = "C"
+
+Result:
+- No weekly shown
+- mismatch logs triggered
+
+---
+
+## 🔥 Required Fix (Next Session)
+
+### Guarded Selection Logic
+
+File:
+- app/(tabs)/this-week/index.tsx
+
+Replace multi-key logic with:
+
+- derive rosterSharedId
+- ONLY return if exists in weekly map
+- otherwise return null
+
+Rules:
+- DO NOT fallback to keys[0]
+- DO NOT fallback to allowed[0]
+- DO NOT guess
+
+Expected result:
+- requested === available OR requested === null
+- no mismatch logs
+
+---
+
+## 🧪 Validation Plan
+
+Run after fix:
+
+### Case 1:
+1 athlete
+→ publish
+→ parent view
+
+Expected:
+- weekly shows correctly
+
+---
+
+### Case 2:
+2 athletes
+→ publish for one
+→ view other
+
+Expected:
+- no weekly shown
+- no mismatch logs
+
+---
+
+### Case 3:
+2 athletes
+→ publish for both
+
+Expected:
+- correct switching behavior
+
+---
+
+## ⚠️ Known Secondary Risk
+
+Parent cache skip condition:
+- when only one session exists
+
+May cause stale weekly snapshot:
+- less likely source of mismatch
+- monitor but DO NOT fix yet
+
+---
+
+## 🧩 Next System Phase
+
+### Multi-Athlete UX (Not Started)
+
+Problem:
+- System can return null (correct)
+- UI has no way to resolve ambiguity
+
+Needs:
+- explicit athlete selection
+- clear empty states
+- no implicit switching
+
+---
+
+## 🧱 This Week Tab Migration (In Progress)
+
+Goal:
+Move from:
+- invite-level weekly
+- implicit selection
+
+To:
+- per-athlete weekly
+- explicit selection
+
+Next steps:
+- remove legacy fallback paths
+- remove "legacy_assignment" mode
+- align UI strictly to `weeklyByAthleteId`
+
+---
+
+## 🧠 Coach Tab Direction
+
+Current:
+- mixed responsibilities
+
+Target:
+- weekly becomes central object
+- training + competition support weekly
+
+Not yet implemented
+
+---
+
+## 📌 Current System Status
+
+Navigation: ✅ stable  
+Weekly write: ✅ correct  
+Worker storage: ✅ correct  
+Parent fetch: ✅ correct  
+Single athlete: ✅ correct  
+Multi-athlete: ❌ broken  
+UI clarity: ⚠️ incomplete  
+
+---
+
+## 🎯 Tomorrow Priorities
+
+### MUST
+1. Implement guarded weekly selection logic
+2. Validate logs (no mismatch)
+3. Confirm all test scenarios
+
+### SHOULD
+4. Begin
+
+
+
+
+
 ## Date: 2026-05-02
 
 ------------------------------------------------------------------------

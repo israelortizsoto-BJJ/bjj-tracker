@@ -12,6 +12,8 @@ export function isParentAllowedCoachSegments(segments: string[]): boolean {
   const tail = rest.join("/");
   if (tail === "index") return true;
   if (tail === "join") return true;
+  if (tail === "kids") return true;
+  if (tail.startsWith("kid/")) return true;
   if (tail === "parent-athletes") return true;
   if (tail === "manage") return true;
   if (tail === "family-competition/edit") return true;

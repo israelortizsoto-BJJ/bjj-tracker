@@ -1,7 +1,7 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -40,6 +40,7 @@ import {
   setCoachLinks,
   setCoachesById,
 } from "../../../src/storage/coachShareStore";
+import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
 import {
   clearLocalCoachSharingBindingsForInviteToken,
   deleteKidPilot,
@@ -127,6 +128,7 @@ export default function KidsRosterScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const syncConfigured = isCoachSyncConfigured();
+  const parentCoachKidNavLockRef = useRef(false);
 
   const loadKids = useCallback(async (opts?: { skipReadyReset?: boolean }) => {
     if (!opts?.skipReadyReset) {
@@ -148,6 +150,16 @@ export default function KidsRosterScreen() {
           const tokenKey = normalizeInviteLinkToken(ws.linkToken);
           try {
             const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+            const nowIso = new Date().toISOString();
+            await setCachedWeeklyForLinkToken(
+              ws.linkToken,
+              session.weekly,
+              nowIso,
+              session.weeklyByAthleteId ?? {},
+              session.athletes,
+              session,
+              tokenKey,
+            );
             successfulSnapshots.push({ linkTokenNorm: tokenKey, athletes: session.athletes });
             const names = session.athletes
               .map((a) => (typeof a.name === "string" ? a.name.trim() : ""))
@@ -451,7 +463,7 @@ export default function KidsRosterScreen() {
       setKidName("");
       setHouseholdLabelDraft("");
 
-      router.replace(`/this-week/kid/${id}`);
+      router.replace(`/coach/kid/${id}`);
     } finally {
       setSavingKid(false);
     }
@@ -808,7 +820,14 @@ export default function KidsRosterScreen() {
                       )}
                     >
                       <Pressable
-                        onPress={() => router.push(`/this-week/kid/${kid.id}`)}
+                        onPress={() => {
+                          if (parentCoachKidNavLockRef.current) return;
+                          parentCoachKidNavLockRef.current = true;
+                          router.push(`/coach/kid/${kid.id}`);
+                          setTimeout(() => {
+                            parentCoachKidNavLockRef.current = false;
+                          }, 800);
+                        }}
                         style={({ pressed }) => ({
                           padding: 12,
                           borderRadius: 12,

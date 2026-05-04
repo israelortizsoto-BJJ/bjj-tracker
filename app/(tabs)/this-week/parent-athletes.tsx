@@ -153,7 +153,15 @@ export default function ParentLinkedAthletesScreen() {
         setSessionAthletes(session.athletes);
         setSessionAthletesAuthoritative(true);
         const nowIso = new Date().toISOString();
-        await setCachedWeeklyForLinkToken(ws.linkToken, session.weekly, nowIso);
+        await setCachedWeeklyForLinkToken(
+          ws.linkToken,
+          session.weekly,
+          nowIso,
+          session.weeklyByAthleteId ?? {},
+          session.athletes,
+          session,
+          normalizeInviteLinkToken(ws.linkToken),
+        );
       }
     } catch (e) {
       const msg =

@@ -1,13 +1,29 @@
 import { Stack } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { getAppVariant, isDev } from "../src/config/runtime";
 import { DeviceRoleProvider } from "../src/deviceRole/DeviceRoleProvider";
 import { ensureStorageUpToDate } from "../src/storage/migrations";
 
 export default function RootLayout() {
+  const mountRef = useRef(0);
   const [storageReady, setStorageReady] = useState(false);
+
+  useEffect(() => {
+    console.log("[ENV CHECK]", {
+      appVariant: getAppVariant(),
+      isDev: isDev(),
+      __DEV__,
+      env: process.env.APP_VARIANT,
+    });
+  }, []);
+
+  useEffect(() => {
+    mountRef.current += 1;
+    console.log("[MOUNT_TRACE:ROOT_LAYOUT]", mountRef.current);
+  }, []);
 
   useEffect(() => {
     let alive = true;

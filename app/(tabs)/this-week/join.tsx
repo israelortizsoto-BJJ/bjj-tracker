@@ -206,7 +206,15 @@ export default function CoachJoinScreen() {
         linkIdForParentAthletes = newLink.id;
       }
 
-      await setCachedWeeklyForLinkToken(token, session.weekly, nowIso);
+      await setCachedWeeklyForLinkToken(
+        token,
+        session.weekly,
+        nowIso,
+        session.weeklyByAthleteId ?? {},
+        session.athletes,
+        session,
+        token,
+      );
 
       if (__DEV__) {
         const after = await getCoachLinks();

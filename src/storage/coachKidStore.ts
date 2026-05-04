@@ -25,6 +25,7 @@ type KidWeeklyFocusAppendInput =
       kidId: KidId;
       weekStartYMD: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
+      sparringApplication?: KidWeeklyFocusEntry["sparringApplication"];
       coachNotes?: string;
       missionResourceUrl?: string;
       missionResourceLabel?: string;
@@ -36,6 +37,7 @@ type KidWeeklyFocusAppendInput =
       kidId: KidId;
       weekStartYMD: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
+      sparringApplication?: KidWeeklyFocusEntry["sparringApplication"];
       coachNotes?: string;
       missionResourceUrl?: string;
       missionResourceLabel?: string;
@@ -659,6 +661,7 @@ export async function updateKidWeeklyFocusFocusById(
     updatedAt: nowIso,
     coachOutcome: existing.coachOutcome,
     coachNotes: existing.coachNotes,
+    sparringApplication: existing.sparringApplication,
   };
 
   const missionUrl =
@@ -766,6 +769,7 @@ export async function appendKidWeeklyFocus(
           familyResourceLabel: famLabel,
           familyCoachRecapNote: recap,
           coachOutcome: input.coachOutcome,
+          sparringApplication: input.sparringApplication,
           coachNotes: input.coachNotes,
         }
       : {
@@ -784,6 +788,7 @@ export async function appendKidWeeklyFocus(
           familyResourceLabel: famLabel,
           familyCoachRecapNote: recap,
           coachOutcome: input.coachOutcome,
+          sparringApplication: input.sparringApplication,
           coachNotes: input.coachNotes,
         };
 
@@ -795,7 +800,11 @@ export async function appendKidWeeklyFocus(
 
 export async function patchKidWeeklyFocusCoachFields(
   entryId: string,
-  patch: { coachOutcome?: CoachOutcome; coachNotes?: string },
+  patch: {
+    coachOutcome?: CoachOutcome;
+    sparringApplication?: KidWeeklyFocusEntry["sparringApplication"];
+    coachNotes?: string;
+  },
 ): Promise<KidWeeklyFocusEntry | null> {
   const all = await getKidWeeklyFocusEntriesRaw();
   const idx = all.findIndex((e) => e.id === entryId);
@@ -815,10 +824,16 @@ export async function patchKidWeeklyFocusCoachFields(
     nextCoachNotes = raw?.trim() ? raw.trim() : undefined;
   }
 
+  let nextSparringApplication = existing.sparringApplication;
+  if (Object.prototype.hasOwnProperty.call(patch, "sparringApplication")) {
+    nextSparringApplication = patch.sparringApplication;
+  }
+
   const updated: KidWeeklyFocusEntry = {
     ...existing,
     updatedAt: nowIso,
     coachOutcome: nextCoachOutcome,
+    sparringApplication: nextSparringApplication,
     coachNotes: nextCoachNotes,
   };
 

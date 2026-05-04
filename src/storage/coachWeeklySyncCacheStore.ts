@@ -1,6 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import type { SyncedSharedAthlete, SyncedWeeklyMessagePayload } from "../types/coachWeeklySync";
+import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
+import type {
+  CoachWeeklySyncSessionResponse,
+  SyncedSharedAthlete,
+  SyncedSharedCompetition,
+  SyncedWeeklyMessagePayload,
+} from "../types/coachWeeklySync";
 import { StorageKeys } from "./storageKeys";
 
 /** Same validation as `resolveWeeklyDoc` / invite-level `weekly` (not exported from there). */
@@ -22,14 +28,20 @@ export type CoachWeeklySyncCacheEntry = {
   weeklyByAthleteId: Record<string, SyncedWeeklyMessagePayload | null>;
   /** Session GET roster; older cache entries may omit. */
   athletes: SyncedSharedAthlete[];
+  /** Normalized invite token for logs and dedupe; derived on read if missing. */
+  tokenNorm: string;
+  /** Full GET /v1/sessions/:token response when present (newer cache entries). */
+  session: CoachWeeklySyncSessionResponse | null;
 };
 
-/** Persisted shape; older entries may omit `weeklyByAthleteId` / `athletes`. */
+/** Persisted shape; older entries may omit `weeklyByAthleteId` / `athletes` / `session`. */
 type StoredCoachWeeklySyncCacheEntry = {
   weekly: SyncedWeeklyMessagePayload | null;
   fetchedAt: string;
   weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null>;
   athletes?: unknown;
+  tokenNorm?: string;
+  session?: unknown;
 };
 
 type CacheMap = Record<string, StoredCoachWeeklySyncCacheEntry>;
@@ -62,7 +74,57 @@ function normalizeAthletes(raw: unknown): SyncedSharedAthlete[] {
   );
 }
 
-function normalizeReadEntry(entry: unknown): CoachWeeklySyncCacheEntry | null {
+function normalizeCompetitions(raw: unknown): SyncedSharedCompetition[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(
+    (c): c is SyncedSharedCompetition =>
+      Boolean(c) &&
+      typeof c === "object" &&
+      typeof (c as { id?: unknown }).id === "string" &&
+      typeof (c as { sharedAthleteId?: unknown }).sharedAthleteId === "string" &&
+      typeof (c as { tournamentName?: unknown }).tournamentName === "string" &&
+      typeof (c as { eventDate?: unknown }).eventDate === "string" &&
+      typeof (c as { createdAt?: unknown }).createdAt === "string" &&
+      typeof (c as { updatedAt?: unknown }).updatedAt === "string",
+  );
+}
+
+/** Rehydrates a persisted session blob; returns null if shape is not usable. */
+function normalizeStoredSession(
+  raw: unknown,
+  linkTokenForNorm: string,
+): CoachWeeklySyncSessionResponse | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const p = raw as Record<string, unknown>;
+  if (
+    typeof p.coach !== "object" ||
+    p.coach === null ||
+    Array.isArray(p.coach) ||
+    typeof (p.coach as { id?: unknown }).id !== "string" ||
+    typeof (p.coach as { displayName?: unknown }).displayName !== "string"
+  ) {
+    return null;
+  }
+  const coach = p.coach as CoachWeeklySyncSessionResponse["coach"];
+  const weeklyRaw = "weekly" in p ? p.weekly : null;
+  const weekly = weeklyRaw === null ? null : isValidWeeklyDoc(weeklyRaw) ? weeklyRaw : null;
+  const weeklyByAthleteId = normalizeWeeklyByAthleteId(p.weeklyByAthleteId);
+  const athletes = normalizeAthletes(p.athletes);
+  const competitions = normalizeCompetitions(p.competitions);
+  return {
+    ...(typeof p.schemaVersion === "number" ? { schemaVersion: p.schemaVersion } : {}),
+    coach,
+    weekly,
+    weeklyByAthleteId,
+    athletes,
+    competitions,
+  };
+}
+
+function normalizeReadEntry(
+  entry: unknown,
+  linkToken: string,
+): CoachWeeklySyncCacheEntry | null {
   if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
     return null;
   }
@@ -73,11 +135,17 @@ function normalizeReadEntry(entry: unknown): CoachWeeklySyncCacheEntry | null {
   }
   const rawWeekly = "weekly" in e ? e.weekly : null;
   const weekly = isValidWeeklyDoc(rawWeekly) ? rawWeekly : null;
+  const storedTokenNorm =
+    typeof e.tokenNorm === "string" && e.tokenNorm.trim().length > 0 ? e.tokenNorm.trim() : "";
+  const tokenNorm = storedTokenNorm || normalizeInviteLinkToken(linkToken);
+  const session = normalizeStoredSession(e.session, linkToken);
   return {
     weekly,
     fetchedAt,
     weeklyByAthleteId: normalizeWeeklyByAthleteId(e.weeklyByAthleteId),
     athletes: normalizeAthletes("athletes" in e ? e.athletes : []),
+    tokenNorm,
+    session,
   };
 }
 
@@ -113,7 +181,7 @@ export async function getCachedWeeklyForLinkToken(
   const map = await readMap();
   const raw = map[linkToken as keyof CacheMap];
   if (raw === undefined) return null;
-  return normalizeReadEntry(raw);
+  return normalizeReadEntry(raw, linkToken);
 }
 
 export async function setCachedWeeklyForLinkToken(
@@ -122,13 +190,32 @@ export async function setCachedWeeklyForLinkToken(
   fetchedAtIso: string,
   weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null>,
   athletes?: SyncedSharedAthlete[] | null,
+  /** When set, replaces cached full session; when `undefined`, previous session (if any) is kept. */
+  cachedFullSession?: CoachWeeklySyncSessionResponse,
+  /** Normalized token for logs/dedupe; defaults from `linkToken` when session is written. */
+  cachedTokenNorm?: string,
 ): Promise<void> {
   const map = await readMap();
+  const prevRaw = map[linkToken];
+  const prev = prevRaw ? normalizeReadEntry(prevRaw, linkToken) : null;
+  const nextSession =
+    cachedFullSession !== undefined ? cachedFullSession : prev?.session ?? null;
+  const nextTokenNorm =
+    cachedTokenNorm !== undefined && cachedTokenNorm.trim().length > 0
+      ? cachedTokenNorm.trim()
+      : cachedFullSession !== undefined
+        ? normalizeInviteLinkToken(linkToken)
+        : prev?.tokenNorm && prev.tokenNorm.length > 0
+          ? prev.tokenNorm
+          : normalizeInviteLinkToken(linkToken);
+
   map[linkToken] = {
     weekly: isValidWeeklyDoc(weekly) ? weekly : null,
     fetchedAt: fetchedAtIso,
     weeklyByAthleteId: normalizeWeeklyByAthleteId(weeklyByAthleteId),
     athletes: athletes && athletes.length > 0 ? athletes : undefined,
+    tokenNorm: nextTokenNorm,
+    session: nextSession ?? undefined,
   };
   await writeMap(map);
 }

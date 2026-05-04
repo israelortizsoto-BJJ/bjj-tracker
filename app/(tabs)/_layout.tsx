@@ -1,4 +1,5 @@
 import { Tabs } from "expo-router";
+import { useEffect, useRef } from "react";
 
 const HIDDEN = { href: null } as const;
 
@@ -15,6 +16,12 @@ const HIDDEN = { href: null } as const;
  * `training/[id]`, `profile/dev-settings`.
  */
 export default function TabLayout() {
+  const mountRef = useRef(0);
+  useEffect(() => {
+    mountRef.current += 1;
+    console.log("[MOUNT_TRACE:TABS_LAYOUT]", mountRef.current);
+  }, []);
+
   return (
     <Tabs screenOptions={{ headerShown: true }}>
       <Tabs.Screen name="summary" options={{ title: "Summary" }} />
@@ -28,7 +35,6 @@ export default function TabLayout() {
       <Tabs.Screen name="gear" options={HIDDEN} />
       <Tabs.Screen name="health" options={HIDDEN} />
       <Tabs.Screen name="training/[id]" options={HIDDEN} />
-      <Tabs.Screen name="coach/[athleteId]" options={HIDDEN} />
       <Tabs.Screen name="profile/dev-settings" options={HIDDEN} />
     </Tabs>
   );

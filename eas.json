@@ -8,6 +8,7 @@
       "distribution": "internal",
       "env": {
         "APP_VARIANT": "dev",
+        "EXPO_PUBLIC_APP_VARIANT": "dev",
         "EXPO_NO_DOCTOR": "1",
         "EXPO_PUBLIC_COACH_SYNC_BASE_URL": "https://matmind-coach-sync.ortizdigitalstudio.workers.dev"
       },

@@ -2,7 +2,17 @@ import appJson from "./app.json" assert { type: "json" };
 import type { ExpoConfig } from "expo/config";
 
 const base = appJson.expo as ExpoConfig;
-const APP_VARIANT = process.env.APP_VARIANT ?? "prod";
+
+/** Used at config-eval time (Node). Prefer APP_VARIANT / EXPO_PUBLIC_APP_VARIANT; if unset, treat `NODE_ENV === "development"` as dev so `expo start` matches Metro `__DEV__` semantics. */
+function resolveAppVariant(): "dev" | "prod" {
+  const raw = (process.env.APP_VARIANT ?? process.env.EXPO_PUBLIC_APP_VARIANT ?? "").trim().toLowerCase();
+  if (raw === "dev") return "dev";
+  if (raw === "prod") return "prod";
+  if (process.env.NODE_ENV === "development") return "dev";
+  return "prod";
+}
+
+const APP_VARIANT = resolveAppVariant();
 const isDev = APP_VARIANT === "dev";
 
 const PROD_BUNDLE_ID = "com.ortizdigitalstudio.matmind";

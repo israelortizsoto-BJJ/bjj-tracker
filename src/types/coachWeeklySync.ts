@@ -1,5 +1,10 @@
 export type SyncedCoachOutcome = "not_yet" | "close" | "hit";
 
+export type SyncedWeeklyParentFeedback = {
+  viewedAt?: string;
+  acknowledgedAt?: string;
+};
+
 /**
  * Remote weekly message published by coach devices; parents read-only in MVP.
  * Explicit fields only — no coach private notes.
@@ -24,6 +29,8 @@ export type SyncedWeeklyMessagePayload = {
   familyCoachRecapNote?: string;
   /** Parent-safe coach progress signal, mapped from the coach weekly check-in. */
   coachOutcome?: SyncedCoachOutcome;
+  /** Parent read/acknowledge signal for the currently published weekly note. */
+  parentFeedback?: SyncedWeeklyParentFeedback;
   updatedAt: string;
 };
 
