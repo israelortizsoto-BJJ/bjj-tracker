@@ -11,95 +11,98 @@ type SummaryAthleteSwitcherProps = {
   onChange?: (athleteId: string) => void;
 };
 
-const getInitials = (name: string) => {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-};
-
 export default function SummaryAthleteSwitcher({
   athletes,
   activeAthleteId,
   onChange,
 }: SummaryAthleteSwitcherProps) {
-  const activeAthlete =
-    athletes.find((athlete) => athlete.id === activeAthleteId) ?? athletes[0];
-  const athleteName = activeAthlete?.name ?? "Athlete";
-  const content = (
-    <>
-      <View style={styles.left}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{getInitials(athleteName)}</Text>
-        </View>
-        <Text style={styles.name}>{athleteName}</Text>
-      </View>
-      <Text style={styles.indicator}>›</Text>
-    </>
-  );
-
-  if (athletes.length <= 1) {
-    return <View style={styles.container}>{content}</View>;
-  }
-
   return (
-    <Pressable
-      style={styles.container}
-      onPress={() => {
-        const currentIndex = athletes.findIndex(
-          (athlete) => athlete.id === activeAthleteId,
-        );
-        const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % athletes.length : 0;
-        const nextAthlete = athletes[nextIndex];
-        if (nextAthlete) onChange?.(nextAthlete.id);
-      }}
-    >
-      {content}
-    </Pressable>
+    <View style={styles.container}>
+      <Text style={styles.label}>Athlete</Text>
+      <View style={styles.chipRow}>
+        {athletes.length === 0 ? (
+          <Text style={styles.emptyText}>No athlete yet</Text>
+        ) : (
+          athletes.map((athlete) => {
+            const isActive = athlete.id === activeAthleteId;
+
+            return (
+              <Pressable
+                key={athlete.id}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                onPress={() => onChange?.(athlete.id)}
+                style={({ pressed }) => [
+                  styles.chip,
+                  isActive ? styles.activeChip : styles.inactiveChip,
+                  pressed ? styles.pressedChip : null,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    isActive ? styles.activeChipText : styles.inactiveChipText,
+                  ]}
+                >
+                  {athlete.name}
+                </Text>
+              </Pressable>
+            );
+          })
+        )}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: "#0b0f12",
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderColor: "#1f2937",
+    backgroundColor: "transparent",
   },
-  left: {
-    flexDirection: "row",
-    alignItems: "center",
+  label: {
+    color: "#9ca3af",
+    fontSize: 13,
+    fontWeight: "700",
+    marginBottom: 10,
   },
-  avatar: {
-    width: 36,
-    height: 36,
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 10,
+  },
+  chip: {
+    minHeight: 40,
     borderRadius: 999,
-    backgroundColor: "#20252b",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    borderWidth: 1,
   },
-  avatarText: {
-    color: "#ffffff",
-    fontSize: 13,
+  activeChip: {
+    backgroundColor: "#c7f36b",
+    borderColor: "#c7f36b",
+  },
+  inactiveChip: {
+    backgroundColor: "#111827",
+    borderColor: "#1f2937",
+  },
+  pressedChip: {
+    opacity: 0.82,
+  },
+  chipText: {
+    fontSize: 14,
     fontWeight: "800",
   },
-  name: {
-    color: "#ffffff",
-    fontSize: 16,
-    fontWeight: "700",
+  activeChipText: {
+    color: "#111827",
   },
-  indicator: {
+  inactiveChipText: {
+    color: "#ffffff",
+  },
+  emptyText: {
     color: "#9ca3af",
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 14,
   },
 });

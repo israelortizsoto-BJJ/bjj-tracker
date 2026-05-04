@@ -2,6 +2,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
+import SummaryAthleteSwitcher from "../../components/summary/SummaryAthleteSwitcher";
 import SummaryCompetitionCard from "../../components/summary/SummaryCompetitionCard";
 import SummaryConsistencyCard from "../../components/summary/SummaryConsistencyCard";
 import SummaryHeroCard from "../../components/summary/SummaryHeroCard";
@@ -9,7 +10,7 @@ import SummaryPatternsCard from "../../components/summary/SummaryPatternsCard";
 import SummaryWeekCard from "../../components/summary/SummaryWeekCard";
 import type { CompetitionEntry } from "../../lib/signals/computeSignals";
 import { useSignals } from "../../hooks/useSignals";
-import { useActiveKidId } from "../../state/activeKidStore";
+import { setActiveKidId, useActiveKidId } from "../../state/activeKidStore";
 import { getKidsById } from "../../storage/coachKidStore";
 import { getCompetitionDetailByEntryId } from "../../storage/competitionStore";
 import { getKidCompetitionEntriesForKid } from "../../storage/kidCompetitionStore";
@@ -20,6 +21,11 @@ type AthleteData = {
   sessions: Session[];
   competitions: CompetitionEntry[];
   loading: boolean;
+};
+
+type SummaryAthlete = {
+  id: string;
+  name: string;
 };
 
 function useAthleteData(activeKidId: string): AthleteData {
@@ -84,6 +90,7 @@ function useAthleteData(activeKidId: string): AthleteData {
 export default function SummaryScreen() {
   const activeKidIdFromStore = useActiveKidId();
   const [fallbackKidId, setFallbackKidId] = useState("");
+  const [athletes, setAthletes] = useState<SummaryAthlete[]>([]);
 
   useFocusEffect(
     useCallback(() => {
@@ -91,11 +98,19 @@ export default function SummaryScreen() {
 
       async function loadFallbackAthlete() {
         const kidsById = await getKidsById();
-        const firstKid = Object.values(kidsById)
-          .filter((kid) => kid.name.trim().length > 0)
-          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }))[0];
+        const nextAthletes = Object.values(kidsById)
+          .map((kid) => ({
+            id: kid.id,
+            name: kid.name.trim() || "Athlete",
+          }))
+          .sort((a, b) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+          );
 
-        if (mounted) setFallbackKidId(firstKid?.id ?? "");
+        if (mounted) {
+          setAthletes(nextAthletes);
+          setFallbackKidId(nextAthletes[0]?.id ?? "");
+        }
       }
 
       void loadFallbackAthlete();
@@ -106,7 +121,14 @@ export default function SummaryScreen() {
     }, []),
   );
 
-  const activeKidId = activeKidIdFromStore ?? fallbackKidId;
+  const activeKidExists = athletes.some(
+    (athlete) => athlete.id === activeKidIdFromStore,
+  );
+  const activeKidId =
+    activeKidIdFromStore && activeKidExists ? activeKidIdFromStore : fallbackKidId;
+  const handleSelectAthlete = useCallback((kidId: string) => {
+    setActiveKidId(kidId);
+  }, []);
   const { sessions, competitions } = useAthleteData(activeKidId);
   const signals = useSignals({
     sessions,
@@ -119,6 +141,16 @@ export default function SummaryScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+      {athletes.length > 0 ? (
+        <View style={styles.selectorSection}>
+          <SummaryAthleteSwitcher
+            activeAthleteId={activeKidId}
+            athletes={athletes}
+            onChange={handleSelectAthlete}
+          />
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <SummaryHeroCard
           alignment={signals.alignment}
@@ -178,6 +210,9 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     paddingBottom: 36,
+  },
+  selectorSection: {
+    marginBottom: 24,
   },
   section: {
     marginBottom: 30,
