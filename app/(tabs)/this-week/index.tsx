@@ -1799,6 +1799,74 @@ function ParentThisWeekScreen() {
           </Text>
         ) : (
           <>
+            {showParentKidSelector ? (
+              <>
+                <View
+                  style={{
+                    marginTop: 16,
+                    marginBottom: -2,
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: FEED.muted }}>
+                    Athlete
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    marginTop: 8,
+                    paddingHorizontal: 2,
+                    fontSize: 14,
+                    color: FEED.muted,
+                    lineHeight: 20,
+                  }}
+                >
+                  Choose who this week is for.
+                </Text>
+                <View
+                  style={{
+                    marginTop: 12,
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: 8,
+                  }}
+                >
+                {relevantParentKids.map((kid) => {
+                  const selected = kid.id === familyCompetition.kidId;
+                  return (
+                    <Pressable
+                      key={kid.id}
+                      onPress={() => void handleSelectParentKidForThisWeek(kid)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`Training and competition for ${kid.name.trim() || "this child"}`}
+                      style={({ pressed }) => ({
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: FEED.radius,
+                        borderWidth: 1,
+                        borderColor: selected ? FEED.lineStrong : FEED.line,
+                        backgroundColor: selected
+                          ? (pressed ? FEED.panel3 : FEED.panel2)
+                          : (pressed ? FEED.panel3 : FEED.panel),
+                      })}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: "800",
+                          color: selected ? FEED.text : FEED.muted,
+                        }}
+                      >
+                        {kid.name.trim() || "Child"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                </View>
+              </>
+            ) : null}
+
             <View
               style={{
                 marginTop: 16,
@@ -2043,6 +2111,55 @@ function ParentThisWeekScreen() {
               ) : null}
 
             </View>
+
+            <Pressable
+              onPress={openWeeklyStory}
+              accessibilityRole="button"
+              accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
+              style={({ pressed }) => ({
+                marginTop: 16,
+                paddingVertical: tokens.space[4],
+                paddingHorizontal: tokens.space[4],
+                borderRadius: FEED.radius,
+                borderWidth: 1,
+                borderColor: FEED.line,
+                backgroundColor: pressed ? FEED.panel3 : FEED.panel,
+                alignSelf: "stretch",
+                alignItems: "flex-start",
+                ...tokens.elevation.card,
+              })}
+            >
+              <Text
+                style={[
+                  tokens.type.label,
+                  { color: FEED.muted },
+                ]}
+              >
+                FAMILY HUDDLE
+              </Text>
+              <Text
+                style={[
+                  tokens.type.h2,
+                  {
+                    marginTop: tokens.space[2],
+                    color: FEED.text,
+                  },
+                ]}
+              >
+                Talk through the week together
+              </Text>
+              <Text
+                style={[
+                  tokens.type.body,
+                  {
+                    marginTop: tokens.space[2],
+                    color: FEED.muted,
+                  },
+                ]}
+              >
+                Review the coach message, ask what clicked, and keep training simple.
+              </Text>
+            </Pressable>
 
             <View
               style={{
@@ -2411,124 +2528,18 @@ function ParentThisWeekScreen() {
               </View>
             ) : null}
 
-            {showParentKidSelector ? (
-              <>
-                <View
-                  style={{
-                    marginTop: tokens.layout.sectionGap,
-                    marginBottom: -2,
-                    paddingHorizontal: 2,
-                  }}
-                >
-                  <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: FEED.muted }}>
-                    Athlete
-                  </Text>
-                </View>
-                <Text
-                  style={{
-                    marginTop: 8,
-                    paddingHorizontal: 2,
-                    fontSize: 14,
-                    color: FEED.muted,
-                    lineHeight: 20,
-                  }}
-                >
-                  This controls weekly direction, training, and snapshots below.
-                </Text>
-                <View
-                  style={{
-                    marginTop: 12,
-                    flexDirection: "row",
-                    flexWrap: "wrap",
-                    gap: 8,
-                  }}
-                >
-                {relevantParentKids.map((kid) => {
-                  const selected = kid.id === familyCompetition.kidId;
-                  return (
-                    <Pressable
-                      key={kid.id}
-                      onPress={() => void handleSelectParentKidForThisWeek(kid)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected }}
-                      accessibilityLabel={`Training and competition for ${kid.name.trim() || "this child"}`}
-                      style={({ pressed }) => ({
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: FEED.radius,
-                        borderWidth: 1,
-                        borderColor: selected ? FEED.lineStrong : FEED.line,
-                        backgroundColor: selected
-                          ? (pressed ? FEED.panel3 : FEED.panel2)
-                          : (pressed ? FEED.panel3 : FEED.panel),
-                      })}
-                    >
-                      <Text
-                        style={{
-                          fontSize: 13,
-                          fontWeight: "800",
-                          color: selected ? FEED.text : FEED.muted,
-                        }}
-                      >
-                        {kid.name.trim() || "Child"}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-                </View>
-              </>
-            ) : null}
-
-            <Pressable
-              onPress={openWeeklyStory}
-              accessibilityRole="button"
-              accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
-              style={({ pressed }) => ({
-                marginTop: tokens.layout.sectionGap,
-                paddingVertical: tokens.space[4],
-                paddingHorizontal: tokens.space[4],
-                borderRadius: FEED.radius,
-                borderWidth: 1,
-                borderColor: FEED.line,
-                backgroundColor: pressed ? FEED.panel3 : FEED.panel,
-                alignSelf: "stretch",
-                alignItems: "flex-start",
-                ...tokens.elevation.card,
-              })}
-            >
-              <Text
-                style={[
-                  tokens.type.label,
-                  { color: FEED.muted },
-                ]}
-              >
-                FAMILY HUDDLE
-              </Text>
-              <Text
-                style={[
-                  tokens.type.h2,
-                  {
-                    marginTop: tokens.space[2],
-                    color: FEED.text,
-                  },
-                ]}
-              >
-                Talk through the week together
-              </Text>
-              <Text
-                style={[
-                  tokens.type.body,
-                  {
-                    marginTop: tokens.space[2],
-                    color: FEED.muted,
-                  },
-                ]}
-              >
-                Review the coach message, ask what clicked, and keep training simple.
-              </Text>
-            </Pressable>
-
+            {/* Transitional utilities remain below the weekly loop until their final homes are decided. */}
             <Section title="Competition snapshot" tone="family">
+              <Text
+                style={{
+                  marginBottom: 12,
+                  fontSize: 13,
+                  color: FEED.faint,
+                  lineHeight: 18,
+                }}
+              >
+                Event planning sits below this week’s coach loop.
+              </Text>
               {role === "parent" ? (
                 <View
                   style={{
