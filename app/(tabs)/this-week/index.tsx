@@ -3382,7 +3382,7 @@ export default function CoachesScreen() {
 
   useEffect(() => {
     if (role === "coach") {
-      router.replace("/coach");
+      router.replace("/(tabs)/coach");
     }
   }, [role]);
 
