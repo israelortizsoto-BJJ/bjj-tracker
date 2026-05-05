@@ -49,6 +49,7 @@ import {
   reconcileCoachKidRosterFromWriterSessions,
   setKidsById,
 } from "../../../src/storage/coachKidStore";
+import { safeReplace } from "../../../src/navigation/safeNavigate";
 import type { CoachIdentity, CoachLink } from "../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
@@ -134,7 +135,7 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
   const syncConfigured = isCoachSyncConfigured();
   const parentCoachKidNavLockRef = useRef(false);
   const backLabel = surface === "coach" ? "Back to Coach" : "Back to Profile";
-  const backRoute = surface === "coach" ? "/(tabs)/coach" : "/profile";
+  const backRoute = surface === "coach" ? "/coach" : "/profile";
 
   const loadKids = useCallback(async (opts?: { skipReadyReset?: boolean }) => {
     if (!opts?.skipReadyReset) {
@@ -504,7 +505,7 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
           }
         >
         <Pressable
-          onPress={() => router.replace(backRoute)}
+          onPress={() => safeReplace(router, backRoute)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,

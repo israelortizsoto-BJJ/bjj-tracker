@@ -98,14 +98,11 @@ export function resolveWeeklyDoc(
   }
 }
 
-/** True if invite-level or any per-athlete slot has a valid weekly doc. */
+/** True if any per-athlete slot has a valid weekly doc. */
 export function sessionSnapshotHasUsableWeeklyDoc(
   session: ResolveWeeklyDocSession | null | undefined,
 ): boolean {
   if (!session) return false;
-  if (session.weekly != null && isValidWeeklyDoc(session.weekly)) {
-    return true;
-  }
   const m = session.weeklyByAthleteId;
   if (m && typeof m === "object" && !Array.isArray(m)) {
     for (const v of Object.values(m)) {

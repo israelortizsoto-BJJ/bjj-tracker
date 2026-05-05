@@ -7,6 +7,7 @@ import type {
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
+import { enforceWeeklyAthleteInvariant } from "./invariants/weeklyAthleteInvariant";
 import { StorageKeys } from "./storageKeys";
 
 /** Same validation as `resolveWeeklyDoc` / invite-level `weekly` (not exported from there). */
@@ -208,12 +209,30 @@ export async function setCachedWeeklyForLinkToken(
         : prev?.tokenNorm && prev.tokenNorm.length > 0
           ? prev.tokenNorm
           : normalizeInviteLinkToken(linkToken);
+  const {
+    weeklyByAthleteId: normalizedWeeklyByAthleteId,
+    athletes: normalizedAthletes,
+  } = enforceWeeklyAthleteInvariant({
+    weeklyByAthleteId,
+    athletes,
+    session: nextSession,
+  });
+  const athleteIds = new Set(normalizedAthletes.map((a) => a.id));
+  const missing = Object.keys(normalizedWeeklyByAthleteId).filter((id) => !athleteIds.has(id));
+
+  if (__DEV__ && missing.length > 0) {
+    console.error("[CACHE INVARIANT VIOLATION]", {
+      missing,
+      weeklyKeys: Object.keys(normalizedWeeklyByAthleteId),
+      athleteIds: Array.from(athleteIds),
+    });
+  }
 
   map[linkToken] = {
     weekly: isValidWeeklyDoc(weekly) ? weekly : null,
     fetchedAt: fetchedAtIso,
-    weeklyByAthleteId: normalizeWeeklyByAthleteId(weeklyByAthleteId),
-    athletes: athletes && athletes.length > 0 ? athletes : undefined,
+    weeklyByAthleteId: normalizedWeeklyByAthleteId,
+    athletes: normalizedAthletes,
     tokenNorm: nextTokenNorm,
     session: nextSession ?? undefined,
   };

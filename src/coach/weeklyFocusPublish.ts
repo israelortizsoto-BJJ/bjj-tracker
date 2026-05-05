@@ -33,6 +33,32 @@ function coachOutcomeForPublish(
   }
 }
 
+/** Newest-created row strictly before `entry` in the same week that still has a mission URL. */
+function missionFieldsFromOlderSameWeekRow(
+  entry: KidWeeklyFocusEntry,
+  weekStartYMD: string,
+  candidates: KidWeeklyFocusEntry[],
+): Pick<KidWeeklyFocusEntry, "missionResourceUrl" | "missionResourceLabel"> | null {
+  const older = candidates.filter(
+    (e) =>
+      e.kidId === entry.kidId &&
+      e.weekStartYMD === weekStartYMD &&
+      e.id !== entry.id &&
+      e.createdAt.localeCompare(entry.createdAt) < 0,
+  );
+  older.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  for (const e of older) {
+    const u = (e.missionResourceUrl ?? "").trim();
+    if (u) return { missionResourceUrl: e.missionResourceUrl, missionResourceLabel: e.missionResourceLabel };
+  }
+  return null;
+}
+
+export type KidWeeklyFocusPublishPayloadOptions = {
+  /** Any rows for this Monday week; used to recover mission fields when the latest row omitted them (e.g. check-in append). */
+  sameWeekEntriesForMissionFallback?: KidWeeklyFocusEntry[];
+};
+
 /**
  * Maps a saved weekly focus row to the **family-facing** remote document.
  * Does not include coach private notes or the coach-only reference video URL (`youtubeUrl`).
@@ -41,7 +67,16 @@ function coachOutcomeForPublish(
 export function kidWeeklyFocusToPublishPayload(
   entry: KidWeeklyFocusEntry,
   weekStartYMD: string,
+  options?: KidWeeklyFocusPublishPayloadOptions,
 ): CoachWeeklySyncPublishBody {
+  if (__DEV__) {
+    console.log("[weekly-publish-mission-debug]", {
+      selectedRowCreatedAt: entry.createdAt,
+      hasMission: Boolean((entry.missionResourceUrl ?? "").trim()),
+      focusType: entry.focusType,
+    });
+  }
+
   const headline = entry.title.trim().slice(0, 200);
   const bodyRaw =
     entry.focusType === "template"
@@ -51,9 +86,26 @@ export function kidWeeklyFocusToPublishPayload(
     bodyRaw ||
     "Your coach highlighted this week’s focus in class. Use the title above as the main cue, and ask your coach if you want more detail.";
 
-  const publishedMissionUrl = normalizeFamilyResourceUrl(entry.missionResourceUrl);
+  const entryMissionTrim = (entry.missionResourceUrl ?? "").trim();
+  const missionFallback =
+    !entryMissionTrim && options?.sameWeekEntriesForMissionFallback?.length
+      ? missionFieldsFromOlderSameWeekRow(
+          entry,
+          weekStartYMD,
+          options.sameWeekEntriesForMissionFallback,
+        )
+      : null;
+  const missionResourceUrlForPublish = entryMissionTrim
+    ? entry.missionResourceUrl
+    : (missionFallback?.missionResourceUrl ?? entry.missionResourceUrl);
+  const missionResourceLabelForPublish =
+    entryMissionTrim
+      ? entry.missionResourceLabel
+      : (missionFallback?.missionResourceLabel ?? entry.missionResourceLabel);
+
+  const publishedMissionUrl = normalizeFamilyResourceUrl(missionResourceUrlForPublish);
   const publishedMissionLabel = publishedMissionUrl
-    ? normalizePublishedLabel(entry.missionResourceLabel) ??
+    ? normalizePublishedLabel(missionResourceLabelForPublish) ??
       defaultFamilyLinkButtonLabel(publishedMissionUrl)
     : undefined;
   const publishedFamilyUrl = normalizeFamilyResourceUrl(entry.familyResourceUrl);

@@ -723,6 +723,8 @@ export async function updateKidWeeklyFocusFocusById(
 
 /**
  * Append a new weekly focus log (never overwrites an existing row).
+ * Check-in appends should pass `missionResourceUrl` / `missionResourceLabel` through from the
+ * focus row so “latest by createdAt” reads do not drop the mission link.
  */
 export async function appendKidWeeklyFocus(
   input: KidWeeklyFocusAppendInput,

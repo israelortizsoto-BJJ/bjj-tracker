@@ -322,17 +322,38 @@ export async function coachSyncPublishWeekly(
   body: CoachWeeklySyncPublishBody,
   apiBaseUrlOverride?: string | null,
 ): Promise<void> {
-  const base = resolveBase(apiBaseUrlOverride);
-  const enc = encodeURIComponent(linkToken);
-  const res = await fetch(joinUrl(base, `/v1/sessions/${enc}/weekly`), {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      Authorization: `Bearer ${writerSecret}`,
-    },
-    body: JSON.stringify(body),
+  const tokenTail = linkToken.trim().slice(-6);
+  const sharedAthleteId =
+    typeof body.sharedAthleteId === "string" ? body.sharedAthleteId.trim() || null : null;
+  console.log("[PUBLISH \u2192 API CALL]", {
+    tokenTail,
+    sharedAthleteId,
   });
+  let res: Response;
+  try {
+    const base = resolveBase(apiBaseUrlOverride);
+    const enc = encodeURIComponent(linkToken);
+    const url = joinUrl(base, `/v1/sessions/${enc}/weekly`);
+    console.log("[API CALL]", {
+      url,
+      method: "PUT",
+      body,
+    });
+    res = await fetch(url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        Authorization: `Bearer ${writerSecret}`,
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (error) {
+    console.error("[PUBLISH \u2192 API ERROR]", error);
+    throw error;
+  }
+  console.log("[API RESPONSE STATUS]", res.status);
+  console.log("[PUBLISH \u2192 API SUCCESS]", res.status);
   const payload = await parseJsonOrText(res);
   if (!res.ok) {
     const msg =

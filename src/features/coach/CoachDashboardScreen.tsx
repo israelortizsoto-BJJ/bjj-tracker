@@ -185,7 +185,7 @@ export default function CoachDashboardScreen() {
           <Text style={styles.title}>Coach Dashboard</Text>
           <Text style={styles.subtitle}>Where coaching decisions are made.</Text>
           <Pressable
-            onPress={() => router.push("/(tabs)/coach/kids")}
+            onPress={() => router.push("/coach/kids")}
             accessibilityRole="button"
             accessibilityLabel="Open athlete roster and parent links"
             style={({ pressed }) => [

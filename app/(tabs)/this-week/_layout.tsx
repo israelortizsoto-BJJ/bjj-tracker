@@ -4,6 +4,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
 import { isParentAllowedCoachSegments } from "../../../src/deviceRole/coachRouteGate";
+import { safeReplace } from "../../../src/navigation/safeNavigate";
 
 export default function CoachesStackLayout() {
   const mountRef = useRef(0);
@@ -20,7 +21,9 @@ export default function CoachesStackLayout() {
     if (loading) return;
     if (role !== "parent") return;
     if (isParentAllowedCoachSegments(segments)) return;
-    router.replace("/this-week");
+    queueMicrotask(() => {
+      safeReplace(router, "/this-week");
+    });
   }, [loading, role, router, segments]);
 
   return (

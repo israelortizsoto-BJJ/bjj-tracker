@@ -454,6 +454,9 @@ export default function KidDetailScreen() {
   const [savingHousehold, setSavingHousehold] = useState(false);
   const [householdSavedAck, setHouseholdSavedAck] = useState(false);
   const [currentWeekEntry, setCurrentWeekEntry] = useState<KidWeeklyFocusEntry | null>(null);
+  const [weeklyFocusEntriesThisWeek, setWeeklyFocusEntriesThisWeek] = useState<
+    KidWeeklyFocusEntry[]
+  >([]);
   const [publishedWeeklyFeedback, setPublishedWeeklyFeedback] =
     useState<SyncedWeeklyMessagePayload["parentFeedback"] | null>(null);
   const [thisWeekReflections, setThisWeekReflections] = useState<KidWeeklyFocusEntry[]>([]);
@@ -550,6 +553,9 @@ export default function KidDetailScreen() {
       setNotesDraft("");
 
       const allEntries = await getKidWeeklyFocusEntriesForKid(kidId);
+      setWeeklyFocusEntriesThisWeek(
+        allEntries.filter((e) => e.weekStartYMD === weekStartYMD),
+      );
       const weekReflections = allEntries.filter(
         (e) =>
           e.weekStartYMD === weekStartYMD &&
@@ -670,9 +676,7 @@ export default function KidDetailScreen() {
               canonicalTokenTail = linkTokenTail;
               remoteForKid = matching;
               feedbackForPublishedWeekly =
-                session.weeklyByAthleteId?.[sharedAthleteId]?.parentFeedback ??
-                session.weekly?.parentFeedback ??
-                null;
+                session.weeklyByAthleteId?.[sharedAthleteId]?.parentFeedback ?? null;
             }
           } catch {
             sessionFetchFailures += 1;
@@ -1139,7 +1143,9 @@ export default function KidDetailScreen() {
 
   const readTogetherPreviewCards = useMemo(() => {
     if (!currentWeekEntry || !weekStartYMD) return [];
-    const payload = kidWeeklyFocusToPublishPayload(currentWeekEntry, weekStartYMD);
+    const payload = kidWeeklyFocusToPublishPayload(currentWeekEntry, weekStartYMD, {
+      sameWeekEntriesForMissionFallback: weeklyFocusEntriesThisWeek,
+    });
     const synthetic: SyncedWeeklyMessagePayload = {
       weekStartYMD: payload.weekStartYMD,
       headline: payload.headline,
@@ -1170,7 +1176,12 @@ export default function KidDetailScreen() {
         "Publishing updates the shared weekly note for this invite.",
       practiceSummary: readTogetherPreviewPractice,
     });
-  }, [currentWeekEntry, weekStartYMD, readTogetherPreviewPractice]);
+  }, [
+    currentWeekEntry,
+    weekStartYMD,
+    readTogetherPreviewPractice,
+    weeklyFocusEntriesThisWeek,
+  ]);
 
   const closeReadTogetherPreview = useCallback(() => {
     setReadTogetherPreviewOpen(false);
@@ -1219,6 +1230,8 @@ export default function KidDetailScreen() {
           title: currentWeekEntry.title,
           metadata: currentWeekEntry.metadata,
           youtubeUrl: currentWeekEntry.youtubeUrl,
+          missionResourceUrl: currentWeekEntry.missionResourceUrl,
+          missionResourceLabel: currentWeekEntry.missionResourceLabel,
           familyResourceUrl: currentWeekEntry.familyResourceUrl,
           familyResourceLabel: currentWeekEntry.familyResourceLabel,
           familyCoachRecapNote: currentWeekEntry.familyCoachRecapNote,
@@ -1234,6 +1247,8 @@ export default function KidDetailScreen() {
           title: currentWeekEntry.title,
           note: currentWeekEntry.note,
           youtubeUrl: currentWeekEntry.youtubeUrl,
+          missionResourceUrl: currentWeekEntry.missionResourceUrl,
+          missionResourceLabel: currentWeekEntry.missionResourceLabel,
           familyResourceUrl: currentWeekEntry.familyResourceUrl,
           familyResourceLabel: currentWeekEntry.familyResourceLabel,
           familyCoachRecapNote: currentWeekEntry.familyCoachRecapNote,
@@ -1347,6 +1362,9 @@ export default function KidDetailScreen() {
       Alert.alert("Set focus first", "Save this week’s focus before publishing to families.");
       return;
     }
+    const sameWeekFallbackPool = (
+      await getKidWeeklyFocusEntriesForKid(kidId)
+    ).filter((e) => e.weekStartYMD === weekStartYMD);
     if (__DEV__) {
       const recap = (latestEntry.familyCoachRecapNote ?? "").trim();
       console.log("[bjj-coach-publish-latest-entry]", {
@@ -1428,7 +1446,9 @@ export default function KidDetailScreen() {
     }
 
     const sharedAthleteId = sharedAthleteIdRaw;
-    const basePublish = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD);
+    const basePublish = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD, {
+      sameWeekEntriesForMissionFallback: sameWeekFallbackPool,
+    });
     const payload: CoachWeeklySyncPublishBody = {
       ...basePublish,
       sharedAthleteId,

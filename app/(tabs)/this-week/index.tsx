@@ -33,6 +33,7 @@ import {
   setCompletionReceiptsQueue as persistCompletionReceiptsQueue,
   setCoachPilotPreviewItems,
 } from "../../../src/storage/coachShareStore";
+import { safeReplace } from "../../../src/navigation/safeNavigate";
 import {
   getCachedWeeklyForLinkToken,
   setCachedWeeklyForLinkToken,
@@ -102,6 +103,7 @@ import {
   markWeeklyAcknowledged,
   markWeeklyViewed,
 } from "../../../src/features/weekly/parentFeedbackHelpers";
+import { useIdentity } from "@/src/identity/useIdentity";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
 const UI = {
@@ -208,27 +210,57 @@ type WeeklySessionSnapshot = {
   athletes: SyncedSharedAthlete[];
 };
 
+function logWeeklyKidMapping({
+  kidsById,
+  weeklySessionSnapshot,
+}: {
+  kidsById: Record<string, any> | null | undefined;
+  weeklySessionSnapshot: any;
+}) {
+  if (!kidsById || !weeklySessionSnapshot) return;
+
+  const available = Object.keys(
+    weeklySessionSnapshot.weeklyByAthleteId ?? {},
+  );
+
+  const rows = Object.entries(kidsById).map(([kidId, kid]) => {
+    const sharedAthleteId = kid?.sharedAthleteId ?? null;
+    const valid =
+      sharedAthleteId != null && available.includes(sharedAthleteId);
+
+    return {
+      kidId,
+      sharedAthleteId,
+      valid,
+    };
+  });
+
+  console.log("[WEEKLY KID MAPPING]", {
+    available,
+    rows,
+    validKids: rows.filter((r) => r.valid),
+    invalidKids: rows.filter((r) => !r.valid),
+  });
+}
+
 function resolveStrictWeeklySelectedSharedAthleteIdForKid(
   kidId: string | null | undefined,
-  kidsById: KidsById,
-  weeklySessionSnapshot: WeeklySessionSnapshot | null,
+  kidsById: KidsById | null | undefined,
+  weeklySessionSnapshot: WeeklySessionSnapshot | null | undefined,
 ): string | null {
-  if (!kidId || !weeklySessionSnapshot) return null;
+  const normalizedKidId = kidId?.trim();
+  if (!normalizedKidId || !kidsById || !weeklySessionSnapshot) return null;
 
   const weeklyMap = weeklySessionSnapshot.weeklyByAthleteId ?? {};
   const candidate = sharedAthleteIdFromRosterForSession(
-    kidId,
-    kidsById[kidId]?.sharedAthleteId,
+    normalizedKidId,
+    kidsById[normalizedKidId]?.sharedAthleteId,
     weeklySessionSnapshot.athletes,
   );
 
-  return (
-    candidate != null &&
-    Object.prototype.hasOwnProperty.call(weeklyMap, candidate) &&
-    weeklyMap[candidate] != null
-  )
-    ? candidate
-    : null;
+  if (!candidate) return null;
+  if (!(candidate in weeklyMap)) return null;
+  return candidate;
 }
 
 function Section({
@@ -417,10 +449,6 @@ function ParentThisWeekScreen() {
   const roleRef = useRef(role);
   roleRef.current = role;
   const mountCountRef = useRef(0);
-  useEffect(() => {
-    mountCountRef.current += 1;
-    console.log("[MOUNT_TRACE:PARENT_THIS_WEEK]", mountCountRef.current);
-  }, []);
   const insets = useSafeAreaInsets();
   const [ready, setReady] = useState(false);
   /** Dev-only: raw AsyncStorage row counts (long-press title). */
@@ -441,24 +469,79 @@ function ParentThisWeekScreen() {
   );
   /** Invite-level `weekly` plus per-athlete map; `weeklySyncDoc` is derived via useMemo. */
   const [weeklySessionSnapshot, setWeeklySessionSnapshot] = useState<WeeklySessionSnapshot | null>(null);
-  /** Set with `weeklySessionSnapshot` from the same `loadCoachShareData` pass (`loadedKidsById` + session athletes). */
-  const [weeklySyncSelectedSharedAthleteId, setWeeklySyncSelectedSharedAthleteId] = useState<
-    string | null
-  >(null);
+  const derivedActiveAthleteId = useMemo(() => {
+    if (!activeKidIdFromStore) return null;
+    if (!kidsByIdState || Object.keys(kidsByIdState).length === 0) return null;
+    if (!weeklySessionSnapshot?.weeklyByAthleteId) return null;
+
+    const available = Object.keys(weeklySessionSnapshot.weeklyByAthleteId ?? {});
+    const rows = Object.entries(kidsByIdState).map(([kidId, kid]) => {
+      const sharedAthleteId = kid?.sharedAthleteId ?? null;
+      const valid =
+        sharedAthleteId != null && available.includes(sharedAthleteId);
+
+      return {
+        kidId,
+        sharedAthleteId,
+        valid,
+      };
+    });
+    const validKids = rows.filter((r) => r.valid);
+    const match = validKids.find((k) => k.kidId === activeKidIdFromStore);
+
+    return match?.sharedAthleteId ?? null;
+  }, [
+    activeKidIdFromStore,
+    kidsByIdState,
+    weeklySessionSnapshot?.weeklyByAthleteId,
+  ]);
+  console.log("[DERIVED ATHLETE RESOLVE]", {
+    activeKidIdFromStore,
+    hasKids: !!kidsByIdState,
+    weeklyKeys: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId || {}),
+    result: derivedActiveAthleteId,
+  });
+
+  useEffect(() => {
+    mountCountRef.current += 1;
+    console.log("[MOUNT_TRACE:PARENT_THIS_WEEK]", mountCountRef.current);
+    console.log("[THIS WEEK MOUNT]", {
+      activeKidIdFromStore,
+      derivedActiveAthleteId,
+    });
+  }, []);
+
   const weeklySyncDoc = useMemo(() => {
     if (!weeklySessionSnapshot) return null;
-    return resolveWeeklyDoc(weeklySessionSnapshot, weeklySyncSelectedSharedAthleteId);
-  }, [weeklySessionSnapshot, weeklySyncSelectedSharedAthleteId]);
+    return resolveWeeklyDoc(weeklySessionSnapshot, derivedActiveAthleteId);
+  }, [weeklySessionSnapshot, derivedActiveAthleteId]);
   const [weeklySyncFetchFailed, setWeeklySyncFetchFailed] = useState(false);
   const [weeklySyncFetchedAt, setWeeklySyncFetchedAt] = useState<string | null>(null);
   const [weeklySyncFromCache, setWeeklySyncFromCache] = useState(false);
   const [weeklySyncNetworkOk, setWeeklySyncNetworkOk] = useState(false);
+  const weeklyKidMappingLoggedKeyRef = useRef<string | null>(null);
   /** Dev + parent: show after successful weekly fetch when `weekly.updatedAt` is newer than local last-seen. */
   const [showNewCoachUpdateBanner, setShowNewCoachUpdateBanner] = useState(false);
   const [practiceSummary, setPracticeSummary] = useState<ParentWeeklyPracticeSummary>(
     INITIAL_PRACTICE_SUMMARY,
   );
   const [kidsByIdState, setKidsByIdState] = useState<KidsById>({});
+  const identity = useIdentity(kidsByIdState, weeklySessionSnapshot);
+  if (__DEV__) {
+    console.log("[IDENTITY SHADOW]", {
+      status: identity.status,
+      kidId: identity.kidId,
+      sharedAthleteId: identity.sharedAthleteId,
+      hasWeeklyDoc: !!identity.weeklyDoc,
+
+      // existing system values
+      activeKidIdFromStore,
+      derivedActiveAthleteId,
+      hasWeeklyDocOld: !!weeklySyncDoc,
+
+      weeklyKeys: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId || {}),
+    });
+  }
   /** Invalidates in-flight `loadCoachShareData` family competition writes so delete wins over stale reloads. */
   const applyFamilyCompGenRef = useRef(0);
   /** User tapped Refresh — bypass `coachSyncFetchSession` once-per-token skip. */
@@ -480,6 +563,23 @@ function ParentThisWeekScreen() {
     if (role !== "parent" || !familyCompetition.kidId) return;
     setActiveKidId(familyCompetition.kidId);
   }, [role, familyCompetition.kidId]);
+
+  useEffect(() => {
+    if (!kidsByIdState || !weeklySessionSnapshot) return;
+
+    const logKey = JSON.stringify({
+      kidIds: Object.keys(kidsByIdState),
+      weeklyAthleteIds: Object.keys(weeklySessionSnapshot.weeklyByAthleteId ?? {}),
+      weeklyUpdatedAt: weeklySessionSnapshot.weekly?.updatedAt ?? null,
+    });
+    if (weeklyKidMappingLoggedKeyRef.current === logKey) return;
+    weeklyKidMappingLoggedKeyRef.current = logKey;
+
+    logWeeklyKidMapping({
+      kidsById: kidsByIdState,
+      weeklySessionSnapshot,
+    });
+  }, [kidsByIdState, weeklySessionSnapshot]);
 
   const computeParentKidScopedState = useCallback(
     async (kidId: string | null, loadedKidsById: KidsById, today: string) => {
@@ -773,34 +873,7 @@ function ParentThisWeekScreen() {
       }
     }
 
-    const nextWeeklySelectedSharedAthleteId = (() => {
-      if (!nextWeeklySnapshot) return null;
-      const weeklyMap = nextWeeklySnapshot.weeklyByAthleteId ?? {};
-      const keys = Object.keys(weeklyMap);
-      if (keys.length === 1) {
-        const onlyKey = keys[0] ?? null;
-        return onlyKey && weeklyMap[onlyKey] != null ? onlyKey : null;
-      }
-      if (keys.length > 1) {
-        const candidate = sharedAthleteIdFromRosterForSession(
-          rosterKidId,
-          rosterKidId ? loadedKidsById[rosterKidId]?.sharedAthleteId : undefined,
-          nextWeeklySnapshot.athletes,
-        );
-        return (
-          candidate != null &&
-          Object.prototype.hasOwnProperty.call(weeklyMap, candidate) &&
-          weeklyMap[candidate] != null
-        ) ? candidate : null;
-      }
-      return null;
-    })();
     setStateIfJsonChanged("loadCoachShareData:weeklySessionSnapshot", setWeeklySessionSnapshot, nextWeeklySnapshot);
-    setStateIfJsonChanged(
-      "loadCoachShareData:weeklySyncSelectedSharedAthleteId",
-      setWeeklySyncSelectedSharedAthleteId,
-      nextWeeklySelectedSharedAthleteId,
-    );
 
     if (
       activeWeeklySyncLink?.weeklySync &&
@@ -858,8 +931,12 @@ function ParentThisWeekScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      console.log("[THIS WEEK FOCUS]", {
+        activeKidIdFromStore,
+        derivedActiveAthleteId,
+      });
       void loadCoachShareData();
-    }, [loadCoachShareData]),
+    }, [activeKidIdFromStore, derivedActiveAthleteId, loadCoachShareData]),
   );
 
   useEffect(() => {
@@ -944,7 +1021,7 @@ function ParentThisWeekScreen() {
       const rawToken = weeklySyncLink?.weeklySync?.linkToken;
       if (!rawToken?.trim() || !weeklySessionSnapshot || !weeklySyncDoc) return;
 
-      const selectedSharedAthleteId = weeklySyncSelectedSharedAthleteId?.trim() ?? "";
+      const selectedSharedAthleteId = derivedActiveAthleteId?.trim() ?? "";
       const currentMap = weeklySessionSnapshot.weeklyByAthleteId ?? {};
       const updatesAthleteDoc =
         selectedSharedAthleteId.length > 0 &&
@@ -997,7 +1074,7 @@ function ParentThisWeekScreen() {
       weeklySessionSnapshot,
       weeklySyncDoc,
       weeklySyncLink?.weeklySync?.linkToken,
-      weeklySyncSelectedSharedAthleteId,
+      derivedActiveAthleteId,
     ],
   );
 
@@ -1328,16 +1405,41 @@ function ParentThisWeekScreen() {
     setWeeklyStoryOpen((prev) => (prev === true ? prev : true));
   }, []);
 
-  const activeAthleteLabel = familyCompetition.kidName
-    ? familyCompetition.kidName
-    : familyCompetition.kidId
-      ? "Selected athlete"
-      : "No athlete selected";
-  const weeklyDirectionSubtitle = familyCompetition.kidName
-    ? `For ${familyCompetition.kidName}`
-    : "For your athlete";
+  const weeklySyncSelectionDisplayName = useMemo(() => {
+    const id = derivedActiveAthleteId?.trim();
+    if (!id || !weeklySessionSnapshot) return null;
+    const fromSession = weeklySessionSnapshot.athletes?.find((a) => a.id === id);
+    const fromSessionName = fromSession?.name?.trim();
+    if (fromSessionName) return fromSessionName;
+    const kid = Object.values(kidsByIdState).find(
+      (k) => k && k.sharedAthleteId?.trim() === id,
+    );
+    return kid?.name?.trim() ?? null;
+  }, [derivedActiveAthleteId, weeklySessionSnapshot, kidsByIdState]);
+
+  const activeAthleteLabel = useWeeklySyncHero
+    ? weeklySyncSelectionDisplayName
+      ? weeklySyncSelectionDisplayName
+      : derivedActiveAthleteId?.trim()
+        ? "Selected athlete"
+        : "No athlete selected"
+    : familyCompetition.kidName
+      ? familyCompetition.kidName
+      : familyCompetition.kidId
+        ? "Selected athlete"
+        : "No athlete selected";
+  const weeklyDirectionSubtitle = useWeeklySyncHero
+    ? weeklySyncSelectionDisplayName
+      ? `For ${weeklySyncSelectionDisplayName}`
+      : "For your athlete"
+    : familyCompetition.kidName
+      ? `For ${familyCompetition.kidName}`
+      : "For your athlete";
   const whyThisMattersText = useMemo(() => {
-    const childName = familyCompetition.kidName?.trim() || "your kid";
+    const childName =
+      (useWeeklySyncHero
+        ? weeklySyncSelectionDisplayName?.trim()
+        : familyCompetition.kidName?.trim()) || "your kid";
     const mission = (focusTitle ?? "").trim();
 
     if (!mission) {
@@ -1345,7 +1447,12 @@ function ParentThisWeekScreen() {
     }
 
     return `This week’s mission turns training into a family game: you both know what to practice, and ${childName} can feel proud when it clicks.`;
-  }, [familyCompetition.kidName, focusTitle]);
+  }, [
+    useWeeklySyncHero,
+    weeklySyncSelectionDisplayName,
+    familyCompetition.kidName,
+    focusTitle,
+  ]);
   /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
   const weeklyNoteHeroEyebrow = "Weekly coach message";
 
@@ -1371,12 +1478,7 @@ function ParentThisWeekScreen() {
       if (!kid?.id || kid.id === familyCompetition.kidId) return;
       const today = todayYMD();
       const freshKidsById = await getKidsById();
-      const nextSelectedSharedAthleteId =
-        resolveStrictWeeklySelectedSharedAthleteIdForKid(
-          kid.id,
-          freshKidsById,
-          weeklySessionSnapshot,
-        );
+      setActiveKidId(kid.id);
       await setFamilyCompetitionSelectedKidId(kid.id);
       const compApplyGen = ++applyFamilyCompGenRef.current;
       const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
@@ -1391,9 +1493,8 @@ function ParentThisWeekScreen() {
       });
       setStateIfJsonChanged("handleSelectParentKid:practiceSummary", setPracticeSummary, nextPracticeSummary);
       setStateIfJsonChanged("handleSelectParentKid:kidsByIdState", setKidsByIdState, freshKidsById);
-      setWeeklySyncSelectedSharedAthleteId(nextSelectedSharedAthleteId);
     },
-    [computeParentKidScopedState, familyCompetition.kidId, setStateIfJsonChanged, weeklySessionSnapshot],
+    [computeParentKidScopedState, familyCompetition.kidId, setStateIfJsonChanged],
   );
 
   useEffect(() => {
@@ -1416,12 +1517,6 @@ function ParentThisWeekScreen() {
     void (async () => {
       await setFamilyCompetitionSelectedKidId(activeKidIdFromStore);
       const today = todayYMD();
-      const nextSelectedSharedAthleteId =
-        resolveStrictWeeklySelectedSharedAthleteIdForKid(
-          activeKidIdFromStore,
-          kidsByIdState,
-          weeklySessionSnapshot,
-        );
       const compApplyGen = ++applyFamilyCompGenRef.current;
       const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
         activeKidIdFromStore,
@@ -1440,7 +1535,6 @@ function ParentThisWeekScreen() {
         setPracticeSummary,
         nextPracticeSummary,
       );
-      setWeeklySyncSelectedSharedAthleteId(nextSelectedSharedAthleteId);
     })();
 
     return () => {
@@ -1455,7 +1549,6 @@ function ParentThisWeekScreen() {
     relevantParentKids,
     role,
     setStateIfJsonChanged,
-    weeklySessionSnapshot,
   ]);
 
   /** Derived relink intent (useMemo) so the async effect does not re-run on unrelated object identity churn. */
@@ -1591,6 +1684,32 @@ function ParentThisWeekScreen() {
 
   const missionUrlTrimmed = (weeklySyncDoc?.missionResourceUrl ?? "").trim();
   const hasMissionResource = missionUrlTrimmed.length > 0;
+
+  const isReady =
+    !!activeKidIdFromStore &&
+    !!kidsByIdState &&
+    Object.keys(kidsByIdState).length > 0 &&
+    !!weeklySessionSnapshot?.weeklyByAthleteId &&
+    Object.keys(weeklySessionSnapshot.weeklyByAthleteId).length > 0;
+
+  if (!isReady) {
+    console.log("[THIS WEEK NOT READY]", {
+      activeKidIdFromStore,
+      hasKids: !!kidsByIdState,
+      kidCount: Object.keys(kidsByIdState || {}).length,
+      weeklyKeys: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId || {}),
+    });
+
+    return null;
+  }
+
+  if (__DEV__) {
+    console.log("[RENDER ATHLETE SOURCE]", {
+      activeKidIdFromStore,
+      derivedActiveAthleteId,
+      available: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId ?? {}),
+    });
+  }
 
   return (
     <>
@@ -2081,6 +2200,9 @@ function ParentThisWeekScreen() {
                   onPress={() => {
                     const d = todayYMD();
                     const k = familyCompetition.kidId;
+                    console.log("[THIS WEEK NAV TRAINING]", {
+                      selected: derivedActiveAthleteId,
+                    });
                     router.push(
                       k
                         ? `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`
@@ -3382,7 +3504,9 @@ export default function CoachesScreen() {
 
   useEffect(() => {
     if (role === "coach") {
-      router.replace("/(tabs)/coach");
+      queueMicrotask(() => {
+        safeReplace(router, "/coach");
+      });
     }
   }, [role]);
 

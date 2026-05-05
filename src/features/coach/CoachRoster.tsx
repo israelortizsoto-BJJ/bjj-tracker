@@ -232,7 +232,7 @@ export default function CoachRoster() {
                   coachKidNavLockRef.current = true;
                   console.log("[NAV TEST] pushing coach route", kid.id);
                   router.push({
-                    pathname: "/(tabs)/coach/kid/[kidId]",
+                    pathname: "/coach/kid/[kidId]",
                     params: { kidId: kid.id },
                   });
                   setTimeout(() => {

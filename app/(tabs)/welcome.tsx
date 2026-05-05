@@ -7,6 +7,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StorageKeys } from "../../src/storage/storageKeys";
 import { getDeviceRole } from "../../src/storage/deviceRoleStore";
+import { safeReplace } from "../../src/navigation/safeNavigate";
 import MatMindLogo from "../../assets/images/matmind-logo.png";
 
 
@@ -64,9 +65,13 @@ export default function Welcome() {
         if (!cancelled && shouldRedirectAfterProfileComplete) {
           const role = await getDeviceRole();
           if (role === "parent" || role === "coach") {
-            router.replace("/this-week");
+            queueMicrotask(() => {
+              safeReplace(router, "/this-week");
+            });
           } else {
-            router.replace("/training");
+            queueMicrotask(() => {
+              safeReplace(router, "/training");
+            });
           }
         }
       }
