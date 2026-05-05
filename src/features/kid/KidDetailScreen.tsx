@@ -1420,11 +1420,18 @@ export default function KidDetailScreen() {
       );
       return;
     }
-    const sharedAthleteId = (kidRow?.sharedAthleteId ?? "").trim() || undefined;
+    const sharedAthleteIdRaw = (kidRow?.sharedAthleteId ?? "").trim();
+
+    if (!sharedAthleteIdRaw) {
+      Alert.alert("Cannot publish", "This athlete is not properly linked yet.");
+      return;
+    }
+
+    const sharedAthleteId = sharedAthleteIdRaw;
     const basePublish = kidWeeklyFocusToPublishPayload(latestEntry, weekStartYMD);
     const payload: CoachWeeklySyncPublishBody = {
       ...basePublish,
-      ...(sharedAthleteId ? { sharedAthleteId } : {}),
+      sharedAthleteId,
     };
     setPublishingWeekly(true);
     try {
