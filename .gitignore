@@ -37,3 +37,4 @@ expo-env.d.ts
 # Expo prebuild artifacts (keep repo managed)
 ios/
 android/
+.env.local
