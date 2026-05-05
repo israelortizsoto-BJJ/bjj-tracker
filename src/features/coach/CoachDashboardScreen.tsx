@@ -180,6 +180,23 @@ export default function CoachDashboardScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>Coach</Text>
+          <Text style={styles.title}>Coach Dashboard</Text>
+          <Text style={styles.subtitle}>Where coaching decisions are made.</Text>
+          <Pressable
+            onPress={() => router.push("/(tabs)/coach/kids")}
+            accessibilityRole="button"
+            accessibilityLabel="Open athlete roster and parent links"
+            style={({ pressed }) => [
+              styles.rosterButton,
+              pressed ? styles.rosterButtonPressed : null,
+            ]}
+          >
+            <Text style={styles.rosterButtonText}>Athlete roster / Parent links</Text>
+          </Pressable>
+        </View>
+
         <View style={styles.snapshot}>
           <Text style={styles.snapshotTitle}>Coach Snapshot</Text>
           <View style={styles.snapshotRows}>
@@ -225,6 +242,45 @@ const styles = StyleSheet.create({
     gap: 24,
     padding: 16,
     paddingBottom: 36,
+  },
+  header: {
+    gap: 8,
+  },
+  eyebrow: {
+    color: UI.textSecondary,
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+  },
+  title: {
+    color: UI.textPrimary,
+    fontSize: 30,
+    fontWeight: "900",
+    lineHeight: 35,
+  },
+  subtitle: {
+    color: UI.textSecondary,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  rosterButton: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: UI.accent,
+    borderRadius: 10,
+    marginTop: 8,
+    minHeight: 46,
+    justifyContent: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  rosterButtonPressed: {
+    opacity: 0.82,
+  },
+  rosterButtonText: {
+    color: "#10140b",
+    fontSize: 15,
+    fontWeight: "900",
   },
   snapshot: {
     backgroundColor: UI.bgCard,

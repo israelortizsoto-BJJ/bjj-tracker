@@ -109,7 +109,11 @@ function buildHouseholdSections(kids: Kid[]): { sectionKey: string; title: strin
   }));
 }
 
-export default function KidsRosterScreen() {
+type KidsRosterScreenProps = {
+  surface?: "this-week" | "coach";
+};
+
+export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterScreenProps) {
   const [ready, setReady] = useState(false);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
   const [activeWriterAthleteIds, setActiveWriterAthleteIds] = useState<Set<string>>(new Set());
@@ -129,6 +133,8 @@ export default function KidsRosterScreen() {
   const headerHeight = useHeaderHeight();
   const syncConfigured = isCoachSyncConfigured();
   const parentCoachKidNavLockRef = useRef(false);
+  const backLabel = surface === "coach" ? "Back to Coach" : "Back to Profile";
+  const backRoute = surface === "coach" ? "/(tabs)/coach" : "/profile";
 
   const loadKids = useCallback(async (opts?: { skipReadyReset?: boolean }) => {
     if (!opts?.skipReadyReset) {
@@ -498,7 +504,7 @@ export default function KidsRosterScreen() {
           }
         >
         <Pressable
-          onPress={() => router.replace("/profile")}
+          onPress={() => router.replace(backRoute)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,
@@ -510,7 +516,7 @@ export default function KidsRosterScreen() {
             alignSelf: "flex-start",
           })}
         >
-          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Profile</Text>
+          <Text style={{ fontSize: 14, color: UI.textPrimary }}>{backLabel}</Text>
         </Pressable>
 
         <Text style={{ fontSize: 22, fontWeight: "700", marginBottom: 6, color: UI.textPrimary }}>
