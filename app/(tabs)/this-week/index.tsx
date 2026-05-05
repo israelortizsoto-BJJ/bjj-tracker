@@ -1633,7 +1633,7 @@ function ParentThisWeekScreen() {
           paddingBottom: tokens.space[8],
         }}
       >
-        <View style={{ paddingTop: 8 }}>
+        <View style={{ paddingTop: insets.top + 8 }}>
           <View
             style={{
               minHeight: 38,

@@ -31,7 +31,9 @@ export default function CoachesStackLayout() {
           headerBackButtonDisplayMode: "minimal",
           headerBackTitle: "",
         }}
-      />
+      >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
+      </Stack>
 
       {loading && (
         <View style={styles.bootOverlay}>
