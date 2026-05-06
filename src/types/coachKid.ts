@@ -93,6 +93,12 @@ export type KidCompetitionResult =
   | "dnf"
   | "other";
 
+/** Medal / placement tier surfaced in athlete-facing UI (gallery, Compete tab). */
+export type KidCompetitionMedalTier = Extract<
+  KidCompetitionResult,
+  "gold" | "silver" | "bronze" | "participated"
+>;
+
 /** Coach-facing event lifecycle (appearance / planning); optional on stored entries. */
 export type KidCompetitionEventStatus =
   | "upcoming"
@@ -140,6 +146,9 @@ export type KidCompetitionEntry = {
   organizationOrPromoter?: string;
   outcomeKind?: KidCompetitionOutcomeKind;
   coachNotes?: string;
+  /** Gallery / Compete-tab medal tier; omit to derive from `result` via `competeMedalTierFromKidEntry`. */
+  medal?: KidCompetitionMedalTier;
+  medalImageUri?: string;
   /** Up to 3 persisted clips; slot 0 is mirrored in `videoUri` / `videoAssetId`. */
   competitionVideos?: KidCompetitionVideoRef[];
   videoUri?: string;
@@ -147,6 +156,25 @@ export type KidCompetitionEntry = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** Derives podium-style tier for display; prefers `entry.medal`, then `entry.result`; DNF/other → participated. */
+export function competeMedalTierFromKidEntry(entry: KidCompetitionEntry): KidCompetitionMedalTier {
+  const raw = entry.medal ?? entry.result;
+  if (raw === "gold" || raw === "silver" || raw === "bronze" || raw === "participated") return raw;
+  return "participated";
+}
+
+export function medalTierFromKidResult(result: KidCompetitionResult | undefined): KidCompetitionMedalTier {
+  if (
+    result === "gold" ||
+    result === "silver" ||
+    result === "bronze" ||
+    result === "participated"
+  ) {
+    return result;
+  }
+  return "participated";
+}
 
 /** Local rows mirrored from the worker use `id` `shared-comp-<workerCompetitionId>`. */
 const SHARED_COMP_LOCAL_ID_PREFIX = "shared-comp-";

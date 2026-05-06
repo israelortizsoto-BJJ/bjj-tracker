@@ -28,6 +28,7 @@ export default function TabLayout() {
       <Tabs.Screen name="this-week" options={{ title: "This Week", headerShown: false }} />
       <Tabs.Screen name="coach" options={{ title: "Coach", headerShown: false }} />
       <Tabs.Screen name="training" options={{ title: "Training" }} />
+      <Tabs.Screen name="compete" options={{ title: "Compete", headerShown: false }} />
       <Tabs.Screen name="learn" options={{ title: "Learn", headerShown: false }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       <Tabs.Screen name="welcome" options={HIDDEN} />

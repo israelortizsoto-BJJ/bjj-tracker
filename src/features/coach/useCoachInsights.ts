@@ -3,13 +3,29 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 
 import {
+  deriveCompetitionTrainingSkillFocus,
+  principalTrainingSkillBucketFromCoachFocusText,
+  principalTrainingSkillBucketFromDerivedFocus,
+  type TrainingSkillBucket,
+} from "../../ai-coach/competitionTrainingSkillFocus";
+import {
+  isCoachTrainingFocusDecisionFresh,
+  peekCoachTrainingFocusDecision,
+} from "../../ai-coach/coachTrainingFocusFeedback";
+import {
+  deriveCompetitionBucketHistorySignals,
+  type BucketOutcomeTrend,
+} from "../../lib/signals/competitionBucketHistory";
+import type { CompetitionPlacementTrend } from "../../lib/signals/computeSignals";
+import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../storage/coachKidStore";
-import { getKidCompetitionEntriesForKid } from "../../storage/kidCompetitionStore";
+import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../storage/competitionStore";
 import { StorageKeys } from "../../storage/storageKeys";
+import type { Session } from "../../types";
 import type { Kid, KidWeeklyFocusSparringApplication } from "../../types/coachKid";
 import { computeCoachInsight, type CoachInsight } from "./computeCoachInsight";
 
@@ -24,6 +40,19 @@ export type CoachInsightRow = {
     appliedInSparring?: CoachAppliedInSparring;
     derivedOutcome?: CoachDerivedOutcome;
   };
+};
+
+/** Per-athlete training focus bucket for roster-wide aggregation (shared load with insights). */
+export type CoachTeamFocusAthleteRow = {
+  athlete: Kid;
+  focusBucket: TrainingSkillBucket | null;
+  placementTrend: CompetitionPlacementTrend | null | undefined;
+  bucketOutcomeTrends: Partial<Record<TrainingSkillBucket, BucketOutcomeTrend>>;
+  usedCoachFocusOverride: boolean;
+};
+
+export type CoachTeamFocusSnapshot = {
+  athleteRows: CoachTeamFocusAthleteRow[];
 };
 
 export function deriveOutcomeFromSparring(
@@ -90,9 +119,11 @@ function sessionsForAthlete(allSessions: any[], athlete: Kid): any[] {
 export function useCoachInsights(): {
   loading: boolean;
   insights: CoachInsightRow[];
+  teamFocus: CoachTeamFocusSnapshot;
 } {
   const [loading, setLoading] = useState(false);
   const [insights, setInsights] = useState<CoachInsightRow[]>([]);
+  const [teamFocus, setTeamFocus] = useState<CoachTeamFocusSnapshot>({ athleteRows: [] });
 
   useFocusEffect(
     useCallback(() => {
@@ -109,13 +140,14 @@ export function useCoachInsights(): {
           const allSessions = parseSessions(rawSessions);
           const weekStart = startOfWeekMondayYMD(todayYMD());
           const nextInsights: CoachInsightRow[] = [];
+          const nextTeamFocusRows: CoachTeamFocusAthleteRow[] = [];
 
           for (const athlete of Object.values(kidsById)) {
             const athleteId = athlete.id.trim();
             if (!athleteId) continue;
 
             const [competitions, weeklyFocus] = await Promise.all([
-              getKidCompetitionEntriesForKid(athleteId),
+              getKidCompetitionEntriesWithMatchDetailForKid(athleteId),
               getLatestKidWeeklyFocusForWeek(athleteId, weekStart),
             ]);
             const sessionsFiltered = sessionsForAthlete(allSessions, athlete);
@@ -160,8 +192,44 @@ export function useCoachInsights(): {
                 derivedOutcome,
               },
             });
+
+            const tf = deriveCompetitionTrainingSkillFocus({
+              competitionsWithMatches: competitions,
+              sessions: sessionsFiltered as Session[],
+            });
+            const { bucketOutcomeTrends } = deriveCompetitionBucketHistorySignals(competitions);
+            const placementTrend = tf?.placementTrend ?? null;
+            const coachDecision = peekCoachTrainingFocusDecision(athleteId);
+            let focusBucket: TrainingSkillBucket | null = null;
+            let usedCoachFocusOverride = false;
+            if (coachDecision && isCoachTrainingFocusDecisionFresh(coachDecision)) {
+              const fromCoachText = principalTrainingSkillBucketFromCoachFocusText(
+                coachDecision.finalCoachFocus,
+              );
+              if (fromCoachText) {
+                focusBucket = fromCoachText;
+                usedCoachFocusOverride = true;
+              }
+            }
+            if (!focusBucket) {
+              focusBucket = principalTrainingSkillBucketFromDerivedFocus(tf);
+            }
+
+            nextTeamFocusRows.push({
+              athlete,
+              focusBucket,
+              placementTrend,
+              bucketOutcomeTrends,
+              usedCoachFocusOverride,
+            });
           }
           if (mounted) setInsights(nextInsights);
+          if (mounted) setTeamFocus({ athleteRows: nextTeamFocusRows });
+        } catch {
+          if (mounted) {
+            setInsights([]);
+            setTeamFocus({ athleteRows: [] });
+          }
         } finally {
           if (mounted) setLoading(false);
         }
@@ -175,5 +243,5 @@ export function useCoachInsights(): {
     }, []),
   );
 
-  return { loading, insights };
+  return { loading, insights, teamFocus };
 }

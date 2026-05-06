@@ -1,8 +1,15 @@
+import type { CompetitionTrainingSkillFocus } from "../ai-coach/competitionTrainingSkillFocus";
+import { recommendedFocusAreaFromTrainingSkillFocus } from "../ai-coach/competitionTrainingSkillFocus";
 import type {
   CoachWeeklySyncSessionResponse,
   SyncedSharedAthlete,
   SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
+
+/** Athlete weekly note plus optional derived training emphasis (never overwrites coach copy). */
+export type ResolvedSyncedWeeklyDoc = SyncedWeeklyMessagePayload & {
+  recommendedFocusArea?: string;
+};
 
 export type ResolveWeeklyDocSession = Pick<CoachWeeklySyncSessionResponse, "weekly"> & {
   weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null> | null;
@@ -50,12 +57,14 @@ function isValidWeeklyDoc(v: unknown): v is SyncedWeeklyMessagePayload {
  * Resolves the weekly doc for a parent view using strict athlete scope.
  * Invite-level `weekly` is legacy and is intentionally not used for parent weekly rendering.
  * Missing, null, or invalid athlete docs resolve to null.
+ * When `trainingSkillFocus` is present, merges `recommendedFocusArea` onto the resolved doc — augments coach copy only.
  * Never throws.
  */
 export function resolveWeeklyDoc(
   session: ResolveWeeklyDocSession,
   sharedAthleteId: string | null | undefined,
-): SyncedWeeklyMessagePayload | null {
+  trainingSkillFocus?: CompetitionTrainingSkillFocus | null,
+): ResolvedSyncedWeeklyDoc | null {
   try {
     const id = typeof sharedAthleteId === "string" ? sharedAthleteId.trim() : "";
 
@@ -87,6 +96,12 @@ export function resolveWeeklyDoc(
       if (Object.prototype.hasOwnProperty.call(map, id)) {
         const athleteDoc = map[id];
         if (athleteDoc != null && isValidWeeklyDoc(athleteDoc)) {
+          const recommendedFocusArea = recommendedFocusAreaFromTrainingSkillFocus(
+            trainingSkillFocus ?? null,
+          );
+          if (recommendedFocusArea) {
+            return { ...athleteDoc, recommendedFocusArea };
+          }
           return athleteDoc;
         }
       }

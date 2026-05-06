@@ -23,3 +23,38 @@ export function toDateKey(input?: string | null): string {
   // If parsing fails, return original to avoid data loss (caller can handle)
   return raw;
 }
+
+/** Local calendar day as YYYY-MM-DD (for comparisons with `toDateKey` event dates). */
+export function localTodayDateKey(now: Date = new Date()): string {
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * True when the event day is today or earlier — match breakdown / match media apply.
+ * Malformed dates return true so editing is not blocked.
+ */
+export function isCompetitionMatchUiAvailableForEventDate(
+  eventDateRaw: string,
+  now: Date = new Date(),
+): boolean {
+  const eventKey = toDateKey(eventDateRaw);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(eventKey)) return true;
+  const todayKey = localTodayDateKey(now);
+  return eventKey <= todayKey;
+}
+
+/** Whole calendar days from `earlierYMD` to `laterYMD` (non-negative when earlier ≤ later). */
+export function calendarDaysBetweenYMD(
+  earlierYMD: string,
+  laterYMD: string,
+): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(earlierYMD) || !/^\d{4}-\d{2}-\d{2}$/.test(laterYMD)) {
+    return null;
+  }
+  const earlier = new Date(`${earlierYMD}T12:00:00`).getTime();
+  const later = new Date(`${laterYMD}T12:00:00`).getTime();
+  return Math.round((later - earlier) / 86400000);
+}

@@ -1,7 +1,14 @@
-import { toDateKey } from "../../_domain/dateKey";
+import { calendarDaysBetweenYMD, toDateKey } from "../../_domain/dateKey";
+import type { TrainingSkillBucket } from "../../ai-coach/skillBucketText";
+import { getPlacementLabel } from "../../features/competition/placementLabel";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import type { Session, TechniqueEntry } from "../../types";
 import type { KidCompetitionEntry } from "../../types/coachKid";
+import {
+  deriveCompetitionBucketHistorySignals,
+  type BucketOutcomeTrend,
+  type CompetitionBucketHistoryRow,
+} from "./competitionBucketHistory";
 
 export type CompetitionEntry = Partial<KidCompetitionEntry> & {
   matches?: readonly Partial<CompetitionDetailMatchSnapshot>[] | null;
@@ -21,6 +28,19 @@ export type RankedSignalItem = {
   label: string;
   count: number;
 };
+
+/** Last N labeled competition outcomes, oldest → newest (for interpreting placement trends). */
+export type CompetitionRecentResultSignal = {
+  eventDateYMD: string;
+  /** Athlete-facing label: "1st" … "DNF". */
+  resultLabel: string;
+};
+
+export type CompetitionPlacementTrend =
+  | "improving"
+  | "plateau"
+  | "decline"
+  | "inconsistent";
 
 export type SignalOutput = {
   frequency: {
@@ -68,6 +88,26 @@ export type SignalOutput = {
     methodFrequency: Record<string, number>;
     lastCompetitionDate: string | null;
     lastCompetitionResult: string | null;
+    lastCompetitionName: string | null;
+    lastCompetitionMatchCount: number;
+    lastCompetitionWins: number;
+    lastCompetitionLosses: number;
+    podiumCountLast30Days: number;
+    podiumCountLast90Days: number;
+    /** Up to five most recent labeled events, chronological (oldest first). */
+    recentResults: CompetitionRecentResultSignal[];
+    /** Counting backward from most recent labeled event. */
+    podiumStreak: number;
+    /** Counting backward from most recent labeled event among non‑podium tiers. */
+    nonPodiumStreak: number;
+    /** Modal placement label among `recentResults` (null if empty). */
+    mostCommonResult: string | null;
+    /** Derived from ≥3 labeled events in `recentResults`; avoids thin-data guesses. */
+    placementTrend: CompetitionPlacementTrend | null;
+    /** Labeled competitions with inferred skill bucket (match/event notes only). Chronological. */
+    bucketHistory: CompetitionBucketHistoryRow[];
+    /** Per-bucket placement trajectory when that bucket has ≥3 tagged events and a stable pattern. */
+    bucketOutcomeTrends: Partial<Record<TrainingSkillBucket, BucketOutcomeTrend>>;
   };
   confidence: number;
   alignment: number;
@@ -76,6 +116,224 @@ export type SignalOutput = {
 
 const WEEKLY_SESSION_GOAL = 3;
 const MAX_STREAK_WEEKS_LOOKBACK = 12;
+const MULTI_EVENT_RECENT_CAP = 5;
+const MULTI_EVENT_TREND_MIN = 3;
+
+type KnownCompetitionStoredTier =
+  | "gold"
+  | "silver"
+  | "bronze"
+  | "participated"
+  | "dnf"
+  | "other";
+
+function parseKnownCompetitionStoredTier(
+  competition: CompetitionEntry,
+): KnownCompetitionStoredTier | null {
+  const raw = cleanText(competition.result).toLowerCase();
+  if (
+    raw === "gold" ||
+    raw === "silver" ||
+    raw === "bronze" ||
+    raw === "participated" ||
+    raw === "dnf" ||
+    raw === "other"
+  ) {
+    return raw;
+  }
+  return null;
+}
+
+function ordinalForStoredTier(tier: KnownCompetitionStoredTier): number {
+  switch (tier) {
+    case "dnf":
+      return 0;
+    case "other":
+      return 1;
+    case "participated":
+      return 2;
+    case "bronze":
+      return 3;
+    case "silver":
+      return 4;
+    case "gold":
+      return 5;
+    default:
+      return -1;
+  }
+}
+
+function isPodiumStoredTier(tier: KnownCompetitionStoredTier): boolean {
+  return tier === "gold" || tier === "silver" || tier === "bronze";
+}
+
+/** Copy for Snapshot / parent weekly shells (thin UI cue). */
+export function resolveCompetitionTrendCopy(trend: CompetitionPlacementTrend | null): {
+  snapshotLine: string | null;
+  thisWeekLine: string | null;
+} {
+  switch (trend) {
+    case "improving":
+      return {
+        snapshotLine: "Trend: improving",
+        thisWeekLine: "Recent trend: improving",
+      };
+    case "plateau":
+      return {
+        snapshotLine: "Trend: plateau",
+        thisWeekLine: "Recent trend: plateau",
+      };
+    case "decline":
+      return {
+        snapshotLine: "Trend: decline",
+        thisWeekLine: "Recent trend: decline",
+      };
+    case "inconsistent":
+      return {
+        snapshotLine: "Trend: inconsistent",
+        thisWeekLine: "Recent trend: inconsistent",
+      };
+    default:
+      return { snapshotLine: null, thisWeekLine: null };
+  }
+}
+
+/** Second sentence appended to deterministic draft competition cues when a placement pattern is clear. */
+export function multiEventCoachPatternFragment(trend: CompetitionPlacementTrend): string {
+  switch (trend) {
+    case "improving":
+      return (
+        "Pattern across recent events: placements are stepping up — reinforce what is working and keep building " +
+        "match confidence deliberately."
+      );
+    case "plateau":
+      return (
+        "Pattern across recent events: results are clustered at one tier — pick one breakout focus that targets " +
+        "the specific moments costing the upgrade."
+      );
+    case "decline":
+      return (
+        "Pattern across recent events: tiers have slipped lately — tighten fundamentals, trim the plan slightly, " +
+        "and rebuild crisp execution reps."
+      );
+    case "inconsistent":
+      return (
+        "Pattern across recent events: outcomes are bouncing — stabilize core positional control and pre-match routines " +
+        "so performances feel repeatable."
+      );
+    default:
+      return "";
+  }
+}
+
+function derivePlacementTrendFromOrdinalRun(ordinals: readonly number[]): CompetitionPlacementTrend | null {
+  if (ordinals.length < MULTI_EVENT_TREND_MIN) return null;
+  if (ordinals.some((o) => !Number.isFinite(o) || o < 0)) return null;
+
+  const plateau = ordinals.every((o) => o === ordinals[0]);
+
+  let improving = true;
+  let declining = true;
+  for (let i = 0; i < ordinals.length - 1; i++) {
+    if (ordinals[i + 1] <= ordinals[i]) improving = false;
+    if (ordinals[i + 1] >= ordinals[i]) declining = false;
+  }
+
+  if (plateau) return "plateau";
+  if (improving) return "improving";
+  if (declining) return "decline";
+  return "inconsistent";
+}
+
+/**
+ * Multi-event competition analytics from existing entries only (labeled results only — skips unknown tiers).
+ */
+export function computeMultiEventCompetitionMetrics(
+  competitions: readonly CompetitionEntry[],
+): Pick<
+  SignalOutput["competition"],
+  | "recentResults"
+  | "podiumStreak"
+  | "nonPodiumStreak"
+  | "mostCommonResult"
+  | "placementTrend"
+> {
+  const labeledSortedNewestFirst = competitions
+    .map((entry) => {
+      const date = toDateKey(entry.eventDate);
+      const tier = date ? parseKnownCompetitionStoredTier(entry) : null;
+      return { entry, date, tier };
+    })
+    .filter(
+      (
+        row,
+      ): row is {
+        entry: CompetitionEntry;
+        date: string;
+        tier: KnownCompetitionStoredTier;
+      } => Boolean(row.date && row.tier),
+    )
+    .sort((a, b) => {
+      const cmp = b.date.localeCompare(a.date);
+      if (cmp !== 0) return cmp;
+      return cleanText(b.entry.createdAt ?? "").localeCompare(cleanText(a.entry.createdAt ?? ""));
+    });
+
+  let podiumStreak = 0;
+  let nonPodiumStreak = 0;
+  for (const row of labeledSortedNewestFirst) {
+    if (isPodiumStoredTier(row.tier)) {
+      if (nonPodiumStreak > 0) break;
+      podiumStreak += 1;
+    } else {
+      if (podiumStreak > 0) break;
+      nonPodiumStreak += 1;
+    }
+  }
+
+  const cappedNewestFirst = labeledSortedNewestFirst.slice(0, MULTI_EVENT_RECENT_CAP);
+
+  const chronoDetailed = cappedNewestFirst
+    .slice()
+    .reverse()
+    .map((row) => ({
+      eventDateYMD: row.date,
+      resultLabel: competitionResultDisplayFromStored(row.tier)!,
+      ordinal: ordinalForStoredTier(row.tier),
+    }));
+
+  const recentResults: CompetitionRecentResultSignal[] = chronoDetailed.map(
+    ({ eventDateYMD, resultLabel }) => ({ eventDateYMD, resultLabel }),
+  );
+
+  const labelFrequency: Record<string, number> = {};
+  for (const item of recentResults) {
+    increment(labelFrequency, item.resultLabel);
+  }
+
+  let mostCommonResult: string | null = null;
+  let mostCommonHit = 0;
+  const labelsSortedStable = [...Object.keys(labelFrequency)].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: "base" }),
+  );
+  for (const lbl of labelsSortedStable) {
+    const c = labelFrequency[lbl] ?? 0;
+    if (!mostCommonResult || c > mostCommonHit) {
+      mostCommonResult = lbl;
+      mostCommonHit = c;
+    }
+  }
+
+  const placementTrend = derivePlacementTrendFromOrdinalRun(chronoDetailed.map((r) => r.ordinal));
+
+  return {
+    recentResults,
+    podiumStreak,
+    nonPodiumStreak,
+    mostCommonResult: recentResults.length === 0 ? null : mostCommonResult,
+    placementTrend,
+  };
+}
 
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -84,6 +342,24 @@ function clampPercent(value: number): number {
 
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+/** Stored `result` codes → athlete-facing placement copy (signals feed summary UI only). */
+function competitionResultDisplayFromStored(value: unknown): string | null {
+  const cleaned = cleanText(value);
+  if (!cleaned) return null;
+  const lower = cleaned.toLowerCase();
+  if (lower === "dnf") return "DNF";
+  if (lower === "other") return "Other";
+  if (
+    lower === "gold" ||
+    lower === "silver" ||
+    lower === "bronze" ||
+    lower === "participated"
+  ) {
+    return getPlacementLabel(lower);
+  }
+  return cleaned;
 }
 
 function dateToYMD(date: Date): string {
@@ -326,26 +602,97 @@ function resolveWinStyle(input: {
   return "mixed";
 }
 
-function resolveLastCompetition(competitions: readonly CompetitionEntry[]): {
-  date: string;
-  result: string | null;
-} | null {
-  let latest: { date: string; result: string | null } | null = null;
+function pickLatestCompetitionEntry(
+  competitions: readonly CompetitionEntry[],
+): CompetitionEntry | null {
+  let best: CompetitionEntry | null = null;
+  let bestDate = "";
 
   for (const competition of competitions) {
     const date = toDateKey(competition.eventDate);
     if (!date) continue;
 
-    if (latest && date <= latest.date) continue;
+    if (!best || date > bestDate) {
+      best = competition;
+      bestDate = date;
+      continue;
+    }
 
-    const result = cleanText(competition.result);
-    latest = {
-      date,
-      result: result.length > 0 ? result : null,
-    };
+    if (date === bestDate) {
+      const prevCreated = cleanText(best!.createdAt);
+      const nextCreated = cleanText(competition.createdAt);
+      if (nextCreated > prevCreated) {
+        best = competition;
+      }
+    }
   }
 
-  return latest;
+  return best;
+}
+
+function countWinsLossesFromEntryMatches(
+  entry: CompetitionEntry,
+): { matchCount: number; wins: number; losses: number } {
+  const matches = Array.isArray(entry.matches) ? entry.matches : [];
+  let wins = 0;
+  let losses = 0;
+  for (const match of matches) {
+    const normalized = normalizeMatchResult(match.matchResult);
+    if (normalized === "win") wins += 1;
+    else if (normalized === "loss") losses += 1;
+  }
+  return { matchCount: matches.length, wins, losses };
+}
+
+function resolveLatestCompetitionSnapshot(
+  competitions: readonly CompetitionEntry[],
+): {
+  date: string;
+  result: string | null;
+  tournamentName: string | null;
+  matchCount: number;
+  wins: number;
+  losses: number;
+} | null {
+  const entry = pickLatestCompetitionEntry(competitions);
+  if (!entry) return null;
+
+  const date = toDateKey(entry.eventDate);
+  if (!date) return null;
+
+  const { matchCount, wins, losses } = countWinsLossesFromEntryMatches(entry);
+
+  return {
+    date,
+    result: competitionResultDisplayFromStored(entry.result),
+    tournamentName: cleanText(entry.tournamentName) || null,
+    matchCount,
+    wins,
+    losses,
+  };
+}
+
+function countPodiumFinishesInRollingDays(
+  competitions: readonly CompetitionEntry[],
+  referenceYMD: string,
+  windowDays: number,
+): number {
+  let count = 0;
+
+  for (const competition of competitions) {
+    const date = toDateKey(competition.eventDate);
+    if (!date || date > referenceYMD) continue;
+
+    const span = calendarDaysBetweenYMD(date, referenceYMD);
+    if (span === null || span > windowDays) continue;
+
+    const tier = cleanText(competition.result).toLowerCase();
+    if (tier === "gold" || tier === "silver" || tier === "bronze") {
+      count += 1;
+    }
+  }
+
+  return count;
 }
 
 function hasMeaningfulValue(value: unknown): boolean {
@@ -385,7 +732,6 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const gear = computeGearSignal(sessions);
 
   const matches = collectMatches(competitions);
-  console.log("[MATCHES RAW]", matches);
   const normalizedMatches = matches.map((match) => ({
     ...match,
     matchResult: normalizeMatchResult(match.matchResult),
@@ -393,7 +739,6 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const validMatches = normalizedMatches.filter(
     (match) => match.matchResult === "win" || match.matchResult === "loss",
   );
-  console.log("[MATCHES VALID]", validMatches);
   const competitionCount = competitions.length;
   const totalMatches = matches.length;
   const wins = validMatches.filter((match) => match.matchResult === "win").length;
@@ -434,11 +779,23 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const winStyle = resolveWinStyle({ submissionWins, pointsStyleWins });
   const winRate =
     completedMatchCount === 0 ? null : Math.round((wins / completedMatchCount) * 100);
-  const lastCompetition = resolveLastCompetition(competitions);
+  const latestSnapshot = resolveLatestCompetitionSnapshot(competitions);
   const lastCompetitionDate =
-    competitionCount === 0 ? null : lastCompetition ? lastCompetition.date : null;
+    competitionCount === 0 ? null : latestSnapshot ? latestSnapshot.date : null;
   const lastCompetitionResult =
-    competitionCount === 0 ? null : lastCompetition ? lastCompetition.result : null;
+    competitionCount === 0 ? null : latestSnapshot ? latestSnapshot.result : null;
+  const lastCompetitionName =
+    competitionCount === 0 ? null : latestSnapshot ? latestSnapshot.tournamentName : null;
+  const lastCompetitionMatchCount =
+    competitionCount === 0 ? 0 : latestSnapshot ? latestSnapshot.matchCount : 0;
+  const lastCompetitionWins =
+    competitionCount === 0 ? 0 : latestSnapshot ? latestSnapshot.wins : 0;
+  const lastCompetitionLosses =
+    competitionCount === 0 ? 0 : latestSnapshot ? latestSnapshot.losses : 0;
+  const podiumCountLast30Days = countPodiumFinishesInRollingDays(competitions, referenceDate, 30);
+  const podiumCountLast90Days = countPodiumFinishesInRollingDays(competitions, referenceDate, 90);
+  const multiEventMetrics = computeMultiEventCompetitionMetrics(competitions);
+  const bucketHistorySignals = deriveCompetitionBucketHistorySignals(competitions);
 
   const goalMet = weeklySessionCount >= WEEKLY_SESSION_GOAL;
   const confidence = clampPercent(
@@ -502,6 +859,19 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
       methodFrequency,
       lastCompetitionDate,
       lastCompetitionResult,
+      lastCompetitionName,
+      lastCompetitionMatchCount,
+      lastCompetitionWins,
+      lastCompetitionLosses,
+      podiumCountLast30Days,
+      podiumCountLast90Days,
+      recentResults: multiEventMetrics.recentResults,
+      podiumStreak: multiEventMetrics.podiumStreak,
+      nonPodiumStreak: multiEventMetrics.nonPodiumStreak,
+      mostCommonResult: multiEventMetrics.mostCommonResult,
+      placementTrend: multiEventMetrics.placementTrend,
+      bucketHistory: bucketHistorySignals.bucketHistory,
+      bucketOutcomeTrends: bucketHistorySignals.bucketOutcomeTrends,
     },
     confidence,
     alignment,

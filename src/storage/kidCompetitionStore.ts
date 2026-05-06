@@ -6,11 +6,13 @@ import type {
   KidCompetitionEntry,
   KidCompetitionEventStatus,
   KidCompetitionFormat,
+  KidCompetitionMedalTier,
   KidCompetitionOutcomeKind,
   KidCompetitionResult,
   KidCompetitionVideoRef,
   KidId,
 } from "../types/coachKid";
+import { medalTierFromKidResult } from "../types/coachKid";
 import type { SyncedSharedCompetition } from "../types/coachWeeklySync";
 
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
@@ -62,6 +64,19 @@ const OUTCOME_KIND_SET = new Set<KidCompetitionOutcomeKind>([
 ]);
 
 const FORMAT_SET = new Set<KidCompetitionFormat>(["gi", "nogi", "both"]);
+
+function normalizeMedalTier(raw: unknown): KidCompetitionMedalTier | undefined {
+  if (raw !== "gold" && raw !== "silver" && raw !== "bronze" && raw !== "participated") {
+    return undefined;
+  }
+  return raw;
+}
+
+function normalizeMedalImageUri(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  return t ? t : undefined;
+}
 
 function normalizeFormat(raw: unknown): KidCompetitionFormat | undefined {
   if (typeof raw !== "string") return undefined;
@@ -223,12 +238,16 @@ function normalizeKidCompetitionEntry(
     sharedAthleteId: _omitAthlete,
     sharedCompetitionId: _omitComp,
     status: _omitStatus,
+    medal: _omitMedal,
+    medalImageUri: _omitMedalImage,
     ...rest
   } = raw;
   const linkage = normalizeSharedLinkageFields(raw);
   const media = normalizeKidCompetitionEntryMedia(raw);
   const eventStatus = normalizeEventStatus(raw.eventStatus);
   const status = normalizeEventStatus(raw.status) ?? eventStatus;
+  const medal = normalizeMedalTier(raw.medal);
+  const medalImageUri = normalizeMedalImageUri(raw.medalImageUri);
   return {
     ...rest,
     ...linkage,
@@ -240,6 +259,8 @@ function normalizeKidCompetitionEntry(
     ),
     outcomeKind: normalizeOutcomeKind(raw.outcomeKind),
     ...media,
+    ...(medal ? { medal } : {}),
+    ...(medalImageUri ? { medalImageUri } : {}),
   };
 }
 
@@ -424,6 +445,7 @@ export async function upsertSharedCompetitionsForKid(
       tournamentName: r.tournamentName,
       eventDate: r.eventDate,
       result: r.result,
+      medal: medalTierFromKidResult(r.result),
       status: r.eventStatus,
       eventStatus: r.eventStatus,
       format: r.format,
@@ -541,6 +563,8 @@ export type KidCompetitionCreateInput = {
   tournamentName: string;
   eventDate: string;
   result?: KidCompetitionResult;
+  medal?: KidCompetitionMedalTier;
+  medalImageUri?: string;
   status?: KidCompetitionEventStatus;
   eventStatus?: KidCompetitionEventStatus;
   format?: KidCompetitionFormat;
@@ -573,6 +597,9 @@ export async function createKidCompetitionEntry(
   }
   const videoFields = mediaFromSlots(videoSlots);
   const status = input.status ?? input.eventStatus;
+  const medalResolved =
+    normalizeMedalTier(input.medal) ?? medalTierFromKidResult(input.result);
+  const medalImageResolved = normalizeMedalImageUri(input.medalImageUri);
 
   const created: KidCompetitionEntry = {
     id,
@@ -582,6 +609,8 @@ export async function createKidCompetitionEntry(
     tournamentName: input.tournamentName.trim(),
     eventDate: input.eventDate,
     ...(input.result ? { result: input.result } : {}),
+    medal: medalResolved,
+    ...(medalImageResolved ? { medalImageUri: medalImageResolved } : {}),
     ...(status ? { status } : {}),
     ...(input.eventStatus ? { eventStatus: input.eventStatus } : {}),
     ...(input.format ? { format: input.format } : {}),
@@ -615,6 +644,8 @@ export type KidCompetitionUpdateInput = Partial<{
   tournamentName: string;
   eventDate: string;
   result: KidCompetitionResult | undefined;
+  medal: KidCompetitionMedalTier | undefined;
+  medalImageUri: string | undefined;
   status: KidCompetitionEventStatus | undefined;
   eventStatus: KidCompetitionEventStatus | undefined;
   format: KidCompetitionFormat | undefined;
@@ -756,8 +787,30 @@ export async function updateKidCompetitionEntry(
     }
   }
 
+  let nextMedalImageUri: string | undefined = existing.medalImageUri;
+  const patchMedalImage = Object.prototype.hasOwnProperty.call(patch, "medalImageUri");
+  if (patchMedalImage) {
+    nextMedalImageUri = normalizeMedalImageUri(patch.medalImageUri);
+  }
+
+  const nextEffectiveResult =
+    Object.prototype.hasOwnProperty.call(patch, "result") ? patch.result : existing.result;
+
+  let nextMedalTier: KidCompetitionMedalTier;
+  if (Object.prototype.hasOwnProperty.call(patch, "medal")) {
+    nextMedalTier =
+      normalizeMedalTier(patch.medal) ?? medalTierFromKidResult(nextEffectiveResult);
+  } else if (Object.prototype.hasOwnProperty.call(patch, "result")) {
+    nextMedalTier = medalTierFromKidResult(patch.result);
+  } else {
+    nextMedalTier =
+      normalizeMedalTier(existing.medal) ?? medalTierFromKidResult(existing.result);
+  }
+
+  const { medalImageUri: _omitPrevMedalImg, ...existingBase } = existing;
+
   const updated: KidCompetitionEntry = {
-    ...existing,
+    ...existingBase,
     updatedAt: nowIso,
     sharedAthleteId: nextSharedAthleteId,
     sharedCompetitionId: nextSharedCompetitionId,
@@ -770,6 +823,14 @@ export async function updateKidCompetitionEntry(
     result: Object.prototype.hasOwnProperty.call(patch, "result")
       ? patch.result
       : existing.result,
+    medal: nextMedalTier,
+    ...(patchMedalImage
+      ? nextMedalImageUri
+        ? { medalImageUri: nextMedalImageUri }
+        : {}
+      : existing.medalImageUri
+        ? { medalImageUri: existing.medalImageUri }
+        : {}),
     status: nextStatus,
     eventStatus: nextEventStatus,
     format: nextFormat,
@@ -789,6 +850,22 @@ export async function deleteKidCompetitionEntry(entryId: string): Promise<boolea
   const all = await getRaw();
   const found = all.find((e) => e.id === entryId);
   if (!found) return false;
+
+  const { getCompetitionDetailByEntryId, removeCompetitionDetailForEntryId } = await import(
+    "./competitionStore",
+  );
+  const detail = await getCompetitionDetailByEntryId(entryId);
+  if (detail?.matches) {
+    for (const m of detail.matches) {
+      await bestEffortDeletePersistedMedia(
+        typeof m.imageUri === "string" ? m.imageUri : undefined,
+      );
+      await bestEffortDeletePersistedMedia(
+        typeof m.videoUri === "string" ? m.videoUri : undefined,
+      );
+    }
+  }
+  await removeCompetitionDetailForEntryId(entryId);
 
   for (const u of collectKidCompetitionVideoUris(found)) {
     await bestEffortDeletePersistedMedia(u);

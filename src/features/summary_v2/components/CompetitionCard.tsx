@@ -8,6 +8,9 @@ type Props = {
   statWinRate: string;
   statSubmissionRate: string;
   statFastestSub: string;
+  latestSummary: string;
+  latestDateLine: string;
+  insightText: string;
 };
 
 export default function CompetitionCard({
@@ -15,11 +18,28 @@ export default function CompetitionCard({
   statWinRate,
   statSubmissionRate,
   statFastestSub,
+  latestSummary,
+  latestDateLine,
+  insightText,
 }: Props) {
+  const showLatest = Boolean(latestSummary.trim() || latestDateLine.trim());
+
   return (
     <View style={styles.shell}>
       <View style={styles.card}>
       <Text style={styles.sectionHeader}>COMPETITION SNAPSHOT</Text>
+      {showLatest ? (
+        <View style={styles.latestBlock}>
+          {latestSummary.trim() ? (
+            <Text style={styles.latestSummary} numberOfLines={2}>
+              {latestSummary}
+            </Text>
+          ) : null}
+          {latestDateLine.trim() ? (
+            <Text style={styles.latestDate}>{latestDateLine}</Text>
+          ) : null}
+        </View>
+      ) : null}
       <Text style={styles.record}>{recordLabel || "—"}</Text>
       <View style={styles.statsRow}>
         <View style={styles.statCol}>
@@ -43,7 +63,7 @@ export default function CompetitionCard({
           <Image source={ICON_INSIGHT} style={styles.insightIcon} resizeMode="contain" />
           <Text style={styles.insightLabel}>INSIGHT</Text>
         </View>
-        <Text style={styles.insightText}>Your pressure game is converting at a higher rate this month.</Text>
+        <Text style={styles.insightText}>{insightText}</Text>
       </View>
       </View>
     </View>
@@ -71,6 +91,24 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 1.1,
     marginBottom: 8,
+  },
+  latestBlock: {
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(148, 163, 184, 0.2)",
+  },
+  latestSummary: {
+    color: "#E2E8F0",
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  latestDate: {
+    color: "#94A3B8",
+    fontSize: 12,
+    fontWeight: "600",
   },
   record: {
     color: "#F8FAFC",

@@ -42,6 +42,13 @@ import {
 import { ReadTogetherStoryModal } from "../../family/ReadTogetherStoryModal";
 import { deriveWeeklyNarrative } from "../coach/deriveWeeklyNarrative";
 import WeeklySuggestionCard from "../coach/components/WeeklySuggestionCard";
+import { getPlacementLabel } from "../competition/placementLabel";
+import {
+  deriveCompetitionTrainingSkillFocus,
+  recommendedFocusAreaFromTrainingSkillFocus,
+} from "../../ai-coach/competitionTrainingSkillFocus";
+import type { CompetitionTrainingSkillFocus } from "../../ai-coach/competitionTrainingSkillFocus";
+import { recordCoachTrainingFocusDecision } from "../../ai-coach/coachTrainingFocusFeedback";
 import {
   CoachWeeklySyncApiError,
   coachSyncFetchSession,
@@ -65,6 +72,11 @@ import {
 import { deleteSessionById } from "../../storage/sessionsStore";
 import { getKidStandingGuidance } from "../../storage/kidStandingGuidanceStore";
 import { StorageKeys } from "../../storage/storageKeys";
+import {
+  mergeCompetitionMatchDetailIntoEntries,
+  pickLastCompetitionWeeklyContext,
+  type LastCompetitionWeeklyContext,
+} from "../../storage/competitionStore";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntriesForKid,
@@ -126,6 +138,10 @@ function resolveSystemLabel(systemId?: string) {
 
 function pad2(n: number) {
   return String(n).padStart(2, "0");
+}
+
+function collapseFocusText(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
 }
 
 function addDaysYMDLocal(ymd: string, delta: number) {
@@ -234,20 +250,7 @@ function isUsableYoutubeUrl(raw?: string) {
 
 function competitionResultLabel(r: KidCompetitionResult | undefined): string {
   if (!r) return "No result yet";
-  switch (r) {
-    case "gold":
-      return "Gold";
-    case "silver":
-      return "Silver";
-    case "bronze":
-      return "Bronze";
-    case "participated":
-      return "Participated";
-    case "dnf":
-      return "DNF";
-    case "other":
-      return "Other";
-  }
+  return getPlacementLabel(r);
 }
 
 function competitionOutcomeKindLabel(k: KidCompetitionOutcomeKind): string {
@@ -468,9 +471,15 @@ export default function KidDetailScreen() {
   const [hasUserEditedWeekly, setHasUserEditedWeekly] = useState(false);
   const [savingOutcome, setSavingOutcome] = useState(false);
   const [competitions, setCompetitions] = useState<KidCompetitionEntry[]>([]);
+  const [lastCompetitionWeekly, setLastCompetitionWeekly] =
+    useState<LastCompetitionWeeklyContext | null>(null);
   const [kidWeekSessions, setKidWeekSessions] = useState<Session[]>([]);
+  const [competitionDerivedTrainingFocus, setCompetitionDerivedTrainingFocus] =
+    useState<CompetitionTrainingSkillFocus | null>(null);
   const [readTogetherPreviewOpen, setReadTogetherPreviewOpen] = useState(false);
   const [readTogetherPreviewStep, setReadTogetherPreviewStep] = useState(0);
+  const [suggestedFocusEditOpen, setSuggestedFocusEditOpen] = useState(false);
+  const [suggestedFocusDraft, setSuggestedFocusDraft] = useState("");
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewState | null>(null);
   const [playableMediaUri, setPlayableMediaUri] = useState<string | null>(null);
@@ -532,6 +541,7 @@ export default function KidDetailScreen() {
     const promise = (async (): Promise<boolean> => {
     const loadGen = ++coachKidDetailLoadGenRef.current;
     const keepPreviousUiReady = opts?.keepPreviousUiReady ?? false;
+    setCompetitionDerivedTrainingFocus(null);
     if (!keepPreviousUiReady) {
       setReady(false);
     }
@@ -766,6 +776,10 @@ export default function KidDetailScreen() {
       }
       setCompetitions(compRows);
 
+      const withDetail = await mergeCompetitionMatchDetailIntoEntries(compRows);
+      if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+      setLastCompetitionWeekly(pickLastCompetitionWeeklyContext(withDetail, todayYMD()));
+
       const guidanceRow = await getKidStandingGuidance(kidId);
       setStandingGuidance(guidanceRow);
 
@@ -794,6 +808,16 @@ export default function KidDetailScreen() {
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
         );
       setKidWeekSessions(kidWeek);
+      if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+      const allKidSessions = sessionsArray
+        .filter((s: any) => String(s?.kidId ?? "").trim() === kidId)
+        .map((s: any) => s as Session);
+      setCompetitionDerivedTrainingFocus(
+        deriveCompetitionTrainingSkillFocus({
+          competitionsWithMatches: withDetail,
+          sessions: allKidSessions,
+        }),
+      );
       return loadGen === coachKidDetailLoadGenRef.current;
     } finally {
       if (loadGen === coachKidDetailLoadGenRef.current) {
@@ -1005,6 +1029,56 @@ export default function KidDetailScreen() {
   const competitionListTodayYMD = todayYMD();
 
   const focusTitle = currentWeekEntry?.title ?? null;
+  const recommendedFocusArea = useMemo(
+    () => recommendedFocusAreaFromTrainingSkillFocus(competitionDerivedTrainingFocus),
+    [competitionDerivedTrainingFocus],
+  );
+
+  const handleUseRecommendedFocusArea = useCallback(() => {
+    if (!kidId || !recommendedFocusArea) return;
+    const line = `Weekly training focus: ${recommendedFocusArea}.`;
+    setWeeklyWhyThisMatters((prev) => {
+      const p = prev.trim();
+      return p ? `${p}\n\n${line}` : line;
+    });
+    setHasUserEditedWeekly(true);
+    recordCoachTrainingFocusDecision(kidId, recommendedFocusArea, recommendedFocusArea);
+  }, [kidId, recommendedFocusArea]);
+
+  const openSuggestedFocusModal = useCallback(() => {
+    if (!recommendedFocusArea) return;
+    setSuggestedFocusDraft(recommendedFocusArea);
+    setSuggestedFocusEditOpen(true);
+  }, [recommendedFocusArea]);
+
+  const closeSuggestedFocusModal = useCallback(() => {
+    setSuggestedFocusEditOpen(false);
+    Keyboard.dismiss();
+  }, []);
+
+  const handleApplySuggestedFocusEdit = useCallback(() => {
+    if (!kidId || !recommendedFocusArea) return;
+    const edited = collapseFocusText(suggestedFocusDraft);
+    if (!edited.length) {
+      Alert.alert(
+        "Add focus wording",
+        "Type how you want to phrase this week’s training focus, or cancel.",
+      );
+      return;
+    }
+    setWeeklyWhyThisMatters((prev) => {
+      const p = prev.trim();
+      return p ? `${p}\n\n${edited}` : edited;
+    });
+    setHasUserEditedWeekly(true);
+    recordCoachTrainingFocusDecision(kidId, recommendedFocusArea, edited);
+    closeSuggestedFocusModal();
+  }, [
+    kidId,
+    recommendedFocusArea,
+    suggestedFocusDraft,
+    closeSuggestedFocusModal,
+  ]);
   const feedback = publishedWeeklyFeedback;
   const feedbackStatus = feedback?.acknowledgedAt
     ? "acknowledged"
@@ -2186,6 +2260,72 @@ export default function KidDetailScreen() {
             <Text style={{ fontSize: 13, letterSpacing: 0.3, fontWeight: "800", color: UI.textPrimary }}>
               Weekly focus
             </Text>
+            {recommendedFocusArea ? (
+              <View style={{ gap: 10 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: UI.textSecondary,
+                    lineHeight: 16,
+                    fontStyle: "italic",
+                  }}
+                >
+                  Suggested focus from recent competitions:{" "}
+                  <Text style={{ fontStyle: "normal", fontWeight: "700", color: UI.textSecondary }}>
+                    {recommendedFocusArea}
+                  </Text>
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <Pressable
+                    onPress={handleUseRecommendedFocusArea}
+                    style={({ pressed }) => ({
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: UI.familyLaneBorder,
+                      backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                    })}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
+                      Use suggested focus
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={openSuggestedFocusModal}
+                    style={({ pressed }) => ({
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: UI.coachLaneBorder,
+                      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                    })}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
+                      Edit focus
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+                  Inserts copy into Why this matters above—you save when ready; nothing publishes on its own.
+                </Text>
+              </View>
+            ) : null}
+            {lastCompetitionWeekly ? (
+              <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                Based on last competition
+                {typeof lastCompetitionWeekly.lastCompetitionResult !== "undefined"
+                  ? ` · ${getPlacementLabel(lastCompetitionWeekly.lastCompetitionResult)}`
+                  : ""}
+                {lastCompetitionWeekly.lastCompetitionName
+                  ? ` · ${lastCompetitionWeekly.lastCompetitionName}`
+                  : ""}
+                {lastCompetitionWeekly.lastCompetitionMatchSummary
+                  ? ` · ${lastCompetitionWeekly.lastCompetitionMatchSummary}`
+                  : ""}
+              </Text>
+            ) : null}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
               <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
                 {focusTitle ?? "No focus saved yet"}
@@ -2840,6 +2980,92 @@ export default function KidDetailScreen() {
                 )}
               </View>
             ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={suggestedFocusEditOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={closeSuggestedFocusModal}
+      >
+        <Pressable
+          onPress={closeSuggestedFocusModal}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.45)",
+            justifyContent: "flex-end",
+          }}
+        >
+          <Pressable
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: UI.bgCard,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingHorizontal: 20,
+              paddingTop: 18,
+              paddingBottom: insets.bottom + 20,
+              gap: 12,
+            }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: "800", color: UI.textPrimary }}>
+              Edit focus
+            </Text>
+            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+              Starts from the system suggestion. Applies to Why this matters above—you control when notes are saved
+              elsewhere.
+            </Text>
+            <TextInput
+              value={suggestedFocusDraft}
+              onChangeText={setSuggestedFocusDraft}
+              multiline
+              placeholder="Coach wording for this week’s training focus…"
+              placeholderTextColor={UI.textSecondary}
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+                minHeight: 100,
+                padding: 12,
+                textAlignVertical: "top",
+              }}
+            />
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 4 }}>
+              <Pressable
+                onPress={closeSuggestedFocusModal}
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? UI.rowMutedBg : UI.bgCard,
+                })}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "600", color: UI.textPrimary }}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={handleApplySuggestedFocusEdit}
+                style={({ pressed }) => ({
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#1d4ed8",
+                  backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
+                })}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "800", color: "#ffffff" }}>
+                  Insert into weekly note
+                </Text>
+              </Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

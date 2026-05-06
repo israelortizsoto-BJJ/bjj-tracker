@@ -1,7 +1,7 @@
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useState } from "react";
 
-import { getCompetitionDetailByEntryId } from "@/src/storage/competitionStore";
+import { mergeCompetitionMatchDetailIntoEntries } from "@/src/storage/competitionStore";
 import { getKidCompetitionEntries } from "../storage/kidCompetitionStore";
 import { getSessions } from "../storage/sessionsStore";
 import type { Session } from "../types";
@@ -60,16 +60,7 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
             return sharedAthleteId === athleteId;
           });
 
-          const nextCompetitions = await Promise.all(
-            filteredCompetitions.map(async (competition) => {
-              const detail = await getCompetitionDetailByEntryId(competition.id);
-
-              return {
-                ...competition,
-                matches: Array.isArray(detail?.matches) ? detail.matches : [],
-              };
-            }),
-          );
+          const nextCompetitions = await mergeCompetitionMatchDetailIntoEntries(filteredCompetitions);
 
           if (!mounted) return;
 

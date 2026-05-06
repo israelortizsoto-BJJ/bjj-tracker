@@ -1,9 +1,20 @@
 import { StyleSheet, Text, View } from "react-native";
 
+import {
+  resolveCompetitionTrendCopy,
+  type CompetitionPlacementTrend,
+} from "../../lib/signals/computeSignals";
+
 type SummaryCompetitionProps = {
   competitionCount: number;
   lastCompetitionDate: string | null;
   lastCompetitionResult: string | null;
+  lastCompetitionName: string | null;
+  lastCompetitionMatchCount: number;
+  lastCompetitionWins: number;
+  lastCompetitionLosses: number;
+  podiumCountLast30Days: number;
+  podiumCountLast90Days: number;
   record: { wins: number; losses: number };
   submissionRate: number | null;
   fastestSubmission: string | null;
@@ -11,6 +22,11 @@ type SummaryCompetitionProps = {
   winStyle: "submission-heavy" | "points-heavy" | "mixed" | null;
   totalMatches: number;
   winRate: number | null;
+  placementTrend: CompetitionPlacementTrend | null;
+  /** When match/practice logs surface a clear repeated theme. */
+  skillFocusHint?: string;
+  /** ≥3 inferred bucket datapoints + stable placement trajectory (signals-derived). */
+  bucketFocusEvidenceLine?: string | null;
 };
 
 export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
@@ -20,12 +36,22 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
     fastestSubmission,
     lastCompetitionDate,
     lastCompetitionResult,
+    lastCompetitionName,
+    lastCompetitionMatchCount,
+    lastCompetitionWins,
+    lastCompetitionLosses,
+    podiumCountLast30Days,
+    podiumCountLast90Days,
     record,
     submissionRate,
     totalMatches,
     winRate,
     winStyle,
+    placementTrend,
+    skillFocusHint,
+    bucketFocusEvidenceLine,
   } = props;
+  const trendSubtitle = resolveCompetitionTrendCopy(placementTrend).snapshotLine;
   const hasData = competitionCount > 0 || totalMatches > 0;
   const hasMatchData = totalMatches > 0;
   const matchLabel =
@@ -51,6 +77,29 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
   };
 
   const lastDateLabel = formatLastDate(lastCompetitionDate);
+  const formatEventDateHeading = (dateKey: string | null) => {
+    if (!dateKey) return null;
+    const date = new Date(`${dateKey}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return dateKey;
+    return date.toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+  const lastEventDateHeading = formatEventDateHeading(lastCompetitionDate);
+  const hasLastEventHero = Boolean(
+    lastCompetitionResult && lastCompetitionDate && lastCompetitionName,
+  );
+  const lastEventMatchLine =
+    lastCompetitionMatchCount > 0
+      ? `${lastCompetitionMatchCount} match${lastCompetitionMatchCount === 1 ? "" : "es"} · ${lastCompetitionWins}–${lastCompetitionLosses}`
+      : null;
+  const podiumLine =
+    podiumCountLast30Days > 0 || podiumCountLast90Days > 0
+      ? `Podiums: ${podiumCountLast30Days} last 30 days · ${podiumCountLast90Days} last 90 days`
+      : null;
   const formatRate = (value: number | null) => (value === null ? "—" : `${value}%`);
   const formatWinStyle = (value: SummaryCompetitionProps["winStyle"]) => {
     switch (value) {
@@ -83,6 +132,39 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
         </View>
       ) : (
         <>
+          {hasLastEventHero ? (
+            <View style={styles.lastEventBlock}>
+              <Text style={styles.lastEventResult}>{lastCompetitionResult}</Text>
+              <Text style={styles.lastEventTitle} numberOfLines={2}>
+                {lastCompetitionName}
+              </Text>
+              <Text style={styles.lastEventWhen}>
+                {[lastEventDateHeading, lastEventMatchLine].filter(Boolean).join(" · ")}
+              </Text>
+            </View>
+          ) : lastCompetitionResult && lastCompetitionDate ? (
+            <View style={styles.lastEventBlock}>
+              <Text style={styles.lastEventResult}>{lastCompetitionResult}</Text>
+              <Text style={styles.lastEventWhen}>
+                {[formatEventDateHeading(lastCompetitionDate), lastDateLabel?.replace(/^Last: /, "")]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            </View>
+          ) : null}
+
+          {hasData && trendSubtitle ? (
+            <Text style={styles.trendLine}>{trendSubtitle}</Text>
+          ) : null}
+
+          {hasData && skillFocusHint ? (
+            <Text style={styles.focusHintLine}>Focus area: {skillFocusHint}</Text>
+          ) : null}
+
+          {hasData && bucketFocusEvidenceLine ? (
+            <Text style={styles.bucketEvidenceLine}>{bucketFocusEvidenceLine}</Text>
+          ) : null}
+
           <View style={styles.primaryGrid}>
             <View style={styles.primaryMetric}>
               <Text style={styles.primaryLabel}>Record</Text>
@@ -144,6 +226,7 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
           {matchLabel}
           {lastDateLabel ? ` • ${lastDateLabel}` : ""}
           {lastCompetitionResult ? ` • Last result: ${lastCompetitionResult}` : ""}
+          {podiumLine ? `\n${podiumLine}` : ""}
         </Text>
       ) : null}
     </View>
@@ -274,5 +357,55 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 16,
     marginTop: 2,
+  },
+  lastEventBlock: {
+    backgroundColor: "#0f172a",
+    borderRadius: 8,
+    padding: 14,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: "#2b3542",
+  },
+  lastEventResult: {
+    color: "#d4ad4f",
+    fontSize: 28,
+    fontWeight: "900",
+    marginBottom: 6,
+  },
+  lastEventTitle: {
+    color: "#f9fafb",
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  lastEventWhen: {
+    color: "#9ca3af",
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  trendLine: {
+    color: "#7c8490",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+    letterSpacing: 0.15,
+  },
+  focusHintLine: {
+    color: "#9ca3af",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+    letterSpacing: 0.12,
+  },
+  bucketEvidenceLine: {
+    color: "#93c5a8",
+    fontSize: 12,
+    lineHeight: 16,
+    fontWeight: "600",
+    marginBottom: 10,
+    letterSpacing: 0.12,
   },
 });

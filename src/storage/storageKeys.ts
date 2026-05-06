@@ -25,6 +25,9 @@ export const StorageKeys = {
   /** Family-facing Competition lane only: last explicit child choice on this device. */
   familyCompetitionSelectedKidId: "mm:v1:familyCompetitionSelectedKidId",
 
+  /** Parent This Week: last explicitly selected roster athlete (`Kid.id`), local device only. */
+  lastAthleteId: "mm:v1:lastAthleteId",
+
   /** Stable pseudo-profile id for locally stored Coach Share rows (parent device). */
   parentProfileLocalId: "mm:v1:parentProfileLocalId",
 

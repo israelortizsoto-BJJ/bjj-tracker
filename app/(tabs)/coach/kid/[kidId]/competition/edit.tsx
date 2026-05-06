@@ -1,12 +1,17 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import * as ImagePicker from "expo-image-picker";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Swipeable } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import {
+  persistMediaFromCameraRoll,
+  requestMediaLibraryPermission,
+} from "../../../../../../src/media/persistCameraRollMedia";
 import {
   createKidCompetitionEntry,
   deleteKidCompetitionEntry,
@@ -24,6 +29,8 @@ import type {
   KidCompetitionFormat,
   KidCompetitionResult,
 } from "../../../../../../src/types/coachKid";
+import { getPlacementLabel } from "../../../../../../src/features/competition/placementLabel";
+import { medalTierFromKidResult } from "../../../../../../src/types/coachKid";
 import {
   createEmptyMatch,
   deriveInitialMatches,
@@ -33,7 +40,7 @@ import {
   normalizeSubmissionTimeInput,
   snapshotFromLocal,
   type LocalMatch,
-} from "../../../../../competition/[id]";
+} from "@/src/features/competition/competitionMatchEditor";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -64,20 +71,9 @@ const EVENT_STATUSES: KidCompetitionEventStatus[] = [
 const FORMATS: KidCompetitionFormat[] = ["gi", "nogi", "both"];
 
 function resultLabel(r: KidCompetitionResult): string {
-  switch (r) {
-    case "gold":
-      return "Gold";
-    case "silver":
-      return "Silver";
-    case "bronze":
-      return "Bronze";
-    case "participated":
-      return "Participated";
-    case "dnf":
-      return "DNF";
-    case "other":
-      return "Other";
-  }
+  if (r === "dnf") return "DNF";
+  if (r === "other") return "Other";
+  return getPlacementLabel(r);
 }
 
 function eventStatusLabel(s: KidCompetitionEventStatus): string {
@@ -111,11 +107,17 @@ function isValidYMD(s: string): boolean {
 }
 
 export default function KidCompetitionEditScreen() {
-  const params = useLocalSearchParams<{ kidId?: string; entryId?: string }>();
+  const params = useLocalSearchParams<{
+    kidId?: string;
+    entryId?: string;
+    openNonce?: string;
+  }>();
   const kidId = params.kidId ? String(params.kidId) : "";
   const entryId = params.entryId ? String(params.entryId) : "";
+  const openNonce = params.openNonce ? String(params.openNonce) : "";
   const isNew = !entryId;
   const reactId = useId();
+  const lastProcessedOpenNonceRef = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(!isNew);
   const [nameDraft, setNameDraft] = useState("");
@@ -129,6 +131,7 @@ export default function KidCompetitionEditScreen() {
     undefined,
   );
   const [notesDraft, setNotesDraft] = useState("");
+  const [medalImageDraft, setMedalImageDraft] = useState<string | undefined>();
   const [matches, setMatches] = useState<LocalMatch[]>([]);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
@@ -159,6 +162,7 @@ export default function KidCompetitionEditScreen() {
       setPromoterDraft(found.organizationOrPromoter ?? "");
       setFormatDraft(found.format);
       setNotesDraft(found.coachNotes ?? "");
+      setMedalImageDraft(found.medalImageUri);
       const detail = await getCompetitionDetailByEntryId(found.id);
       setMatches(deriveInitialMatches(found, detail, reactId));
     } finally {
@@ -173,22 +177,41 @@ export default function KidCompetitionEditScreen() {
     }
   }, [kidId]);
 
+  useLayoutEffect(() => {
+    if (!isNew || !openNonce) return;
+    if (lastProcessedOpenNonceRef.current === openNonce) return;
+    lastProcessedOpenNonceRef.current = openNonce;
+    setNameDraft("");
+    setDateDraft(todayYMD());
+    setResultDraft("participated");
+    setEventStatusDraft(undefined);
+    setPromoterDraft("");
+    setFormatDraft(undefined);
+    setNotesDraft("");
+    setMedalImageDraft(undefined);
+    setMatches([createEmptyMatch(`new-${Date.now()}`)]);
+    setLoading(false);
+  }, [isNew, openNonce]);
+
   useFocusEffect(
     useCallback(() => {
       if (isNew) {
-        setNameDraft("");
-        setDateDraft(todayYMD());
-        setResultDraft("participated");
-        setEventStatusDraft(undefined);
-        setPromoterDraft("");
-        setFormatDraft(undefined);
-        setNotesDraft("");
-        setMatches([createEmptyMatch(`new-${Date.now()}`)]);
+        if (!openNonce) {
+          setNameDraft("");
+          setDateDraft(todayYMD());
+          setResultDraft("participated");
+          setEventStatusDraft(undefined);
+          setPromoterDraft("");
+          setFormatDraft(undefined);
+          setNotesDraft("");
+          setMedalImageDraft(undefined);
+          setMatches([createEmptyMatch(`new-${Date.now()}`)]);
+        }
         setLoading(false);
         return;
       }
       void loadExisting();
-    }, [isNew, loadExisting]),
+    }, [isNew, loadExisting, openNonce]),
   );
 
   const canSave = useMemo(() => {
@@ -237,6 +260,50 @@ export default function KidCompetitionEditScreen() {
 
   const addMatch = useCallback(() => {
     setMatches((prev) => [...prev, createEmptyMatch(`${Date.now()}`)]);
+  }, []);
+
+  const pickMedalImage = useCallback(() => {
+    const runLibrary = async () => {
+      const ok = await requestMediaLibraryPermission();
+      if (!ok) {
+        Alert.alert("Permission needed", "Allow Photos access to attach a medal photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: false,
+        base64: false,
+      });
+      if (result.canceled) return;
+      const uri = result.assets[0]?.uri;
+      if (uri) {
+        const persisted = await persistMediaFromCameraRoll(uri, "image");
+        setMedalImageDraft(persisted);
+      }
+    };
+    const runCamera = async () => {
+      const cam = await ImagePicker.requestCameraPermissionsAsync();
+      if (!cam.granted) {
+        Alert.alert("Permission needed", "Allow Camera to take a medal photo.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (result.canceled) return;
+      const uri = result.assets[0]?.uri;
+      if (uri) {
+        const persisted = await persistMediaFromCameraRoll(uri, "image");
+        setMedalImageDraft(persisted);
+      }
+    };
+    Alert.alert("Medal photo", "Choose a source", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Take photo", onPress: () => void runCamera() },
+      { text: "Photo library", onPress: () => void runLibrary() },
+    ]);
   }, []);
 
   const handleDeleteMatch = useCallback(
@@ -321,6 +388,8 @@ export default function KidCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          medal: medalTierFromKidResult(resultDraft),
+          medalImageUri: medalImageDraft,
           status: eventStatusDraft,
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim()
@@ -336,6 +405,8 @@ export default function KidCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          medal: medalTierFromKidResult(resultDraft),
+          medalImageUri: medalImageDraft,
           status: eventStatusDraft,
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim()
@@ -641,6 +712,33 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textSecondary,
               }}
             >
+              MEDAL PHOTO (OPTIONAL)
+            </Text>
+            <Pressable
+              onPress={pickMedalImage}
+              style={({ pressed }) => ({
+                marginTop: 8,
+                padding: 12,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: pressed ? "#eef2ff" : UI.bgCard,
+              })}
+            >
+              <Text style={{ fontSize: 14, color: UI.textPrimary }}>
+                {medalImageDraft ? "Replace medal photo" : "Add medal photo (camera or library)"}
+              </Text>
+            </Pressable>
+
+            <Text
+              style={{
+                marginTop: 16,
+                fontSize: 12,
+                letterSpacing: 0.6,
+                fontWeight: "700",
+                color: UI.textSecondary,
+              }}
+            >
               COACH NOTES (OPTIONAL)
             </Text>
             <TextInput
@@ -699,6 +797,7 @@ export default function KidCompetitionEditScreen() {
                     onToggleOutcome={(label) => setMatchOutcome(i, label)}
                     onSubmissionTimeChange={(text) => setMatchSubmissionTime(i, text)}
                     onCoachNoteChange={(text) => setMatchCoachNote(i, text)}
+                    onCoachNoteFocus={onNotesFocusScroll}
                     onImageChange={(uri, assetId) => updateMatchMedia(i, { imageUri: uri, imageAssetId: assetId })}
                     onVideoChange={(uri, assetId) => updateMatchMedia(i, { videoUri: uri, videoAssetId: assetId })}
                   />

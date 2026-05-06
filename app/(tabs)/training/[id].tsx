@@ -19,6 +19,10 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
+import {
+  deriveCompetitionTrainingSkillFocus,
+  recommendedFocusAreaFromTrainingSkillFocus,
+} from "../../../src/ai-coach/competitionTrainingSkillFocus";
 import { toDateKey } from "../../../src/_domain/dateKey";
 import { buildTechniqueIndex, getTechniqueById } from "../../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../../src/fundamentals/taxonomy";
@@ -27,6 +31,7 @@ import {
   requestMediaLibraryPermission,
 } from "../../../src/media/persistCameraRollMedia";
 import { getKidsById } from "../../../src/storage/coachKidStore";
+import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../../src/storage/competitionStore";
 import { getSessions, setSessions } from "../../../src/storage/sessionsStore";
 import type { Session, TechniqueEntry } from "../../../src/types";
 
@@ -160,6 +165,7 @@ export default function TrainingSessionEditor() {
     typeof params.kidId === "string" && params.kidId.trim()
       ? params.kidId.trim()
       : undefined;
+  const [recommendedFocusHint, setRecommendedFocusHint] = useState<string | null>(null);
   const isNew = useMemo(() => sessionId === "new", [sessionId]);
   const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const [draftId, setDraftId] = useState(makeId());
@@ -185,6 +191,37 @@ export default function TrainingSessionEditor() {
   const [techQuery, setTechQuery] = useState("");
   // Which technique entry is currently being edited by the picker modal.
   const [pickerTargetIndex, setPickerTargetIndex] = useState<number | null>(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!kidIdParam) {
+        setRecommendedFocusHint(null);
+        return;
+      }
+      try {
+        const [comps, sessions] = await Promise.all([
+          getKidCompetitionEntriesWithMatchDetailForKid(kidIdParam),
+          getSessions(),
+        ]);
+        if (cancelled) return;
+        const athleteSessions = sessions.filter(
+          (s) => String(s.kidId ?? "").trim() === kidIdParam,
+        );
+        const tf = deriveCompetitionTrainingSkillFocus({
+          competitionsWithMatches: comps,
+          sessions: athleteSessions,
+        });
+        const area = recommendedFocusAreaFromTrainingSkillFocus(tf);
+        setRecommendedFocusHint(area ?? null);
+      } catch {
+        if (!cancelled) setRecommendedFocusHint(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [kidIdParam]);
 
   function updateTechniqueAt(index: number, patch: Partial<TechniqueEntry>) {
     setTechniques((prev) =>
@@ -854,6 +891,16 @@ return; // prevents any router.replace below from firing immediately
 
 <View style={styles.divider} />
 
+  {recommendedFocusHint ? (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={styles.focusHintLead}>
+        {`Today's focus: `}
+        <Text style={styles.focusHintEmphasis}>{recommendedFocusHint}</Text>
+      </Text>
+      <Text style={styles.helperText}>Optional cue from recent competitions — log what you actually trained.</Text>
+    </View>
+  ) : null}
+
   <Text style={styles.sectionTitle}>Gear</Text>
   <View style={styles.pillRow}>
     {(["gi", "nogi"] as const).map((g) => (
@@ -1218,7 +1265,11 @@ Format: start position (grips) → transition → outcome (pass, sweep, submit)
   value={notes}
   scrollEnabled={false}
   onChangeText={setNotes}
-  placeholder="Ex: Closed guard (sleeve+collar) → hip bump → mount → armbar"
+  placeholder={
+    recommendedFocusHint && !notes.trim()
+      ? `Example: tie today's reps to ${recommendedFocusHint} (optional)`
+      : "Ex: Closed guard (sleeve+collar) → hip bump → mount → armbar"
+  }
   placeholderTextColor="#6f6f86"
   style={[styles.input, styles.textarea]}
   multiline
@@ -1392,6 +1443,15 @@ helperText: {
   marginBottom: 10,
   fontSize: 12,
 },
+  focusHintLead: {
+    fontSize: 13,
+    color: UI.textSecondary,
+    lineHeight: 19,
+  },
+  focusHintEmphasis: {
+    fontWeight: "700",
+    color: UI.textPrimary,
+  },
 inputValueText: {
   color: UI.accent,
   fontSize: 16,

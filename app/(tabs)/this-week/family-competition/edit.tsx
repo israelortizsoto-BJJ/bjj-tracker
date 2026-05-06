@@ -1,6 +1,7 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -17,6 +18,10 @@ import {
 } from "../../../../src/services/coachWeeklySyncApi";
 import { getKidsById, todayYMD } from "../../../../src/storage/coachKidStore";
 import {
+  persistMediaFromCameraRoll,
+  requestMediaLibraryPermission,
+} from "../../../../src/media/persistCameraRollMedia";
+import {
   createKidCompetitionEntry,
   getKidCompetitionEntryById,
   getWorkerCompetitionIdForEntry,
@@ -27,6 +32,8 @@ import type {
   KidCompetitionFormat,
   KidCompetitionResult,
 } from "../../../../src/types/coachKid";
+import { getPlacementLabel } from "../../../../src/features/competition/placementLabel";
+import { medalTierFromKidResult } from "../../../../src/types/coachKid";
 const UI = {
   screenBg: "#f3f4f6",
   bgCard: "#ffffff",
@@ -56,20 +63,9 @@ const EVENT_STATUSES: KidCompetitionEventStatus[] = [
 const FORMATS: KidCompetitionFormat[] = ["gi", "nogi", "both"];
 
 function resultLabel(r: KidCompetitionResult): string {
-  switch (r) {
-    case "gold":
-      return "Gold";
-    case "silver":
-      return "Silver";
-    case "bronze":
-      return "Bronze";
-    case "participated":
-      return "Participated";
-    case "dnf":
-      return "DNF";
-    case "other":
-      return "Other";
-  }
+  if (r === "dnf") return "DNF";
+  if (r === "other") return "Other";
+  return getPlacementLabel(r);
 }
 
 function eventStatusLabel(s: KidCompetitionEventStatus): string {
@@ -140,6 +136,7 @@ export default function FamilyCompetitionEditScreen() {
     undefined,
   );
   const [promoterDraft, setPromoterDraft] = useState("");
+  const [medalImageDraft, setMedalImageDraft] = useState<string | undefined>();
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -183,6 +180,7 @@ export default function FamilyCompetitionEditScreen() {
       setEventStatusDraft(found.status ?? found.eventStatus);
       setFormatDraft(found.format);
       setPromoterDraft(found.organizationOrPromoter ?? "");
+      setMedalImageDraft(found.medalImageUri);
     } finally {
       setLoading(false);
     }
@@ -213,6 +211,7 @@ export default function FamilyCompetitionEditScreen() {
     setEventStatusDraft(undefined);
     setFormatDraft(undefined);
     setPromoterDraft("");
+    setMedalImageDraft(undefined);
     setLoading(false);
   }, [kidId, isNew, openNonce]);
 
@@ -241,6 +240,50 @@ export default function FamilyCompetitionEditScreen() {
     if (missingName) return "Add a tournament name to enable Save.";
     return "Use a valid event date (YYYY-MM-DD) to enable Save.";
   }, [canSave, nameDraft, dateDraft]);
+
+  const pickMedalImage = useCallback(() => {
+    const runLibrary = async () => {
+      const ok = await requestMediaLibraryPermission();
+      if (!ok) {
+        Alert.alert("Permission needed", "Allow Photos access to attach a medal photo.");
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+        allowsEditing: false,
+        base64: false,
+      });
+      if (result.canceled) return;
+      const uri = result.assets[0]?.uri;
+      if (uri) {
+        const persisted = await persistMediaFromCameraRoll(uri, "image");
+        setMedalImageDraft(persisted);
+      }
+    };
+    const runCamera = async () => {
+      const cam = await ImagePicker.requestCameraPermissionsAsync();
+      if (!cam.granted) {
+        Alert.alert("Permission needed", "Allow Camera to take a medal photo.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        quality: 0.85,
+      });
+      if (result.canceled) return;
+      const uri = result.assets[0]?.uri;
+      if (uri) {
+        const persisted = await persistMediaFromCameraRoll(uri, "image");
+        setMedalImageDraft(persisted);
+      }
+    };
+    Alert.alert("Medal photo", "Choose a source", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Take photo", onPress: () => void runCamera() },
+      { text: "Photo library", onPress: () => void runLibrary() },
+    ]);
+  }, []);
 
   async function onSave() {
     if (!canSave || !kidId) return;
@@ -302,6 +345,8 @@ export default function FamilyCompetitionEditScreen() {
               tournamentName: name,
               eventDate,
               ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+              medal: medalTierFromKidResult(resultDraft),
+              medalImageUri: medalImageDraft,
               status: eventStatusDraft,
               eventStatus: eventStatusDraft,
               organizationOrPromoter: promoterDraft.trim()
@@ -319,6 +364,8 @@ export default function FamilyCompetitionEditScreen() {
             tournamentName: name,
             eventDate,
             ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+            medal: medalTierFromKidResult(resultDraft),
+            medalImageUri: medalImageDraft,
             status: eventStatusDraft,
             eventStatus: eventStatusDraft,
             organizationOrPromoter: promoterDraft.trim()
@@ -380,6 +427,8 @@ export default function FamilyCompetitionEditScreen() {
           tournamentName: name,
           eventDate,
           result: resultDraft,
+          medal: medalTierFromKidResult(resultDraft),
+          medalImageUri: medalImageDraft,
           status: eventStatusDraft,
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim()
@@ -697,6 +746,33 @@ export default function FamilyCompetitionEditScreen() {
                   );
                 })}
               </View>
+
+              <Text
+                style={{
+                  marginTop: 16,
+                  fontSize: 12,
+                  letterSpacing: 0.6,
+                  fontWeight: "700",
+                  color: UI.textSecondary,
+                }}
+              >
+                MEDAL PHOTO (OPTIONAL)
+              </Text>
+              <Pressable
+                onPress={pickMedalImage}
+                style={({ pressed }) => ({
+                  marginTop: 8,
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? "#eef2ff" : UI.bgCard,
+                })}
+              >
+                <Text style={{ fontSize: 14, color: UI.textPrimary }}>
+                  {medalImageDraft ? "Replace medal photo" : "Add medal photo (camera or library)"}
+                </Text>
+              </Pressable>
 
               <Pressable
                 disabled={!canSave || saving || loading}

@@ -29,13 +29,13 @@ import {
   buildSessionsByDate,
 } from "../../domain/sessionUtils";
 import { SUMMARY_IDENTITY_ACCOUNT_SCOPE } from "../../types/summaryIdentityScope";
-import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
-import { getCompetitionDetailByEntryId } from "../../storage/competitionStore";
-import {
-  getCompetitionVersion,
-  getKidCompetitionEntriesForKid,
-  subscribeCompetition,
-} from "../../storage/kidCompetitionStore";
+import { familyCompetitionResultLabel, formatFamilyCompetitionDate } from "../../family/coachShareCompetitionBuckets";
+import type {
+  CompetitionDetailMatchSnapshot,
+  KidCompetitionEntryWithMatchDetail,
+} from "../../storage/competitionStore";
+import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../storage/competitionStore";
+import { getCompetitionVersion, subscribeCompetition } from "../../storage/kidCompetitionStore";
 import { getKidsById, startOfWeekMondayYMD, todayYMD as todayKidYMD } from "../../storage/coachKidStore";
 import { getSessions } from "../../storage/sessionsStore";
 import { StorageKeys } from "../../storage/storageKeys";
@@ -228,6 +228,7 @@ export default function SummaryScreenV2() {
   type LoadShape = {
     sessionsByDate: Record<string, Session[]>;
     mergedMatches: CompetitionDetailMatchSnapshot[];
+    competitionEntries: KidCompetitionEntryWithMatchDetail[];
   };
 
   const [loaded, setLoaded] = useState<LoadShape | null>(null);
@@ -255,19 +256,20 @@ export default function SummaryScreenV2() {
         const byDate = buildSessionsByDate(scoped);
 
         let mergedMatches: CompetitionDetailMatchSnapshot[] = [];
+        let competitionEntries: KidCompetitionEntryWithMatchDetail[] = [];
         if (selectedKidIdForCompetition) {
-          const entries = await getKidCompetitionEntriesForKid(selectedKidIdForCompetition);
-          for (const e of entries) {
-            const detail = await getCompetitionDetailByEntryId(e.id);
-            const matches = detail?.matches;
-            if (Array.isArray(matches)) mergedMatches.push(...matches);
+          competitionEntries = await getKidCompetitionEntriesWithMatchDetailForKid(
+            selectedKidIdForCompetition,
+          );
+          for (const e of competitionEntries) {
+            mergedMatches.push(...e.matches);
           }
         }
 
         if (cancelled) return;
         setProfileRoot(parseProfileRoot(profileRaw));
         setKidsByIdSnapshot(kids);
-        setLoaded({ sessionsByDate: byDate, mergedMatches });
+        setLoaded({ sessionsByDate: byDate, mergedMatches, competitionEntries });
       })();
       return () => {
         cancelled = true;
@@ -277,6 +279,7 @@ export default function SummaryScreenV2() {
 
   const sessionsByDateEffective = loaded?.sessionsByDate ?? {};
   const mergedMatchesEffective = loaded?.mergedMatches ?? [];
+  const competitionEntriesEffective = loaded?.competitionEntries ?? [];
 
   const confidenceMetrics = useMemo((): SummaryConfidenceMetrics => {
     const weekDates = Array.from({ length: 7 }, (_, i) => addDaysLocal(weekStartMonday, i));
@@ -365,6 +368,42 @@ export default function SummaryScreenV2() {
     return { recordLabel, statWinRate, statSubmissionRate, statFastestSub };
   }, [mergedMatchesEffective]);
 
+  const latestCompetitionFace = useMemo(() => {
+    if (competitionEntriesEffective.length === 0) {
+      return {
+        latestSummary: "" as string,
+        latestDateLine: "" as string,
+        insight:
+          "Log competitions with match detail to connect outcomes to what you drill in class.",
+      };
+    }
+    const sorted = [...competitionEntriesEffective].sort((a, b) => {
+      const byDate = b.eventDate.localeCompare(a.eventDate);
+      if (byDate !== 0) return byDate;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
+    const entry = sorted[0]!;
+    const name = entry.tournamentName.trim() || "Event";
+    const latestSummary = `${familyCompetitionResultLabel(entry.result)} · ${name}`;
+    const latestDateLine = formatFamilyCompetitionDate(entry.eventDate);
+    const r = entry.result;
+    let insight =
+      "Name the hardest moment from that day and turn it into one clear training priority.";
+    if (r === "gold") {
+      insight =
+        "A 1st-place outcome reinforces doubling down on trusted positions and finishes that already feel automatic.";
+    } else if (r === "silver" || r === "bronze") {
+      insight =
+        "A 2nd or 3rd place often comes down to a handful of exchanges—pick one sequence to sharpen before the next event.";
+    } else if (r === "dnf") {
+      insight =
+        "Use this week to reset pacing and preparation, with one steady technical theme for the next outing.";
+    } else if (r === "other") {
+      insight = "Translate what happened into one measurable focus in training this block.";
+    }
+    return { latestSummary, latestDateLine, insight };
+  }, [competitionEntriesEffective]);
+
   const onSelectAthlete = useCallback(
     (key: string) => {
       setSelectedAthleteKey(key);
@@ -420,10 +459,13 @@ export default function SummaryScreenV2() {
         <Text style={styles.sectionTitle}>Competition</Text>
 
         <CompetitionCard
+          insightText={latestCompetitionFace.insight}
+          latestDateLine={latestCompetitionFace.latestDateLine}
+          latestSummary={latestCompetitionFace.latestSummary}
           recordLabel={competitionView.recordLabel}
-          statWinRate={competitionView.statWinRate}
-          statSubmissionRate={competitionView.statSubmissionRate}
           statFastestSub={competitionView.statFastestSub}
+          statSubmissionRate={competitionView.statSubmissionRate}
+          statWinRate={competitionView.statWinRate}
         />
       </ScrollView>
     </SafeAreaView>

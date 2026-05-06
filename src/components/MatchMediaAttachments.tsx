@@ -1,7 +1,7 @@
 import { ResizeMode, Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useRef } from "react";
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
@@ -27,6 +27,11 @@ export type MatchMediaCallbacks = {
   onVideoChange: (uri: string | null, assetId: string | null) => void;
 };
 
+function looksLikeHttpVideoUrl(raw: string): boolean {
+  const t = raw.trim();
+  return /^https?:\/\//i.test(t);
+}
+
 /**
  * Camera-roll image + video attachments (training session pattern): pick, preview, replay, remove.
  * No YouTube. Uses persisted document URIs via persistMediaFromCameraRoll.
@@ -42,6 +47,15 @@ export function MatchMediaAttachments({
   onVideoChange,
 }: MatchMediaCallbacks) {
   const videoRef = useRef<Video>(null);
+  const [videoLinkDraft, setVideoLinkDraft] = useState("");
+
+  useEffect(() => {
+    if (videoUri && looksLikeHttpVideoUrl(videoUri)) {
+      setVideoLinkDraft(videoUri.trim());
+    } else {
+      setVideoLinkDraft("");
+    }
+  }, [videoUri]);
 
   async function ensureMediaPermissions() {
     const ok = await requestMediaLibraryPermission();
@@ -52,7 +66,7 @@ export function MatchMediaAttachments({
     return true;
   }
 
-  async function pickImage() {
+  async function pickImageFromLibrary() {
     if (!(await ensureMediaPermissions())) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -65,6 +79,61 @@ export function MatchMediaAttachments({
       const persisted = await persistMediaFromCameraRoll(asset.uri, "image");
       onImageChange(persisted, asset.assetId ?? null);
     }
+  }
+
+  async function pickImageFromCamera() {
+    const cam = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cam.granted) {
+      Alert.alert("Permission needed", "Allow Camera to take a photo.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+    });
+
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      const asset = result.assets[0];
+      const persisted = await persistMediaFromCameraRoll(asset.uri, "image");
+      onImageChange(persisted, asset.assetId ?? null);
+    }
+  }
+
+  function offerImageSource() {
+    Alert.alert("Add image", "Choose a source", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Take photo",
+        onPress: () => {
+          void pickImageFromCamera();
+        },
+      },
+      {
+        text: "Photo library",
+        onPress: () => {
+          void pickImageFromLibrary();
+        },
+      },
+    ]);
+  }
+
+  function commitVideoLink() {
+    const raw = videoLinkDraft.trim();
+    if (!raw) {
+      if (videoUri && looksLikeHttpVideoUrl(videoUri)) {
+        onVideoChange(null, null);
+      }
+      return;
+    }
+    if (!looksLikeHttpVideoUrl(raw)) {
+      Alert.alert(
+        "Check the link",
+        "Enter a URL starting with http:// or https://, or pick a video from your library.",
+      );
+      return;
+    }
+    onVideoChange(raw, null);
   }
 
   async function pickVideo() {
@@ -120,7 +189,7 @@ export function MatchMediaAttachments({
   return (
     <View>
       <View style={styles.attachmentButtonsRow}>
-        <TouchableOpacity style={styles.attachmentButton} onPress={pickImage}>
+        <TouchableOpacity style={styles.attachmentButton} onPress={offerImageSource}>
           <Text style={styles.attachmentButtonText}>📷 Add Image</Text>
         </TouchableOpacity>
 
@@ -128,6 +197,23 @@ export function MatchMediaAttachments({
           <Text style={styles.attachmentButtonText}>🎥 Add Video</Text>
         </TouchableOpacity>
       </View>
+
+      <Text style={styles.linkSectionTitle}>Video link (optional)</Text>
+      <Text style={styles.linkHint}>
+        Use a direct http(s) link, or pick a clip above. Saving applies the link when you leave this field.
+      </Text>
+      <TextInput
+        value={videoLinkDraft}
+        onChangeText={setVideoLinkDraft}
+        onBlur={commitVideoLink}
+        onSubmitEditing={commitVideoLink}
+        placeholder="https://…"
+        placeholderTextColor={UI.textSecondary}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType="url"
+        style={styles.linkInput}
+      />
 
       {imageUri ? (
         <View style={styles.attachmentPreview}>
@@ -184,6 +270,31 @@ export function MatchMediaAttachments({
 }
 
 const styles = StyleSheet.create({
+  linkSectionTitle: {
+    color: UI.textSecondary,
+    marginTop: 12,
+    marginBottom: 4,
+    fontWeight: "700",
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  linkHint: {
+    color: UI.textSecondary,
+    fontSize: 11,
+    lineHeight: 15,
+    marginBottom: 6,
+    opacity: 0.92,
+  },
+  linkInput: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: UI.textPrimary,
+    fontSize: 14,
+  },
   sectionTitle: {
     color: UI.textPrimary,
     marginTop: 12,

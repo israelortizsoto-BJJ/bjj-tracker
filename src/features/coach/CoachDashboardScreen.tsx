@@ -1,8 +1,27 @@
+import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import type { CoachInsightRow } from "./useCoachInsights";
+import type { CompetitionPlacementTrend } from "../../lib/signals/computeSignals";
+import {
+  trainingSkillBucketDisplayLabel,
+  trainingSkillBucketTopicPhrase,
+  type TrainingSkillBucket,
+} from "../../ai-coach/competitionTrainingSkillFocus";
+import { summarizeTeamBucketMomentum } from "../../lib/signals/competitionBucketHistory";
+import type {
+  CoachInsightRow,
+  CoachTeamFocusAthleteRow,
+} from "./useCoachInsights";
 import { useCoachInsights } from "./useCoachInsights";
 
 const UI = {
@@ -61,6 +80,79 @@ function appliedInSparringLabel(
 
 function attentionLabel(level: AttentionLevel): string {
   return level.toUpperCase();
+}
+
+function topTrainingSkillBuckets(rows: CoachTeamFocusAthleteRow[], take: number) {
+  const tallies = new Map<TrainingSkillBucket, number>();
+  for (const r of rows) {
+    const b = r.focusBucket;
+    if (!b) continue;
+    tallies.set(b, (tallies.get(b) ?? 0) + 1);
+  }
+  return [...tallies.entries()]
+    .map(([bucket, count]) => ({ bucket, count }))
+    .sort((a, b) => b.count - a.count || a.bucket.localeCompare(b.bucket))
+    .slice(0, take);
+}
+
+/** Static drill ideas keyed by the same `TrainingSkillBucket` system as team focus. */
+const CLASS_FOCUS_DRILL_IDEAS: Record<TrainingSkillBucket, readonly [string, string]> = {
+  guard_retention: ["Positional sparring", "Guard recovery drills"],
+  defense: ["Escape chains", "Submission defense rounds"],
+  sweeps: ["Sweep timing reps", "Partner sweep chains"],
+  submissions: ["Submission chains", "Finish-pressure rounds"],
+  positioning: ["Positional control rounds", "Scoring / advantage scenarios"],
+};
+
+function classFocusSentenceFromTopBuckets(
+  top: { bucket: TrainingSkillBucket; count: number }[],
+): string | null {
+  if (top.length === 0) return null;
+  const topics = top.map((t) => trainingSkillBucketTopicPhrase(t.bucket));
+  const focus =
+    topics.length === 1
+      ? topics[0]
+      : `${topics[0]} and ${topics[1]}`;
+  return `Today's class can focus on ${focus}.`;
+}
+
+function drillIdeasForClassFocus(
+  top: { bucket: TrainingSkillBucket; count: number }[],
+): string[] {
+  if (top.length === 0) return [];
+  if (top.length === 1) {
+    return [...CLASS_FOCUS_DRILL_IDEAS[top[0].bucket].slice(0, 2)];
+  }
+  const a = CLASS_FOCUS_DRILL_IDEAS[top[0].bucket];
+  const b = CLASS_FOCUS_DRILL_IDEAS[top[1].bucket];
+  return [a[0], b[0], a[1]].slice(0, 3);
+}
+
+function formatClassPlanForClipboard(sentence: string, bullets: string[]): string {
+  if (bullets.length === 0) return sentence;
+  return [sentence, "", ...bullets.map((line) => `• ${line}`)].join("\n");
+}
+
+function dominantPlacementTrendWithCount(rows: CoachTeamFocusAthleteRow[]): {
+  trend: CompetitionPlacementTrend;
+  count: number;
+} | null {
+  const tallies = new Map<CompetitionPlacementTrend, number>();
+  for (const r of rows) {
+    const t = r.placementTrend;
+    if (!t) continue;
+    tallies.set(t, (tallies.get(t) ?? 0) + 1);
+  }
+  const ranked = [...tallies.entries()].sort(
+    (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+  );
+  const first = ranked[0];
+  if (!first || first[1] < 2) return null;
+  return { trend: first[0], count: first[1] };
+}
+
+function formatPlacementTrendLabel(t: CompetitionPlacementTrend): string {
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
 function Group({
@@ -161,7 +253,71 @@ function badgeStyleForLevel(level: AttentionLevel) {
 }
 
 export default function CoachDashboardScreen() {
-  const { loading, insights } = useCoachInsights();
+  const { loading, insights, teamFocus } = useCoachInsights();
+  const [drillBucket, setDrillBucket] = useState<TrainingSkillBucket | null>(null);
+  const [classPlanCopied, setClassPlanCopied] = useState(false);
+  const classPlanCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const bucketTopLines = useMemo(
+    () => topTrainingSkillBuckets(teamFocus.athleteRows, 3),
+    [teamFocus.athleteRows],
+  );
+
+  const topTwoFocusBuckets = useMemo(
+    () => topTrainingSkillBuckets(teamFocus.athleteRows, 2),
+    [teamFocus.athleteRows],
+  );
+
+  const classFocusSentence = useMemo(
+    () => classFocusSentenceFromTopBuckets(topTwoFocusBuckets),
+    [topTwoFocusBuckets],
+  );
+
+  const classFocusDrillBullets = useMemo(
+    () => drillIdeasForClassFocus(topTwoFocusBuckets),
+    [topTwoFocusBuckets],
+  );
+
+  const classPlanClipboardText = useMemo(
+    () =>
+      classFocusSentence
+        ? formatClassPlanForClipboard(classFocusSentence, classFocusDrillBullets)
+        : "",
+    [classFocusSentence, classFocusDrillBullets],
+  );
+
+  const onUseForClass = useCallback(async () => {
+    const text = classPlanClipboardText.trim();
+    if (!text) return;
+    await Clipboard.setStringAsync(text);
+    setClassPlanCopied(true);
+    if (classPlanCopiedTimer.current) clearTimeout(classPlanCopiedTimer.current);
+    classPlanCopiedTimer.current = setTimeout(() => {
+      setClassPlanCopied(false);
+      classPlanCopiedTimer.current = null;
+    }, 2200);
+  }, [classPlanClipboardText]);
+
+  const trendHighlight = useMemo(
+    () => dominantPlacementTrendWithCount(teamFocus.athleteRows),
+    [teamFocus.athleteRows],
+  );
+
+  const teamBucketMomentum = useMemo(
+    () =>
+      summarizeTeamBucketMomentum(
+        teamFocus.athleteRows.map((r) => ({
+          focusBucket: r.focusBucket,
+          bucketOutcomeTrends: r.bucketOutcomeTrends,
+        })),
+      ),
+    [teamFocus.athleteRows],
+  );
+
+  const drillAthletes = useMemo(() => {
+    if (!drillBucket) return [];
+    return teamFocus.athleteRows.filter((r) => r.focusBucket === drillBucket);
+  }, [teamFocus.athleteRows, drillBucket]);
 
   const high = insights
     .filter(({ insight }) => insight.attentionLevel === "high")
@@ -219,12 +375,149 @@ export default function CoachDashboardScreen() {
           </View>
         </View>
 
+        <View style={styles.snapshot}>
+          <Text style={styles.snapshotTitle}>Team Focus Snapshot</Text>
+          {!loading && bucketTopLines.length === 0 ? (
+            <Text style={styles.teamFocusHint}>
+              High-confidence gaps from logged competition notes will aggregate here across athletes.
+            </Text>
+          ) : null}
+          {!loading && bucketTopLines.length > 0 ? (
+            <View style={styles.teamFocusBuckets}>
+              {bucketTopLines.map(({ bucket, count }) => (
+                <Pressable
+                  key={bucket}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${trainingSkillBucketDisplayLabel(bucket)}, ${count} athletes`}
+                  onPress={() => setDrillBucket(bucket)}
+                  style={({ pressed }) => [
+                    styles.teamFocusBucketRow,
+                    pressed ? styles.teamFocusBucketRowPressed : null,
+                  ]}
+                >
+                  <Text style={styles.teamFocusBucketLabel}>
+                    {trainingSkillBucketDisplayLabel(bucket)}{" "}
+                    <Text style={styles.teamFocusBucketCount}>
+                      ({count} {count === 1 ? "athlete" : "athletes"})
+                    </Text>
+                  </Text>
+                  <Text style={styles.teamFocusChevron}>›</Text>
+                </Pressable>
+              ))}
+              {trendHighlight ? (
+                <Text style={styles.teamFocusTrend}>
+                  Most common trend: {formatPlacementTrendLabel(trendHighlight.trend)}{" "}
+                  ({trendHighlight.count}{" "}
+                  {trendHighlight.count === 1 ? "athlete" : "athletes"})
+                </Text>
+              ) : null}
+
+              {teamBucketMomentum.mostImproved ? (
+                <Text style={styles.teamFocusMomentum}>
+                  Most improved area:{" "}
+                  {trainingSkillBucketDisplayLabel(teamBucketMomentum.mostImproved.bucket)}{" "}
+                  ({teamBucketMomentum.mostImproved.count}{" "}
+                  {teamBucketMomentum.mostImproved.count === 1 ? "athlete" : "athletes"})
+                </Text>
+              ) : null}
+              {teamBucketMomentum.needsAttention ? (
+                <Text style={styles.teamFocusMomentum}>
+                  Needs attention:{" "}
+                  {trainingSkillBucketDisplayLabel(teamBucketMomentum.needsAttention.bucket)}{" "}
+                  ({teamBucketMomentum.needsAttention.count}{" "}
+                  {teamBucketMomentum.needsAttention.count === 1 ? "athlete" : "athletes"})
+                </Text>
+              ) : null}
+
+              {classFocusSentence ? (
+                <View style={styles.classFocusBlock}>
+                  <Text style={styles.classFocusSectionTitle}>Suggested class focus</Text>
+                  <Text style={styles.classFocusSentence}>{classFocusSentence}</Text>
+                  {classFocusDrillBullets.map((line) => (
+                    <Text key={line} style={styles.classFocusBullet}>
+                      • {line}
+                    </Text>
+                  ))}
+                  <Pressable
+                    onPress={onUseForClass}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy class focus and drills to clipboard"
+                    style={({ pressed }) => [
+                      styles.classFocusCopyButton,
+                      pressed ? styles.classFocusCopyButtonPressed : null,
+                    ]}
+                  >
+                    <Text style={styles.classFocusCopyButtonText}>Use this for class</Text>
+                  </Pressable>
+                  {classPlanCopied ? (
+                    <Text style={styles.classFocusCopiedHint}>Copied to clipboard</Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
         {loading ? <Text style={styles.loadingText}>Loading athletes…</Text> : null}
 
         <Group title="Needs Attention" level="high" rows={high} />
         <Group title="Monitor" level="medium" rows={medium} />
         <Group title="On Track" level="low" rows={low} />
       </ScrollView>
+
+      <Modal
+        visible={Boolean(drillBucket)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDrillBucket(null)}
+      >
+        <View style={styles.modalRoot}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close roster focus list"
+            style={styles.modalBackdrop}
+            onPress={() => setDrillBucket(null)}
+          />
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>
+              {drillBucket
+                ? `${trainingSkillBucketDisplayLabel(drillBucket)} · ${drillAthletes.length} athletes`
+                : ""}
+            </Text>
+            <ScrollView style={styles.modalList} keyboardShouldPersistTaps="handled">
+              {drillAthletes.map((row) => (
+                <Pressable
+                  key={row.athlete.id}
+                  onPress={() => {
+                    const id = row.athlete.id.trim();
+                    setDrillBucket(null);
+                    if (id) router.push(`/coach/kid/${id}`);
+                  }}
+                  style={({ pressed }) => [
+                    styles.modalRow,
+                    pressed ? styles.modalRowPressed : null,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open athlete ${row.athlete.name}`}
+                >
+                  <Text style={styles.modalRowName}>{row.athlete.name.trim() || "Athlete"}</Text>
+                  {row.usedCoachFocusOverride ? (
+                    <Text style={styles.modalRowMeta}>Coach focus</Text>
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable
+              onPress={() => setDrillBucket(null)}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={styles.modalDismiss}
+            >
+              <Text style={styles.modalDismissText}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -315,6 +608,188 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     opacity: 0.86,
+  },
+  teamFocusHint: {
+    color: UI.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+    opacity: 0.86,
+  },
+  teamFocusBuckets: {
+    gap: 10,
+    marginTop: 2,
+  },
+  teamFocusBucketRow: {
+    alignItems: "center",
+    backgroundColor: UI.fieldBg,
+    borderColor: UI.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  teamFocusBucketRowPressed: {
+    opacity: 0.76,
+  },
+  teamFocusBucketLabel: {
+    color: UI.textPrimary,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 20,
+    paddingRight: 8,
+  },
+  teamFocusBucketCount: {
+    color: UI.textSecondary,
+    fontWeight: "700",
+  },
+  teamFocusChevron: {
+    color: UI.textSecondary,
+    fontSize: 20,
+    fontWeight: "700",
+    lineHeight: 22,
+    opacity: 0.82,
+    paddingBottom: 1,
+  },
+  teamFocusTrend: {
+    color: UI.textSecondary,
+    fontSize: 13,
+    fontStyle: "italic",
+    fontWeight: "600",
+    lineHeight: 19,
+    marginTop: 4,
+    opacity: 0.9,
+  },
+  teamFocusMomentum: {
+    color: UI.accent,
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 19,
+    marginTop: 4,
+    opacity: 0.9,
+  },
+  classFocusBlock: {
+    borderTopColor: UI.border,
+    borderTopWidth: 1,
+    gap: 8,
+    marginTop: 14,
+    paddingTop: 14,
+  },
+  classFocusSectionTitle: {
+    color: UI.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+    marginBottom: 2,
+  },
+  classFocusSentence: {
+    color: UI.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 21,
+  },
+  classFocusBullet: {
+    color: UI.textSecondary,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+    opacity: 0.92,
+    paddingLeft: 4,
+  },
+  classFocusCopyButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: "transparent",
+    borderColor: UI.accent,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 6,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  classFocusCopyButtonPressed: {
+    opacity: 0.78,
+  },
+  classFocusCopyButtonText: {
+    color: UI.accent,
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  classFocusCopiedHint: {
+    color: UI.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+    opacity: 0.85,
+  },
+  modalRoot: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  modalSheet: {
+    alignSelf: "stretch",
+    backgroundColor: UI.bgCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: UI.border,
+    maxHeight: "72%",
+    paddingBottom: 12,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  modalTitle: {
+    color: UI.textPrimary,
+    fontSize: 17,
+    fontWeight: "900",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  modalList: {
+    flexGrow: 0,
+    maxHeight: 360,
+  },
+  modalRow: {
+    backgroundColor: UI.fieldBg,
+    borderColor: UI.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  modalRowPressed: {
+    opacity: 0.8,
+  },
+  modalRowName: {
+    color: UI.textPrimary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  modalRowMeta: {
+    color: UI.accent,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 4,
+    opacity: 0.92,
+  },
+  modalDismiss: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    minHeight: 44,
+    paddingVertical: 6,
+  },
+  modalDismissText: {
+    color: UI.accent,
+    fontSize: 15,
+    fontWeight: "900",
   },
   loadingText: {
     color: UI.textSecondary,

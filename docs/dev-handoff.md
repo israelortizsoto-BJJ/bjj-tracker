@@ -1,5 +1,246 @@
 # BJJ Tracker - Dev Handoff Notes
 
+## Date: 2026-05-04
+
+## Summary
+
+Today focused on **system correction and architectural alignment**, not feature completion.
+
+The primary outcome:
+→ Weekly direction is now correctly scoped **per athlete**, resolving a critical data integrity issue.
+
+UI work progressed toward the new “This Week” direction but remains intentionally incomplete pending full decomposition.
+
+---
+
+## Commits
+
+- 7839fa6 — Sync This Week with global athlete selection
+- 0fb74e0 — Translate This Week into weekly direction surface
+- 7f00652 — Align This Week feed with coach direction mock
+- 8e83d61 — Replicate This Week coach feed mock
+- 3562cc2 — Align This Week shell with coach feed
+- a568b6c — Reorder This Week into weekly story flow
+- 75691de — Fix coach redirect from This Week
+- 7df7c95 — Wire coach dashboard to roster invites
+- 5ab0baa — Ignore local env file
+- 8b98926 — Enforce sharedAthleteId on weekly publish
+- 843f0f6 — EOD May 4 2026 — Lock per-athlete enforcement + decomposition planning
+
+---
+
+## Key Workstreams
+
+### 1. Weekly System Fix (Critical)
+- Enforced `sharedAthleteId`
+- Blocked invite-level overwrites
+- Updated sync + cache + resolve logic
+
+**Impact:**
+Fixes cross-athlete overwrite bug and establishes correct data model moving forward.
+
+---
+
+### 2. This Week Iteration
+- Shifted toward coach-led weekly narrative
+- Synced athlete selection across surfaces
+- Improved navigation and redirects
+
+**Status:**
+Transitional — not final
+
+---
+
+### 3. Coach System Alignment
+- Dashboard connected to roster invites
+- Improved coach → athlete flow
+
+---
+
+### 4. Early Architecture Work
+- Introduced identity, navigation, invariants, and test scaffolding folders
+
+**Status:**
+Not fully validated — requires review before expansion
+
+---
+
+## Product Insight
+
+“This Week” is currently overloaded and violates single-responsibility.
+
+It includes:
+- Weekly direction ✅ (correct)
+- Practice summary ❌ (should move)
+- Coaching history ❓ (undecided)
+- Competition data ❌ (should move)
+
+---
+
+## Risks
+
+- Continuing to iterate on This Week without decomposition will increase complexity
+- New system folders are introduced but not yet enforced or validated
+- UI may diverge from backend correctness if rebuild is not controlled
+
+---
+
+## Next Steps
+
+1. Repo verification (no assumptions)
+2. Surface decomposition (map vs move vs new)
+3. Build isolated slice:
+   - Practice Summary extraction
+4. Plan Competition tab
+5. Define final home for Coach Connection + Coaching History
+
+---
+
+## Status
+
+- Backend: ✅ Correct
+- UI: ⚠️ Transitional
+- Architecture: 🟡 Emerging
+- Direction: ✅ Clear
+
+System Correction + This Week Decomposition Setup
+
+### Context
+Work resumed from prior dev handoff with full alignment to:
+- Pre-flight checklist
+- 9-step build system (Mock → Spec → Decomposition → Repo Verification → Build → Integration → Validation → Cleanup → Dead Code)
+- Codex design mock as source of truth for “This Week”
+
+---
+
+### What Was Accomplished
+
+#### 1. Weekly System Integrity (CORE FIX)
+- Enforced `sharedAthleteId` on weekly publish
+- Blocked legacy invite-level weekly writes
+- Updated:
+  - `resolveWeeklyDoc.ts`
+  - `weeklyFocusPublish.ts`
+  - `coachWeeklySyncApi.ts`
+  - `coachWeeklySyncCacheStore.ts`
+
+**Result:**
+- Weekly direction is now **per-athlete**
+- Eliminates “last publish wins across household” issue
+
+---
+
+#### 2. Coach System Integration
+- Wired coach dashboard to roster invites
+- Improved coach roster flow
+- Continued alignment between coach dashboard and weekly system
+
+---
+
+#### 3. This Week — Directional Iteration (NOT FINAL)
+Multiple passes were made to align This Week toward:
+- Coach-led weekly direction
+- Athlete-specific flow
+- Narrative “weekly story”
+
+Changes included:
+- Sync with global athlete selection
+- Reorder into weekly story flow
+- Align with coach feed mock
+- Fix redirect/navigation issues
+
+**Important:**
+- This Week is still **structurally overloaded**
+- No decomposition or migration has been executed yet
+
+---
+
+#### 4. System Foundations (Early Stage)
+Introduced new structural areas (not fully validated yet):
+- `src/identity/`
+- `src/navigation/`
+- `src/storage/invariants/`
+- `src/storage/tests/`
+
+These represent movement toward:
+- clearer system boundaries
+- stronger data contracts
+- future-safe architecture
+
+---
+
+### Key Product Realization
+
+“This Week” is currently mixing:
+- Weekly direction (should stay)
+- Practice summary (should move)
+- Coaching history (unclear ownership)
+- Competition data (should move)
+
+**Conclusion:**
+A full **surface decomposition is required before any further UI work**
+
+---
+
+### Current State
+
+- ✅ Backend weekly system is correct (per-athlete enforced)
+- ⚠️ UI layer is transitional / not final
+- ❌ This Week is not yet decomposed
+- ✅ Repo is stable and pushed (summary-rebuild-v2)
+
+---
+
+### Next Session — Entry Point
+
+#### Step 1 — Repo Verification (MANDATORY)
+Cursor must scan and confirm:
+- All This Week surfaces
+- Weekly data flow (read/write)
+- Navigation dependencies
+- Athlete selection flow
+
+No assumptions allowed.
+
+---
+
+#### Step 2 — Surface Decomposition
+Define:
+- KEEP → Weekly Direction (This Week core)
+- MOVE → Practice Summary (→ Consistency/Summary surface)
+- DECIDE → Coaching History
+- REHOME → Coach Connection
+- NEW → Competition tab
+
+---
+
+#### Step 3 — Build Slice #1 (Isolated)
+- Extract Practice Summary into new surface
+- Do NOT delete existing implementation yet
+- No direct edits to current This Week screen
+
+---
+
+### Rules Going Forward
+
+- No direct mutation of existing screens
+- All work must follow:
+  → Isolated build → Controlled integration
+- Decomposition must be complete before UI rebuild
+- Dead code must be proven before removal
+
+---
+
+### Branch
+`summary-rebuild-v2`
+
+---
+
+### Last Commit
+`843f0f6 — EOD May 4 2026 — Lock weekly per-athlete enforcement + This Week decomposition planning`
+
+
+
 ## Date: 2026-05-03
 
 ---

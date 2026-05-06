@@ -5,7 +5,11 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
 } from "../storage/coachKidStore";
-import { getKidCompetitionEntriesForKid } from "../storage/kidCompetitionStore";
+import {
+  getKidCompetitionEntriesWithMatchDetailForKid,
+  pickLastCompetitionWeeklyContext,
+} from "../storage/competitionStore";
+import { getSessions } from "../storage/sessionsStore";
 import type { KidCompetitionEntry, KidWeeklyFocusEntry } from "../types/coachKid";
 import type {
   WhatMattersNextDraftCheckIn,
@@ -13,6 +17,9 @@ import type {
   WhatMattersNextDraftPayload,
   WhatMattersNextDraftWeeklyFocus,
 } from "./whatMattersNextDraftTypes";
+import { deriveCompetitionBucketHistorySignals } from "../lib/signals/competitionBucketHistory";
+import { deriveCompetitionTrainingSkillFocus } from "./competitionTrainingSkillFocus";
+import { peekCoachTrainingFocusDecision } from "./coachTrainingFocusFeedback";
 
 const RECENT_CHECK_INS_CAP = 12;
 const RECENT_COMPETITIONS_CAP = 8;
@@ -62,7 +69,7 @@ function competitionToPayload(row: KidCompetitionEntry): WhatMattersNextDraftCom
 
 /**
  * Builds the Slice 1 draft payload from local stores + current on-screen draft text.
- * Omits training sessions, media URLs, competition coach notes, and other kids.
+ * Omits media URLs and other kids; includes a derived training-focus hint from recent sessions + logged match notes.
  */
 export async function loadWhatMattersNextDraftPayload(
   kidId: string,
@@ -83,8 +90,28 @@ export async function loadWhatMattersNextDraftPayload(
     .slice(0, RECENT_CHECK_INS_CAP)
     .map(checkInToPayload);
 
-  const comps = await getKidCompetitionEntriesForKid(kidId);
+  const [comps, allSessions] = await Promise.all([
+    getKidCompetitionEntriesWithMatchDetailForKid(kidId),
+    getSessions(),
+  ]);
+  const athleteSessions = allSessions.filter((s) => String(s.kidId ?? "").trim() === kidId);
+  const trainingSkillFocus = deriveCompetitionTrainingSkillFocus({
+    competitionsWithMatches: comps,
+    sessions: athleteSessions,
+  });
+  const { bucketOutcomeTrends } = deriveCompetitionBucketHistorySignals(comps);
+
+  const decision = peekCoachTrainingFocusDecision(kidId);
+
+  const today = todayYMD();
+  const lastCompetitionWeekly = pickLastCompetitionWeeklyContext(comps, today);
   const recentCompetitions = comps
+    .slice()
+    .sort((a, b) => {
+      const dateCmp = b.eventDate.localeCompare(a.eventDate);
+      if (dateCmp !== 0) return dateCmp;
+      return b.createdAt.localeCompare(a.createdAt);
+    })
     .slice(0, RECENT_COMPETITIONS_CAP)
     .map(competitionToPayload);
 
@@ -98,5 +125,14 @@ export async function loadWhatMattersNextDraftPayload(
     currentWeekWeeklyFocus: weekRow ? weeklyFocusToPayload(weekRow) : null,
     recentCheckIns,
     recentCompetitions,
+    lastCompetitionWeekly,
+    trainingSkillFocus,
+    bucketOutcomeTrends,
+    coachTrainingFocusDecision: decision
+      ? {
+          suggestedFocusArea: decision.suggestedFocusArea,
+          finalCoachFocus: decision.finalCoachFocus,
+        }
+      : null,
   };
 }

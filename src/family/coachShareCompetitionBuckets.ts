@@ -1,3 +1,4 @@
+import { getPlacementLabel } from "../features/competition/placementLabel";
 import type {
   Kid,
   KidCompetitionEntry,
@@ -96,20 +97,7 @@ export function familyCompetitionResultLabel(
   r: KidCompetitionResult | undefined,
 ): string {
   if (!r) return "—";
-  switch (r) {
-    case "gold":
-      return "Gold";
-    case "silver":
-      return "Silver";
-    case "bronze":
-      return "Bronze";
-    case "participated":
-      return "Participated";
-    case "dnf":
-      return "DNF";
-    case "other":
-      return "Other";
-  }
+  return getPlacementLabel(r);
 }
 
 /** Month label for grouping (YYYY-MM). */

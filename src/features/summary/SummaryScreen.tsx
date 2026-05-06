@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 
 import SummaryAthleteSwitcher from "../../components/summary/SummaryAthleteSwitcher";
@@ -8,12 +8,16 @@ import SummaryConsistencyCard from "../../components/summary/SummaryConsistencyC
 import SummaryHeroCard from "../../components/summary/SummaryHeroCard";
 import SummaryPatternsCard from "../../components/summary/SummaryPatternsCard";
 import SummaryWeekCard from "../../components/summary/SummaryWeekCard";
+import {
+  deriveCompetitionTrainingSkillFocus,
+  principalTrainingSkillBucketFromDerivedFocus,
+} from "../../ai-coach/competitionTrainingSkillFocus";
+import { resolvePrincipalBucketEvidenceLine } from "../../lib/signals/competitionBucketHistory";
 import type { CompetitionEntry } from "../../lib/signals/computeSignals";
 import { useSignals } from "../../hooks/useSignals";
 import { setActiveKidId, useActiveKidId } from "../../state/activeKidStore";
 import { getKidsById } from "../../storage/coachKidStore";
-import { getCompetitionDetailByEntryId } from "../../storage/competitionStore";
-import { getKidCompetitionEntriesForKid } from "../../storage/kidCompetitionStore";
+import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../storage/competitionStore";
 import { getSessions } from "../../storage/sessionsStore";
 import type { Session } from "../../types";
 
@@ -48,24 +52,12 @@ function useAthleteData(activeKidId: string): AthleteData {
         setLoading(true);
 
         try {
-          const [allSessions, competitionEntries] = await Promise.all([
-            getSessions(),
-            getKidCompetitionEntriesForKid(activeKidId),
-          ]);
+          const allSessions = await getSessions();
 
           const nextSessions = allSessions.filter(
             (session) => session.kidId === activeKidId,
           );
-          const nextCompetitions = await Promise.all(
-            competitionEntries.map(async (competition): Promise<CompetitionEntry> => {
-              const detail = await getCompetitionDetailByEntryId(competition.id);
-
-              return {
-                ...competition,
-                matches: Array.isArray(detail?.matches) ? detail.matches : [],
-              };
-            }),
-          );
+          const nextCompetitions = await getKidCompetitionEntriesWithMatchDetailForKid(activeKidId);
 
           if (!mounted) return;
 
@@ -135,6 +127,38 @@ export default function SummaryScreen() {
     competitions,
   });
 
+  const competitionSkillFocus = useMemo(
+    () =>
+      activeKidId
+        ? deriveCompetitionTrainingSkillFocus({
+            competitionsWithMatches: competitions,
+            sessions,
+          })
+        : null,
+    [activeKidId, competitions, sessions],
+  );
+
+  const competitionSkillFocusHint =
+    competitionSkillFocus?.eligibleForSummaryLine &&
+    competitionSkillFocus.highConfidence &&
+    competitionSkillFocus.summaryLabel
+      ? competitionSkillFocus.summaryLabel
+      : undefined;
+
+  const principalFocusBucket = useMemo(
+    () => principalTrainingSkillBucketFromDerivedFocus(competitionSkillFocus),
+    [competitionSkillFocus],
+  );
+
+  const bucketFocusEvidenceLine = useMemo(
+    () =>
+      resolvePrincipalBucketEvidenceLine(
+        principalFocusBucket,
+        signals.competition.bucketOutcomeTrends,
+      ),
+    [principalFocusBucket, signals.competition.bucketOutcomeTrends],
+  );
+
   return (
     <ScrollView
       style={styles.screen}
@@ -191,11 +215,20 @@ export default function SummaryScreen() {
           fastestSubmission={signals.competition.fastestSubmission}
           lastCompetitionDate={signals.competition.lastCompetitionDate}
           lastCompetitionResult={signals.competition.lastCompetitionResult}
+          lastCompetitionLosses={signals.competition.lastCompetitionLosses}
+          lastCompetitionMatchCount={signals.competition.lastCompetitionMatchCount}
+          lastCompetitionName={signals.competition.lastCompetitionName}
+          lastCompetitionWins={signals.competition.lastCompetitionWins}
+          podiumCountLast30Days={signals.competition.podiumCountLast30Days}
+          podiumCountLast90Days={signals.competition.podiumCountLast90Days}
           record={signals.competition.record}
           submissionRate={signals.competition.submissionRate}
           totalMatches={signals.competition.totalMatches}
           winRate={signals.competition.winRate}
           winStyle={signals.competition.winStyle}
+          placementTrend={signals.competition.placementTrend}
+          skillFocusHint={competitionSkillFocusHint}
+          bucketFocusEvidenceLine={bucketFocusEvidenceLine ?? undefined}
         />
       </View>
     </ScrollView>
