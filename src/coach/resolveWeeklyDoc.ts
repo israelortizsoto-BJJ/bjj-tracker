@@ -42,6 +42,25 @@ export function sharedAthleteIdFromRosterForSession(
   return ids.has(raw) ? raw : null;
 }
 
+/**
+ * When there is no roster `Kid` row yet, the parent device athlete id (`pa_*`) may still match
+ * `session.athletes` after the athlete is added to the worker session.
+ */
+export function sharedAthleteIdFromParentAthleteForSession(
+  parentAthleteId: string | null | undefined,
+  sessionAthletes: SyncedSharedAthlete[] | null | undefined,
+): string | null {
+  const raw = typeof parentAthleteId === "string" ? parentAthleteId.trim() : "";
+  if (!raw) return null;
+  const roster = Array.isArray(sessionAthletes) ? sessionAthletes : [];
+  const ids = new Set(
+    roster
+      .map((a) => (typeof a.id === "string" ? a.id.trim() : ""))
+      .filter((id) => id.length > 0),
+  );
+  return ids.has(raw) ? raw : null;
+}
+
 function isValidWeeklyDoc(v: unknown): v is SyncedWeeklyMessagePayload {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
   const o = v as Record<string, unknown>;

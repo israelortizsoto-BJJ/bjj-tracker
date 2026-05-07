@@ -26,7 +26,7 @@ export default function RolePickerScreen() {
     setBusy(true);
     try {
       await setRole(next);
-      router.replace("/welcome");
+      router.replace("/summary");
     } finally {
       setBusy(false);
     }

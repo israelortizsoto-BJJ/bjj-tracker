@@ -21,6 +21,9 @@ export type SignalInput = {
   declaredInput?: unknown;
   connectionState?: { isCoachConnected?: boolean | null } | null;
   referenceDate?: string | Date | null;
+  /** Optional identity tags for diagnostics / future scoping — never required to compute aggregates. */
+  athleteId?: string | null;
+  kidId?: string | null;
 };
 
 export type RankedSignalItem = {
@@ -706,6 +709,15 @@ function hasMeaningfulValue(value: unknown): boolean {
 }
 
 export function computeSignals(input: SignalInput = {}): SignalOutput {
+  if (__DEV__) {
+    console.log("[SIGNALS INPUT]", {
+      athleteId: input.athleteId ?? null,
+      kidId: input.kidId ?? null,
+      sessionCount: Array.isArray(input.sessions) ? input.sessions.length : 0,
+      competitionCount: Array.isArray(input.competitions) ? input.competitions.length : 0,
+    });
+  }
+
   const sessions = Array.isArray(input.sessions) ? input.sessions : [];
   const competitions = Array.isArray(input.competitions) ? input.competitions : [];
   const hasData = sessions.length > 0 || competitions.length > 0;

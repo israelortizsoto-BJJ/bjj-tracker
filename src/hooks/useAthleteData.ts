@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { mergeCompetitionMatchDetailIntoEntries } from "@/src/storage/competitionStore";
 import { getKidCompetitionEntries } from "../storage/kidCompetitionStore";
@@ -101,9 +101,12 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
     }, [activeAthleteId]),
   );
 
-  return {
-    sessions: [...sessions],
-    competitions: [...competitions],
-    loading,
-  };
+  return useMemo(
+    () => ({
+      sessions: [...sessions],
+      competitions: [...competitions],
+      loading,
+    }),
+    [sessions, competitions, loading],
+  );
 }

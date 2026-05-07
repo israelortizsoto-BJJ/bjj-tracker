@@ -1,8 +1,16 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
-import { Stack, router, useLocalSearchParams } from "expo-router";
+import { Stack, router, useLocalSearchParams, type Href } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { Swipeable } from "react-native-gesture-handler";
@@ -17,6 +25,7 @@ import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
   updateKidCompetitionEntry,
+  parentAthleteIdFromUnlinkedCompetitionKidId,
 } from "../../../../../../src/storage/kidCompetitionStore";
 import {
   competitionVideoRefsFromMatches,
@@ -106,6 +115,14 @@ function isValidYMD(s: string): boolean {
   return !Number.isNaN(t.getTime());
 }
 
+function safeDecodeRouteParam(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 export default function KidCompetitionEditScreen() {
   const params = useLocalSearchParams<{
     kidId?: string;
@@ -113,11 +130,20 @@ export default function KidCompetitionEditScreen() {
     /** Present on "Add competition" from Compete so each visit gets a clean form. */
     openNonce?: string;
   }>();
-  const kidId = params.kidId ? String(params.kidId) : "";
+  const kidId = params.kidId ? safeDecodeRouteParam(String(params.kidId)) : "";
   const entryId = params.entryId ? String(params.entryId) : "";
   const openNonce = params.openNonce ? String(params.openNonce) : "";
   const isNew = !entryId;
   const reactId = useId();
+  const unlinkedParentAthleteId = useMemo(
+    () => parentAthleteIdFromUnlinkedCompetitionKidId(kidId),
+    [kidId],
+  );
+  const exitHref = useMemo<Href>(() => {
+    return unlinkedParentAthleteId
+      ? ("/compete" as Href)
+      : (`/this-week/kid/${kidId}` as Href);
+  }, [unlinkedParentAthleteId, kidId]);
   const lastProcessedOpenNonceRef = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(!isNew);
@@ -153,7 +179,7 @@ export default function KidCompetitionEditScreen() {
       const found = await getKidCompetitionEntryById(entryId);
       if (!found || found.kidId !== kidId) {
         Alert.alert("Not found", "This competition entry is missing or belongs to another kid.");
-        router.replace(`/this-week/kid/${kidId}`);
+        router.replace(exitHref);
         return;
       }
       setNameDraft(found.tournamentName);
@@ -169,7 +195,7 @@ export default function KidCompetitionEditScreen() {
     } finally {
       setLoading(false);
     }
-  }, [entryId, kidId, reactId]);
+  }, [entryId, kidId, reactId, exitHref]);
 
   useEffect(() => {
     if (!kidId) {
@@ -386,6 +412,7 @@ export default function KidCompetitionEditScreen() {
       if (isNew) {
         const created = await createKidCompetitionEntry({
           kidId,
+          ...(unlinkedParentAthleteId ? { sharedAthleteId: unlinkedParentAthleteId } : {}),
           tournamentName: name,
           eventDate,
           result: resultDraft,
@@ -419,7 +446,7 @@ export default function KidCompetitionEditScreen() {
         });
         await setCompetitionDetailForEntryId(entryId, { matches: snapshots });
       }
-      router.replace(`/this-week/kid/${kidId}`);
+      router.replace(exitHref);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert(
@@ -434,7 +461,7 @@ export default function KidCompetitionEditScreen() {
 
   function onDelete() {
     if (isNew) {
-      router.replace(`/this-week/kid/${kidId}`);
+      router.replace(exitHref);
       return;
     }
     Alert.alert("Delete competition?", "This cannot be undone.", [
@@ -444,7 +471,7 @@ export default function KidCompetitionEditScreen() {
         style: "destructive",
         onPress: async () => {
           await deleteKidCompetitionEntry(entryId);
-          router.replace(`/this-week/kid/${kidId}`);
+          router.replace(exitHref);
         },
       },
     ]);
@@ -474,7 +501,7 @@ export default function KidCompetitionEditScreen() {
           }}
         >
         <Pressable
-          onPress={() => router.replace(`/this-week/kid/${kidId}`)}
+          onPress={() => router.replace(exitHref)}
           style={({ pressed }) => ({
             marginBottom: 12,
             paddingVertical: 10,
@@ -486,7 +513,9 @@ export default function KidCompetitionEditScreen() {
             alignSelf: "flex-start",
           })}
         >
-          <Text style={{ fontSize: 14, color: UI.textPrimary }}>Back to Kid</Text>
+          <Text style={{ fontSize: 14, color: UI.textPrimary }}>
+            {unlinkedParentAthleteId ? "Back to Compete" : "Back to Kid"}
+          </Text>
         </Pressable>
 
         {loading ? (

@@ -1,5 +1,395 @@
 # BJJ Tracker - Dev Handoff Notes
 
+
+
+## Date: 2026-05-05
+**Branch:** summary-rebuild-v2
+**Focus:** Competition System + Native Dev Environment + Signal Loop Completion
+
+---
+
+# 🔥 TODAY’S OUTCOME (EXECUTIVE SUMMARY)
+
+Today was a **critical inflection point**.
+
+We successfully:
+
+1. **Moved competition into a true performance system**
+2. **Unified all competition data into a single source of truth**
+3. **Completed the full feedback loop (Competition → Weekly → Training → Coach)**
+4. **Established real-device native dev workflow (Expo Dev Build)**
+5. **Validated end-to-end UI + signal + coaching infrastructure**
+
+👉 This is no longer a feature — this is a **system layer of the product**
+
+---
+
+# 🧠 CORE PRODUCT SHIFT
+
+## Before:
+
+* Competitions = isolated entries
+* Medals = decorative
+* Coaching = disconnected from performance
+
+## After:
+
+```text
+Competition → Signals → Focus → Weekly → Training → Next Competition
+```
+
+👉 You now have a **closed performance loop**
+
+---
+
+# 🏗️ COMPETITION SYSTEM (FINAL STATE)
+
+## ✅ Data Architecture
+
+* Single source:
+
+  ```ts
+  getKidCompetitionEntriesWithMatchDetailForKid(kidId)
+  ```
+* Removed:
+  ❌ legacy `mm:v1:competitions` feed
+* All surfaces read from same pipeline:
+
+  * Compete tab
+  * Summary
+  * This Week
+  * AI Coach
+  * Coach Dashboard
+
+---
+
+## 🥇 Medal System
+
+### Behavior:
+
+* Only **podium results** shown (1st / 2nd / 3rd)
+* Grouped by:
+
+  * Year
+  * Chronological (newest → oldest)
+* Tile includes:
+
+  * Medal image (user or fallback)
+  * Placement (1st/2nd/3rd)
+  * Date (e.g. Apr 30)
+  * Event name
+
+### UX Decisions:
+
+* Performance-based gallery (not decorative)
+* No empty grids
+* Strong hierarchy (Achievements block)
+
+---
+
+## 📅 Competition Lifecycle
+
+### Future event:
+
+* No matches UI
+* No medals
+* Planning-only state
+
+### Past event:
+
+* Full match system unlocked
+* Media + notes + breakdowns
+
+---
+
+## 🎥 Media System
+
+### Now aligned with Training:
+
+* Uses:
+
+  ```ts
+  persistMediaFromCameraRoll
+  ```
+* Supports:
+
+  * Camera
+  * Camera roll
+  * URL (for video)
+
+### Key fix:
+
+* Removed raw URI inconsistency (medals now persistent)
+
+---
+
+## 🧩 Match System
+
+* Multiple matches per competition
+* Shared editor module:
+
+  ```ts
+  competitionMatchEditor.tsx
+  ```
+* Coach-only enrichment:
+
+  * Media
+  * Notes
+* Parent sees:
+
+  * Summary + coach notes ONLY
+
+---
+
+## 🔁 Navigation + Editing
+
+* `/competition/[id]` → now a **resolver**
+* Routes to:
+
+  * Parent edit flow
+  * Coach edit flow
+
+👉 Eliminated duplicate editors
+
+---
+
+# 📊 SIGNAL SYSTEM (MAJOR PROGRESS)
+
+## Competition Signals
+
+Added:
+
+* Recent results (last 5)
+* Placement trend:
+
+  * improving / plateau / decline / inconsistent
+* Podium counts (30 / 90 days)
+* Match W/L aggregation
+
+---
+
+## 🧠 Multi-event Intelligence
+
+* Trend requires ≥3 valid events
+* Strict monotonic logic
+* Ignores invalid/unknown data
+
+---
+
+## 🥋 Skill Focus System
+
+Derived from:
+
+* Match notes
+* Event notes
+* Outcomes (submission vs points)
+
+Outputs:
+
+* Buckets:
+
+  * Guard retention
+  * Sweeps
+  * Submissions
+  * Defense
+  * Positioning
+
+---
+
+## 🎯 Training Focus
+
+* High-confidence only
+* No noise injection
+* Flows into:
+
+  * Weekly focus
+  * AI draft
+  * Coach dashboard
+
+---
+
+# 🔄 FULL LOOP COMPLETED
+
+## Flow:
+
+```text
+Competition
+→ Match notes
+→ Skill inference
+→ Weekly focus suggestion
+→ Coach decision (accept/edit/ignore)
+→ Training session guidance
+→ Next competition signal update
+```
+
+### Key constraints maintained:
+
+* ❌ No auto-writing coach notes
+* ❌ No new persistence
+* ✅ Fully derived system
+
+---
+
+# 👨‍🏫 COACH SYSTEM
+
+## Team Focus Snapshot
+
+* Aggregates athlete buckets
+* Top 2–3 focus areas
+* Drill suggestions
+* Clipboard export
+
+---
+
+## Coach Override System
+
+* Tracks:
+
+  * Suggested focus
+  * Final coach decision
+* Behavior:
+
+  * If coach edits → system backs off
+  * If accepted → system reinforces
+
+---
+
+# 📱 NATIVE DEV ENVIRONMENT (MAJOR MILESTONE)
+
+## Completed:
+
+* Expo Dev Build installed on physical iPhone
+* Xcode signing configured
+* Bundle ID resolved
+* Device trust established
+
+---
+
+## Working setup:
+
+```text
+MatMind Dev (local build)
+MatMind (TestFlight)
+```
+
+---
+
+## Workflow:
+
+### Daily:
+
+```bash
+npx expo start
+```
+
+### Native changes:
+
+```bash
+npx expo run:ios --device
+```
+
+---
+
+## Issues resolved:
+
+* ❌ Device not recognized
+* ❌ Developer disk image error
+* ❌ Code signing failure
+* ❌ Bundle ID conflict
+* ❌ Untrusted developer block
+* ❌ Dev server not connecting
+
+---
+
+# ⚠️ KNOWN GAPS / NEXT FIXES
+
+## 1. Parent Edit Flow
+
+* Cannot reopen/edit competition from parent side
+
+## 2. Video Upload (Parent)
+
+* Field exists but not wired to picker
+
+## 3. Keyboard UX
+
+* Video link field hidden behind keyboard
+
+## 4. Sorting UX
+
+* Need:
+
+  * Upcoming vs Past separation
+  * Month collapse UX refinement
+
+---
+
+# 🧪 QA PLAN (NEXT SESSION)
+
+You will run:
+
+1. Create athlete
+2. Add competitions (3–5)
+3. Add match data (coach)
+4. Validate:
+
+   * Medal gallery
+   * Summary signals
+   * Weekly integration
+   * Coach dashboard
+
+---
+
+# 🧠 STRATEGIC NOTE
+
+Today you crossed from:
+
+```text
+Feature building
+```
+
+into:
+
+```text
+System building
+```
+
+The competition system is now:
+
+* a **performance memory**
+* a **coaching engine**
+* a **feedback loop driver**
+
+---
+
+# 🚀 NEXT PRIORITY
+
+After QA:
+
+1. Fix parent edit + video flow
+2. Polish Compete UX (expand/collapse)
+3. Validate signals with real data
+4. Prepare next TestFlight build
+
+---
+
+# 🎯 FINAL STATE
+
+```text
+MatMind now understands:
+- what happened
+- what it means
+- what to do next
+```
+
+That is the product.
+
+---
+
+
+
+
+
 ## Date: 2026-05-04
 
 ## Summary

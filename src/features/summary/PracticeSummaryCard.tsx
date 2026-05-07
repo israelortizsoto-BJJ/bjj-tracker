@@ -46,17 +46,32 @@ function sessionSummaryTitle(session: Session): string {
 }
 
 export type PracticeSummaryCardProps = {
-  /** Roster athlete id (`Kid.id`). Omit or empty = do not load. */
-  kidId: string | undefined;
+  /** Parent `athleteStore` id (`pa_*`) — scopes `sharedAthleteId` sessions. */
+  athleteId?: string | undefined;
+  /** Optional roster `Kid.id` when linked — scopes legacy kid-tagged sessions. */
+  kidId?: string | undefined;
 };
 
-export function PracticeSummaryCard({ kidId }: PracticeSummaryCardProps) {
+function sessionMatchesAthlete(card: PracticeSummaryCardProps, s: Session): boolean {
+  const aid =
+    typeof card.athleteId === "string" ? card.athleteId.trim() : "";
+  const kid =
+    typeof card.kidId === "string" ? card.kidId.trim() : "";
+  if (!aid && !kid) return false;
+  if (aid && (s.sharedAthleteId ?? "").trim() === aid) return true;
+  if (kid && (s.kidId ?? "").trim() === kid) return true;
+  return false;
+}
+
+export function PracticeSummaryCard(props: PracticeSummaryCardProps) {
   const [sessionCount, setSessionCount] = useState(0);
   const [latestSession, setLatestSession] = useState<Session | null>(null);
 
   const load = useCallback(async () => {
-    const k = typeof kidId === "string" ? kidId.trim() : "";
-    if (!k) {
+    const hasScope =
+      (typeof props.athleteId === "string" && props.athleteId.trim()) ||
+      (typeof props.kidId === "string" && props.kidId.trim());
+    if (!hasScope) {
       setSessionCount(0);
       setLatestSession(null);
       return;
@@ -71,7 +86,7 @@ export function PracticeSummaryCard({ kidId }: PracticeSummaryCardProps) {
       ...s,
       date: s.date || today,
     }));
-    let scopedSessions = allSessions.filter((s) => (s.kidId ?? "").trim() === k);
+    let scopedSessions = allSessions.filter((s) => sessionMatchesAthlete(props, s));
     scopedSessions = scopedSessions.filter((s) => s.trainingLoggedByRole !== "coach");
     const weekStart = startOfWeekMondayYMD(today);
     const thisWeekSessions = scopedSessions
@@ -82,7 +97,7 @@ export function PracticeSummaryCard({ kidId }: PracticeSummaryCardProps) {
 
     setSessionCount(thisWeekSessions.length);
     setLatestSession(latestSession);
-  }, [kidId]);
+  }, [props.athleteId, props.kidId]);
 
   useFocusEffect(
     useCallback(() => {

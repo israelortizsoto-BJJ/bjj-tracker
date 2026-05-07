@@ -157,5 +157,3 @@ export function useDerivedActiveAthleteKidId(
   return { kidId, persistenceHydrated };
 }
 
-/** Alias for naming parity with product copy (“active athlete”). */
-export const useActiveAthlete = useDerivedActiveAthleteKidId;

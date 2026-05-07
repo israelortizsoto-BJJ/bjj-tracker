@@ -39,4 +39,9 @@ export const StorageKeys = {
 
   /** Pilot: who this install is for — local only, not server RBAC. */
   deviceRole: "mm:v1:deviceRole",
+
+  /** Parent Summary: local-only athletes (not coach roster). */
+  parentAthletes: "mm:v1:parentAthletes",
+  /** Parent Summary: last selected athlete id from `parentAthletes`. */
+  parentActiveAthleteId: "mm:v1:parentActiveAthleteId",
 } as const;

@@ -17,7 +17,8 @@ export type IdentityState = {
 };
 
 export type ResolveIdentityInput = {
-  activeKidId: string | null | undefined;
+  /** Parent `athleteStore` id (`pa_*`). Drives weekly `sharedAthleteId` plane. */
+  activeAthleteId: string | null | undefined;
   kidsById: KidsById | null | undefined;
   weeklySessionSnapshot: ParentWeeklySessionSnapshot | null | undefined;
 };
@@ -33,18 +34,18 @@ function safeKidsById(kidsById: KidsById | null | undefined): KidsById {
   return kidsById;
 }
 
-function findKidRow(kids: KidsById, normalizedKidId: string): { key: string; row: KidsById[string] } | null {
-  if (!normalizedKidId) return null;
-  if (Object.prototype.hasOwnProperty.call(kids, normalizedKidId)) {
-    const row = kids[normalizedKidId];
-    if (row && typeof row === "object") return { key: normalizedKidId, row };
-    return null;
-  }
+function findLinkedKidBySharedAthleteId(
+  kids: KidsById,
+  normalizedAthleteId: string,
+): { key: string; row: KidsById[string] } | null {
+  if (!normalizedAthleteId) return null;
   for (const key of Object.keys(kids)) {
-    if (key.trim() === normalizedKidId) {
-      const row = kids[key];
-      if (row && typeof row === "object") return { key, row };
-      return null;
+    const row = kids[key];
+    if (!row || typeof row !== "object") continue;
+    const sid = normalizeId(row.sharedAthleteId);
+    if (sid === normalizedAthleteId) {
+      const kidKey = normalizeId(row.id) || key.trim();
+      if (kidKey) return { key: kidKey, row };
     }
   }
   return null;
@@ -90,10 +91,10 @@ const loadingState: IdentityState = {
  */
 export function resolveIdentity(input: ResolveIdentityInput): IdentityState {
   try {
-    const kidId = normalizeId(input.activeKidId);
-    if (!kidId) {
+    const sharedAthleteId = normalizeId(input.activeAthleteId);
+    if (!sharedAthleteId) {
       return {
-        status: "no_kid",
+        status: "no_athlete",
         kidId: null,
         sharedAthleteId: null,
         weeklyDoc: null,
@@ -101,25 +102,8 @@ export function resolveIdentity(input: ResolveIdentityInput): IdentityState {
     }
 
     const kids = safeKidsById(input.kidsById);
-    const found = findKidRow(kids, kidId);
-    if (!found) {
-      return {
-        status: "no_kid",
-        kidId,
-        sharedAthleteId: null,
-        weeklyDoc: null,
-      };
-    }
-
-    const sharedAthleteId = normalizeId(found.row.sharedAthleteId);
-    if (!sharedAthleteId) {
-      return {
-        status: "no_athlete",
-        kidId,
-        sharedAthleteId: null,
-        weeklyDoc: null,
-      };
-    }
+    const linked = findLinkedKidBySharedAthleteId(kids, sharedAthleteId);
+    const kidId = linked ? normalizeId(linked.key) : null;
 
     const session = input.weeklySessionSnapshot;
     if (session == null) {

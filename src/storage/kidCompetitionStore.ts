@@ -15,6 +15,27 @@ import type {
 import { medalTierFromKidResult } from "../types/coachKid";
 import type { SyncedSharedCompetition } from "../types/coachWeeklySync";
 
+/**
+ * Virtual roster id for competitions saved from Compete when the Summary athlete has no linked coach
+ * kid. Rows still carry `sharedAthleteId` (parent `athleteStore` id).
+ */
+export const UNLINKED_PARENT_ATHLETE_COMPETITION_KID_PREFIX = "unlinked__" as const;
+
+export function kidIdForUnlinkedParentAthleteCompetitions(athleteId: string): KidId {
+  const t = typeof athleteId === "string" ? athleteId.trim() : "";
+  if (!t) return "" as KidId;
+  return `${UNLINKED_PARENT_ATHLETE_COMPETITION_KID_PREFIX}${t}` as KidId;
+}
+
+export function parentAthleteIdFromUnlinkedCompetitionKidId(
+  kidId: KidId | string,
+): string | null {
+  const k = typeof kidId === "string" ? kidId.trim() : "";
+  if (!k.startsWith(UNLINKED_PARENT_ATHLETE_COMPETITION_KID_PREFIX)) return null;
+  const rest = k.slice(UNLINKED_PARENT_ATHLETE_COMPETITION_KID_PREFIX.length).trim();
+  return rest || null;
+}
+
 function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
   if (!raw) return fallback;
   try {

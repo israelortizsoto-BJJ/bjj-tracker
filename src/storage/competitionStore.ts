@@ -5,7 +5,11 @@ import type {
   KidCompetitionResult,
   KidCompetitionVideoRef,
 } from "../types/coachKid";
-import { emitCompetitionChange, getKidCompetitionEntriesForKid } from "./kidCompetitionStore";
+import {
+  emitCompetitionChange,
+  getKidCompetitionEntries,
+  getKidCompetitionEntriesForKid,
+} from "./kidCompetitionStore";
 
 const DETAIL_STORAGE_KEY = "competitions" as const;
 
@@ -112,6 +116,17 @@ export async function getKidCompetitionEntriesWithMatchDetailForKid(
   const k = typeof kidId === "string" ? kidId.trim() : "";
   if (!k) return [];
   const entries = await getKidCompetitionEntriesForKid(k);
+  return mergeCompetitionMatchDetailIntoEntries(entries);
+}
+
+/** Competitions whose `sharedAthleteId` matches the parent Summary / `athleteStore` id (unlink-safe). */
+export async function getKidCompetitionEntriesWithMatchDetailForSharedAthlete(
+  sharedAthleteId: string,
+): Promise<KidCompetitionEntryWithMatchDetail[]> {
+  const aid = typeof sharedAthleteId === "string" ? sharedAthleteId.trim() : "";
+  if (!aid) return [];
+  const all = await getKidCompetitionEntries();
+  const entries = all.filter((e) => (e.sharedAthleteId ?? "").trim() === aid);
   return mergeCompetitionMatchDetailIntoEntries(entries);
 }
 

@@ -30,6 +30,8 @@ import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../../../src/media/persistCameraRollMedia";
+import { useActiveAthlete } from "../../../src/hooks/useActiveAthlete";
+import { getActiveAthleteId } from "../../../src/storage/athleteStore";
 import { getKidsById } from "../../../src/storage/coachKidStore";
 import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../../src/storage/competitionStore";
 import { getSessions, setSessions } from "../../../src/storage/sessionsStore";
@@ -165,6 +167,11 @@ export default function TrainingSessionEditor() {
     typeof params.kidId === "string" && params.kidId.trim()
       ? params.kidId.trim()
       : undefined;
+  const athleteIdFromParams =
+    typeof params.athleteId === "string" && params.athleteId.trim()
+      ? params.athleteId.trim()
+      : "";
+  const { athleteId: hookActiveAthleteId } = useActiveAthlete();
   const [recommendedFocusHint, setRecommendedFocusHint] = useState<string | null>(null);
   const isNew = useMemo(() => sessionId === "new", [sessionId]);
   const makeId = () => `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -715,10 +722,31 @@ if (effectiveKidId) {
   if (linkedSharedAthleteId) {
     sharedAthleteId = linkedSharedAthleteId;
   }
+} else if (!(sharedAthleteId && sharedAthleteId.trim())) {
+  const storedActive = ((await getActiveAthleteId()) ?? "").trim();
+  sharedAthleteId =
+    athleteIdFromParams ||
+    hookActiveAthleteId.trim() ||
+    storedActive ||
+    undefined;
+}
+
+const athleteId = (sharedAthleteId ?? "").trim();
+if (!athleteId) {
+  console.error("❌ Cannot save session: missing athleteId");
+  Alert.alert(
+    "Can't save session",
+    "No athlete is linked to this log. Add or select an athlete from Summary, or open training from a kid profile.",
+  );
+  return;
 }
 
 if (__DEV__) {
-  console.log("SAVING SESSION FOR ATHLETE", sharedAthleteId ?? null);
+  console.log("[TrainingSessionEditor] saving session", {
+    sessionId: realId,
+    athleteId,
+    kidId: effectiveKidId,
+  });
 }
 
 const payload: Session = {
@@ -727,7 +755,7 @@ const payload: Session = {
   date: finalDate,
 
   kidId: effectiveKidId,
-  sharedAthleteId,
+  sharedAthleteId: athleteId,
 
   trainingLoggedByRole: effectiveKidId
     ? deviceRole === "coach"

@@ -19,7 +19,7 @@ export default function Index() {
     return <Redirect href="/role-picker" />;
   }
 
-  return <Redirect href="/welcome" />;
+  return <Redirect href="/summary" />;
 }
 
 const styles = StyleSheet.create({

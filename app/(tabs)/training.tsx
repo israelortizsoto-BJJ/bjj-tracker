@@ -25,14 +25,16 @@ import {
 import { Calendar } from "react-native-calendars";
 import { toDateKey } from "../../src/_domain/dateKey";
 import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
-import { useActiveKidId } from "../../src/state/activeKidStore";
+import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
 
 import { buildTechniqueIndex, getTechniqueById } from "../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
 import type { TechniqueIndexItem } from "../../src/fundamentals/types";
 
 import type { Session } from "../../src/types";
+import { useAthleteData } from "@/src/hooks/useAthleteData";
 import { useSignals } from "../../src/hooks/useSignals";
+import { deriveTrend } from "@/src/lib/summary/deriveSummaryInsights";
 
 type PreviewState =
   | null
@@ -91,6 +93,12 @@ function resolveTechniqueLabelById(
 
 /** Resolved once for session technique labels (matches list card / insight resolution). */
 const SESSION_TECHNIQUE_INDEX = buildTechniqueIndex(FUNDAMENTALS_TAXONOMY);
+
+const TREND_LABEL = {
+  improving: "Improving",
+  stable: "Stable",
+  developing: "Developing",
+} as const;
 
 /**
  * All technique labels for a session: from `techniques[]` when present, else legacy `technique`.
@@ -336,6 +344,52 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     textAlign: "center",
   },
+  trainingIdentityBlock: {
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#11161a",
+    borderWidth: 1,
+    borderColor: "#1f2a30",
+  },
+  trainingIdentityText: {
+    color: "#c7f36b",
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  trainingTrendLabel: {
+    marginTop: 4,
+    fontSize: 11,
+    color: "#6b7c86",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  nextLogBlock: {
+    marginBottom: 16,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#0f1418",
+    borderWidth: 1,
+    borderColor: "#243038",
+  },
+  nextLogTitle: {
+    color: "#8fa3ad",
+    fontSize: 12,
+    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  nextLogText: {
+    color: "#ffffff",
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  postSessionFeedback: {
+    marginTop: 10,
+    fontSize: 13,
+    color: "#c7f36b",
+    lineHeight: 18,
+  },
 });
 // ------------------------------
 // 3) Component setup (state + navigation + derived constants)
@@ -352,8 +406,20 @@ export default function Training() {
 
   const kidIdParam =
     typeof params.kidId === "string" && params.kidId.trim() ? params.kidId.trim() : undefined;
-  const activeKidId = useActiveKidId();
-  const effectiveKidId = kidIdParam ?? activeKidId;
+  const {
+    athleteId: trainingAthleteId,
+    linkedKidId: trainingLinkedKidId,
+    athlete,
+  } = useActiveAthlete();
+
+  const experienceLevel = athlete?.experienceLevel ?? "";
+  const declaredSkills = athlete?.declaredSkills ?? [];
+  const isCompetitor = !!athlete?.isCompetitor;
+
+  /** Effective roster kid scope (legacy session `kidId`); deep links win over linked roster kid. */
+  const effectiveKidId = kidIdParam ?? trainingLinkedKidId ?? undefined;
+  const athleteScopeTrim = trainingAthleteId.trim();
+  const { competitions: recentCompetitionEntries = [] } = useAthleteData(athleteScopeTrim);
   const cameFromWeekly =
     typeof params.fromWeekly === "string" &&
     (params.fromWeekly === "1" || params.fromWeekly === "true");
@@ -440,22 +506,36 @@ const refresh = useCallback(async () => {
       date: toDateKey(s.date) || todayYMD(),
     }));
 
-    // Kid-scoped view:
-    // - when kidId is provided: show only sessions for that kid
-    // - when kidId is absent: show only account-level sessions (no kidId)
-    const scoped = effectiveKidId
-      ? normalized.filter((s) => {
-          if ((s.kidId ?? "").trim() !== effectiveKidId) return false;
-          if (deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
-          return true;
-        })
-      : normalized.filter((s) => !(s.kidId ?? "").trim());
+    // Scoped view:
+    // - explicit kidId query: kid-tagged sessions for that roster id
+    // - otherwise: parent athlete from `useActiveAthlete` (sharedAthleteId and/or linked kidId)
+    // - no athlete/kid scope: account-level sessions (no kidId)
+    let scoped: typeof normalized;
+    if (kidIdParam) {
+      scoped = normalized.filter((s) => {
+        if ((s.kidId ?? "").trim() !== kidIdParam) return false;
+        if (deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
+        return true;
+      });
+    } else if (athleteScopeTrim || effectiveKidId) {
+      scoped = normalized.filter((s) => {
+        const byShared =
+          athleteScopeTrim && (s.sharedAthleteId ?? "").trim() === athleteScopeTrim;
+        const byKid =
+          !!effectiveKidId && (s.kidId ?? "").trim() === effectiveKidId.trim();
+        if (!byShared && !byKid) return false;
+        if (deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
+        return true;
+      });
+    } else {
+      scoped = normalized.filter((s) => !(s.kidId ?? "").trim());
+    }
 
     setSessions(scoped);
   } finally {
     setIsLoadingSessions(false);
   }
-}, [effectiveKidId, deviceRole]);
+}, [athleteScopeTrim, effectiveKidId, kidIdParam, deviceRole]);
 
 useEffect(() => {
   if (typeof params.date === "string" && params.date) {
@@ -577,8 +657,80 @@ const weekSessionsRaw = useMemo(() => {
 
 }, [weekDates, sessionsByDate]);
 const signals = useSignals({
-  sessions: weekSessionsRaw,
+  athleteId: athleteScopeTrim || null,
+  kidId: effectiveKidId ?? null,
 });
+
+const trend = deriveTrend(signals);
+
+const sessionConfirmationMessage = useMemo(() => {
+  const latestSession = weekSessionsRaw?.[0] ?? null;
+  if (!latestSession) return null;
+  const techLabels = getTechniqueLabelsFromSession(latestSession);
+  const systemLabel =
+    resolveSystemLabel(latestSession.system) !== "—"
+      ? resolveSystemLabel(latestSession.system)
+      : null;
+  const primary = techLabels[0]?.trim() || systemLabel;
+  if (!primary) return null;
+  return `${primary} was emphasized in your latest session. Detailed coaching cues are on Summary.`;
+}, [weekSessionsRaw]);
+
+const getTrainingMessage = () => {
+  if (experienceLevel === "beginner") {
+    return "Focus on building your foundation. Keep showing up and logging your training.";
+  }
+
+  if (experienceLevel === "developing") {
+    if (declaredSkills.length > 0) {
+      return "Start connecting your known techniques into sequences during training.";
+    }
+    return "You're developing your game. Start recognizing positions and patterns.";
+  }
+
+  if (experienceLevel === "experienced") {
+    if (isCompetitor) {
+      return "Refine your strongest systems and sharpen your competition strategy.";
+    }
+    return "Focus on precision, efficiency, and tightening your core game.";
+  }
+
+  return "Log your training to start building your game.";
+};
+
+const getTrendAwareTrainingMessage = () => {
+  const skills = athlete?.declaredSkills ?? [];
+
+  const topSkills = skills
+    .slice(0, 2)
+    .map((s) => s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
+    .join(" & ");
+
+  // TREND-DRIVEN OVERRIDE
+
+  if (trend === "improving") {
+    if (topSkills) {
+      return `You're making progress. Keep reinforcing your ${topSkills} during live rounds.`;
+    }
+    return "You're making progress. Keep reinforcing what's working.";
+  }
+
+  if (trend === "stable") {
+    if (topSkills) {
+      return `Your game is stabilizing. Focus on sharpening your ${topSkills} execution.`;
+    }
+    return "Your game is stabilizing. Focus on tightening execution.";
+  }
+
+  if (trend === "developing") {
+    if (topSkills) {
+      return `Focus on simplifying your ${topSkills} and building consistency.`;
+    }
+    return "Focus on simplifying your game and building consistency.";
+  }
+
+  return getTrainingMessage();
+};
 
 const topSystemThisWeek = signals.systems.topSystem
   ? {
@@ -899,6 +1051,67 @@ const searchedSessions = useMemo(() => {
   });
 }, [filteredSessions, searchQuery]);
 
+  const getTrendAwareLogNext = () => {
+    const exp = athlete?.experienceLevel ?? "";
+    const skills = athlete?.declaredSkills ?? [];
+    const competitor = !!athlete?.isCompetitor;
+
+    const hasSessions = (weekSessionsRaw?.length ?? 0) > 0;
+    const hasCompetitions = (recentCompetitionEntries?.length ?? 0) > 0;
+
+    const formatSkill = (skill: string) =>
+      skill.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+    const topSkills = skills.slice(0, 2).map(formatSkill).join(" & ");
+
+    if (trend === "improving") {
+      if (topSkills) {
+        return `Log a session reinforcing your ${topSkills} during live rounds.`;
+      }
+      return "Log a session reinforcing what's already working.";
+    }
+
+    if (trend === "stable") {
+      if (topSkills) {
+        return `Log a session focusing on refining your ${topSkills} under pressure.`;
+      }
+      return "Log a session focused on tightening execution and details.";
+    }
+
+    if (trend === "developing") {
+      if (topSkills) {
+        return `Log a session simplifying your ${topSkills} and building consistency.`;
+      }
+      return "Log a session focused on simplifying your game and building consistency.";
+    }
+
+    if (!hasSessions) {
+      return "Log your first training session to start building your game.";
+    }
+
+    if (exp === "beginner") {
+      return "Log a session focused on repeating core positions.";
+    }
+
+    if (exp === "developing") {
+      if (topSkills) {
+        return `Log a session focused on connecting your ${topSkills}.`;
+      }
+      return "Log a session focused on recognizing patterns in your training.";
+    }
+
+    if (exp === "experienced") {
+      if (competitor) {
+        return hasCompetitions
+          ? "Log a session refining sequences from your last competition."
+          : "Log a competition-focused session (situational rounds + intensity).";
+      }
+      return "Log a session refining your strongest systems.";
+    }
+
+    return "Log your next session to continue building your game.";
+  };
+
 const weekHasVisibleSessions = useMemo(() => {
   if (viewMode !== "week") return true;
 
@@ -1031,15 +1244,13 @@ const renderDayWeekHeader = () => (
 // 7D) New session CTA row
 const renderNewSessionCTA = () => (
   <Pressable
-    onPress={() =>
-      router.push(
-        effectiveKidId
-          ? `/training/new?date=${encodeURIComponent(selectedDate)}&kidId=${encodeURIComponent(
-              effectiveKidId ?? "",
-            )}`
-          : `/training/new?date=${encodeURIComponent(selectedDate)}`
-      )
-    }
+    onPress={() => {
+      const q = new URLSearchParams();
+      q.set("date", selectedDate);
+      if (effectiveKidId) q.set("kidId", effectiveKidId);
+      if (athleteScopeTrim) q.set("athleteId", athleteScopeTrim);
+      router.push(`/training/new?${q.toString()}`);
+    }}
     style={({ pressed }) => ({
       paddingVertical: 14,
       paddingHorizontal: 18,
@@ -1086,6 +1297,21 @@ const renderNewSessionCTA = () => (
   </Text>
 </Pressable>    
       {renderTitleAndIntro()}
+
+      <View style={styles.trainingIdentityBlock}>
+        <Text style={styles.trainingIdentityText}>{getTrendAwareTrainingMessage()}</Text>
+        {trend !== "none" ? (
+          <Text style={styles.trainingTrendLabel}>{TREND_LABEL[trend]}</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.nextLogBlock}>
+        <Text style={styles.nextLogTitle}>What to log next</Text>
+        <Text style={styles.nextLogText}>{getTrendAwareLogNext()}</Text>
+        {sessionConfirmationMessage ? (
+          <Text style={styles.postSessionFeedback}>{sessionConfirmationMessage}</Text>
+        ) : null}
+      </View>
 
       <View style={styles.trainingFilterRow}>
         {(["Gi", "No-Gi", "System"] as const).map((label, index) => (

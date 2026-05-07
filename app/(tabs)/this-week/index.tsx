@@ -52,6 +52,7 @@ import {
 import { normalizeInviteLinkToken } from "../../../src/coachShare/inviteLinkToken";
 import {
   resolveWeeklyDoc,
+  sharedAthleteIdFromParentAthleteForSession,
   sharedAthleteIdFromRosterForSession,
 } from "../../../src/coach/resolveWeeklyDoc";
 import { coachSyncFetchSession } from "../../../src/services/coachWeeklySyncApi";
@@ -90,28 +91,25 @@ import { getPlacementLabel } from "../../../src/features/competition/placementLa
 import {
   getCompetitionMediaPresenceForEntryIds,
   getKidCompetitionEntriesWithMatchDetailForKid,
+  getKidCompetitionEntriesWithMatchDetailForSharedAthlete,
   pickLastCompetitionWeeklyContext,
   type KidCompetitionEntryWithMatchDetail,
   type LastCompetitionWeeklyContext,
 } from "../../../src/storage/competitionStore";
 import {
-  getActiveKidId,
+  clearActiveKidId,
   setActiveKidId,
   useActiveKidId,
 } from "../../../src/state/activeKidStore";
-import {
-  activeAthletePoolKidIds,
-  eligibleParentWeeklyKidIds,
-  resolveDerivedActiveAthleteKidId,
-  useDerivedActiveAthleteKidId,
-} from "../../../src/state/derivedActiveAthleteKid";
+import { type ParentAthlete, setActiveAthleteId } from "../../../src/storage/athleteStore";
+import { linkedKidIdForParentAthlete, useActiveAthlete } from "../../../src/hooks/useActiveAthlete";
 import { calendarDaysBetweenYMD } from "../../../src/_domain/dateKey";
 import { resolveIdentity } from "../../../src/identity/resolveIdentity";
 import {
   computeMultiEventCompetitionMetrics,
   resolveCompetitionTrendCopy,
 } from "../../../src/lib/signals/computeSignals";
-import { getLastAthleteKidId, setLastAthleteKidId } from "../../../src/storage/lastAthleteIdStore";
+import { setLastAthleteKidId } from "../../../src/storage/lastAthleteIdStore";
 import type { Session } from "../../../src/types";
 import {
   type Kid,
@@ -274,24 +272,56 @@ function logWeeklyKidMapping({
   });
 }
 
-function resolveStrictWeeklySelectedSharedAthleteIdForKid(
-  kidId: string | null | undefined,
+function resolveStrictWeeklySelectedSharedAthleteIdForParentAthlete(
+  parentAthleteId: string | null | undefined,
   kidsById: KidsById | null | undefined,
   weeklySessionSnapshot: WeeklySessionSnapshot | null | undefined,
 ): string | null {
-  const normalizedKidId = kidId?.trim();
-  if (!normalizedKidId || !kidsById || !weeklySessionSnapshot) return null;
+  const aid = typeof parentAthleteId === "string" ? parentAthleteId.trim() : "";
+  if (!aid || !weeklySessionSnapshot) return null;
 
   const weeklyMap = weeklySessionSnapshot.weeklyByAthleteId ?? {};
-  const candidate = sharedAthleteIdFromRosterForSession(
-    normalizedKidId,
-    kidsById[normalizedKidId]?.sharedAthleteId,
-    weeklySessionSnapshot.athletes,
-  );
+  let candidate: string | null = null;
+
+  const linkedKid = kidsById
+    ? Object.values(kidsById).find(
+        (k) => k && (k.sharedAthleteId ?? "").trim() === aid,
+      )
+    : undefined;
+
+  if (linkedKid) {
+    candidate = sharedAthleteIdFromRosterForSession(
+      linkedKid.id,
+      linkedKid.sharedAthleteId,
+      weeklySessionSnapshot.athletes,
+    );
+  }
+  if (!candidate) {
+    candidate = sharedAthleteIdFromParentAthleteForSession(
+      aid,
+      weeklySessionSnapshot.athletes,
+    );
+  }
 
   if (!candidate) return null;
   if (!(candidate in weeklyMap)) return null;
   return candidate;
+}
+
+function parentSessionMatchesAthlete(
+  s: Session,
+  athleteId: string,
+  linkedKidLocal: string | null,
+): boolean {
+  const aid = athleteId.trim();
+  const kid = linkedKidLocal?.trim() ?? "";
+  if (!aid) {
+    if (!kid) return false;
+    return (s.kidId ?? "").trim() === kid;
+  }
+  if ((s.sharedAthleteId ?? "").trim() === aid) return true;
+  if (kid && (s.kidId ?? "").trim() === kid) return true;
+  return false;
 }
 
 function Section({
@@ -477,6 +507,24 @@ function ParentThisWeekScreen() {
   console.log("[RENDER_TRACE:PARENT_THIS_WEEK]");
   const { role } = useDeviceRole();
   const activeKidIdFromStore = useActiveKidId();
+  const activeAthleteCtx = useActiveAthlete();
+  const activeParentAthleteId = activeAthleteCtx.athleteId;
+  const activeParentLinkedKidId = activeAthleteCtx.linkedKidId;
+
+  const parentActiveAthleteIdRef = useRef("");
+  const parentAthleteDisplayNameRef = useRef<string | null>(null);
+  const parentMultiAthleteRef = useRef(false);
+
+  useEffect(() => {
+    parentActiveAthleteIdRef.current = activeParentAthleteId.trim();
+    parentAthleteDisplayNameRef.current = activeAthleteCtx.athlete?.name?.trim() ?? null;
+    parentMultiAthleteRef.current = activeAthleteCtx.athletes.length > 1;
+  }, [
+    activeParentAthleteId,
+    activeAthleteCtx.athlete,
+    activeAthleteCtx.athletes.length,
+  ]);
+
   const roleRef = useRef(role);
   roleRef.current = role;
   const mountCountRef = useRef(0);
@@ -502,44 +550,23 @@ function ParentThisWeekScreen() {
   const [weeklySessionSnapshot, setWeeklySessionSnapshot] = useState<WeeklySessionSnapshot | null>(null);
   const [kidsByIdState, setKidsByIdState] = useState<KidsById>({});
 
-  const parentWeeklyStrictLinkForEligibility = useMemo(() => {
-    if (role !== "parent") return null;
-    return parentStrictWeeklyLinkedCoachLinksForUi(coachLinks)[0] ?? null;
-  }, [role, coachLinks]);
-
-  const eligibleKidIdsForDerivedAthlete = useMemo(() => {
-    if (role !== "parent") return null as string[] | null;
-    const tokenNorm = normalizeInviteLinkToken(
-      parentWeeklyStrictLinkForEligibility?.weeklySync?.linkToken ?? "",
-    );
-    return eligibleParentWeeklyKidIds(kidsByIdState, coachLinks, tokenNorm);
-  }, [role, coachLinks, kidsByIdState, parentWeeklyStrictLinkForEligibility]);
-
-  const {
-    kidId: derivedActiveAthleteId,
-    persistenceHydrated: derivedAthletePersistenceHydrated,
-  } = useDerivedActiveAthleteKidId(kidsByIdState, eligibleKidIdsForDerivedAthlete);
-
-  const thisWeekAthletePoolKidIds = useMemo(
-    () => activeAthletePoolKidIds(kidsByIdState, eligibleKidIdsForDerivedAthlete),
-    [kidsByIdState, eligibleKidIdsForDerivedAthlete],
-  );
-  const thisWeekAthletePoolCount = thisWeekAthletePoolKidIds.length;
+  const thisWeekParentAthletePoolCount = activeAthleteCtx.athletes.length;
 
   const resolvedWeeklySharedAthleteId = useMemo(
     () =>
-      resolveStrictWeeklySelectedSharedAthleteIdForKid(
-        derivedActiveAthleteId,
+      resolveStrictWeeklySelectedSharedAthleteIdForParentAthlete(
+        activeParentAthleteId,
         kidsByIdState,
         weeklySessionSnapshot,
       ),
-    [derivedActiveAthleteId, kidsByIdState, weeklySessionSnapshot],
+    [activeParentAthleteId, kidsByIdState, weeklySessionSnapshot],
   );
 
   console.log("[DERIVED ATHLETE RESOLVE]", {
-    rosterKidId: derivedActiveAthleteId,
+    athleteId: activeParentAthleteId,
+    linkedKidId: activeParentLinkedKidId,
     activeKidIdFromStore,
-    persistenceHydrated: derivedAthletePersistenceHydrated,
+    athleteHydrationReady: activeAthleteCtx.hydrationReady,
     hasKids: !!kidsByIdState,
     weeklyKeys: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId || {}),
     resolvedWeeklySharedAthleteId,
@@ -549,7 +576,8 @@ function ParentThisWeekScreen() {
     mountCountRef.current += 1;
     console.log("[MOUNT_TRACE:PARENT_THIS_WEEK]", mountCountRef.current);
     console.log("[THIS WEEK MOUNT]", {
-      rosterKidId: derivedActiveAthleteId,
+      athleteId: activeParentAthleteId,
+      linkedKidId: activeParentLinkedKidId,
       activeKidIdFromStore,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- mount diagnostics only
@@ -581,11 +609,11 @@ function ParentThisWeekScreen() {
   const identityShadow = useMemo(
     () =>
       resolveIdentity({
-        activeKidId: derivedActiveAthleteId ?? "",
+        activeAthleteId: activeParentAthleteId,
         kidsById: kidsByIdState,
         weeklySessionSnapshot,
       }),
-    [derivedActiveAthleteId, kidsByIdState, weeklySessionSnapshot],
+    [activeParentAthleteId, kidsByIdState, weeklySessionSnapshot],
   );
 
   if (__DEV__) {
@@ -595,7 +623,8 @@ function ParentThisWeekScreen() {
       sharedAthleteId: identityShadow.sharedAthleteId,
       hasWeeklyDoc: !!identityShadow.weeklyDoc,
 
-      rosterKidId: derivedActiveAthleteId,
+      athleteId: activeParentAthleteId,
+      linkedKidId: activeParentLinkedKidId,
       activeKidIdFromStore,
       resolvedWeeklySharedAthleteId,
       hasWeeklyDocResolved: !!weeklySyncDoc,
@@ -644,48 +673,73 @@ function ParentThisWeekScreen() {
   }, [kidsByIdState, weeklySessionSnapshot]);
 
   const computeParentKidScopedState = useCallback(
-    async (kidId: string | null, loadedKidsById: KidsById, today: string) => {
-      const rosterCount = Object.keys(loadedKidsById).length;
+    async (
+      sharedAthleteIdParent: string | null,
+      linkedKidLocal: string | null,
+      loadedKidsById: KidsById,
+      today: string,
+      parentAthleteDisplayName: string | null,
+      parentMultiAthlete: boolean,
+    ) => {
+      const trimmedAthlete = typeof sharedAthleteIdParent === "string" ? sharedAthleteIdParent.trim() : "";
+      const rosterKidForFamily = typeof linkedKidLocal === "string" ? linkedKidLocal.trim() || null : null;
+
       let compEntriesForDerivation: KidCompetitionEntryWithMatchDetail[] = [];
+      if (rosterKidForFamily) {
+        compEntriesForDerivation = await getKidCompetitionEntriesWithMatchDetailForKid(
+          rosterKidForFamily,
+        );
+      } else if (trimmedAthlete) {
+        compEntriesForDerivation =
+          await getKidCompetitionEntriesWithMatchDetailForSharedAthlete(trimmedAthlete);
+      }
+
       let nextFamily: FamilyCompetitionLoadState = {
         todayYMD: today,
-        kidId,
-        kidName: kidId ? kidDisplayNameForId(loadedKidsById, kidId) : null,
-        multiKidOnRoster: rosterCount > 1,
+        kidId: rosterKidForFamily,
+        kidName: rosterKidForFamily
+          ? kidDisplayNameForId(loadedKidsById, rosterKidForFamily)
+          : parentAthleteDisplayName,
+        multiKidOnRoster: parentMultiAthlete,
         upcoming: [],
         recent: [],
         mediaByEntryId: {},
         lastCompetitionWeekly: null,
         derivedTrainingSkillFocus: null,
       };
-      if (kidId) {
-        compEntriesForDerivation = await getKidCompetitionEntriesWithMatchDetailForKid(kidId);
-        const part = partitionFamilyCompetitionEntries(compEntriesForDerivation, today);
-        const competitionIds = Array.from(
-          new Set([...part.upcoming, ...part.recent].map((e) => e.id).filter(Boolean)),
-        );
-        const mediaByEntryId = await getCompetitionMediaPresenceForEntryIds(competitionIds);
-        const lastCompetitionWeekly = pickLastCompetitionWeeklyContext(compEntriesForDerivation, today);
-        nextFamily = {
-          ...nextFamily,
-          upcoming: part.upcoming,
-          recent: part.recent,
-          mediaByEntryId,
-          lastCompetitionWeekly,
-        };
-      }
+
+      const part =
+        trimmedAthlete || rosterKidForFamily
+          ? partitionFamilyCompetitionEntries(compEntriesForDerivation, today)
+          : { upcoming: [] as KidCompetitionEntry[], recent: [] as KidCompetitionEntry[] };
+      const competitionIds = Array.from(
+        new Set([...part.upcoming, ...part.recent].map((e) => e.id).filter(Boolean)),
+      );
+      const mediaByEntryId = competitionIds.length
+        ? await getCompetitionMediaPresenceForEntryIds(competitionIds)
+        : {};
+      const lastCompetitionWeekly =
+        trimmedAthlete || rosterKidForFamily
+          ? pickLastCompetitionWeeklyContext(compEntriesForDerivation, today)
+          : null;
+
+      nextFamily = {
+        ...nextFamily,
+        upcoming: part.upcoming,
+        recent: part.recent,
+        mediaByEntryId,
+        lastCompetitionWeekly,
+      };
 
       const rawSessions = await AsyncStorage.getItem(StorageKeys.sessions);
       const allSessions = readSessionsSafe(rawSessions).map((s) => ({
         ...s,
         date: s.date || today,
       }));
-      const normalizedKid = typeof kidId === "string" ? kidId.trim() : "";
-      let scopedSessions =
-        normalizedKid.length > 0
-          ? allSessions.filter((s) => (s.kidId ?? "").trim() === normalizedKid)
-          : [];
-      if (role === "parent" && normalizedKid.length > 0) {
+      let scopedSessions = allSessions.filter((s) =>
+        parentSessionMatchesAthlete(s, trimmedAthlete, rosterKidForFamily),
+      );
+      if (role === "parent" && (trimmedAthlete.length > 0 || Boolean(rosterKidForFamily))) {
         scopedSessions = scopedSessions.filter((s) => s.trainingLoggedByRole !== "coach");
       }
       const weekStart = startOfWeekMondayYMD(today);
@@ -706,12 +760,13 @@ function ParentThisWeekScreen() {
         latestSession: latestSessionOverall,
       };
 
-      const derivedTrainingSkillFocus = kidId
-        ? deriveCompetitionTrainingSkillFocus({
-            competitionsWithMatches: compEntriesForDerivation,
-            sessions: scopedSessions,
-          })
-        : null;
+      const derivedTrainingSkillFocus =
+        trimmedAthlete || rosterKidForFamily
+          ? deriveCompetitionTrainingSkillFocus({
+              competitionsWithMatches: compEntriesForDerivation,
+              sessions: scopedSessions,
+            })
+          : null;
 
       return {
         nextFamily: { ...nextFamily, derivedTrainingSkillFocus },
@@ -927,28 +982,14 @@ function ParentThisWeekScreen() {
     setStateIfJsonChanged("loadCoachShareData:weeklySyncNetworkOk", setWeeklySyncNetworkOk, nextWeeklyNetworkOk);
 
     const today = todayYMD();
-    const strictWeeklyForParent = roleNow === "parent" ? parentStrictOrderedForLoad : [];
-    const activeWeeklyInviteTokenNorm =
-      roleNow === "parent" && strictWeeklyForParent[0]?.weeklySync?.linkToken
-        ? normalizeInviteLinkToken(strictWeeklyForParent[0].weeklySync.linkToken)
-        : "";
     let rosterKidId: string | null = null;
     if (roleNow === "parent") {
-      const eligible = eligibleParentWeeklyKidIds(
-        loadedKidsById,
-        loadedCoachLinks,
-        activeWeeklyInviteTokenNorm,
-      );
-      const persistedLastAthlete = await getLastAthleteKidId();
-      rosterKidId = resolveDerivedActiveAthleteKidId({
-        explicitKidId: getActiveKidId(),
-        persistedLastKidId: persistedLastAthlete,
-        kidsById: loadedKidsById,
-        eligibleKidIds: eligible,
-      });
-      if (rosterKidId) {
-        setActiveKidId(rosterKidId);
-      }
+      const activeAid = parentActiveAthleteIdRef.current.trim();
+      rosterKidId = activeAid
+        ? linkedKidIdForParentAthlete(loadedKidsById, activeAid)
+        : null;
+      if (rosterKidId) setActiveKidId(rosterKidId);
+      else clearActiveKidId();
     } else {
       rosterKidId = resolveFamilyCompetitionKidId(loadedKidsById, storedFamilyCompKidId);
     }
@@ -986,9 +1027,12 @@ function ParentThisWeekScreen() {
 
     const compApplyGen = ++applyFamilyCompGenRef.current;
     const { nextFamily, nextPracticeSummary } = await computeParentKidScopedStateRef.current(
+      parentActiveAthleteIdRef.current.trim() || null,
       rosterKidId,
       loadedKidsById,
       today,
+      parentAthleteDisplayNameRef.current,
+      parentMultiAthleteRef.current,
     );
 
     setFamilyCompetition((prev) => {
@@ -1025,12 +1069,21 @@ function ParentThisWeekScreen() {
   useFocusEffect(
     useCallback(() => {
       console.log("[THIS WEEK FOCUS]", {
+        athleteId: activeParentAthleteId,
+        linkedKidId: activeParentLinkedKidId,
         activeKidIdFromStore,
-        derivedActiveAthleteId,
       });
       void loadCoachShareData();
-    }, [activeKidIdFromStore, derivedActiveAthleteId, loadCoachShareData]),
+    }, [activeKidIdFromStore, activeParentAthleteId, activeParentLinkedKidId, loadCoachShareData]),
   );
+
+  const prevParentAthleteIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!ready || !activeAthleteCtx.hydrationReady) return;
+    if (prevParentAthleteIdRef.current === activeParentAthleteId) return;
+    prevParentAthleteIdRef.current = activeParentAthleteId;
+    void loadCoachShareData();
+  }, [activeAthleteCtx.hydrationReady, activeParentAthleteId, loadCoachShareData, ready]);
 
   useEffect(() => {
     if (!__DEV__ || role !== "parent") return;
@@ -1527,8 +1580,20 @@ function ParentThisWeekScreen() {
     const kid = Object.values(kidsByIdState).find(
       (k) => k && k.sharedAthleteId?.trim() === id,
     );
-    return kid?.name?.trim() ?? null;
-  }, [resolvedWeeklySharedAthleteId, weeklySessionSnapshot, kidsByIdState]);
+    return (
+      kid?.name?.trim() ||
+      (activeAthleteCtx.athlete?.id === activeParentAthleteId
+        ? activeAthleteCtx.athlete?.name?.trim()
+        : null) ||
+      null
+    );
+  }, [
+    resolvedWeeklySharedAthleteId,
+    weeklySessionSnapshot,
+    kidsByIdState,
+    activeAthleteCtx.athlete,
+    activeParentAthleteId,
+  ]);
 
   const weeklyDirectionSubtitle = useWeeklySyncHero
     ? weeklySyncSelectionDisplayName
@@ -1558,48 +1623,52 @@ function ParentThisWeekScreen() {
   /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
   const weeklyNoteHeroEyebrow = "Weekly coach message";
 
-  const relevantParentKids = useMemo(() => {
-    const base = Object.values(kidsByIdState)
-      .filter((kid) => kid && kid.id)
-      .sort((a, b) =>
-        (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }),
-      );
-    if (role !== "parent") return base;
-    const tokenNorm = normalizeInviteLinkToken(weeklySyncLink?.weeklySync?.linkToken ?? "");
-    if (!tokenNorm) return base;
-    return base.filter((kid) =>
-      parentKidCoherentlyLinkedToInviteToken(kid, tokenNorm, coachLinks),
-    );
-  }, [kidsByIdState, role, weeklySyncLink?.weeklySync?.linkToken, coachLinks]);
-
   const showParentKidSelector =
-    role === "parent" && ready && relevantParentKids.length >= 2;
+    role === "parent" && ready && activeAthleteCtx.athletes.length >= 2;
 
-  const handleSelectParentKidForThisWeek = useCallback(
-    async (kid: Kid) => {
-      if (!kid?.id || kid.id === derivedActiveAthleteId) return;
+  const handleSelectParentAthleteForThisWeek = useCallback(
+    async (pick: ParentAthlete) => {
+      if (!pick?.id || pick.id === activeParentAthleteId) return;
       const today = todayYMD();
+      await setActiveAthleteId(pick.id);
+
       const freshKidsById = await getKidsById();
-      setActiveKidId(kid.id);
-      await setLastAthleteKidId(kid.id);
-      await setFamilyCompetitionSelectedKidId(kid.id);
+      const lk = linkedKidIdForParentAthlete(freshKidsById, pick.id);
+
+      if (lk) {
+        setActiveKidId(lk);
+        await setLastAthleteKidId(lk);
+        await setFamilyCompetitionSelectedKidId(lk);
+      } else {
+        clearActiveKidId();
+        await clearFamilyCompetitionSelectedKidId();
+      }
+
       const compApplyGen = ++applyFamilyCompGenRef.current;
+      const parentName = pick.name.trim() || null;
+      const multi = activeAthleteCtx.athletes.length > 1;
+
       const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
-        kid.id,
+        pick.id,
+        lk,
         freshKidsById,
         today,
+        parentName,
+        multi,
       );
+
       setFamilyCompetition((prev) => {
         if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
         if (JSON.stringify(prev) === JSON.stringify(nextFamily)) return prev;
         return nextFamily;
       });
-      setStateIfJsonChanged("handleSelectParentKid:practiceSummary", setPracticeSummary, nextPracticeSummary);
-      setStateIfJsonChanged("handleSelectParentKid:kidsByIdState", setKidsByIdState, freshKidsById);
+      setStateIfJsonChanged("handleSelectAthlete:practiceSummary", setPracticeSummary, nextPracticeSummary);
+      setStateIfJsonChanged("handleSelectAthlete:kidsByIdState", setKidsByIdState, freshKidsById);
     },
     [
+      activeAthleteCtx.athletes.length,
+      activeParentAthleteId,
       computeParentKidScopedState,
-      derivedActiveAthleteId,
       setStateIfJsonChanged,
     ],
   );
@@ -1614,35 +1683,19 @@ function ParentThisWeekScreen() {
       return;
     }
 
-    const activeKidExists =
-      relevantParentKids.some((kid) => kid.id === activeKidIdFromStore) ||
-      Boolean(kidsByIdState[activeKidIdFromStore]);
-    if (!activeKidExists) return;
+    const kidRow = kidsByIdState[activeKidIdFromStore];
+    if (!kidRow) return;
+    const sid = (kidRow.sharedAthleteId ?? "").trim();
+    if (!sid) return;
 
     let cancelled = false;
 
     void (async () => {
+      await setActiveAthleteId(sid);
       await setFamilyCompetitionSelectedKidId(activeKidIdFromStore);
       await setLastAthleteKidId(activeKidIdFromStore);
-      const today = todayYMD();
-      const compApplyGen = ++applyFamilyCompGenRef.current;
-      const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
-        activeKidIdFromStore,
-        kidsByIdState,
-        today,
-      );
       if (cancelled) return;
-
-      setFamilyCompetition((prev) => {
-        if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
-        if (JSON.stringify(prev) === JSON.stringify(nextFamily)) return prev;
-        return nextFamily;
-      });
-      setStateIfJsonChanged(
-        "activeKidStoreSync:practiceSummary",
-        setPracticeSummary,
-        nextPracticeSummary,
-      );
+      void loadCoachShareData();
     })();
 
     return () => {
@@ -1650,28 +1703,48 @@ function ParentThisWeekScreen() {
     };
   }, [
     activeKidIdFromStore,
-    computeParentKidScopedState,
     familyCompetition.kidId,
     kidsByIdState,
+    loadCoachShareData,
     ready,
-    relevantParentKids,
     role,
-    setStateIfJsonChanged,
   ]);
 
   /** Derived relink intent (useMemo) so the async effect does not re-run on unrelated object identity churn. */
+  const inviteLinkedRosterKidIds = useMemo(() => {
+    if (role !== "parent") return [] as KidId[];
+    const tokenNorm = normalizeInviteLinkToken(weeklySyncLink?.weeklySync?.linkToken ?? "");
+    if (!tokenNorm) return [];
+    return Object.values(kidsByIdState)
+      .filter(
+        (kid): kid is Kid =>
+          Boolean(kid?.id) &&
+          parentKidCoherentlyLinkedToInviteToken(kid, tokenNorm, coachLinks),
+      )
+      .sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }),
+      )
+      .map((k) => k.id);
+  }, [coachLinks, kidsByIdState, role, weeklySyncLink?.weeklySync?.linkToken]);
+
   const parentInviteAutoRelinkSignature = useMemo(() => {
     if (role !== "parent" || !ready) return "";
     const tokenNorm = normalizeInviteLinkToken(weeklySyncLink?.weeklySync?.linkToken ?? "");
     if (!tokenNorm) return "";
     const kidId = familyCompetition.kidId;
-    if (relevantParentKids.length === 0) {
+    if (inviteLinkedRosterKidIds.length === 0) {
       return kidId == null ? "" : "clear";
     }
-    if (kidId != null && relevantParentKids.some((k) => k.id === kidId)) return "";
+    if (kidId != null && inviteLinkedRosterKidIds.includes(kidId)) return "";
     if (kidId == null) return "";
-    return `fallback:${relevantParentKids[0]!.id}`;
-  }, [ready, role, weeklySyncLink?.weeklySync?.linkToken, familyCompetition.kidId, relevantParentKids]);
+    return `fallback:${inviteLinkedRosterKidIds[0]}`;
+  }, [
+    familyCompetition.kidId,
+    inviteLinkedRosterKidIds,
+    ready,
+    role,
+    weeklySyncLink?.weeklySync?.linkToken,
+  ]);
 
   useEffect(() => {
     if (role !== "parent" || !ready || !parentInviteAutoRelinkSignature) return;
@@ -1679,23 +1752,7 @@ function ParentThisWeekScreen() {
     if (parentInviteAutoRelinkSignature === "clear") {
       void (async () => {
         await clearFamilyCompetitionSelectedKidId();
-        const today = todayYMD();
-        const compApplyGen = ++applyFamilyCompGenRef.current;
-        const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
-          null,
-          kidsByIdState,
-          today,
-        );
-        setFamilyCompetition((prev) => {
-          if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
-          if (JSON.stringify(prev) === JSON.stringify(nextFamily)) return prev;
-          return nextFamily;
-        });
-        setStateIfJsonChanged(
-          "parentInviteAutoRelink:clear:practiceSummary",
-          setPracticeSummary,
-          nextPracticeSummary,
-        );
+        void loadCoachShareData();
       })();
       return;
     }
@@ -1708,32 +1765,13 @@ function ParentThisWeekScreen() {
       await setFamilyCompetitionSelectedKidId(fallback);
       await setLastAthleteKidId(fallback);
       setActiveKidId(fallback);
-      const today = todayYMD();
-      const compApplyGen = ++applyFamilyCompGenRef.current;
-      const { nextFamily, nextPracticeSummary } = await computeParentKidScopedState(
-        fallback,
-        kidsByIdState,
-        today,
-      );
-      setFamilyCompetition((prev) => {
-        if (compApplyGen !== applyFamilyCompGenRef.current) return prev;
-        if (JSON.stringify(prev) === JSON.stringify(nextFamily)) return prev;
-        return nextFamily;
-      });
-      setStateIfJsonChanged(
-        "parentInviteAutoRelink:fallback:practiceSummary",
-        setPracticeSummary,
-        nextPracticeSummary,
-      );
+      const freshKidsById = await getKidsById();
+      const row = freshKidsById[fallback];
+      const sid = row?.sharedAthleteId?.trim();
+      if (sid) await setActiveAthleteId(sid);
+      void loadCoachShareData();
     })();
-  }, [
-    ready,
-    role,
-    parentInviteAutoRelinkSignature,
-    kidsByIdState,
-    computeParentKidScopedState,
-    setStateIfJsonChanged,
-  ]);
+  }, [loadCoachShareData, parentInviteAutoRelinkSignature, ready, role]);
 
   const legacyClassProgramBody = useMemo(() => {
     if (useWeeklySyncHero) return "";
@@ -1795,7 +1833,7 @@ function ParentThisWeekScreen() {
   const missionUrlTrimmed = (weeklySyncDoc?.missionResourceUrl ?? "").trim();
   const hasMissionResource = missionUrlTrimmed.length > 0;
 
-  if (!ready) {
+  if (!ready || !activeAthleteCtx.hydrationReady) {
     return (
       <>
         <Stack.Screen options={{ title: "This Week" }} />
@@ -1814,26 +1852,7 @@ function ParentThisWeekScreen() {
     );
   }
 
-  if (!derivedAthletePersistenceHydrated) {
-    return (
-      <>
-        <Stack.Screen options={{ title: "This Week" }} />
-        <View
-          style={{
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 24,
-            backgroundColor: FEED.bg,
-          }}
-        >
-          <Text style={{ fontSize: 15, color: FEED.muted }}>Loading…</Text>
-        </View>
-      </>
-    );
-  }
-
-  if (thisWeekAthletePoolCount === 0) {
+  if (thisWeekParentAthletePoolCount === 0) {
     return (
       <>
         <Stack.Screen options={{ title: "This Week" }} />
@@ -1872,28 +1891,39 @@ function ParentThisWeekScreen() {
     );
   }
 
-  if (!derivedActiveAthleteId) {
-    if (__DEV__ && thisWeekAthletePoolCount > 0) {
-      console.error("[this-week] invariant violated: athletes in pool but derivedActiveAthleteId is null", {
-        pool: thisWeekAthletePoolKidIds,
-        persistenceHydrated: derivedAthletePersistenceHydrated,
-        activeKidIdFromStore,
-      });
-    }
-
+  if (!activeParentAthleteId.trim()) {
     return (
       <>
         <Stack.Screen options={{ title: "This Week" }} />
         <View
           style={{
             flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingHorizontal: 24,
+            paddingHorizontal: tokens.layout.screenPaddingX,
+            paddingTop: insets.top + 24,
             backgroundColor: FEED.bg,
           }}
         >
-          <Text style={{ fontSize: 15, color: FEED.muted }}>Loading…</Text>
+          <Text style={{ fontSize: 22, fontWeight: "900", color: FEED.text }}>Select an athlete</Text>
+          <Text style={{ marginTop: 12, fontSize: 15, lineHeight: 22, color: FEED.muted }}>
+            Choose who this week is for in Summary, or add an athlete first.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Open Summary"
+            onPress={() => router.push("/summary")}
+            style={({ pressed }) => ({
+              alignSelf: "flex-start",
+              marginTop: 24,
+              paddingVertical: tokens.space[3],
+              paddingHorizontal: tokens.space[5],
+              borderRadius: FEED.radius,
+              borderWidth: 1,
+              borderColor: FEED.lineStrong,
+              backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
+            })}
+          >
+            <Text style={[tokens.type.title, { color: FEED.text }]}>Open Summary</Text>
+          </Pressable>
         </View>
       </>
     );
@@ -1901,7 +1931,8 @@ function ParentThisWeekScreen() {
 
   if (__DEV__) {
     console.log("[RENDER ATHLETE SOURCE]", {
-      rosterKidId: derivedActiveAthleteId,
+      athleteId: activeParentAthleteId,
+      linkedKidId: activeParentLinkedKidId,
       activeKidIdFromStore,
       resolvedWeeklySharedAthleteId,
       available: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId ?? {}),
@@ -2136,22 +2167,22 @@ function ParentThisWeekScreen() {
                     gap: 8,
                   }}
                 >
-                {relevantParentKids.map((kid) => {
-                  const kidSelectedForThisWeek = kid.id === derivedActiveAthleteId;
+                {activeAthleteCtx.athletes.map((athRow) => {
+                  const athleteSelectedForThisWeek = athRow.id === activeParentAthleteId;
                   return (
                     <Pressable
-                      key={kid.id}
-                      onPress={() => void handleSelectParentKidForThisWeek(kid)}
+                      key={athRow.id}
+                      onPress={() => void handleSelectParentAthleteForThisWeek(athRow)}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: kidSelectedForThisWeek }}
-                      accessibilityLabel={`Training and competition for ${kid.name.trim() || "this child"}`}
+                      accessibilityState={{ selected: athleteSelectedForThisWeek }}
+                      accessibilityLabel={`Training and competition for ${athRow.name.trim() || "this athlete"}`}
                       style={({ pressed }) => ({
                         paddingVertical: 8,
                         paddingHorizontal: 12,
                         borderRadius: FEED.radius,
                         borderWidth: 1,
-                        borderColor: kidSelectedForThisWeek ? FEED.lineStrong : FEED.line,
-                        backgroundColor: kidSelectedForThisWeek
+                        borderColor: athleteSelectedForThisWeek ? FEED.lineStrong : FEED.line,
+                        backgroundColor: athleteSelectedForThisWeek
                           ? (pressed ? FEED.panel3 : FEED.panel2)
                           : (pressed ? FEED.panel3 : FEED.panel),
                       })}
@@ -2160,10 +2191,10 @@ function ParentThisWeekScreen() {
                         style={{
                           fontSize: 13,
                           fontWeight: "800",
-                          color: kidSelectedForThisWeek ? FEED.text : FEED.muted,
+                          color: athleteSelectedForThisWeek ? FEED.text : FEED.muted,
                         }}
                       >
-                        {kid.name.trim() || "Child"}
+                        {athRow.name.trim() || "Athlete"}
                       </Text>
                     </Pressable>
                   );
@@ -2434,13 +2465,17 @@ function ParentThisWeekScreen() {
                 <Pressable
                   onPress={() => {
                     const d = todayYMD();
-                    const k = derivedActiveAthleteId;
+                    const lk = activeParentLinkedKidId;
+                    const q = lk
+                      ? `date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(lk)}&fromWeekly=1`
+                      : `date=${encodeURIComponent(d)}&fromWeekly=1`;
                     if (__DEV__) {
-                      console.log("[THIS WEEK NAV TRAINING]", { rosterKidId: k });
+                      console.log("[THIS WEEK NAV TRAINING]", {
+                        athleteId: activeParentAthleteId,
+                        kidIdNullable: lk,
+                      });
                     }
-                    router.push(
-                      `/training?date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(k)}&fromWeekly=1`,
-                    );
+                    router.push(`/training?${q}`);
                   }}
                   accessibilityRole="button"
                   style={({ pressed }) => ({
@@ -2670,7 +2705,7 @@ function ParentThisWeekScreen() {
             </View>
 
             {role === "parent" ? (
-              <CoachingHistoryLogCard kidId={derivedActiveAthleteId} />
+              <CoachingHistoryLogCard kidId={activeParentLinkedKidId ?? undefined} />
             ) : null}
 
             {role === "parent" && lastCompetitionWithinWeek ? (
@@ -2732,7 +2767,10 @@ function ParentThisWeekScreen() {
             ) : null}
 
             {role === "parent" ? (
-              <PracticeSummaryCard kidId={derivedActiveAthleteId} />
+              <PracticeSummaryCard
+                athleteId={activeParentAthleteId}
+                kidId={activeParentLinkedKidId ?? undefined}
+              />
             ) : null}
 
             {!isLinked ||

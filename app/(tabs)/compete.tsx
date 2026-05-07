@@ -8,10 +8,12 @@ import { localTodayDateKey, toDateKey } from "@/src/_domain/dateKey";
 import { CompetitionCard } from "@/src/features/competition/CompetitionCard";
 import { MedalCollection } from "@/src/features/competition/MedalCollection";
 import type { CompeteKidEntryMerged } from "@/src/features/competition/MedalGallery";
-import { getKidCompetitionEntriesWithMatchDetailForKid } from "@/src/storage/competitionStore";
-import { getKidsById } from "@/src/storage/coachKidStore";
-import type { KidsById } from "@/src/types/coachKid";
-import { useDerivedActiveAthleteKidId } from "@/src/state/derivedActiveAthleteKid";
+import {
+  getKidCompetitionEntriesWithMatchDetailForKid,
+  getKidCompetitionEntriesWithMatchDetailForSharedAthlete,
+} from "@/src/storage/competitionStore";
+import { kidIdForUnlinkedParentAthleteCompetitions } from "@/src/storage/kidCompetitionStore";
+import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
 
 const FEED = {
   bg: "#111315",
@@ -67,6 +69,16 @@ function monthLabel(monthKey: string): string {
   });
 }
 
+function initialsFromName(name: string): string {
+  const parts = name
+    .trim()
+    .split(/\s+/u)
+    .filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+}
+
 function buildPastMonthGroups(entries: CompeteKidEntryMerged[]): MonthGroup[] {
   const byMonth = new Map<string, CompeteKidEntryMerged[]>();
 
@@ -87,29 +99,21 @@ function buildPastMonthGroups(entries: CompeteKidEntryMerged[]): MonthGroup[] {
 }
 
 export default function CompetitionTab() {
-  const [kidsById, setKidsById] = useState<KidsById>({});
+  const { athleteId, linkedKidId, hydrationReady, athlete } = useActiveAthlete();
   const [entries, setEntries] = useState<CompeteKidEntryMerged[]>([]);
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
-  const { kidId, persistenceHydrated } = useDerivedActiveAthleteKidId(kidsById, null);
-
-  const loadKids = useCallback(async () => {
-    setKidsById(await getKidsById());
-  }, []);
 
   const loadCompetitions = useCallback(async () => {
-    if (!kidId) {
+    const trimmedAthleteId = athleteId.trim();
+    if (!trimmedAthleteId) {
       setEntries([]);
       return;
     }
-    const merged = await getKidCompetitionEntriesWithMatchDetailForKid(kidId);
+    const merged = linkedKidId
+      ? await getKidCompetitionEntriesWithMatchDetailForKid(linkedKidId)
+      : await getKidCompetitionEntriesWithMatchDetailForSharedAthlete(trimmedAthleteId);
     setEntries(merged);
-  }, [kidId]);
-
-  useFocusEffect(
-    useCallback(() => {
-      void loadKids();
-    }, [loadKids]),
-  );
+  }, [athleteId, linkedKidId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -117,11 +121,15 @@ export default function CompetitionTab() {
     }, [loadCompetitions]),
   );
 
-  const noKidSelected = persistenceHydrated && !kidId;
-  const visibleEntries = useMemo(
-    () => entries.filter((entry) => entry.kidId === kidId),
-    [entries, kidId],
-  );
+  const noAthleteSelected = hydrationReady && !athleteId.trim();
+  const athleteName = (athlete?.name ?? "").trim();
+  const athleteInitials = initialsFromName(athleteName || "?");
+  const visibleEntries = useMemo(() => {
+    const aid = athleteId.trim();
+    if (!aid) return [];
+    if (linkedKidId) return entries.filter((entry) => entry.kidId === linkedKidId);
+    return entries.filter((entry) => (entry.sharedAthleteId ?? "").trim() === aid);
+  }, [entries, athleteId, linkedKidId]);
   const todayKey = useMemo(() => localTodayDateKey(), []);
   const upcomingEntries = useMemo(
     () =>
@@ -161,8 +169,15 @@ export default function CompetitionTab() {
           <Text style={styles.statusText}>5G 82%</Text>
         </View>
         <View style={styles.appTop}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>MM</Text>
+          <View style={styles.appTopLeft}>
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>{athleteInitials}</Text>
+            </View>
+            <View style={styles.athleteNameBlock}>
+              <Text style={styles.athleteNameLabel} numberOfLines={1}>
+                {noAthleteSelected ? "No athlete selected" : athleteName || "Athlete"}
+              </Text>
+            </View>
           </View>
           <View style={styles.iconRow}>
             <View style={styles.iconBtn}>
@@ -170,11 +185,20 @@ export default function CompetitionTab() {
             </View>
             <Pressable
               style={styles.iconBtn}
-              disabled={!kidId}
+              disabled={!hydrationReady || !athleteId.trim()}
               onPress={() => {
-                if (!kidId) return;
+                if (!hydrationReady || !athleteId.trim()) return;
+                const aid = athleteId.trim();
+                if (linkedKidId) {
+                  router.push(
+                    `/this-week/kid/${linkedKidId}/competition/edit?openNonce=${Date.now()}` as Href,
+                  );
+                  return;
+                }
+                if (!aid) return;
+                const bucket = kidIdForUnlinkedParentAthleteCompetitions(aid);
                 router.push(
-                  `/this-week/kid/${kidId}/competition/edit?openNonce=${Date.now()}` as Href,
+                  `/this-week/kid/${encodeURIComponent(bucket)}/competition/edit?openNonce=${Date.now()}` as Href,
                 );
               }}
             >
@@ -187,12 +211,14 @@ export default function CompetitionTab() {
           <Text style={styles.h2}>Events and matches</Text>
         </View>
 
-        {noKidSelected ? (
+        {noAthleteSelected ? (
           <View style={styles.twEmptyCard}>
             <Text style={styles.twEmptyTitle}>No athlete selected</Text>
-            <Text style={styles.twEmptySubtitle}>Select an athlete to view competition history</Text>
+            <Text style={styles.twEmptySubtitle}>
+              Select an athlete in Summary to view competition history
+            </Text>
             <Pressable
-              onPress={() => router.push("/this-week/kids")}
+              onPress={() => router.push("/summary")}
               style={({ pressed }) => ({
                 marginTop: 22,
                 paddingVertical: 14,
@@ -205,7 +231,7 @@ export default function CompetitionTab() {
                 alignItems: "center",
               })}
             >
-              <Text style={styles.twEmptyButtonLabel}>Select Athlete</Text>
+              <Text style={styles.twEmptyButtonLabel}>Open Summary</Text>
             </Pressable>
           </View>
         ) : (
@@ -300,6 +326,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     marginTop: 18,
+    gap: 12,
+  },
+  appTopLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    minWidth: 0,
+  },
+  athleteNameBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  athleteNameLabel: {
+    color: FEED.text,
+    fontSize: 16,
+    fontWeight: "800",
   },
   avatar: {
     width: 36,
