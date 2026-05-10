@@ -129,6 +129,7 @@ import {
 } from "../../../src/features/weekly/parentFeedbackHelpers";
 import { CoachingHistoryLogCard } from "@/src/features/summary/CoachingHistoryLogCard";
 import { PracticeSummaryCard } from "@/src/features/summary/PracticeSummaryCard";
+import OperatingHeader from "@/src/components/operating/OperatingHeader";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
 const UI = {
@@ -326,6 +327,13 @@ function parentSessionMatchesAthlete(
   if ((s.sharedAthleteId ?? "").trim() === aid) return true;
   if (kid && (s.kidId ?? "").trim() === kid) return true;
   return false;
+}
+
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "MM";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 function Section({
@@ -1984,157 +1992,37 @@ function ParentThisWeekScreen() {
         }}
       >
         <View style={{ paddingTop: insets.top + 8 }}>
-          <View
-            style={{
-              minHeight: 38,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 10,
+          <OperatingHeader
+            mode="athlete"
+            eyebrow="Coach Direction"
+            title="This week’s direction"
+            subtitle={weeklyConnectionStatusLabel}
+            onTitleLongPress={
+              __DEV__
+                ? () => {
+                    setShowDebugData((prev) => !prev);
+                  }
+                : undefined
+            }
+            athlete={{
+              name: weeklySyncSelectionDisplayName ?? activeAthleteCtx.athlete?.name?.trim() ?? "Athlete",
+              initials: initialsFromName(
+                weeklySyncSelectionDisplayName ?? activeAthleteCtx.athlete?.name ?? "",
+              ),
+              meta: weeklyDirectionSubtitle,
             }}
-          >
-            <View
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: FEED.line,
-                backgroundColor: FEED.panel2,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ color: FEED.text, fontSize: 11, fontWeight: "900" }}>
-                MM
-              </Text>
-            </View>
-            <View
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                justifyContent: "flex-end",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <View
-                style={{
-                  flex: 1,
-                  maxWidth: 236,
-                  minHeight: 36,
-                  justifyContent: "center",
-                  paddingVertical: 4,
-                  paddingHorizontal: 9,
-                  borderRadius: FEED.radius,
-                  borderWidth: 1,
-                  borderColor: FEED.line,
-                  backgroundColor: FEED.panel,
-                }}
-              >
-                <Text
-                  numberOfLines={1}
-                  style={[
-                    tokens.type.caption,
-                    {
-                      fontWeight: "800",
-                      color: isPreviewOnlyOnDevice
-                        ? tokens.colors.semantic.warningText
-                        : FEED.text,
-                    },
-                  ]}
-                >
-                  {weeklyConnectionStatusLabel}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    marginTop: 1,
-                    color: FEED.faint,
-                    fontSize: 10,
-                    lineHeight: 12,
-                    fontWeight: "800",
-                  }}
-                >
-                  {weeklyDirectionSubtitle}
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => void refreshParentData()}
-                accessibilityRole="button"
-                accessibilityLabel="Refresh this week"
-                style={({ pressed }) => ({
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: FEED.line,
-                  backgroundColor: pressed ? FEED.panel3 : "rgba(255,255,255,0.045)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                })}
-              >
-                <Text
-                  style={{
-                    color: FEED.text,
-                    fontSize: 16,
-                    lineHeight: 18,
-                    fontWeight: "900",
-                  }}
-                >
-                  ↻
-                </Text>
-              </Pressable>
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: FEED.line,
-                  backgroundColor: "rgba(255,255,255,0.045)",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <View
-                  style={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: 999,
-                    backgroundColor: isLinked ? FEED.accent : FEED.faint,
-                  }}
-                />
-              </View>
-            </View>
-          </View>
-          <Text
-            style={[
-              tokens.type.label,
+            actions={[
               {
-                marginTop: 18,
-                marginBottom: 6,
-                color: FEED.muted,
+                label: "Refresh this week",
+                icon: "↻",
+                onPress: () => void refreshParentData(),
+              },
+              {
+                label: isLinked ? "Coach linked" : "Not linked",
+                statusColor: isLinked ? FEED.accent : FEED.faint,
               },
             ]}
-          >
-            COACH FEED
-          </Text>
-          <Text
-            onLongPress={
-              __DEV__
-              ? () => {
-                  setShowDebugData((prev) => !prev);
-                }
-              : undefined
-            }
-            style={[
-              tokens.type.h1,
-              { color: FEED.text, fontSize: 30, lineHeight: 34 },
-            ]}
-          >
-            This week’s direction
-          </Text>
+          />
         </View>
 
           <>

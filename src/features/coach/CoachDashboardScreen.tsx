@@ -23,6 +23,7 @@ import type {
   CoachTeamFocusAthleteRow,
 } from "./useCoachInsights";
 import { useCoachInsights } from "./useCoachInsights";
+import OperatingHeader from "../../components/operating/OperatingHeader";
 
 const UI = {
   screenBg: "#0b0f12",
@@ -336,22 +337,25 @@ export default function CoachDashboardScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.eyebrow}>Coach</Text>
-          <Text style={styles.title}>Coach Dashboard</Text>
-          <Text style={styles.subtitle}>Where coaching decisions are made.</Text>
-          <Pressable
-            onPress={() => router.push("/coach/kids")}
-            accessibilityRole="button"
-            accessibilityLabel="Open athlete roster and parent links"
-            style={({ pressed }) => [
-              styles.rosterButton,
-              pressed ? styles.rosterButtonPressed : null,
-            ]}
-          >
-            <Text style={styles.rosterButtonText}>Athlete roster / Parent links</Text>
-          </Pressable>
-        </View>
+        <OperatingHeader
+          mode="team"
+          eyebrow="Team / Operations"
+          title="Coach Dashboard"
+          subtitle="Where coaching decisions are made."
+          teamLabel="Team operations"
+          teamMeta={`${insights.length} active athletes`}
+          actions={[
+            {
+              label: "Athlete roster and parent links",
+              icon: "▣",
+              onPress: () => router.push("/coach/kids"),
+            },
+            {
+              label: "Team dashboard",
+              statusColor: UI.accent,
+            },
+          ]}
+        />
 
         <View style={styles.snapshot}>
           <Text style={styles.snapshotTitle}>Coach Snapshot</Text>

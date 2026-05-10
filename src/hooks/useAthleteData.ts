@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { mergeCompetitionMatchDetailIntoEntries } from "@/src/storage/competitionStore";
 import { getKidCompetitionEntries } from "../storage/kidCompetitionStore";
@@ -17,6 +17,8 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [competitions, setCompetitions] = useState<KidCompetitionEntry[]>([]);
   const [loading, setLoading] = useState(false);
+  const prevHydratedAthleteRef = useRef<string | undefined>(undefined);
+  const loadGenerationRef = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -24,10 +26,14 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
       const athleteId = activeAthleteId.trim();
 
       async function load() {
+        const gen = ++loadGenerationRef.current;
         setLoading(true);
 
         if (!athleteId) {
           if (!mounted) return;
+          if (gen !== loadGenerationRef.current) return;
+
+          prevHydratedAthleteRef.current = "";
 
           setSessions([]);
           setCompetitions([]);
@@ -43,6 +49,13 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
 
           return;
         }
+
+        const prev = prevHydratedAthleteRef.current;
+        if (prev !== undefined && prev !== athleteId) {
+          setSessions([]);
+          setCompetitions([]);
+        }
+        prevHydratedAthleteRef.current = athleteId;
 
         try {
           const [allSessions, allCompetitions] = await Promise.all([
@@ -62,7 +75,7 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
 
           const nextCompetitions = await mergeCompetitionMatchDetailIntoEntries(filteredCompetitions);
 
-          if (!mounted) return;
+          if (!mounted || gen !== loadGenerationRef.current) return;
 
           setSessions([...nextSessions]);
           setCompetitions([...nextCompetitions]);
@@ -75,7 +88,7 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
             });
           }
         } catch (error) {
-          if (!mounted) return;
+          if (!mounted || gen !== loadGenerationRef.current) return;
 
           setSessions([]);
           setCompetitions([]);
@@ -89,7 +102,7 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
             });
           }
         } finally {
-          if (mounted) setLoading(false);
+          if (mounted && gen === loadGenerationRef.current) setLoading(false);
         }
       }
 

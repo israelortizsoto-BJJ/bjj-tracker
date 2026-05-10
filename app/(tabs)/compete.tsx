@@ -1,6 +1,6 @@
 import { router, type Href } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -14,6 +14,7 @@ import {
 } from "@/src/storage/competitionStore";
 import { kidIdForUnlinkedParentAthleteCompetitions } from "@/src/storage/kidCompetitionStore";
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
+import OperatingHeader from "@/src/components/operating/OperatingHeader";
 
 const FEED = {
   bg: "#111315",
@@ -102,16 +103,20 @@ export default function CompetitionTab() {
   const { athleteId, linkedKidId, hydrationReady, athlete } = useActiveAthlete();
   const [entries, setEntries] = useState<CompeteKidEntryMerged[]>([]);
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
+  const loadGenerationRef = useRef(0);
 
   const loadCompetitions = useCallback(async () => {
+    const gen = ++loadGenerationRef.current;
     const trimmedAthleteId = athleteId.trim();
     if (!trimmedAthleteId) {
       setEntries([]);
       return;
     }
-    const merged = linkedKidId
-      ? await getKidCompetitionEntriesWithMatchDetailForKid(linkedKidId)
+    const lk = linkedKidId;
+    const merged = lk
+      ? await getKidCompetitionEntriesWithMatchDetailForKid(lk)
       : await getKidCompetitionEntriesWithMatchDetailForSharedAthlete(trimmedAthleteId);
+    if (gen !== loadGenerationRef.current) return;
     setEntries(merged);
   }, [athleteId, linkedKidId]);
 
@@ -164,29 +169,26 @@ export default function CompetitionTab() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.status}>
-          <Text style={styles.statusText}>9:41</Text>
-          <Text style={styles.statusText}>5G 82%</Text>
-        </View>
-        <View style={styles.appTop}>
-          <View style={styles.appTopLeft}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{athleteInitials}</Text>
-            </View>
-            <View style={styles.athleteNameBlock}>
-              <Text style={styles.athleteNameLabel} numberOfLines={1}>
-                {noAthleteSelected ? "No athlete selected" : athleteName || "Athlete"}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.iconRow}>
-            <View style={styles.iconBtn}>
-              <Text style={styles.iconText}>▣</Text>
-            </View>
-            <Pressable
-              style={styles.iconBtn}
-              disabled={!hydrationReady || !athleteId.trim()}
-              onPress={() => {
+        <OperatingHeader
+          mode="athlete"
+          eyebrow="Competition / Proof"
+          title="Events and matches"
+          athlete={{
+            name: noAthleteSelected ? "No athlete selected" : athleteName || "Athlete",
+            initials: athleteInitials,
+            meta: linkedKidId ? "Linked athlete" : "Competition history",
+          }}
+          actions={[
+            {
+              label: "Competition view",
+              icon: "▣",
+              selected: true,
+            },
+            {
+              label: "Add competition",
+              icon: "+",
+              disabled: !hydrationReady || !athleteId.trim(),
+              onPress: () => {
                 if (!hydrationReady || !athleteId.trim()) return;
                 const aid = athleteId.trim();
                 if (linkedKidId) {
@@ -200,16 +202,10 @@ export default function CompetitionTab() {
                 router.push(
                   `/this-week/kid/${encodeURIComponent(bucket)}/competition/edit?openNonce=${Date.now()}` as Href,
                 );
-              }}
-            >
-              <Text style={styles.iconText}>＋</Text>
-            </Pressable>
-          </View>
-        </View>
-        <View style={styles.screenTitle}>
-          <Text style={styles.caption}>Competition</Text>
-          <Text style={styles.h2}>Events and matches</Text>
-        </View>
+              },
+            },
+          ]}
+        />
 
         {noAthleteSelected ? (
           <View style={styles.twEmptyCard}>

@@ -12,6 +12,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import SummaryAthleteSwitcher from "../../components/summary/SummaryAthleteSwitcher";
 import SummaryCompetitionCard from "../../components/summary/SummaryCompetitionCard";
@@ -19,6 +20,7 @@ import SummaryConsistencyCard from "../../components/summary/SummaryConsistencyC
 import SummaryHeroCard from "../../components/summary/SummaryHeroCard";
 import SummaryPatternsCard from "../../components/summary/SummaryPatternsCard";
 import SummaryWeekCard from "../../components/summary/SummaryWeekCard";
+import OperatingHeader from "../../components/operating/OperatingHeader";
 import {
   deriveCompetitionTrainingSkillFocus,
   principalTrainingSkillBucketFromDerivedFocus,
@@ -86,6 +88,13 @@ function formatExperienceLabel(experienceLevel: string | undefined): string | nu
   if (k === "developing") return "Developing";
   if (k === "experienced") return "Experienced";
   return titleCaseWords(t);
+}
+
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "MM";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 const formatSkill = (skill: string) => {
@@ -707,7 +716,7 @@ export default function SummaryScreen() {
 
   if (!hasActiveAthlete) {
     return (
-      <View style={styles.ctaScreen}>
+      <SafeAreaView style={styles.ctaScreen} edges={["top"]}>
         <Text style={styles.ctaTitle}>Summary</Text>
         <Text style={styles.ctaSubtitle}>
           Add an athlete on this device to see training insights here.
@@ -719,46 +728,41 @@ export default function SummaryScreen() {
         >
           <Text style={styles.ctaBtnText}>Create Athlete</Text>
         </Pressable>
-      </View>
+      </SafeAreaView>
     );
   }
 
   return (
+    <SafeAreaView style={styles.screen} edges={["top"]}>
     <ScrollView
-      style={styles.screen}
+      style={styles.screenInner}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.headerRow}>
-        <Text style={styles.headerTitle} numberOfLines={1}>
-          {activeAthleteName}
-          <Text style={styles.headerMeta}>
-            {hasIdentityHeader
-              ? ` • ${beltLabel} • ${experienceLabel}`
-              : " • Not Linked"}
-          </Text>
-        </Text>
-        <View style={styles.headerActions}>
-          <Pressable
-            accessibilityLabel="Athlete actions"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={handleOpenManageAthlete}
-            style={({ pressed }) => [styles.headerMenuBtn, pressed ? styles.headerMenuBtnPressed : null]}
-          >
-            <Text style={styles.headerMenuGlyph}>⋯</Text>
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Add athlete"
-            accessibilityRole="button"
-            hitSlop={8}
-            onPress={() => router.push("/summary/add-athlete")}
-            style={({ pressed }) => [styles.headerAddBtn, pressed ? styles.headerAddBtnPressed : null]}
-          >
-            <Text style={styles.headerAddGlyph}>+</Text>
-          </Pressable>
-        </View>
-      </View>
+      <OperatingHeader
+        mode="athlete"
+        eyebrow="Summary / Identity"
+        title="A mirror of the athlete"
+        athlete={{
+          name: activeAthleteName || "Athlete",
+          initials: initialsFromName(activeAthleteName),
+          meta: hasIdentityHeader
+            ? `${beltLabel} / ${experienceLabel}`
+            : "Not linked",
+        }}
+        actions={[
+          {
+            label: "Athlete actions",
+            icon: "⋯",
+            onPress: handleOpenManageAthlete,
+          },
+          {
+            label: "Add athlete",
+            icon: "+",
+            onPress: () => router.push("/summary/add-athlete"),
+          },
+        ]}
+      />
 
       <View style={styles.identityScoreRow}>
         <Text style={styles.identityScoreText}>
@@ -863,6 +867,7 @@ export default function SummaryScreen() {
         />
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -907,6 +912,10 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   screen: {
+    flex: 1,
+    backgroundColor: "#0b0f12",
+  },
+  screenInner: {
     flex: 1,
     backgroundColor: "#0b0f12",
   },

@@ -20,12 +20,14 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Calendar } from "react-native-calendars";
 import { toDateKey } from "../../src/_domain/dateKey";
 import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
+import OperatingHeader from "@/src/components/operating/OperatingHeader";
 
 import { buildTechniqueIndex, getTechniqueById } from "../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
@@ -126,6 +128,13 @@ function getTechniqueLabelsFromSession(session: Session): string[] {
   }
   const legacy = (session.technique ?? "").trim();
   return legacy ? [legacy] : [];
+}
+
+function initialsFromName(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "MM";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
 // ------------------------------
@@ -1124,16 +1133,6 @@ const weekHasVisibleSessions = useMemo(() => {
   return false;
 }, [viewMode, weekDates, weekSessionsByDate, filterAndSort]);
 
-const renderTitleAndIntro = () => (
-  <>
-    <Text style={{ fontSize: 24, fontWeight: "800", color: UI.textPrimary, letterSpacing: 0 }}>
-      Day-based session log
-    </Text>
-    <Text style={{ color: UI.textSecondary, fontSize: 15, marginTop: 4, lineHeight: 21 }}>
-      Record one session with multiple techniques, notes, and media.
-    </Text>
-  </>
-);
 // 7B) Search bar row
 const renderSearchBar = () => (
   <View
@@ -1242,15 +1241,17 @@ const renderDayWeekHeader = () => (
   </View>
 );
 // 7D) New session CTA row
+const openNewSession = () => {
+  const q = new URLSearchParams();
+  q.set("date", selectedDate);
+  if (effectiveKidId) q.set("kidId", effectiveKidId);
+  if (athleteScopeTrim) q.set("athleteId", athleteScopeTrim);
+  router.push(`/training/new?${q.toString()}`);
+};
+
 const renderNewSessionCTA = () => (
   <Pressable
-    onPress={() => {
-      const q = new URLSearchParams();
-      q.set("date", selectedDate);
-      if (effectiveKidId) q.set("kidId", effectiveKidId);
-      if (athleteScopeTrim) q.set("athleteId", athleteScopeTrim);
-      router.push(`/training/new?${q.toString()}`);
-    }}
+    onPress={openNewSession}
     style={({ pressed }) => ({
       paddingVertical: 14,
       paddingHorizontal: 18,
@@ -1269,13 +1270,41 @@ const renderNewSessionCTA = () => (
 );
   // Main Return.
   return (
-  <View style={{ flex: 1, backgroundColor: UI.screenBg }}>
+  <SafeAreaView style={{ flex: 1, backgroundColor: UI.screenBg }} edges={["top"]}>
     <ScrollView
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
     contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, gap: 18 }}
     >
+      <OperatingHeader
+        mode="athlete"
+        eyebrow="Training / Execution"
+        title="Day-based session log"
+        subtitle="Record one session with techniques, notes, and media."
+        athlete={{
+          name: athlete?.name?.trim() || "Athlete",
+          initials: initialsFromName(athlete?.name ?? ""),
+          meta: effectiveKidId ? "Linked athlete" : "Device training",
+        }}
+        actions={[
+          {
+            label: "Week view",
+            icon: "▣",
+            selected: viewMode === "week",
+            onPress: () => {
+              setViewMode("week");
+              setSelectedDate(today);
+              setWeekStartYMD(startOfWeekMondayYMD(today));
+            },
+          },
+          {
+            label: "Add session",
+            icon: "+",
+            onPress: openNewSession,
+          },
+        ]}
+      />
   <Pressable
   onPress={openBetaFeedbackEmail}
   style={({ pressed }) => ({
@@ -1296,7 +1325,6 @@ const renderNewSessionCTA = () => (
     Email support@ortizdigitalstudio.com
   </Text>
 </Pressable>    
-      {renderTitleAndIntro()}
 
       <View style={styles.trainingIdentityBlock}>
         <Text style={styles.trainingIdentityText}>{getTrendAwareTrainingMessage()}</Text>
@@ -1868,6 +1896,6 @@ const renderNewSessionCTA = () => (
     </Pressable>
   </Pressable>
 </Modal>
-</View>
+</SafeAreaView>
 );
 }

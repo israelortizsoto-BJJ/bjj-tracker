@@ -1,5 +1,220 @@
 # BJJ Tracker - Dev Handoff Notes
 
+# EOD — 2026-05-08 
+
+SYSTEM STATE (END OF DAY)
+
+Summary V2 engine is now fully implemented, integrated, and pushed to summary-rebuild-v2.
+
+This includes:
+
+* progression engine (step-based, non-repeating, alignment-driven)
+* alignment integration (no_data, misaligned, aligned, validated)
+* system selection (coach → identity → signals)
+* identity tone layer (exploring / building / performing)
+* stable stepKey tracking (system:id, no longer string-based)
+* AsyncStorage persistence for lastAction
+* full SummaryViewModel pipeline contract documented and locked
+
+TypeScript validation passed across all changes. No runtime-breaking errors introduced.
+
+This is the first version of a true decision engine, not just UI logic.
+
+⸻
+
+WHAT WAS PROVEN
+
+1. Progression is now deterministic
+    * No repetition loops
+    * Stable step identity via stepKey
+    * Alignment controls advancement/reset correctly
+2. System selection is centralized
+    * No more scattered fallback logic
+    * Single source of truth: selectFocusSystem
+3. Identity is now presentation-only
+    * Does not affect progression logic
+    * Clean separation of logic vs tone
+4. Fallbacks are clean
+    * No system → controlled “Pick one position” path
+    * No data → forced first step
+    * No hidden branching in UI layer
+5. Storage is working
+    * lastAction persists correctly
+    * stepKey used instead of fragile string matching
+
+⸻
+
+WHAT BROKE / FRICTION DISCOVERED
+
+1. QA BLOCKER — Roster visibility (CRITICAL)
+
+Cannot reliably run QA because:
+
+* Coach cannot consistently see athlete roster
+* Parent view does not consistently show child
+* Athlete linkage feels unstable across flows
+
+This prevents:
+
+* real scenario testing
+* progression validation in real use
+* coach/parent loop validation
+
+⸻
+
+2. Identity instability (CRITICAL)
+
+Logs show:
+
+* athlete switching unexpectedly
+* state resetting (sessionCount / signals dropping to 0 temporarily)
+* multiple identity resolutions per render cycle
+
+This indicates:
+
+* multiple competing sources of truth
+* identity being recomputed instead of held stable
+* dependency chain issues between:
+    * derivedActiveAthleteKid
+    * session state
+    * signals pipeline
+
+⸻
+
+3. Signal inconsistency during session saves
+
+Observed behavior:
+
+* sessionCount spikes (47 → 0 → 1 → 2 → 3)
+* signals recompute multiple times per action
+* dominance recalculates inconsistently mid-flow
+
+This suggests:
+
+* state rehydration issues
+* async updates not synchronized
+* possible duplicate signal computations
+
+⸻
+
+WHAT IS LOCKED (DO NOT TOUCH)
+
+* computeProgression
+* buildSummaryViewModel
+* alignment logic
+* identity tone formatting
+* system selection logic
+
+All summary engine logic is frozen until QA surface is stable.
+
+⸻
+
+CURRENT PRIORITY (P0)
+
+Fix QA INFRASTRUCTURE
+
+Before any further product iteration, we must fix:
+
+1. Coach roster visibility
+2. Parent athlete visibility
+3. Active athlete selection stability
+
+Without this, the system cannot be validated.
+
+⸻
+
+ROOT PROBLEM (CLEAR)
+
+System logic is now strong.
+
+But:
+
+Inputs (who is the athlete?) are unstable
+
+Which means:
+
+The engine cannot be trusted yet in real scenarios
+
+⸻
+
+PLAN FOR NEXT SESSION
+
+Step 1 — Stabilize identity
+
+* Ensure a single source of truth for active athlete
+* Prevent re-resolution on every render
+* Cache or explicitly set active athlete
+
+Step 2 — Audit roster flows
+
+* coach dashboard roster
+* parent-athletes screen
+* athlete linking logic
+
+Focus:
+
+* filtering issues
+* token vs sharedAthleteId mismatches
+* missing fallbacks
+
+Step 3 — Add debug visibility
+
+Log:
+
+* roster inputs
+* athlete resolution path
+* selection changes
+
+⸻
+
+QA SCENARIOS TO RUN (AFTER FIX)
+
+1. Cold start → no data
+2. Signal-driven athlete (no coach input)
+3. Coach focus override
+4. Parent-only flow
+5. Athlete switching
+
+⸻
+
+GIT STATE
+
+* Branch: summary-rebuild-v2
+* Commit: a469507
+* Status: Clean, pushed to origin
+* Files changed: 25
+* New modules added across summary, identity, storage, and training
+
+⸻
+
+FINAL ASSESSMENT
+
+Today was a major architectural milestone.
+
+You successfully transitioned from:
+
+* UI-driven summaries
+    → to
+* system-driven progression engine
+
+However:
+
+The system cannot be validated until identity + roster flows are stable
+
+⸻
+
+NEXT DIRECTIVE
+
+Do NOT build new features.
+
+Start next session with:
+
+QA infra fix — roster + identity stabilization
+
+That is the only priority.
+
+
+
 # EOD — 2026-05-07  
 ## MatMind / BJJ Tracker — Developer + Product Audit
 
