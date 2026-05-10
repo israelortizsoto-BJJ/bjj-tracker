@@ -51,33 +51,6 @@ function findLinkedKidBySharedAthleteId(
   return null;
 }
 
-function weeklyMap(snapshot: ParentWeeklySessionSnapshot): Record<string, WeeklyDoc | null> {
-  try {
-    const raw = snapshot.weeklyByAthleteId;
-    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-    return raw as Record<string, WeeklyDoc | null>;
-  } catch {
-    return {};
-  }
-}
-
-/** True when the normalized athlete id matches a map key (trim-aware). */
-function athletePresentInWeeklyMap(
-  map: Record<string, WeeklyDoc | null>,
-  normalizedAthleteId: string,
-): boolean {
-  if (!normalizedAthleteId) return false;
-  try {
-    if (Object.prototype.hasOwnProperty.call(map, normalizedAthleteId)) return true;
-    for (const key of Object.keys(map)) {
-      if (key.trim() === normalizedAthleteId) return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  return false;
-}
-
 const loadingState: IdentityState = {
   status: "loading",
   kidId: null,
@@ -114,8 +87,8 @@ export function resolveIdentity(input: ResolveIdentityInput): IdentityState {
       };
     }
 
-    const map = weeklyMap(session);
-    if (!athletePresentInWeeklyMap(map, sharedAthleteId)) {
+    const weeklyDoc = resolveWeeklyDoc(session, sharedAthleteId);
+    if (!weeklyDoc) {
       return {
         status: "no_weekly",
         kidId,
@@ -128,7 +101,7 @@ export function resolveIdentity(input: ResolveIdentityInput): IdentityState {
       status: "ready",
       kidId,
       sharedAthleteId,
-      weeklyDoc: resolveWeeklyDoc(session, sharedAthleteId),
+      weeklyDoc,
     };
   } catch {
     return { ...loadingState };

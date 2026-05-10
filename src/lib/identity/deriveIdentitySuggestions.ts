@@ -33,6 +33,12 @@ function formatLabel(value?: string | null) {
   return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function hasTrainingFocus(signals: IdentitySuggestionInputs["signals"]): boolean {
+  if (!signals || typeof signals !== "object") return false;
+  const tf = (signals as { trainingFocus?: unknown }).trainingFocus;
+  return typeof tf === "string" && tf.trim().length > 0;
+}
+
 function getObservedFocus(signals: any) {
   return (
     signals?.patterns?.topSystem ||
@@ -112,10 +118,14 @@ function deriveSkillSuggestion(inputs: IdentitySuggestionInputs): IdentitySugges
       : "Based on recent training patterns";
 
   const label = formatLabel(observed);
+  const focusSet = hasTrainingFocus(inputs.signals);
+  const message = focusSet
+    ? `Consider aligning your focus with ${label}. Updating your recognized skills can keep your profile in sync with that emphasis.`
+    : `You're building patterns around ${label}. Consider adding ${label} to your recognized skills if it reflects your training.`;
 
   return {
     type: "skill",
-    message: `Your recent training suggests a focus on ${label}. Consider updating your recognized skills.`,
+    message,
     suggestedValue: observed,
     confidence,
     priority: 3,

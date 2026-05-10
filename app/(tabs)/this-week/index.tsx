@@ -280,7 +280,6 @@ function resolveStrictWeeklySelectedSharedAthleteIdForParentAthlete(
   const aid = typeof parentAthleteId === "string" ? parentAthleteId.trim() : "";
   if (!aid || !weeklySessionSnapshot) return null;
 
-  const weeklyMap = weeklySessionSnapshot.weeklyByAthleteId ?? {};
   let candidate: string | null = null;
 
   const linkedKid = kidsById
@@ -303,8 +302,13 @@ function resolveStrictWeeklySelectedSharedAthleteIdForParentAthlete(
     );
   }
 
+  const roster = weeklySessionSnapshot.athletes;
+  const rosterEmpty = !Array.isArray(roster) || roster.length === 0;
+  if (!candidate && rosterEmpty && aid) {
+    candidate = aid;
+  }
+
   if (!candidate) return null;
-  if (!(candidate in weeklyMap)) return null;
   return candidate;
 }
 
@@ -1718,14 +1722,13 @@ function ParentThisWeekScreen() {
     return Object.values(kidsByIdState)
       .filter(
         (kid): kid is Kid =>
-          Boolean(kid?.id) &&
-          parentKidCoherentlyLinkedToInviteToken(kid, tokenNorm, coachLinks),
+          Boolean(kid?.id) && Boolean((kid.sharedAthleteId ?? "").trim()),
       )
       .sort((a, b) =>
         (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }),
       )
       .map((k) => k.id);
-  }, [coachLinks, kidsByIdState, role, weeklySyncLink?.weeklySync?.linkToken]);
+  }, [kidsByIdState, role, weeklySyncLink?.weeklySync?.linkToken]);
 
   const parentInviteAutoRelinkSignature = useMemo(() => {
     if (role !== "parent" || !ready) return "";

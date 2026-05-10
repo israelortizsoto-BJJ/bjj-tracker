@@ -38,6 +38,7 @@ import {
 } from "@/src/lib/identity/validateIdentitySignals";
 import { deriveSummaryExplanation } from "@/src/lib/summary/deriveSummaryExplanation";
 import { deriveSummaryInsights, type SummaryTrend } from "@/src/lib/summary/deriveSummaryInsights";
+import { buildSummaryViewModel } from "@/src/lib/summary/buildSummaryViewModel";
 import { resolvePrincipalBucketEvidenceLine } from "../../lib/signals/competitionBucketHistory";
 import { useActiveAthlete } from "../../hooks/useActiveAthlete";
 import { useAthleteData } from "../../hooks/useAthleteData";
@@ -49,6 +50,10 @@ import {
   type ParentAthlete,
   type ParentAthleteUpdate,
 } from "../../storage/athleteStore";
+import {
+  getLastSummaryAction,
+  setLastSummaryAction,
+} from "@/src/storage/summaryActionTracking";
 
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
@@ -160,6 +165,7 @@ export default function SummaryScreen() {
     Record<string, number>
   >({});
   const [nowTick, setNowTick] = useState(Date.now());
+  const [lastAction, setLastActionState] = useState<string | null>(null);
   const previousValidationRef = useRef<IdentityValidationResult | null>(null);
   const previousTrendRef = useRef<SummaryTrend | null>(null);
   const prevAthleteIdForPrevSignalsRef = useRef(activeAthleteId);
@@ -181,6 +187,18 @@ export default function SummaryScreen() {
     previousTrendRef.current = null;
     prevVisibleSuggestionKeysRef.current = new Set();
     resurfacedKeysRef.current = new Set();
+  }, [activeAthleteId]);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!activeAthleteId) return;
+      const val = await getLastSummaryAction(activeAthleteId);
+      if (mounted) setLastActionState(val);
+    })();
+    return () => {
+      mounted = false;
+    };
   }, [activeAthleteId]);
 
   useEffect(() => {
@@ -615,6 +633,38 @@ export default function SummaryScreen() {
         postSessionFeedback: summaryInsights.postSessionFeedback,
       };
 
+  const summaryV2ViewModel = useMemo(() => {
+    const signals = hybridConfidence;
+    const identityBased =
+      "isIdentityBased" in signals && signals.isIdentityBased === true;
+    const hasData = identityBased ? true : signals.hasData;
+    const confidence = identityBased ? signals.confidenceScore : signals.confidence;
+    const topSystem = identityBased ? null : signals.patterns.topSystem;
+    const topTechnique = identityBased ? null : signals.patterns.topTechnique;
+    const focus = topSystem || topTechnique;
+    let focusText: string | null | undefined = focus;
+    if (identityBased && signals.identityFocus) {
+      focusText = signals.identityFocus;
+    }
+    if (signals.blendedFocus?.trim()) {
+      focusText = signals.blendedFocus.trim();
+    }
+    return buildSummaryViewModel({
+      signals,
+      identityScore: confidence,
+      phase: identityBased ? signals.phase : hasData ? "experienced" : "cold",
+      identityFocus: identityBased ? signals.identityFocus : focusText,
+      lastAction: lastAction,
+    });
+  }, [hybridConfidence, lastAction]);
+
+  useEffect(() => {
+    if (!activeAthleteId) return;
+    if (summaryV2ViewModel.stepKey) {
+      setLastSummaryAction(activeAthleteId, summaryV2ViewModel.stepKey);
+    }
+  }, [activeAthleteId, summaryV2ViewModel?.stepKey]);
+
   const competitionSkillFocus = useMemo(
     () =>
       activeAthleteId
@@ -748,6 +798,7 @@ export default function SummaryScreen() {
       <View style={styles.section}>
         <SummaryHeroCard
           signals={hybridConfidence}
+          lastAction={lastAction}
           emptyInsightCopy={personalizedEmptyInsight}
           identityReason={explanation.identityReason}
           signalReason={explanation.signalReason}

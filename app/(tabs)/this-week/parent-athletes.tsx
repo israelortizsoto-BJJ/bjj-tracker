@@ -12,10 +12,6 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { useFocusEffect } from "@react-navigation/native";
 
 import {
-  parentKidCoherentlyLinkedToInviteToken,
-  parentStrictWeeklyLinkedCoachLinksForUi,
-} from "../../../src/coachShare/coachLinkBinding";
-import {
   inviteLinkTokenTail,
   normalizeInviteLinkToken,
 } from "../../../src/coachShare/inviteLinkToken";
@@ -72,7 +68,6 @@ export default function ParentLinkedAthletesScreen() {
 
   const [ready, setReady] = useState(false);
   const [link, setLink] = useState<CoachLink | null>(null);
-  const [allActiveCoachLinks, setAllActiveCoachLinks] = useState<CoachLink[]>([]);
   const [sessionAthletes, setSessionAthletes] = useState<SyncedSharedAthlete[]>([]);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
   const [nameDraft, setNameDraft] = useState("");
@@ -91,7 +86,6 @@ export default function ParentLinkedAthletesScreen() {
     setSessionAthletesAuthoritative(false);
     try {
       const links = await getCoachLinks();
-      setAllActiveCoachLinks(parentStrictWeeklyLinkedCoachLinksForUi(links));
       const found = links.find((l) => l.id === id && l.status === "active");
       const foundSync = found?.weeklySync;
       if (!found || !foundSync?.linkToken) {
@@ -202,10 +196,10 @@ export default function ParentLinkedAthletesScreen() {
         if (!sid) return true;
         if (!sessionAthletesAuthoritative) return false;
         const onSession = sessionAthleteIds.has(sid);
-        const coherent =
+        const tokenMatchesCurrentInvite =
           Boolean(currentInviteTokenNorm) &&
-          parentKidCoherentlyLinkedToInviteToken(k, currentInviteTokenNorm, allActiveCoachLinks);
-        if (onSession && coherent) return false;
+          normalizeInviteLinkToken(k.sharedFromInviteTokenNorm ?? "") === currentInviteTokenNorm;
+        if (onSession && tokenMatchesCurrentInvite) return false;
         return true;
       })
       .sort((a, b) => {
@@ -213,13 +207,7 @@ export default function ParentLinkedAthletesScreen() {
         if (byName !== 0) return byName;
         return b.updatedAt.localeCompare(a.updatedAt);
       });
-  }, [
-    allActiveCoachLinks,
-    currentInviteTokenNorm,
-    kidsById,
-    sessionAthleteIds,
-    sessionAthletesAuthoritative,
-  ]);
+  }, [currentInviteTokenNorm, kidsById, sessionAthleteIds, sessionAthletesAuthoritative]);
 
   /** Session athletes that match a local child profile on this invite — eligible for Remove from coach. */
   const removableAthleteRows = useMemo(() => {
@@ -228,20 +216,11 @@ export default function ParentLinkedAthletesScreen() {
     for (const a of sessionAthletes) {
       const aid = (typeof a.id === "string" ? a.id : "").trim();
       if (!aid) continue;
-      const kid = Object.values(kidsById).find((k) => {
-        if ((k.sharedAthleteId ?? "").trim() !== aid) return false;
-        return parentKidCoherentlyLinkedToInviteToken(k, currentInviteTokenNorm, allActiveCoachLinks);
-      });
+      const kid = Object.values(kidsById).find((k) => (k.sharedAthleteId ?? "").trim() === aid);
       if (kid) rows.push({ athlete: a, kid });
     }
     return rows;
-  }, [
-    allActiveCoachLinks,
-    currentInviteTokenNorm,
-    kidsById,
-    sessionAthletes,
-    sessionAthletesAuthoritative,
-  ]);
+  }, [currentInviteTokenNorm, kidsById, sessionAthletes, sessionAthletesAuthoritative]);
 
   useFocusEffect(
     useCallback(() => {
@@ -587,6 +566,26 @@ export default function ParentLinkedAthletesScreen() {
                     })}
                   </View>
                 ) : null}
+              </View>
+            ) : sessionAthletesAuthoritative ? (
+              <View
+                style={{
+                  marginBottom: 16,
+                  padding: 14,
+                  borderRadius: CARD_RADIUS,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary }}>
+                  ON THIS INVITE
+                </Text>
+                <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22 }}>
+                  No athletes are on this coach session yet. Add a new athlete below, or link an existing child
+                  profile.
+                </Text>
               </View>
             ) : null}
 

@@ -7,6 +7,9 @@ import type {
   IdentitySuggestionSource,
 } from "@/src/lib/identity/deriveIdentitySuggestions";
 import type { IdentityValidationResult } from "@/src/lib/identity/validateIdentitySignals";
+import { buildSummaryViewModel } from "@/src/lib/summary/buildSummaryViewModel";
+
+import SummaryV2Card from "./SummaryV2Card";
 
 export type SummaryHeroIdentitySignals = {
   hasData: true;
@@ -126,6 +129,7 @@ const SOURCE_PROVENANCE_LABEL: Record<IdentitySuggestionSource, string> = {
 
 type SummaryHeroProps = {
   signals: SummaryHeroSignals;
+  lastAction?: string | null;
   /** When `hasData` is false (activity signals), replaces the default empty-state insight line. */
   emptyInsightCopy?: string | null;
   /** Optional override; prefers `signals.postSessionFeedback` from `deriveSummaryInsights` when present. */
@@ -143,6 +147,7 @@ type SummaryHeroProps = {
 
 export default function SummaryHeroCard({
   signals,
+  lastAction,
   emptyInsightCopy,
   postSessionFeedback,
   identityReason,
@@ -201,7 +206,15 @@ export default function SummaryHeroCard({
       ? "Built from your training and competition."
       : "This view stays quiet until real activity exists.";
 
-  return (
+  const viewModel = buildSummaryViewModel({
+    signals,
+    identityScore: confidence,
+    phase: identityBased ? signals.phase : hasData ? "experienced" : "cold",
+    identityFocus: identityBased ? signals.identityFocus : focusText,
+    lastAction: lastAction ?? null,
+  });
+
+  const legacyHero = (
     <View style={[styles.container, !hasData ? styles.emptyContainer : null]}>
       <View style={styles.headerRow}>
         <Text style={styles.sectionLabel}>Identity</Text>
@@ -329,6 +342,10 @@ export default function SummaryHeroCard({
       </View>
     </View>
   );
+
+  void legacyHero;
+
+  return <SummaryV2Card viewModel={viewModel} />;
 }
 
 const styles = StyleSheet.create({

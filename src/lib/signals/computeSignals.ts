@@ -18,7 +18,14 @@ export type SignalInput = {
   sessions?: readonly Session[] | null;
   competitions?: readonly CompetitionEntry[] | null;
   coachData?: unknown;
-  declaredInput?: unknown;
+  declaredInput?: {
+    skills?: unknown;
+    declaredSkills?: unknown;
+    system?: unknown;
+    trainingFocus?: string | null;
+    experienceLevel?: string | null;
+    isCompetitor?: boolean | null;
+  } | null;
   connectionState?: { isCoachConnected?: boolean | null } | null;
   referenceDate?: string | Date | null;
   /** Optional identity tags for diagnostics / future scoping — never required to compute aggregates. */
@@ -58,6 +65,7 @@ export type SignalOutput = {
   systems: {
     topSystem: string | null;
     systemFrequency: Record<string, number>;
+    systemBreakdown: Array<{ system: string; score: number }>;
   };
   gear: {
     giCount: number;
@@ -112,6 +120,17 @@ export type SignalOutput = {
     /** Per-bucket placement trajectory when that bucket has ≥3 tagged events and a stable pattern. */
     bucketOutcomeTrends: Partial<Record<TrainingSkillBucket, BucketOutcomeTrend>>;
   };
+  contradictionFlags: {
+    declaredVsObserved: boolean;
+    observedVsCompetition: boolean;
+  };
+  identityState: "stable" | "emerging" | "conflicted";
+  /** Normalized dominant system from adjustedSystemBreakdown (lowercase, underscores → spaces). Empty → null. */
+  dominantObservedSystem: string | null;
+  /** Normalized declared focus system from declaredInput (lowercase, underscores → spaces). */
+  declaredFocusSystem: string | null;
+  /** True when the top adjusted system score is below the dominanceThreshold (0.9 with comps, 0.75 without). */
+  isWeakDominance: boolean;
   confidence: number;
   alignment: number;
   hasData: boolean;
@@ -343,8 +362,189 @@ function clampPercent(value: number): number {
   return Math.max(0, Math.min(100, Math.round(value)));
 }
 
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function saturation(count: number, scale: number): number {
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  return 1 - Math.exp(-count / scale);
+}
+
+function dominantShare(frequency: Record<string, number>): number {
+  const counts = Object.values(frequency).filter((count) => count > 0);
+  const total = counts.reduce((sum, count) => sum + count, 0);
+  if (total <= 0) return 0;
+  return Math.max(...counts) / total;
+}
+
+function sessionDateSpanDays(sessions: readonly Session[]): number {
+  const dates = sessions
+    .map((session) => toDateKey(session.date))
+    .filter((date): date is string => Boolean(date))
+    .sort();
+
+  if (dates.length <= 1) return dates.length;
+
+  const span = calendarDaysBetweenYMD(dates[0], dates[dates.length - 1]);
+  return span === null ? 0 : span + 1;
+}
+
+function maxConfidenceForEvidence(input: {
+  sessionCount: number;
+  competitionCount: number;
+  completedMatchCount: number;
+  hasCoachEvidence: boolean;
+}): number {
+  const sessionCap = 34 + saturation(input.sessionCount, 16) * 50;
+  const competitionLift =
+    input.competitionCount > 0
+      ? saturation(input.competitionCount, 3) * 7 + saturation(input.completedMatchCount, 8) * 5
+      : 0;
+  const coachLift = input.hasCoachEvidence ? 4 : 0;
+
+  return Math.min(98, sessionCap + competitionLift + coachLift);
+}
+
+function computeCalibratedConfidence(input: {
+  alignment: number;
+  sessions: readonly Session[];
+  competitionCount: number;
+  completedMatchCount: number;
+  systemFrequency: Record<string, number>;
+  techniqueFrequency: Record<string, number>;
+  streak: number | null;
+  hasCoachEvidence: boolean;
+}): number {
+  const sessionCount = input.sessions.length;
+  if (sessionCount === 0 && input.competitionCount === 0) return 0;
+
+  const alignmentQuality = clampUnit(input.alignment / 100);
+  const evidenceUnits =
+    sessionCount + input.competitionCount * 2 + input.completedMatchCount * 0.5;
+  const sampleWeight = 0.34 + saturation(evidenceUnits, 12) * 0.58;
+  const hasTraining = sessionCount > 0;
+  const hasCompetition = input.competitionCount > 0 || input.completedMatchCount > 0;
+  const diversityWeight = Math.min(
+    1,
+    0.9 + (hasTraining && hasCompetition ? 0.05 : 0) + (input.hasCoachEvidence ? 0.03 : 0),
+  );
+
+  const repeatedPatternShare = Math.max(
+    dominantShare(input.systemFrequency),
+    dominantShare(input.techniqueFrequency),
+  );
+  const consistencyEvidence =
+    repeatedPatternShare * saturation(sessionCount, 10) +
+    Math.min(input.streak ?? 0, 6) * 0.025;
+  const consistencyWeight = 0.82 + clampUnit(consistencyEvidence) * 0.18;
+
+  const spanDays = sessionDateSpanDays(input.sessions);
+  const temporalWeight = 0.82 + saturation(spanDays, 56) * 0.18;
+
+  const raw =
+    alignmentQuality *
+    100 *
+    sampleWeight *
+    diversityWeight *
+    consistencyWeight *
+    temporalWeight;
+
+  return clampPercent(
+    Math.min(
+      raw,
+      maxConfidenceForEvidence({
+        sessionCount,
+        competitionCount: input.competitionCount,
+        completedMatchCount: input.completedMatchCount,
+        hasCoachEvidence: input.hasCoachEvidence,
+      }),
+    ),
+  );
+}
+
 function cleanText(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeSystemKey(value: unknown): string {
+  return cleanText(value).toLowerCase().replace(/_/g, " ").trim();
+}
+
+function extractDeclaredSystem(declaredInput: unknown): string | null {
+  if (!declaredInput || typeof declaredInput !== "object") return null;
+  const declaredRecord = declaredInput as {
+    skills?: unknown;
+    declaredSkills?: unknown;
+    system?: unknown;
+    trainingFocus?: string | null;
+  };
+  const trainingFocusSystem = normalizeSystemKey(declaredRecord.trainingFocus);
+  if (trainingFocusSystem.length > 0) return trainingFocusSystem;
+  const rawSkills = Array.isArray(declaredRecord.skills)
+    ? declaredRecord.skills
+    : Array.isArray(declaredRecord.declaredSkills)
+      ? declaredRecord.declaredSkills
+      : [];
+  if (rawSkills.length > 0) {
+    const firstSkill = rawSkills
+      .map((entry) => normalizeSystemKey(entry))
+      .find((entry) => entry.length > 0);
+    if (firstSkill) return firstSkill;
+  }
+  const fallbackSystem = normalizeSystemKey(declaredRecord.system);
+  return fallbackSystem.length > 0 ? fallbackSystem : null;
+}
+
+function strongestCoachWeaknessSystem(coachData: unknown): string | null {
+  if (!coachData || typeof coachData !== "object") return null;
+  const aggregate = coachData as Record<string, { weakness?: unknown }>;
+  const systems = Object.keys(aggregate).sort((a, b) => a.localeCompare(b));
+  let bestSystem: string | null = null;
+  let bestWeakness = 0;
+  for (const system of systems) {
+    const weaknessRaw = aggregate[system]?.weakness;
+    const weakness =
+      typeof weaknessRaw === "number" && Number.isFinite(weaknessRaw) ? weaknessRaw : 0;
+    if (weakness > bestWeakness) {
+      bestWeakness = weakness;
+      bestSystem = normalizeSystemKey(system);
+    }
+  }
+  return bestWeakness > 0 && bestSystem ? bestSystem : null;
+}
+
+function collectCompetitionSignalSystems(coachData: unknown): Set<string> {
+  const systems = new Set<string>();
+  if (!coachData || typeof coachData !== "object") return systems;
+
+  const aggregate = coachData as Record<
+    string,
+    { strength?: unknown; weakness?: unknown; focus?: unknown }
+  >;
+
+  for (const [rawSystem, signal] of Object.entries(aggregate)) {
+    const system = normalizeSystemKey(rawSystem);
+    if (!system) continue;
+    const strength =
+      typeof signal?.strength === "number" && Number.isFinite(signal.strength)
+        ? signal.strength
+        : 0;
+    const weakness =
+      typeof signal?.weakness === "number" && Number.isFinite(signal.weakness)
+        ? signal.weakness
+        : 0;
+    const focus =
+      typeof signal?.focus === "number" && Number.isFinite(signal.focus)
+        ? signal.focus
+        : 0;
+    if (strength > 0 || weakness > 0 || focus > 0) {
+      systems.add(system);
+    }
+  }
+
+  return systems;
 }
 
 /** Stored `result` codes → athlete-facing placement copy (signals feed summary UI only). */
@@ -466,6 +666,31 @@ function collectSystemFrequency(sessions: readonly Session[]): Record<string, nu
 
   for (const session of sessions) {
     increment(frequency, cleanText(session.system));
+  }
+
+  return frequency;
+}
+
+function collectSystemDistribution(sessions: readonly Session[]): Record<string, number> {
+  const frequency: Record<string, number> = {};
+
+  for (const session of sessions) {
+    const entries = Array.isArray(session.techniques) ? session.techniques : [];
+    const validSystemKeys = entries
+      .map((entry) => cleanText(entry.position))
+      .filter((key) => key.length > 0);
+
+    if (validSystemKeys.length > 0) {
+      const weight = 1 / validSystemKeys.length;
+      for (const key of validSystemKeys) {
+        frequency[key] = (frequency[key] ?? 0) + weight;
+      }
+      continue;
+    }
+
+    const fallbackSystem = cleanText(session.system);
+    if (!fallbackSystem) continue;
+    frequency[fallbackSystem] = (frequency[fallbackSystem] ?? 0) + 1;
   }
 
   return frequency;
@@ -738,8 +963,121 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const topTechniques = rankFrequency(techniqueFrequency).slice(0, 3);
 
   const systemFrequency = collectSystemFrequency(sessions);
-  const rankedSystems = rankFrequency(systemFrequency);
+  const systemDistribution = collectSystemDistribution(sessions);
+  const rankedSystems = rankFrequency(systemDistribution);
+  const totalSystemScore = rankedSystems.reduce((sum, item) => sum + item.count, 0);
+  const systemBreakdown = rankedSystems.map((item) => ({
+    system: item.label,
+    score: totalSystemScore > 0 ? item.count / totalSystemScore : 0,
+  }));
   const topSystem = rankedSystems.length > 0 ? rankedSystems[0].label : null;
+  let adjustedSystemBreakdown = [...systemBreakdown];
+  let dominantObservedSystem = normalizeSystemKey(
+    [...adjustedSystemBreakdown]
+      .sort((a, b) => b.score - a.score || a.system.localeCompare(b.system))[0]?.system,
+  );
+  if (competitions.length > 0) {
+    const competitionSignalSystems = collectCompetitionSignalSystems(input.coachData);
+    if (
+      competitions.length > 0 &&
+      competitionSignalSystems.size === 0 &&
+      dominantObservedSystem
+    ) {
+      competitionSignalSystems.add(dominantObservedSystem);
+      console.log("[COMPETITION FALLBACK APPLIED]", {
+        dominantObservedSystem,
+        competitionCount: competitions.length,
+      });
+      if (
+        competitions.length > 0 &&
+        systemBreakdown.length === 1 &&
+        dominantObservedSystem
+      ) {
+        adjustedSystemBreakdown = adjustedSystemBreakdown.map((row) => {
+          const normalizedSystem = normalizeSystemKey(row.system);
+          if (normalizedSystem !== dominantObservedSystem) return row;
+          return { ...row, score: row.score * 0.65 };
+        });
+        adjustedSystemBreakdown.push({
+          system: "competition.exposed",
+          score: 0.35,
+        });
+        const syntheticTotal = adjustedSystemBreakdown.reduce((sum, row) => sum + row.score, 0);
+        if (syntheticTotal > 0) {
+          adjustedSystemBreakdown = adjustedSystemBreakdown.map((row) => ({
+            ...row,
+            score: row.score / syntheticTotal,
+          }));
+        }
+        console.log("[COMPETITION SYNTHETIC SYSTEM]", {
+          addedSystem: "competition.exposed",
+          adjustedSystemBreakdown,
+        });
+      }
+    }
+    adjustedSystemBreakdown = adjustedSystemBreakdown.map((row) => {
+      const normalizedSystem = normalizeSystemKey(row.system);
+      if (!competitionSignalSystems.has(normalizedSystem)) return row;
+      return {
+        ...row,
+        score: row.score * 1.3,
+      };
+    });
+
+    const adjustedTotal = adjustedSystemBreakdown.reduce((sum, row) => sum + row.score, 0);
+    if (adjustedTotal > 0) {
+      adjustedSystemBreakdown = adjustedSystemBreakdown.map((row) => ({
+        ...row,
+        score: row.score / adjustedTotal,
+      }));
+    }
+
+    const secondPassCompetitionMultiplier = 2.4;
+    const secondPassNonTopAdditiveBoost = 0.25;
+    const currentTopSystem = normalizeSystemKey(
+      [...adjustedSystemBreakdown]
+        .sort((a, b) => b.score - a.score || a.system.localeCompare(b.system))[0]?.system,
+    );
+    adjustedSystemBreakdown = adjustedSystemBreakdown.map((row) => {
+      const normalizedSystem = normalizeSystemKey(row.system);
+      if (!competitionSignalSystems.has(normalizedSystem)) return row;
+      const boostedScore = row.score * secondPassCompetitionMultiplier;
+      return {
+        ...row,
+        score:
+          normalizedSystem !== currentTopSystem
+            ? boostedScore + secondPassNonTopAdditiveBoost
+            : boostedScore,
+      };
+    });
+
+    const secondPassAdjustedTotal = adjustedSystemBreakdown.reduce((sum, row) => sum + row.score, 0);
+    if (secondPassAdjustedTotal > 0) {
+      adjustedSystemBreakdown = adjustedSystemBreakdown.map((row) => ({
+        ...row,
+        score: row.score / secondPassAdjustedTotal,
+      }));
+    }
+  }
+  dominantObservedSystem = normalizeSystemKey(
+    [...adjustedSystemBreakdown]
+      .sort((a, b) => b.score - a.score || a.system.localeCompare(b.system))[0]?.system,
+  );
+
+  const topSystemRow = [...adjustedSystemBreakdown].sort(
+    (a, b) => b.score - a.score || a.system.localeCompare(b.system),
+  )[0];
+  const topScore = typeof topSystemRow?.score === "number" ? topSystemRow.score : 0;
+  const dominanceThreshold = competitions.length > 0 ? 0.9 : 0.75;
+  const isWeakDominance = topScore < dominanceThreshold;
+
+  console.log("[DOMINANCE QUALITY]", {
+    dominantObservedSystem,
+    topScore,
+    dominanceThreshold,
+    isWeakDominance,
+  });
+
   const topTechnique = topTechniques.length > 0 ? topTechniques[0].label : null;
   const gear = computeGearSignal(sessions);
 
@@ -808,17 +1146,78 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const podiumCountLast90Days = countPodiumFinishesInRollingDays(competitions, referenceDate, 90);
   const multiEventMetrics = computeMultiEventCompetitionMetrics(competitions);
   const bucketHistorySignals = deriveCompetitionBucketHistorySignals(competitions);
+  const contradictionFlags = {
+    declaredVsObserved: false,
+    observedVsCompetition: false,
+  };
 
-  const goalMet = weeklySessionCount >= WEEKLY_SESSION_GOAL;
-  const confidence = clampPercent(
-    (Math.min(weeklySessionCount, WEEKLY_SESSION_GOAL) / WEEKLY_SESSION_GOAL) * 70 +
-      (goalMet ? 30 : 0),
-  );
+  const declaredFocusSystem = extractDeclaredSystem(input.declaredInput);
+  if (
+    declaredFocusSystem &&
+    dominantObservedSystem &&
+    (declaredFocusSystem !== dominantObservedSystem || isWeakDominance)
+  ) {
+    contradictionFlags.declaredVsObserved = true;
+  }
+
+  const coachWeaknessSystem = strongestCoachWeaknessSystem(input.coachData);
+  const hasCompetitionOrCoachSignals =
+    competitions.length > 0 || hasMeaningfulValue(input.coachData);
+  if (
+    hasCompetitionOrCoachSignals &&
+    coachWeaknessSystem &&
+    dominantObservedSystem &&
+    (coachWeaknessSystem !== dominantObservedSystem || isWeakDominance)
+  ) {
+    contradictionFlags.observedVsCompetition = true;
+  }
+
+  let identityState: "stable" | "emerging" | "conflicted";
+  if (contradictionFlags.declaredVsObserved && contradictionFlags.observedVsCompetition) {
+    identityState = "conflicted";
+  } else if (contradictionFlags.declaredVsObserved || contradictionFlags.observedVsCompetition) {
+    identityState = "emerging";
+  } else {
+    identityState = "stable";
+  }
 
   const hasDeclaredInput = hasMeaningfulValue(input.declaredInput);
   const alignment = clampPercent((hasDeclaredInput ? 50 : 0) + (hasData ? 50 : 0));
+  let adjustedAlignment = alignment;
+  if (contradictionFlags.declaredVsObserved) {
+    adjustedAlignment *= 0.85;
+  }
+  if (contradictionFlags.observedVsCompetition) {
+    adjustedAlignment *= 0.7;
+  }
+  const hasCoachEvidence =
+    hasMeaningfulValue(input.coachData) ||
+    input.connectionState?.isCoachConnected === true;
+  const confidence = computeCalibratedConfidence({
+    alignment,
+    sessions,
+    competitionCount,
+    completedMatchCount,
+    systemFrequency,
+    techniqueFrequency,
+    streak,
+    hasCoachEvidence,
+  });
+  let adjustedConfidence = confidence;
+  if (contradictionFlags.declaredVsObserved) {
+    adjustedConfidence *= 0.8;
+  }
+  if (contradictionFlags.observedVsCompetition) {
+    adjustedConfidence *= 0.6;
+  }
+  const goalMet = weeklySessionCount >= WEEKLY_SESSION_GOAL;
 
   if (__DEV__) {
+    console.log("[SYSTEM DOMINANCE DEBUG]:", {
+      before: systemBreakdown,
+      after: adjustedSystemBreakdown,
+      dominantObservedSystem,
+    });
     console.log("[SIGNAL GEAR]", gear);
     console.log("[SIGNAL COMPUTE]", {
       sessionCount: sessions.length,
@@ -845,6 +1244,7 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
     systems: {
       topSystem,
       systemFrequency,
+      systemBreakdown,
     },
     gear,
     consistency: {
@@ -885,8 +1285,13 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
       bucketHistory: bucketHistorySignals.bucketHistory,
       bucketOutcomeTrends: bucketHistorySignals.bucketOutcomeTrends,
     },
-    confidence,
-    alignment,
+    contradictionFlags,
+    identityState,
+    dominantObservedSystem: dominantObservedSystem.length > 0 ? dominantObservedSystem : null,
+    declaredFocusSystem,
+    isWeakDominance,
+    confidence: adjustedConfidence,
+    alignment: adjustedAlignment,
     hasData,
   };
 }

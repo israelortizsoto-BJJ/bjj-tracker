@@ -4,11 +4,12 @@ import { ResizeMode, Video } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
   Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -31,9 +32,64 @@ import {
   requestMediaLibraryPermission,
 } from "../../../src/media/persistCameraRollMedia";
 import { useActiveAthlete } from "../../../src/hooks/useActiveAthlete";
-import { getActiveAthleteId } from "../../../src/storage/athleteStore";
+import { getActiveAthleteId, getAthletes } from "../../../src/storage/athleteStore";
 import { getKidsById } from "../../../src/storage/coachKidStore";
-import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../../src/storage/competitionStore";
+import {
+  getKidCompetitionEntriesWithMatchDetailForKid,
+  mergeCompetitionMatchDetailIntoEntries,
+} from "../../../src/storage/competitionStore";
+import {
+  aggregateCoachSignals,
+  deriveCoachSignals,
+} from "../../../src/lib/identity/deriveCoachSignals";
+import { computeSignals } from "../../../src/lib/signals/computeSignals";
+import { getKidCompetitionEntries } from "../../../src/storage/kidCompetitionStore";
+import {
+  clearExposurePendingForAthlete,
+  deriveExposureLevel,
+  getPending,
+  RECOVERY_MIN_SESSIONS,
+  setPending,
+  type ExposurePressureTier,
+} from "../../../src/storage/summaryExposureTracking";
+import {
+  logFocusAdherence,
+  type FocusAdherenceValue,
+} from "../../../src/storage/focusAdherenceTracking";
+import {
+  getActiveFocus,
+  type ActiveFocusPayload,
+} from "../../../src/storage/focusTracking";
+import {
+  clearActiveSessionPlan,
+  getActiveSessionPlan,
+  type ActiveSessionPlanPayload,
+} from "../../../src/storage/sessionPlanTracking";
+
+const EXPOSURE_TIER_RANK: Record<ExposurePressureTier, number> = {
+  low: 0,
+  medium: 1,
+  high: 2,
+};
+
+function logExposurePressureTierChange(prevExposureCount: number, nextExposureCount: number) {
+  const prevTier = deriveExposureLevel(prevExposureCount);
+  const nextTier = deriveExposureLevel(nextExposureCount);
+  if (prevTier === nextTier) return;
+  if (EXPOSURE_TIER_RANK[nextTier] > EXPOSURE_TIER_RANK[prevTier]) {
+    console.log("[EXPOSURE ESCALATED]", {
+      from: prevTier,
+      to: nextTier,
+      exposureCount: nextExposureCount,
+    });
+  } else {
+    console.log("[EXPOSURE DEESCALATED]", {
+      from: prevTier,
+      to: nextTier,
+      exposureCount: nextExposureCount,
+    });
+  }
+}
 import { getSessions, setSessions } from "../../../src/storage/sessionsStore";
 import type { Session, TechniqueEntry } from "../../../src/types";
 
@@ -72,6 +128,15 @@ const SYSTEMS_L1 = [
   ...TAX_L1.map((l1: { id: string; label: string }) => ({ id: l1.id, label: l1.label })),
 ];
 
+function isTaxonomyL1SystemId(id: string): boolean {
+  const t = id.trim();
+  if (!t || t === "ALL") return false;
+  return SYSTEMS_L1.some((s) => s.id === t);
+}
+
+function formatCoachPlanNotes(plan: ActiveSessionPlanPayload["plan"]): string {
+  return ["PLAN:", ...plan.steps.map((s) => `• ${s}`), "", `Focus: ${plan.focus}`].join("\n");
+}
 
 function todayYMD() {
   const d = new Date();
@@ -91,6 +156,56 @@ async function loadSessions(): Promise<Session[]> {
 
 async function saveSessions(sessions: Session[]) {
   await setSessions(sessions);
+}
+
+function formatSystemLabelForTraining(raw: string | null | undefined): string {
+  if (!raw) return "";
+  const tail = raw.split(".").slice(-1)[0]?.trim() ?? "";
+  if (!tail) return "";
+  return tail
+    .replace(/_/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+async function computePostSaveSignals(
+  athleteId: string,
+  sessionsAfterSave: Session[],
+  kidId: string | undefined,
+) {
+  const [allCompetitions, athletes] = await Promise.all([
+    getKidCompetitionEntries(),
+    getAthletes(),
+  ]);
+  const filteredCompetitions = allCompetitions.filter(
+    (c) => c.sharedAthleteId?.trim() === athleteId,
+  );
+  const competitions = await mergeCompetitionMatchDetailIntoEntries(filteredCompetitions);
+  const athlete = athletes.find((a) => a.id === athleteId);
+  const declaredInput =
+    athlete &&
+    ((athlete.experienceLevel ?? "").trim() !== "" ||
+      typeof athlete.isCompetitor === "boolean")
+      ? {
+          experienceLevel: athlete.experienceLevel,
+          isCompetitor: athlete.isCompetitor,
+        }
+      : undefined;
+  const coachNotes =
+    competitions?.flatMap((c) => {
+      const text = typeof c.coachNotes === "string" ? c.coachNotes.trim() : "";
+      return text.length > 0 ? [text] : [];
+    }) ?? [];
+  return computeSignals({
+    sessions: sessionsAfterSave,
+    competitions,
+    athleteId,
+    kidId: kidId?.trim() || null,
+    declaredInput,
+    coachData: aggregateCoachSignals(deriveCoachSignals(coachNotes)),
+  });
 }
 // --- Tech Picker Prefs: Caps + Dedupe (Pure Helpers) ---
 const RECENT_CAP = 3;
@@ -310,6 +425,55 @@ const recentItems = useMemo(() => {
 
 // Legacy (keep for old sessions while we transition)
   const [notes, setNotes] = useState("");
+  const [coachSessionPlan, setCoachSessionPlan] = useState<ActiveSessionPlanPayload | null>(
+    null,
+  );
+  const [lockedFocus, setLockedFocus] = useState<ActiveFocusPayload | null>(null);
+  const [showAdherencePrompt, setShowAdherencePrompt] = useState(false);
+  const [adherenceContext, setAdherenceContext] = useState<{
+    athleteId: string;
+    sessionId: string;
+    system: string;
+  } | null>(null);
+  const adherenceAutoHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const goAfterSaveRef = useRef<(() => void) | null>(null);
+  const postSaveRanRef = useRef(false);
+
+  function clearAdherenceAutoHideTimer() {
+    if (adherenceAutoHideTimerRef.current) {
+      clearTimeout(adherenceAutoHideTimerRef.current);
+      adherenceAutoHideTimerRef.current = null;
+    }
+  }
+
+  function commitPostSaveNavigation() {
+    if (postSaveRanRef.current) return;
+    postSaveRanRef.current = true;
+    clearAdherenceAutoHideTimer();
+    const fn = goAfterSaveRef.current;
+    goAfterSaveRef.current = null;
+    fn?.();
+  }
+
+  async function onAdherenceSelect(adherence: FocusAdherenceValue) {
+    const ctx = adherenceContext;
+    if (!ctx) return;
+    clearAdherenceAutoHideTimer();
+    setShowAdherencePrompt(false);
+    setAdherenceContext(null);
+    await logFocusAdherence({
+      athleteId: ctx.athleteId,
+      sessionId: ctx.sessionId,
+      system: ctx.system,
+      adherence,
+    });
+    console.log("[FOCUS ADHERENCE]", {
+      system: ctx.system,
+      adherence,
+    });
+    commitPostSaveNavigation();
+  }
+
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [date, setDate] = useState(prefillDate || todayYMD());
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -319,6 +483,21 @@ const recentItems = useMemo(() => {
   const videoRef = useRef<Video>(null);
   const scrollRef = useRef<any>(null);
   const [videoKey, setVideoKey] = useState(0);
+
+  useEffect(() => {
+    if (!showAdherencePrompt || !adherenceContext) return;
+    clearAdherenceAutoHideTimer();
+    const delayMs = 5000 + Math.floor(Math.random() * 3000);
+    adherenceAutoHideTimerRef.current = setTimeout(() => {
+      adherenceAutoHideTimerRef.current = null;
+      setShowAdherencePrompt(false);
+      setAdherenceContext(null);
+      commitPostSaveNavigation();
+    }, delayMs);
+    return () => {
+      clearAdherenceAutoHideTimer();
+    };
+  }, [showAdherencePrompt, adherenceContext?.sessionId, adherenceContext?.athleteId]);
 
   const canSave = useMemo(() => {
     const hasTechniqueDetails = techniques.some((t) => {
@@ -340,33 +519,72 @@ const recentItems = useMemo(() => {
     );
   }, [techniques, notes, youtubeUrl, imageUri, videoUri]);
 
-async function replayVideo() {
-  try {
-    if (!videoRef.current) return;
-    await videoRef.current.setPositionAsync(0);
-    await videoRef.current.playAsync();
-  } catch {}
-}
-
-useEffect(() => {
-  if (loading) return;
-
-  try {
-    const node = scrollRef.current;
-    if (!node) return;
-
-    if (typeof node.scrollToPosition === "function") {
-      node.scrollToPosition(0, 0, false);
-    } else if (typeof node.scrollTo === "function") {
-      node.scrollTo({ x: 0, y: 0, animated: false });
+  const applyActiveCoachPlanAfterReset = useCallback(async () => {
+    const resolved =
+      athleteIdFromParams.trim() ||
+      hookActiveAthleteId.trim() ||
+      ((await getActiveAthleteId()) ?? "").trim();
+    if (!resolved) {
+      setCoachSessionPlan(null);
+      return;
     }
-  } catch {}
-}, [loading]);
+    const stored = await getActiveSessionPlan(resolved);
+    if (!stored) {
+      setCoachSessionPlan(null);
+      return;
+    }
+    setCoachSessionPlan(stored);
+    setNotes(formatCoachPlanNotes(stored.plan));
+    const sys = stored.system.trim();
+    if (isTaxonomyL1SystemId(sys)) {
+      setSystem(sys);
+    }
+  }, [athleteIdFromParams, hookActiveAthleteId]);
+
+  const refreshLockedFocus = useCallback(async () => {
+    if (!isNew) {
+      setLockedFocus(null);
+      return;
+    }
+    const resolved =
+      athleteIdFromParams.trim() ||
+      hookActiveAthleteId.trim() ||
+      ((await getActiveAthleteId()) ?? "").trim();
+    if (!resolved) {
+      setLockedFocus(null);
+      return;
+    }
+    setLockedFocus(await getActiveFocus(resolved));
+  }, [athleteIdFromParams, hookActiveAthleteId, isNew]);
+
+  async function replayVideo() {
+    try {
+      if (!videoRef.current) return;
+      await videoRef.current.setPositionAsync(0);
+      await videoRef.current.playAsync();
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (loading) return;
+
+    try {
+      const node = scrollRef.current;
+      if (!node) return;
+
+      if (typeof node.scrollToPosition === "function") {
+        node.scrollToPosition(0, 0, false);
+      } else if (typeof node.scrollTo === "function") {
+        node.scrollTo({ x: 0, y: 0, animated: false });
+      }
+    } catch {}
+  }, [loading]);
 // UseState Block 2 //
   useFocusEffect(
   React.useCallback(() => {
     if (!isNew) return;
 
+    setCoachSessionPlan(null);
     setDraftId(makeId());
     setDate(prefillDate || todayYMD());
 
@@ -389,7 +607,12 @@ useEffect(() => {
    setYoutubeUrl("");
    setImageUri(null);
    setVideoUri(null);
-  }, [isNew, prefillDate, effectivePrefillSystem])
+   clearAdherenceAutoHideTimer();
+   setShowAdherencePrompt(false);
+   setAdherenceContext(null);
+   void applyActiveCoachPlanAfterReset();
+   void refreshLockedFocus();
+  }, [applyActiveCoachPlanAfterReset, refreshLockedFocus, isNew, prefillDate, effectivePrefillSystem])
 );
 
 // Block 3.5: hard reset when opening a NEW session screen (prevents state carryover)
@@ -397,6 +620,7 @@ useFocusEffect(
   React.useCallback(() => {
     if (!isNew) return;
 
+    setCoachSessionPlan(null);
     // Reset fields so "New Session" never inherits the last edited session
     setSystem(effectivePrefillSystem);
     setTechniques([
@@ -423,12 +647,18 @@ useFocusEffect(
     setTechQuery("");
     setTechPickerOpen(false);
 
+    clearAdherenceAutoHideTimer();
+    setShowAdherencePrompt(false);
+    setAdherenceContext(null);
+
     // date
     setDate(prefillDate || todayYMD());
 
     // we’re "ready" instantly for new
     setLoading(false);
- }, [isNew, prefillDate, effectivePrefillSystem])
+   void applyActiveCoachPlanAfterReset();
+   void refreshLockedFocus();
+ }, [applyActiveCoachPlanAfterReset, refreshLockedFocus, isNew, prefillDate, effectivePrefillSystem])
 );
 // Block 4: useEffect to load session if editing existing, or set defaults if new
   useEffect(() => {
@@ -437,6 +667,7 @@ useFocusEffect(
 
       if (isNew) {
         // Reset fields so "New Session" never inherits the last edited session
+        setCoachSessionPlan(null);
         setSystem(effectivePrefillSystem);      // important: system was sticking too
         setTechniques([
           {
@@ -463,9 +694,13 @@ useFocusEffect(
 
         // MVP decision: keep gear sticky (don’t reset setGear)
         setLoading(false);
+        void applyActiveCoachPlanAfterReset();
+        void refreshLockedFocus();
         return;
       }
 
+      setCoachSessionPlan(null);
+      setLockedFocus(null);
       const found = sessions.find((s) => s.id === sessionId);
       if (!found) {
         Alert.alert("Not found", "That session no longer exists.");
@@ -537,7 +772,16 @@ useFocusEffect(
       setLoading(false);
     })();
     // Block 3: dependencies for useEffect - runs when sessionId changes (i.e. when navigating to edit a different session) or when isNew changes (i.e. when toggling between new/edit mode)
-  }, [isNew, router, sessionId, prefillDate, effectivePrefillSystem, kidIdParam]);
+  }, [
+    applyActiveCoachPlanAfterReset,
+    refreshLockedFocus,
+    isNew,
+    router,
+    sessionId,
+    prefillDate,
+    effectivePrefillSystem,
+    kidIdParam,
+  ]);
 
 // Block 5: Derived data (search results for technique picker modal, filtered by search query + gear + system)  
 const techResults = useMemo(() => {
@@ -798,27 +1042,150 @@ const payload: Session = {
       : sessions.map((s) => (s.id === realId ? payload : s));
 
     await saveSessions(next);
-// 1) haptic
-try {
-  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-} catch {}
 
-// 2) message + navigate after user acknowledges
-Alert.alert(
-  "Session logged",
-  "Consistency builds your game.",
-  [
-    {
-      text: "OK",
-      onPress: () =>
-        kidIdParam
-          ? deviceRole === "parent"
-            ? router.replace("/this-week")
-            : router.replace(`/this-week/kid/${encodeURIComponent(kidIdParam)}`)
-          : router.replace(`/training?date=${encodeURIComponent(finalDate)}`),
-    },
-  ]
-);
+    if (isNew) {
+      const pendingPlan = await getActiveSessionPlan(athleteId);
+      if (pendingPlan) {
+        await clearActiveSessionPlan(athleteId);
+        console.log("[SESSION PLAN COMPLETED]", {
+          system: pendingPlan.system,
+          exposureLevel: pendingPlan.exposureLevel,
+        });
+      }
+    }
+
+    let newSessionShowsGapAlert = false;
+    let gapAlertSystemLabel = "";
+
+    try {
+      const pendingBefore = await getPending(athleteId);
+
+      const postSaveSignals = await computePostSaveSignals(
+        athleteId,
+        next,
+        effectiveKidId,
+      );
+      const weak = postSaveSignals.isWeakDominance === true;
+      const compCount = postSaveSignals.competition?.competitionCount ?? 0;
+      const domSys = postSaveSignals.dominantObservedSystem ?? null;
+      const exposedNow = weak && compCount > 0 && Boolean(domSys);
+      if (exposedNow && domSys) {
+        const existing = pendingBefore;
+        if (!existing || existing.system !== domSys) {
+          await setPending(athleteId, {
+            system: domSys,
+            ts: Date.now(),
+            recoveryCount: 0,
+            exposureCount: 1,
+          });
+          console.log("[EXPOSURE DETECTED AT SAVE]", {
+            athleteId,
+            system: domSys,
+            exposureCount: 1,
+          });
+        } else {
+          const prevExposure = existing.exposureCount ?? 1;
+          const nextExposure = prevExposure + 1;
+          logExposurePressureTierChange(prevExposure, nextExposure);
+          await setPending(athleteId, {
+            system: domSys,
+            ts: existing.ts,
+            recoveryCount: 0,
+            exposureCount: nextExposure,
+          });
+        }
+      } else if (pendingBefore) {
+        const stableRecovery =
+          !weak && compCount > 0 && domSys != null && domSys === pendingBefore.system;
+        if (stableRecovery) {
+          const prevExposure = pendingBefore.exposureCount ?? 1;
+          const nextRecovery = (pendingBefore.recoveryCount ?? 0) + 1;
+          const nextExposure = Math.max(0, prevExposure - 1);
+          logExposurePressureTierChange(prevExposure, nextExposure);
+          if (nextRecovery >= RECOVERY_MIN_SESSIONS && nextExposure === 0) {
+            await clearExposurePendingForAthlete(athleteId);
+            console.log("[EXPOSURE RESOLVED]", {
+              athleteId,
+              system: pendingBefore.system,
+            });
+          } else {
+            await setPending(athleteId, {
+              system: pendingBefore.system,
+              ts: pendingBefore.ts,
+              recoveryCount: nextRecovery,
+              exposureCount: nextExposure,
+            });
+          }
+        } else if ((pendingBefore.recoveryCount ?? 0) !== 0) {
+          await setPending(athleteId, {
+            system: pendingBefore.system,
+            ts: pendingBefore.ts,
+            recoveryCount: 0,
+            exposureCount: pendingBefore.exposureCount ?? 1,
+          });
+        }
+      }
+
+      newSessionShowsGapAlert = exposedNow;
+      gapAlertSystemLabel = domSys ? formatSystemLabelForTraining(domSys) : "";
+    } catch {
+      /* non-blocking exposure pipeline */
+    }
+
+    try {
+      await Haptics.notificationAsync(
+        isNew && newSessionShowsGapAlert
+          ? Haptics.NotificationFeedbackType.Warning
+          : Haptics.NotificationFeedbackType.Success,
+      );
+    } catch {}
+
+    const alertTitle =
+      isNew && newSessionShowsGapAlert ? "Gap detected" : "Session logged";
+    const alertMessage =
+      isNew && newSessionShowsGapAlert
+        ? gapAlertSystemLabel
+          ? `You're getting exposed in ${gapAlertSystemLabel}. Next session: live reps under resistance.`
+          : "You're getting exposed in competition. Next session: live reps under resistance."
+        : "Consistency builds your game.";
+
+    postSaveRanRef.current = false;
+    goAfterSaveRef.current = () => {
+      kidIdParam
+        ? deviceRole === "parent"
+          ? router.replace("/this-week")
+          : router.replace(`/this-week/kid/${encodeURIComponent(kidIdParam)}`)
+        : router.replace(`/training?date=${encodeURIComponent(finalDate)}`);
+    };
+
+    const showFocusAdherencePrompt =
+      isNew &&
+      !!lockedFocus &&
+      (lockedFocus.system ?? "").trim() !== "" &&
+      !newSessionShowsGapAlert;
+
+    if (showFocusAdherencePrompt) {
+      setAdherenceContext({
+        athleteId,
+        sessionId: realId,
+        system: lockedFocus!.system.trim(),
+      });
+      setShowAdherencePrompt(true);
+    } else {
+      clearAdherenceAutoHideTimer();
+      setShowAdherencePrompt(false);
+      setAdherenceContext(null);
+    }
+
+    if (newSessionShowsGapAlert) {
+      Alert.alert(alertTitle, alertMessage, [
+        { text: "OK", onPress: () => commitPostSaveNavigation() },
+      ]);
+    } else if (!showFocusAdherencePrompt) {
+      Alert.alert(alertTitle, alertMessage, [
+        { text: "OK", onPress: () => commitPostSaveNavigation() },
+      ]);
+    }
 return; // prevents any router.replace below from firing immediately
   }
 
@@ -918,6 +1285,25 @@ return; // prevents any router.replace below from firing immediately
 </View>
 
 <View style={styles.divider} />
+
+  {lockedFocus && isNew ? (
+    <View style={styles.lockedFocusBlock}>
+      <View style={styles.lockedFocusRow}>
+        <Text style={styles.lockedFocusIcon} accessibilityLabel="Locked">
+          🔒
+        </Text>
+        <View style={styles.lockedFocusTextCol}>
+          <Text style={styles.lockedFocusLabel}>Locked Focus</Text>
+          <Text style={styles.lockedFocusSystem}>
+            {formatSystemLabelForTraining(lockedFocus.system)}
+          </Text>
+          <Text style={styles.lockedFocusSubtext}>
+            Layer this into your normal training and live rounds.
+          </Text>
+        </View>
+      </View>
+    </View>
+  ) : null}
 
   {recommendedFocusHint ? (
     <View style={{ marginBottom: 14 }}>
@@ -1285,6 +1671,20 @@ return; // prevents any router.replace below from firing immediately
 </View>
   </SafeAreaView>
 </Modal>
+        {coachSessionPlan ? (
+          <View style={styles.coachPlanCard}>
+            <Text style={styles.coachPlanSectionLabel}>Active plan</Text>
+            <Text style={styles.coachPlanTitle}>{coachSessionPlan.plan.title}</Text>
+            {coachSessionPlan.plan.steps.map((step, i) => (
+              <Text key={`${i}-${step}`} style={styles.coachPlanStep}>
+                • {step}
+              </Text>
+            ))}
+            <Text style={styles.coachPlanFocusLine}>
+              Focus: {coachSessionPlan.plan.focus}
+            </Text>
+          </View>
+        ) : null}
         <Text style={styles.label}>Training Sequence</Text>
 <Text style={styles.helperText}>
 Format: start position (grips) → transition → outcome (pass, sweep, submit)
@@ -1422,6 +1822,35 @@ Format: start position (grips) → transition → outcome (pass, sweep, submit)
   </View>
 </View>
       </KeyboardAwareScrollView>
+      {showAdherencePrompt && adherenceContext ? (
+        <View
+          pointerEvents="box-none"
+          style={[styles.adherenceAnchor, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+        >
+          <View style={styles.adherenceCard}>
+            <Text style={styles.adherenceSavedHint}>Saved.</Text>
+            <Text style={styles.adherencePromptText}>Did you work on your focus?</Text>
+            <View style={styles.adherenceOptionsRow}>
+              {(
+                [
+                  ["yes", "Yes"] as const,
+                  ["somewhat", "Somewhat"] as const,
+                  ["no", "No"] as const,
+                ] as const
+              ).map(([value, label]) => (
+                <Pressable
+                  key={value}
+                  onPress={() => void onAdherenceSelect(value)}
+                  style={styles.adherenceOption}
+                  hitSlop={8}
+                >
+                  <Text style={styles.adherenceOptionLabel}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1526,12 +1955,92 @@ divider: {
   backgroundColor: UI.border,
   marginBottom: 12,
 },
-sectionTitle: {
+  sectionTitle: {
   color: UI.textPrimary,
   marginTop: 12,
   marginBottom: 6,
   fontWeight: "600",
 },
+  coachPlanCard: {
+    marginTop: 4,
+    marginBottom: 4,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: UI.bgCard,
+  },
+  coachPlanSectionLabel: {
+    color: UI.textSecondary,
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  coachPlanTitle: {
+    color: UI.textPrimary,
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 10,
+    lineHeight: 22,
+  },
+  coachPlanStep: {
+    color: UI.textSecondary,
+    fontSize: 14,
+    fontWeight: "500",
+    lineHeight: 22,
+    marginBottom: 4,
+    paddingLeft: 2,
+  },
+  coachPlanFocusLine: {
+    marginTop: 10,
+    color: UI.textPrimary,
+    fontSize: 14,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  lockedFocusBlock: {
+    marginBottom: 14,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#fefce8",
+    borderWidth: 1,
+    borderColor: "#fcd34d",
+  },
+  lockedFocusRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  lockedFocusIcon: {
+    fontSize: 14,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  lockedFocusTextCol: {
+    flex: 1,
+  },
+  lockedFocusLabel: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    color: UI.textSecondary,
+    marginBottom: 4,
+  },
+  lockedFocusSystem: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: UI.textPrimary,
+    marginBottom: 6,
+    lineHeight: 22,
+  },
+  lockedFocusSubtext: {
+    fontSize: 12,
+    color: UI.textSecondary,
+    lineHeight: 18,
+  },
   // Attachments
   attachmentButtonsRow: {
   flexDirection: "row",
@@ -1770,4 +2279,56 @@ headerSaveText: {
   } ,
   cardTitle: { color: UI.textPrimary, fontWeight: "700", marginBottom: 8 },
   previewImg: { width: "100%", height: 220, borderRadius: 12 },
+  adherenceAnchor: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 16,
+    alignItems: "stretch",
+  },
+  adherenceCard: {
+    backgroundColor: UI.bgCard,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: UI.border,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    shadowColor: "#000000",
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  adherenceSavedHint: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: UI.textSecondary,
+    marginBottom: 2,
+  },
+  adherencePromptText: {
+    fontSize: 12,
+    color: UI.textSecondary,
+    lineHeight: 17,
+  },
+  adherenceOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+    alignItems: "center",
+  },
+  adherenceOption: {
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: UI.border,
+    backgroundColor: "#f9fafb",
+  },
+  adherenceOptionLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: UI.textSecondary,
+  },
 });

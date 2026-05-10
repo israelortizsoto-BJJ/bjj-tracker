@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { parentKidCoherentlyLinkedToInviteToken } from "../coachShare/coachLinkBinding";
 import { getLastAthleteKidId } from "../storage/lastAthleteIdStore";
 import type { CoachLink } from "../types/coachShare";
 import type { Kid, KidId, KidsById } from "../types/coachKid";
@@ -10,15 +9,14 @@ import { getActiveKidId, setActiveKidId, useActiveKidId } from "./activeKidStore
 /** Invite-linked roster kid ids for parent weekly plane (sorted by name); `null` if token missing (use whole roster pool). */
 export function eligibleParentWeeklyKidIds(
   kidsById: KidsById,
-  coachLinks: CoachLink[],
+  _coachLinks: CoachLink[],
   inviteTokenNorm: string,
 ): string[] | null {
   const norm = typeof inviteTokenNorm === "string" ? inviteTokenNorm.trim() : "";
   if (!norm) return null;
   const rows = Object.values(kidsById)
     .filter(
-      (k): k is Kid =>
-        Boolean(k?.id) && parentKidCoherentlyLinkedToInviteToken(k, norm, coachLinks),
+      (k): k is Kid => Boolean(k?.id) && Boolean((k.sharedAthleteId ?? "").trim()),
     )
     .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
   return rows.map((k) => k.id);

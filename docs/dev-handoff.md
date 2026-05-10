@@ -1,5 +1,522 @@
 # BJJ Tracker - Dev Handoff Notes
 
+# EOD — 2026-05-07  
+## MatMind / BJJ Tracker — Developer + Product Audit
+
+---
+
+## 🧠 Summary
+
+Today marked a major transition from feature-building into **system-building**.
+
+The product evolved from:
+- passive tracking
+→ into
+- **behavior-aware coaching system**
+
+Core systems implemented today:
+- Exposure persistence + escalation
+- Focus locking (behavior guidance)
+- Adherence tracking (feedback loop)
+- Session plan generation (guidance layer)
+- Summary → decision engine (not just reporting)
+
+This is the first time the system:
+> observes → reacts → persists → guides → measures
+
+---
+
+## 🚀 What Was Built
+
+### 1. Exposure System (Persistent State)
+
+**Files:**
+- `src/storage/summaryExposureTracking.ts`
+- `app/(tabs)/training/[id].tsx`
+
+**Capabilities:**
+- Detect exposure at save
+- Persist exposure per athlete
+- Track escalation (`exposureCount`)
+- Track recovery (`recoveryCount`)
+- Resolve only after:
+  - 2 stable sessions
+  - exposureCount returns to 0
+- TTL protection (3 days)
+
+**Behavior:**
+- Exposure is no longer momentary
+- It becomes a **state the athlete must work through**
+
+---
+
+### 2. Focus System (Behavior Layer)
+
+**Files:**
+- `src/storage/focusTracking.ts`
+- `SummaryScreen.tsx`
+- `TrainingSessionEditor`
+
+**Capabilities:**
+- One active focus per athlete
+- Set from Summary ("Lock your focus right now")
+- Persisted into training session
+
+**Behavior:**
+- System moves from suggestion → **intent shaping**
+- Athlete enters training with awareness
+
+---
+
+### 3. Adherence Tracking (Feedback Loop)
+
+**Files:**
+- `src/storage/focusAdherenceTracking.ts`
+- `TrainingSessionEditor`
+
+**Capabilities:**
+- Post-session prompt:
+  - Yes / Somewhat / No
+- Logged with:
+  - athleteId
+  - sessionId
+  - system
+  - adherence
+
+**Behavior:**
+- Captures whether athlete followed focus
+- Skipped during exposure (correct prioritization)
+
+---
+
+### 4. Session Plan System (Guidance Layer)
+
+**Files:**
+- `src/lib/training/generateSessionPlan.ts`
+- `SummaryScreen.tsx`
+
+**Capabilities:**
+- Generates plans based on:
+  - system
+  - exposure level (low / medium / high)
+- Displays under “Fix the gap”
+- Converted to **suggestion (not instruction)**
+
+**Behavior:**
+- Reinforces focus during training
+- Does not override coach instruction
+
+---
+
+### 5. Summary System Evolution
+
+**Files:**
+- `SummaryScreen.tsx`
+- `SummaryHeroCard.tsx`
+- `SummaryConsistencyCard.tsx`
+- `SummaryCompetitionCard.tsx`
+
+**Before:**
+- Static insights
+- Confidence %
+- Suggestions
+
+**Now:**
+- Identity state
+- Exposure state (persistent)
+- Pressure tiers
+- Action system (“Fix the gap”)
+- Focus locking
+- Session plan
+- Behavior-aware UI
+
+**Shift:**
+> Summary is now a **decision engine**
+
+---
+
+### 6. UI Philosophy Shift
+
+**Decision made:**
+- Avoid intrusive UX
+- Avoid heavy banners / forced flows
+- Move toward **ambient coaching**
+
+**Direction:**
+- Subtle
+- Always visible
+- Low friction
+- Behavior nudging
+
+---
+
+## 🧪 QA Findings (Luca Test)
+
+### Setup:
+- White belt
+- 2 competitions
+- 2 wins (points + submission)
+- No training sessions initially
+
+### Observed Output:
+- Dominant system inferred: `l1.top_passing`
+- Weak dominance triggered (threshold = 0.9)
+- Exposure state active
+- Confidence ~28–34% (low)
+
+### Insight:
+- System is **technically correct**
+- But **emotionally confusing**
+
+**Problem:**
+> Winning athlete sees “low confidence”
+
+---
+
+## ⚠️ Gaps Identified
+
+### 1. Kids Belt System Missing
+- No structured belt progression
+- No mapping to expectations
+
+**Impact:**
+- Identity accuracy suffers
+- Skill expectations unclear
+
+---
+
+### 2. Beginner Skill Entry Missing
+- Prompt exists (“Add skills…”)
+- No actual entry flow
+
+**Impact:**
+- No data → low confidence
+- System feels incomplete
+
+---
+
+### 3. Confidence Messaging Problem
+Current:
+> “30% — Low”
+
+Needed:
+> “Early signal — building your game”
+
+---
+
+### 4. Video Player Limitations
+Current:
+- Play / Pause / Replay only
+
+Missing:
+- Scrubbing
+- Skip forward/back
+- Fine control
+
+---
+
+### 5. Identity System Visibility
+- Competitor prompt works
+- But is reactive, not proactive
+
+---
+
+## 🔥 New Product Insight
+
+### “Execution Gap” (NEW SIGNAL)
+
+Detected need:
+
+> Coach teaches something  
+> Athlete trains it  
+> It does NOT appear in competition
+
+This is NOT exposure.
+
+This is:
+> **Execution Gap**
+
+### Future Signal:
+- Coach intent vs competition reality
+- Repetition without translation
+
+---
+
+## 🧭 Next Steps
+
+### 🔴 P0 — Core Fixes
+
+1. Implement kids belt system
+2. Add beginner skill onboarding
+3. Adjust confidence messaging
+
+---
+
+### 🟠 P1 — System Strengthening
+
+4. Build Execution Gap signal
+5. Refine focus UI (more subtle)
+6. Improve video controls
+
+---
+
+### 🟡 P2 — Expansion
+
+7. Turn adherence into insight
+8. Build coach feedback layer
+
+---
+
+## 🧪 Next QA Plan (05/08)
+
+### Luca
+- Add 3–5 training sessions
+- Observe:
+  - Identity formation
+  - Exposure persistence
+  - Confidence changes
+
+### Self (Israel)
+- Add real competitions + training
+- Validate:
+  - Accuracy
+  - Emotional alignment
+  - Behavior influence
+
+---
+
+## 🧱 System Status
+
+The product is now:
+
+❌ Not a tracker  
+❌ Not a dashboard  
+
+✅ A **behavior-aware coaching system**
+
+---
+
+## 📌 Final Note
+
+Today was a turning point.
+
+The system now:
+- detects reality
+- persists it
+- pressures behavior
+- measures response
+
+Next phase is:
+> refining trust, clarity, and execution signals
+
+---
+
+
+## Date: 2026-05-06
+Branch: summary-rebuild-v2
+Commit: 1aa81dd
+
+---
+
+## 🚨 Core Objective Today
+
+Stabilize the full system pipeline:
+
+Identity → Sessions → Signals → Suggestions
+
+---
+
+## ✅ What Was Achieved
+
+### 1. Signals Data Source (CRITICAL FIX)
+
+Before:
+- Signals used inconsistent session sources (weekSessions vs full dataset)
+- Result: SIGNALS RUN 0 while data existed
+
+After:
+- `useSignals` now depends ONLY on `useAthleteData`
+- Removed `weekSessionsRaw` from Training
+- Single source of truth established
+
+Result:
+- SIGNALS INPUT sessionCount matches ATHLETE DATA
+- No more phantom zero runs
+
+---
+
+### 2. Signals Stability Layer
+
+- Introduced `previousSignalsRef`
+- Prevents recompute on transient invalid state
+- Eliminates UI flicker
+
+---
+
+### 3. Athlete Identity Stabilization
+
+- Guarded `setActiveAthleteId`
+- Added fallback via `useActiveAthlete`
+- Prevented null identity during render cycles
+
+---
+
+### 4. Suggestion System Overhaul
+
+#### Before
+- Dismiss = permanent suppression ❌
+
+#### After
+- Dismiss = cooldown (10 min) ✅
+- Suggestions reappear when:
+  - cooldown expires
+  - validation changes
+  - trend changes
+  - high confidence signals
+
+---
+
+### 5. Time-Based Recompute (Key Unlock)
+
+- Added `nowTick` interval (60s)
+- Allows cooldown expiration to trigger UI updates
+
+---
+
+### 6. Identity + Summary Engine (NEW)
+
+New architecture added:
+
+- `computeIdentityScore`
+- `validateIdentitySignals`
+- `deriveIdentitySuggestions`
+- `deriveCoachSignals`
+- `deriveSummaryInsights`
+- `deriveSummaryExplanation`
+
+This creates:
+- identity baseline
+- behavioral validation
+- suggestion engine
+- explanation layer
+
+---
+
+### 7. Summary Tab Refactor
+
+- Converted `summary.tsx` → folder structure
+- Added:
+  - onboarding
+  - profile
+  - add-athlete
+  - layout
+
+---
+
+## 🧪 QA Status
+
+### Scenario 1 — Data Integrity
+✅ PASS
+
+- Sessions persist correctly
+- Signals aligned with data
+- No mismatch
+
+---
+
+### Scenario 2 — Suggestion Timing
+
+- Dismiss → disappears ✅
+- Navigation → stays gone ✅
+- Cooldown system implemented ✅
+- Resurfacing logic implemented ⚠️ (needs final verification)
+
+---
+
+## ⚠️ Known Issues (Next Priority)
+
+### 1. Confidence Scaling (HIGH)
+
+Current:
+- 4 sessions → 100% confidence ❌
+
+Needed:
+- confidence weighted by data volume
+
+---
+
+### 2. Label Formatting (HIGH UX)
+
+Current:
+- l1.top_passing ❌
+
+Needed:
+- human-readable labels
+
+---
+
+### 3. Suggestion Tone
+
+Current:
+- robotic phrasing
+
+Needed:
+- coaching tone
+
+---
+
+### 4. Signals Lifecycle Logs
+
+- Occasional SIGNALS RUN 0 during hydration
+- Expected but should be monitored
+
+---
+
+## 🧠 System State
+
+### Stable:
+- Data layer ✅
+- Signals input ✅
+- Suggestion timing logic ✅
+
+### Not yet refined:
+- Confidence ❌
+- UX clarity ❌
+- Messaging ❌
+
+---
+
+## 🎯 Next Steps (Priority Order)
+
+1. Implement confidence scaling model
+2. Fix label formatting layer
+3. Improve suggestion tone
+4. Complete full QA stress test (5 scenarios)
+5. Align with Codex HTML spec
+
+---
+
+## 🔒 Non-Negotiables Maintained
+
+- computeSignals untouched
+- no schema changes
+- identity engine modular
+- suggestion system layered
+
+---
+
+## 📌 Summary
+
+Today we moved from:
+
+"System behaves inconsistently"
+
+→
+
+"System is structurally correct and stable"
+
+Next phase:
+Refinement and trust-building.
 
 
 ## Date: 2026-05-05

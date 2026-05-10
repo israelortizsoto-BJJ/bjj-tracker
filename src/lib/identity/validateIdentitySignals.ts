@@ -35,6 +35,12 @@ function normalizeSkill(s: string) {
   return s?.toLowerCase().replace(/_/g, " ").trim();
 }
 
+function hasTrainingFocus(signals: IdentityValidationInputs["signals"]): boolean {
+  if (!signals || typeof signals !== "object") return false;
+  const tf = (signals as { trainingFocus?: unknown }).trainingFocus;
+  return typeof tf === "string" && tf.trim().length > 0;
+}
+
 function validateSkills(inputs: IdentityValidationInputs): ValidationStatus {
   const declared = inputs.declaredSkills ?? [];
   const signals = inputs.signals;
@@ -126,13 +132,22 @@ export function validateIdentitySignals(
     overall = "insufficient";
 
   const notes: string[] = [];
+  const tf = hasTrainingFocus(inputs.signals);
 
   if (skills === "mismatch") {
-    notes.push("Your training patterns differ from your declared focus.");
+    notes.push(
+      tf
+        ? "Your training patterns differ from your current focus."
+        : "Recent sessions emphasize different systems than your recognized skills.",
+    );
   }
 
   if (competitor === "mismatch") {
-    notes.push("Competition activity doesn’t match your stated intent.");
+    notes.push(
+      tf
+        ? "Competition activity doesn’t align with your current focus."
+        : "Competition activity doesn’t align with how your profile is set up.",
+    );
   }
 
   if (experience === "developing") {

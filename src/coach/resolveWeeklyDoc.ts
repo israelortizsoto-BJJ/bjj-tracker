@@ -73,9 +73,9 @@ function isValidWeeklyDoc(v: unknown): v is SyncedWeeklyMessagePayload {
 }
 
 /**
- * Resolves the weekly doc for a parent view using strict athlete scope.
- * Invite-level `weekly` is legacy and is intentionally not used for parent weekly rendering.
- * Missing, null, or invalid athlete docs resolve to null.
+ * Resolves the weekly doc for a parent view using athlete scope when available.
+ * Per-athlete `weeklyByAthleteId[id]` is preferred; when that slot is missing or empty, falls back to
+ * invite-level `weekly` so parents still see a coach message when only legacy invite data exists.
  * When `trainingSkillFocus` is present, merges `recommendedFocusArea` onto the resolved doc — augments coach copy only.
  * Never throws.
  */
@@ -126,13 +126,28 @@ export function resolveWeeklyDoc(
       }
     }
 
+    const inviteWeekly = session?.weekly;
+    if (
+      id &&
+      inviteWeekly != null &&
+      isValidWeeklyDoc(inviteWeekly)
+    ) {
+      const recommendedFocusArea = recommendedFocusAreaFromTrainingSkillFocus(
+        trainingSkillFocus ?? null,
+      );
+      if (recommendedFocusArea) {
+        return { ...inviteWeekly, recommendedFocusArea };
+      }
+      return inviteWeekly;
+    }
+
     return null;
   } catch {
     return null;
   }
 }
 
-/** True if any per-athlete slot has a valid weekly doc. */
+/** True if any per-athlete slot or invite-level `weekly` has a valid weekly doc. */
 export function sessionSnapshotHasUsableWeeklyDoc(
   session: ResolveWeeklyDocSession | null | undefined,
 ): boolean {
@@ -143,5 +158,6 @@ export function sessionSnapshotHasUsableWeeklyDoc(
       if (v != null && isValidWeeklyDoc(v)) return true;
     }
   }
-  return false;
+  const w = session.weekly;
+  return w != null && isValidWeeklyDoc(w);
 }
