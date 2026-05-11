@@ -45,6 +45,7 @@ import { isDev } from "../../../src/config/runtime";
 import {
   activeCoachLinksForParentLinkedUi,
   buildDevParentWeeklyLinkedStateTrace,
+  parentDeviceCoachLinkedForTrustUi,
   parentKidCoherentlyLinkedToInviteToken,
   parentLocalLinkageConflictsWithCachedSessionRoster,
   parentStrictWeeklyLinkedCoachLinksForUi,
@@ -1092,7 +1093,10 @@ function ParentThisWeekScreen() {
     role === "parent"
       ? activeCoachLinksForParentLinkedUi(coachLinks)
       : coachLinks.filter((link) => link.status === "active");
-  const isLinked = activeCoachLinks.length > 0;
+  const isLinked =
+    role === "parent"
+      ? parentDeviceCoachLinkedForTrustUi(coachLinks)
+      : activeCoachLinks.length > 0;
   const previousIsLinkedRef = useRef(isLinked);
 
   useEffect(() => {

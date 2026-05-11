@@ -106,7 +106,7 @@ export default function OnboardingSkillsScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
       <Text style={styles.subtitle}>
-        Pick what you're comfortable with ({selectedOrder.length}/{MAX_SKILLS} max).
+      Pick what you&apos;re comfortable with
       </Text>
 
       <View style={styles.chipWrap}>

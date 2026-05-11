@@ -95,6 +95,18 @@ export function activeCoachLinksForParentLinkedUi(links: CoachLink[]): CoachLink
   return [...parentStrictWeeklyLinkedCoachLinksForUi(links), ...parentActiveLegacyCoachShareLinks(links)];
 }
 
+/**
+ * Canonical parent-device “coach linked” boolean for trust-layer UI (This Week + Summary).
+ * Semantically identical to `activeCoachLinksForParentLinkedUi(links).length > 0` without
+ * allocating the concatenated array.
+ */
+export function parentDeviceCoachLinkedForTrustUi(links: CoachLink[]): boolean {
+  return (
+    parentStrictWeeklyLinkedCoachLinksForUi(links).length > 0 ||
+    parentActiveLegacyCoachShareLinks(links).length > 0
+  );
+}
+
 /** DEV-only snapshots for auto-relink tracing; no secrets, token tails only. */
 export type DevCoachLinkRowSnap = {
   id: string;

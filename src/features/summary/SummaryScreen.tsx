@@ -55,7 +55,10 @@ import {
   resolveWeeklySharedAthleteIdForParentSnapshot,
   type ParentWeeklySessionSnapshot,
 } from "../../coach/resolveWeeklyDoc";
-import { parentStrictWeeklyLinkedCoachLinksForUi } from "../../coachShare/coachLinkBinding";
+import {
+  parentDeviceCoachLinkedForTrustUi,
+  parentStrictWeeklyLinkedCoachLinksForUi,
+} from "../../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken, inviteLinkTokenTail } from "../../coachShare/inviteLinkToken";
 import { coachSyncFetchSession } from "../../services/coachWeeklySyncApi";
 import {
@@ -63,6 +66,7 @@ import {
   setCachedWeeklyForLinkToken,
 } from "../../storage/coachWeeklySyncCacheStore";
 import { getCoachLinks } from "../../storage/coachShareStore";
+import type { CoachLink } from "../../types/coachShare";
 import { resolvePrincipalBucketEvidenceLine } from "../../lib/signals/competitionBucketHistory";
 import { useDeviceRole } from "../../deviceRole/DeviceRoleProvider";
 import {
@@ -179,6 +183,7 @@ export default function SummaryScreen() {
   const [lastAction, setLastActionState] = useState<string | null>(null);
   const [weeklySessionSnapshot, setWeeklySessionSnapshot] =
     useState<ParentWeeklySessionSnapshot | null>(null);
+  const [coachLinkRowsForTrustUi, setCoachLinkRowsForTrustUi] = useState<CoachLink[]>([]);
   const weeklySessionSourceRef = useRef<"cache" | "network" | "none">("none");
   const previousValidationRef = useRef<IdentityValidationResult | null>(null);
   const previousTrendRef = useRef<SummaryTrend | null>(null);
@@ -210,6 +215,9 @@ export default function SummaryScreen() {
 
       void (async () => {
         const links = await getCoachLinks();
+        if (!cancelled) {
+          setCoachLinkRowsForTrustUi(links);
+        }
         const weeklyLink = parentStrictWeeklyLinkedCoachLinksForUi(links)[0];
         const weeklySync = weeklyLink?.weeklySync;
         if (!weeklySync?.linkToken?.trim()) {
@@ -427,6 +435,18 @@ export default function SummaryScreen() {
   }, [activeAthleteId, athleteForSummary?.name, router]);
 
   const { role: deviceRole } = useDeviceRole();
+
+  const parentCoachLinkedTrust = useMemo(
+    () => deviceRole === "parent" && parentDeviceCoachLinkedForTrustUi(coachLinkRowsForTrustUi),
+    [coachLinkRowsForTrustUi, deviceRole],
+  );
+  const parentWeeklySyncChannelActive = useMemo(
+    () =>
+      deviceRole === "parent" &&
+      parentStrictWeeklyLinkedCoachLinksForUi(coachLinkRowsForTrustUi).length > 0,
+    [coachLinkRowsForTrustUi, deviceRole],
+  );
+
   const { sessions: sessionsRaw, competitions } = useAthleteData(activeAthleteId);
 
   const sessions = useMemo(() => {
@@ -470,6 +490,25 @@ export default function SummaryScreen() {
   const beltLabel = formatAthleteBeltRankLabel(athleteForSummary?.beltRank);
   const experienceLabel = formatAthleteExperienceLevelLabel(athleteForSummary?.experienceLevel);
   const hasIdentityHeader = Boolean(beltLabel && experienceLabel);
+  const summaryOperatingHeaderMeta = useMemo(() => {
+    if (hasIdentityHeader) {
+      return `${beltLabel} / ${experienceLabel}`;
+    }
+    if (deviceRole === "parent" && parentWeeklySyncChannelActive) {
+      return "Coach linked • Weekly sync active";
+    }
+    if (deviceRole === "parent" && parentCoachLinkedTrust) {
+      return "Coach linked";
+    }
+    return "Add belt & experience";
+  }, [
+    beltLabel,
+    deviceRole,
+    experienceLabel,
+    hasIdentityHeader,
+    parentCoachLinkedTrust,
+    parentWeeklySyncChannelActive,
+  ]);
   const declaredSkills = athleteForSummary?.declaredSkills ?? [];
 
   const personalizedEmptyInsight = useMemo(() => {
@@ -1021,9 +1060,7 @@ export default function SummaryScreen() {
         athlete={{
           name: activeAthleteName || "Athlete",
           initials: initialsFromName(activeAthleteName),
-          meta: hasIdentityHeader
-            ? `${beltLabel} / ${experienceLabel}`
-            : "Not linked",
+          meta: summaryOperatingHeaderMeta,
         }}
         actions={[
           {
