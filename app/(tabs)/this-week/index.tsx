@@ -1,4 +1,4 @@
-import { Stack, router, useFocusEffect, type Href } from "expo-router";
+import { Stack, router, useFocusEffect } from "expo-router";
 import {
   useCallback,
   useEffect,
@@ -11,7 +11,6 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   Alert,
-  FlatList,
   Linking,
   Pressable,
   Text,
@@ -47,9 +46,10 @@ import {
   activeCoachLinksForParentLinkedUi,
   buildDevParentWeeklyLinkedStateTrace,
   parentKidCoherentlyLinkedToInviteToken,
+  parentLocalLinkageConflictsWithCachedSessionRoster,
   parentStrictWeeklyLinkedCoachLinksForUi,
 } from "../../../src/coachShare/coachLinkBinding";
-import { normalizeInviteLinkToken } from "../../../src/coachShare/inviteLinkToken";
+import { inviteLinkTokenTail, normalizeInviteLinkToken } from "../../../src/coachShare/inviteLinkToken";
 import {
   resolveWeeklyDoc,
   sharedAthleteIdFromParentAthleteForSession,
@@ -70,8 +70,6 @@ import type {
   ProgramPackMap,
 } from "../../../src/types/coachShare";
 import {
-  familyCompetitionChipForEntry,
-  familyCompetitionPromoterFormatLine,
   familyCompetitionResultLabel,
   formatFamilyCompetitionDate,
   kidDisplayNameForId,
@@ -128,7 +126,6 @@ import {
   markWeeklyViewed,
 } from "../../../src/features/weekly/parentFeedbackHelpers";
 import { CoachingHistoryLogCard } from "@/src/features/summary/CoachingHistoryLogCard";
-import { PracticeSummaryCard } from "@/src/features/summary/PracticeSummaryCard";
 import OperatingHeader from "@/src/components/operating/OperatingHeader";
 
 // Build 7 light visual system — calm shell, braver family-facing cards (indigo / lavender / warm cream / soft coral)
@@ -153,12 +150,6 @@ const UI = {
   monthBannerPressed: "#d8d0f0",
   monthListWellBg: "#f3f0ff",
   monthGroupBorder: "#dcd6f0",
-  competitionRowBg: "#faf8ff",
-  competitionRowBorder: "#e4dff5",
-  nextUpcomingFill: "#e0e7ff",
-  nextUpcomingBorder: "#818cf8",
-  familySectionBg: "#fffaf7",
-  familySectionBorder: "#eadcf0",
   addCompetitionBg: "#ede9fe",
   addCompetitionBgPressed: "#ddd6fe",
   addCompetitionBorder: "#c4b5fd",
@@ -183,26 +174,6 @@ const FEED = {
   accentDark: "#111315",
   radius: 6,
 };
-
-/** Richer chip fills for competition rows (labels stable from `familyCompetitionChipForEntry`). */
-function familyFacingCompetitionChipStyle(chip: {
-  label: string;
-  backgroundColor: string;
-  textColor: string;
-}): { backgroundColor: string; textColor: string } {
-  switch (chip.label) {
-    case "Coming up":
-      return { backgroundColor: FEED.panel3, textColor: FEED.text };
-    case "Past event":
-      return { backgroundColor: FEED.panel2, textColor: FEED.muted };
-    case "Completed":
-      return { backgroundColor: FEED.panel2, textColor: FEED.text };
-    case "Cancelled":
-      return { backgroundColor: FEED.panel2, textColor: FEED.muted };
-    default:
-      return { backgroundColor: chip.backgroundColor, textColor: chip.textColor };
-  }
-}
 
 const CARD_RADIUS = 16;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
@@ -399,49 +370,6 @@ const INITIAL_FAMILY_COMPETITION: FamilyCompetitionLoadState = {
   lastCompetitionWeekly: null,
   derivedTrainingSkillFocus: null,
 };
-
-/** Training / kid detail list: compact media label (parent This Week competition cards). */
-function CompetitionMediaPills({
-  hasVideo,
-  hasImage,
-}: {
-  hasVideo: boolean;
-  hasImage: boolean;
-}) {
-  if (!hasVideo && !hasImage) return null;
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 }}>
-      {hasVideo ? (
-        <View
-          style={{
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-            borderRadius: 999,
-            backgroundColor: UI.bgCardActive,
-            borderWidth: 1,
-            borderColor: UI.border,
-          }}
-        >
-          <Text style={{ color: UI.textSecondary, fontSize: 10, fontWeight: "700" }}>VID</Text>
-        </View>
-      ) : null}
-      {hasImage ? (
-        <View
-          style={{
-            paddingHorizontal: 6,
-            paddingVertical: 2,
-            borderRadius: 999,
-            backgroundColor: UI.bgCardActive,
-            borderWidth: 1,
-            borderColor: UI.border,
-          }}
-        >
-          <Text style={{ color: UI.textSecondary, fontSize: 10, fontWeight: "700" }}>IMG</Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
 
 const INITIAL_PRACTICE_SUMMARY: ParentWeeklyPracticeSummary = {
   sessionCountThisWeek: 0,
@@ -849,10 +777,29 @@ function ParentThisWeekScreen() {
     if (activeWeeklySyncLink?.weeklySync) {
       const rawWeeklyLinkToken = activeWeeklySyncLink.weeklySync.linkToken;
       const normWeeklyLinkToken = normalizeInviteLinkToken(rawWeeklyLinkToken);
-      const skipSessionNetwork =
+      let skipSessionNetwork =
         !forceWeeklySessionFetchRef.current &&
         normWeeklyLinkToken.length > 0 &&
         weeklySessionNetworkOkTokenRef.current === normWeeklyLinkToken;
+
+      if (skipSessionNetwork && roleNow === "parent") {
+        const cachedProbe = await getCachedWeeklyForLinkToken(rawWeeklyLinkToken);
+        if (
+          parentLocalLinkageConflictsWithCachedSessionRoster(
+            loadedKidsById,
+            normWeeklyLinkToken,
+            cachedProbe,
+          )
+        ) {
+          skipSessionNetwork = false;
+          if (__DEV__) {
+            console.warn("[mm:identity-backbone] forcing_session_fetch:local_linkage_vs_cached_roster", {
+              tokenTail: inviteLinkTokenTail(rawWeeklyLinkToken),
+              cachedAthleteCount: cachedProbe?.athletes?.length ?? 0,
+            });
+          }
+        }
+      }
 
       if (skipSessionNetwork) {
         const cached = await getCachedWeeklyForLinkToken(rawWeeklyLinkToken);
@@ -1106,39 +1053,6 @@ function ParentThisWeekScreen() {
     });
   }, [coachLinks, role]);
 
-  const familyUpcomingExcludingHero = useMemo(
-    () => familyCompetition.upcoming.slice(1),
-    [familyCompetition.upcoming],
-  );
-
-  const nextUpcomingCompetitionEntry =
-    familyCompetition.upcoming.length > 0 ? familyCompetition.upcoming[0]! : null;
-
-  const nextUpcomingCompetitionChip = useMemo(() => {
-    if (!nextUpcomingCompetitionEntry) return null;
-    const chipBase = familyCompetitionChipForEntry(
-      nextUpcomingCompetitionEntry,
-      familyCompetition.todayYMD,
-    );
-    return {
-      ...chipBase,
-      ...familyFacingCompetitionChipStyle(chipBase),
-    };
-  }, [nextUpcomingCompetitionEntry, familyCompetition.todayYMD]);
-
-  const nextUpcomingCompetitionPromoterFmt = useMemo(() => {
-    if (!nextUpcomingCompetitionEntry) return null;
-    return familyCompetitionPromoterFormatLine(nextUpcomingCompetitionEntry, 72);
-  }, [nextUpcomingCompetitionEntry]);
-
-  const nextUpcomingCompetitionDateLabel = useMemo(() => {
-    if (!nextUpcomingCompetitionEntry) return null;
-    return formatFamilyCompetitionDate(nextUpcomingCompetitionEntry.eventDate);
-  }, [nextUpcomingCompetitionEntry]);
-
-  // Parent-focused redesign: keep the competition calendar collapsed by default
-  // (we show a dedicated "Next competition" card instead).
-  const [competitionCalendarExpanded, setCompetitionCalendarExpanded] = useState(false);
   const [linkRefreshExpanded, setLinkRefreshExpanded] = useState(false);
 
   const allCoaches = Object.values(coachesById);
@@ -1540,10 +1454,6 @@ function ParentThisWeekScreen() {
   const showCoachOperationalTools = role === "coach";
   const showDebugStoragePanel = __DEV__ && showDebugData;
 
-  const familyCompetitionGlobalEmpty =
-    familyCompetition.upcoming.length === 0 &&
-    familyCompetition.recent.length === 0;
-
   const lastCompetitionWithinWeek = useMemo(() => {
     const today = familyCompetition.todayYMD;
     const first = familyCompetition.recent[0];
@@ -1568,7 +1478,7 @@ function ParentThisWeekScreen() {
     isLinked && currentAssignment?.status === "assigned" && !useWeeklySyncHero
       ? "When you’re ready, mark the weekly focus complete."
       : useWeeklySyncHero
-        ? "When you’re ready, tap Log Session to record training."
+        ? "When you’re ready, capture practice from the Training tab."
         : !isLinked
           ? "When you’re ready, tap Connect with your coach on This week."
           : "When you’re ready, refresh This week for the latest update.";
@@ -1632,8 +1542,8 @@ function ParentThisWeekScreen() {
     familyCompetition.kidName,
     focusTitle,
   ]);
-  /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. */
-  const weeklyNoteHeroEyebrow = "Weekly coach message";
+  /** Weekly sync note is invite/family-scoped — do not tie the hero eyebrow to competition athlete selection. Coupled to Read Together mission eyebrow. */
+  const weeklyNoteHeroEyebrow = "From your coach";
 
   const showParentKidSelector =
     role === "parent" && ready && activeAthleteCtx.athletes.length >= 2;
@@ -1832,14 +1742,6 @@ function ParentThisWeekScreen() {
       practiceSummary,
     ],
   );
-
-  /** Primary CTA: connect → refresh (no coach weekly payload) → Start Training (same navigation as Track your training). */
-  const primaryActionIsStartTraining =
-    isLinked &&
-    (useWeeklySyncHero
-      ? Boolean(weeklySyncDoc)
-      : currentAssignment?.status === "assigned");
-
 
   const missionUrlTrimmed = (weeklySyncDoc?.missionResourceUrl ?? "").trim();
   const hasMissionResource = missionUrlTrimmed.length > 0;
@@ -2096,7 +1998,7 @@ function ParentThisWeekScreen() {
 
             <View
               style={{
-                marginTop: 16,
+                marginTop: tokens.layout.sectionGap,
                 padding: 16,
                 borderRadius: FEED.radius,
                 borderWidth: 1,
@@ -2233,8 +2135,8 @@ function ParentThisWeekScreen() {
                     },
                   ]}
                 >
-                  Showing last saved note — could not reach the sync service. Pull to refresh or try again
-                  shortly.
+                  Showing last saved note — could not reach the sync service. Tap “Refresh this week” above,
+                  or try again shortly.
                 </Text>
               ) : null}
 
@@ -2352,62 +2254,94 @@ function ParentThisWeekScreen() {
                 )
               ) : null}
 
-              {role === "parent" ? (
+            </View>
+
+            {hasMissionResource ? (
+              // Mission link is part of the primary weekly direction — visually
+              // attached to the hero (small top gap, eyebrow-style label, softer
+              // surface) so it reads as a continuation, not a duplicate CTA.
+              <View
+                style={{
+                  marginTop: tokens.space[2],
+                  paddingVertical: tokens.space[3],
+                  paddingHorizontal: tokens.layout.cardPadding,
+                  borderRadius: FEED.radius,
+                  borderWidth: 1,
+                  borderColor: FEED.line,
+                  backgroundColor: FEED.panel,
+                }}
+              >
+                <Text
+                  style={[
+                    tokens.type.label,
+                    { color: FEED.muted },
+                  ]}
+                >
+                  MISSION LINK
+                </Text>
                 <Pressable
-                  onPress={() => {
-                    const d = todayYMD();
-                    const lk = activeParentLinkedKidId;
-                    const q = lk
-                      ? `date=${encodeURIComponent(d)}&kidId=${encodeURIComponent(lk)}&fromWeekly=1`
-                      : `date=${encodeURIComponent(d)}&fromWeekly=1`;
-                    if (__DEV__) {
-                      console.log("[THIS WEEK NAV TRAINING]", {
-                        athleteId: activeParentAthleteId,
-                        kidIdNullable: lk,
-                      });
-                    }
-                    router.push(`/training?${q}`);
-                  }}
+                  onPress={() => void openPublishedWebUrl(weeklySyncDoc?.missionResourceUrl)}
                   accessibilityRole="button"
+                  accessibilityLabel="Open this week’s technique link"
                   style={({ pressed }) => ({
-                    marginTop: tokens.space[4],
-                    minHeight: 46,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    paddingVertical: 12,
+                    marginTop: tokens.space[3],
+                    paddingVertical: tokens.space[3],
                     paddingHorizontal: tokens.space[4],
                     borderRadius: FEED.radius,
                     borderWidth: 1,
-                    borderColor: FEED.accent,
-                    backgroundColor: pressed
-                      ? FEED.accentPressed
-                      : FEED.accent,
+                    borderColor: FEED.lineStrong,
+                    backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
+                    alignSelf: "stretch",
+                    alignItems: "center",
+                    justifyContent: "center",
                   })}
                 >
-                  <Text style={{ color: FEED.accentDark, fontSize: 14, fontWeight: "900" }}>
-                    Log Session
+                  <Text
+                    style={[
+                      tokens.type.title,
+                      { color: FEED.text },
+                    ]}
+                  >
+                    ▶ Open this week’s link
                   </Text>
                 </Pressable>
-              ) : null}
+                <Text
+                  style={[
+                    tokens.type.caption,
+                    {
+                      marginTop: tokens.space[3],
+                      color: FEED.muted,
+                      lineHeight: 18,
+                    },
+                  ]}
+                >
+                  Extra context for the direction above — open when you’re ready.
+                </Text>
+              </View>
+            ) : null}
 
-            </View>
-
+            {/*
+              Family Huddle is the entry point into recap / study / journey —
+              reflection, not a second mission surface. Sits on the secondary
+              panel surface (no elevation) so the hero remains the primary
+              direction; the eyebrow signals reflect-mode.
+            */}
             <Pressable
               onPress={openWeeklyStory}
               accessibilityRole="button"
-              accessibilityLabel={"Start Family Huddle. Review this week’s mission together."}
+              accessibilityLabel={
+                "Open Family Huddle. Reflect on this week together with your athlete."
+              }
               style={({ pressed }) => ({
-                marginTop: 16,
+                marginTop: tokens.layout.sectionGap,
                 paddingVertical: tokens.space[4],
                 paddingHorizontal: tokens.space[4],
                 borderRadius: FEED.radius,
                 borderWidth: 1,
                 borderColor: FEED.line,
-                backgroundColor: pressed ? FEED.panel3 : FEED.panel,
+                backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
                 alignSelf: "stretch",
                 alignItems: "flex-start",
-                ...tokens.elevation.card,
               })}
             >
               <Text
@@ -2416,7 +2350,7 @@ function ParentThisWeekScreen() {
                   { color: FEED.muted },
                 ]}
               >
-                FAMILY HUDDLE
+                FAMILY HUDDLE · REFLECT TOGETHER
               </Text>
               <Text
                 style={[
@@ -2427,7 +2361,7 @@ function ParentThisWeekScreen() {
                   },
                 ]}
               >
-                Talk through the week together
+                Walk through this week with your athlete
               </Text>
               <Text
                 style={[
@@ -2438,165 +2372,48 @@ function ParentThisWeekScreen() {
                   },
                 ]}
               >
-                Review the coach message, ask what clicked, and keep training simple.
+                Revisit the focus together, ask what felt right at training, and look for small ways to
+                reinforce it before next class.
               </Text>
             </Pressable>
 
-            <View
-              style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: FEED.radius,
-                borderWidth: 1,
-                borderColor: FEED.line,
-                backgroundColor: FEED.panel,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: tokens.space[3],
-                }}
-              >
-                <Text
-                  style={{
-                    color: FEED.text,
-                    fontSize: 17,
-                    lineHeight: 22,
-                    fontWeight: "900",
-                  }}
-                >
-                  Next Focus
-                </Text>
-                <View
-                  style={{
-                    paddingVertical: 5,
-                    paddingHorizontal: 8,
-                    borderRadius: FEED.radius,
-                    borderWidth: 1,
-                    borderColor: FEED.line,
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  <Text
-                    style={[
-                      tokens.type.caption,
-                      { color: FEED.text, fontWeight: "800" },
-                    ]}
-                  >
-                    Coach Direction
-                  </Text>
-                </View>
-              </View>
-              <Text
-                numberOfLines={2}
-                style={{
-                  marginTop: 12,
-                  color: FEED.muted,
-                  fontSize: 14,
-                  lineHeight: 21,
-                }}
-              >
-                {focusTitle}
-              </Text>
-            </View>
-
-            <View
-              style={{
-                marginTop: 16,
-                padding: 16,
-                borderRadius: FEED.radius,
-                borderWidth: 1,
-                borderColor: FEED.line,
-                backgroundColor: FEED.panel,
-              }}
-            >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: tokens.space[3],
-                }}
-              >
-                <Text
-                  style={{
-                    color: FEED.text,
-                    fontSize: 17,
-                    lineHeight: 22,
-                    fontWeight: "900",
-                  }}
-                >
-                  Mission Resource
-                </Text>
-                <View
-                  style={{
-                    paddingVertical: 5,
-                    paddingHorizontal: 8,
-                    borderRadius: FEED.radius,
-                    borderWidth: 1,
-                    borderColor: FEED.line,
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  <Text
-                    style={[
-                      tokens.type.caption,
-                      { color: FEED.text, fontWeight: "800" },
-                    ]}
-                  >
-                    {hasMissionResource ? "Shared via link" : "No link yet"}
-                  </Text>
-                </View>
-              </View>
-              {hasMissionResource ? (
-                <Pressable
-                  onPress={() => void openPublishedWebUrl(weeklySyncDoc?.missionResourceUrl)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open this week’s technique link"
-                  style={({ pressed }) => ({
-                    minHeight: 92,
-                    marginTop: 12,
-                    paddingVertical: 12,
-                    paddingHorizontal: tokens.space[5],
-                    borderRadius: FEED.radius,
-                    borderWidth: 1,
-                    borderColor: FEED.line,
-                    backgroundColor: pressed ? FEED.panel2 : "#22272e",
-                    alignSelf: "stretch",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  })}
-                >
-                  <Text
-                    style={{
-                      color: FEED.text,
-                      fontSize: 15,
-                      fontWeight: "900",
-                    }}
-                  >
-                    ▶ Technique Link
-                  </Text>
-                </Pressable>
-              ) : null}
-              <Text
-                style={{
-                  marginTop: 12,
-                  color: FEED.muted,
-                  fontSize: 14,
-                  lineHeight: 21,
-                }}
-              >
-                {hasMissionResource
-                  ? "Technique support for this week’s coach direction."
-                  : "No technique link shared yet."}
-              </Text>
-            </View>
-
             {role === "parent" ? (
-              <CoachingHistoryLogCard kidId={activeParentLinkedKidId ?? undefined} />
+              <>
+                <View
+                  style={{
+                    marginTop: tokens.space[8],
+                    paddingTop: tokens.space[5],
+                    borderTopWidth: 1,
+                    borderTopColor: FEED.line,
+                  }}
+                >
+                  <Text
+                    accessibilityRole="header"
+                    style={[
+                      tokens.type.label,
+                      {
+                        color: FEED.muted,
+                        letterSpacing: 1,
+                      },
+                    ]}
+                  >
+                    LOOKING BACK
+                  </Text>
+                  <Text
+                    style={[
+                      tokens.type.caption,
+                      {
+                        marginTop: tokens.space[2],
+                        color: FEED.faint,
+                        lineHeight: 18,
+                      },
+                    ]}
+                  >
+                    Week-by-week coaching progression for this athlete.
+                  </Text>
+                </View>
+                <CoachingHistoryLogCard kidId={activeParentLinkedKidId ?? undefined} />
+              </>
             ) : null}
 
             {role === "parent" && lastCompetitionWithinWeek ? (
@@ -2657,16 +2474,7 @@ function ParentThisWeekScreen() {
               </View>
             ) : null}
 
-            {role === "parent" ? (
-              <PracticeSummaryCard
-                athleteId={activeParentAthleteId}
-                kidId={activeParentLinkedKidId ?? undefined}
-              />
-            ) : null}
-
-            {!isLinked ||
-            !primaryActionIsStartTraining ||
-            (isLinked && currentAssignment?.status === "assigned") ? (
+            {!isLinked || (isLinked && currentAssignment?.status === "assigned") ? (
               <View style={{ marginTop: 16, gap: tokens.space[3] }}>
                 {!isLinked ? (
                   <Pressable
@@ -2692,32 +2500,6 @@ function ParentThisWeekScreen() {
                       ]}
                     >
                       Connect with your coach
-                    </Text>
-                  </Pressable>
-                ) : !primaryActionIsStartTraining ? (
-                  <Pressable
-                    onPress={() => void refreshParentData()}
-                    accessibilityRole="button"
-                    style={({ pressed }) => ({
-                      paddingVertical: tokens.space[3],
-                      paddingHorizontal: tokens.space[5],
-                      borderRadius: FEED.radius,
-                      borderWidth: 1,
-                      borderColor: FEED.lineStrong,
-                      backgroundColor: pressed
-                        ? FEED.panel3
-                        : FEED.panel2,
-                      alignSelf: "stretch",
-                      alignItems: "center",
-                    })}
-                  >
-                    <Text
-                      style={[
-                        tokens.type.title,
-                        { color: FEED.text },
-                      ]}
-                    >
-                      Refresh coach data
                     </Text>
                   </Pressable>
                 ) : null}
@@ -2763,478 +2545,6 @@ function ParentThisWeekScreen() {
                 ) : null}
               </View>
             ) : null}
-
-            {/* Transitional utilities remain below the weekly loop until their final homes are decided. */}
-            <Section title="Competition snapshot" tone="family">
-              <Text
-                style={{
-                  marginBottom: 12,
-                  fontSize: 13,
-                  color: FEED.faint,
-                  lineHeight: 18,
-                }}
-              >
-                Event planning sits below this week’s coach loop.
-              </Text>
-              {role === "parent" ? (
-                <View
-                  style={{
-                    marginBottom: tokens.layout.sectionGap,
-                    paddingVertical: 16,
-                    paddingHorizontal: 16,
-                    borderRadius: FEED.radius,
-                    borderWidth: 1,
-                    borderColor: FEED.line,
-                    backgroundColor: FEED.panel2,
-                    overflow: "hidden",
-                  }}
-                >
-                  <View style={{ flexDirection: "column", alignItems: "stretch", gap: 0 }}>
-                    {nextUpcomingCompetitionEntry ? (
-                      <Pressable
-                        onPress={() => {
-                          router.push(
-                            `/competition/${encodeURIComponent(nextUpcomingCompetitionEntry.id)}` as Href,
-                          );
-                        }}
-                        style={({ pressed }) => ({ opacity: pressed ? 0.9 : 1 })}
-                        accessibilityRole="button"
-                        accessibilityLabel="Open next competition"
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            letterSpacing: 0.5,
-                            fontWeight: "800",
-                            color: FEED.muted,
-                          }}
-                        >
-                          NEXT COMPETITION
-                        </Text>
-                        <View
-                          style={{
-                            marginTop: 8,
-                            flexDirection: "row",
-                            alignItems: "flex-start",
-                            gap: 8,
-                          }}
-                        >
-                          <Text
-                            numberOfLines={3}
-                            ellipsizeMode="tail"
-                            style={{
-                              flex: 1,
-                              minWidth: 0,
-                              fontSize: 20,
-                              fontWeight: "900",
-                              color: FEED.text,
-                              lineHeight: 26,
-                            }}
-                          >
-                            {(nextUpcomingCompetitionEntry.tournamentName ?? "").trim() || "Competition"}
-                          </Text>
-                          <CompetitionMediaPills
-                            {...(familyCompetition.mediaByEntryId[nextUpcomingCompetitionEntry.id] ?? {
-                              hasVideo: false,
-                              hasImage: false,
-                            })}
-                          />
-                        </View>
-                        {nextUpcomingCompetitionDateLabel ? (
-                          <Text
-                            style={{ marginTop: 6, fontSize: 15, color: FEED.muted, lineHeight: 20 }}
-                          >
-                            {nextUpcomingCompetitionDateLabel}
-                          </Text>
-                        ) : null}
-                        {nextUpcomingCompetitionPromoterFmt ? (
-                          <Text
-                            style={{ marginTop: 4, fontSize: 13, color: FEED.muted, lineHeight: 18 }}
-                          >
-                            {nextUpcomingCompetitionPromoterFmt}
-                          </Text>
-                        ) : null}
-
-                        {nextUpcomingCompetitionChip ? (
-                          <View
-                            style={{
-                              marginTop: 10,
-                              alignSelf: "flex-start",
-                              paddingVertical: 6,
-                              paddingHorizontal: 10,
-                              borderRadius: 999,
-                              backgroundColor: nextUpcomingCompetitionChip.backgroundColor,
-                            }}
-                          >
-                            <Text
-                              style={{ fontSize: 11, fontWeight: "900", color: nextUpcomingCompetitionChip.textColor }}
-                            >
-                              {nextUpcomingCompetitionChip.label}
-                            </Text>
-                          </View>
-                        ) : null}
-                      </Pressable>
-                    ) : (
-                      <View>
-                        <Text
-                          style={{
-                            fontSize: 13,
-                            letterSpacing: 0.5,
-                            fontWeight: "800",
-                            color: FEED.muted,
-                          }}
-                        >
-                          NEXT COMPETITION
-                        </Text>
-                        <Text style={{ marginTop: 10, fontSize: 14, color: FEED.muted, lineHeight: 20 }}>
-                          No upcoming dates right now.
-                        </Text>
-                      </View>
-                    )}
-
-                    <View
-                      style={{
-                        marginTop: 14,
-                        flexDirection: "column",
-                        alignItems: "stretch",
-                        gap: 10,
-                      }}
-                    >
-                      <Pressable
-                        onPress={() => {
-                          setCompetitionCalendarExpanded((v) => !v);
-                        }}
-                        style={({ pressed }) => ({
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          borderRadius: FEED.radius,
-                          borderWidth: 1,
-                          borderColor: FEED.lineStrong,
-                          backgroundColor: pressed ? FEED.panel3 : FEED.panel,
-                          alignSelf: "stretch",
-                          alignItems: "center",
-                        })}
-                        accessibilityRole="button"
-                        accessibilityLabel="View competitions"
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: "900", color: FEED.text }}>
-                          {competitionCalendarExpanded ? "Hide competitions" : "View competitions"}
-                        </Text>
-                      </Pressable>
-
-                      {familyCompetition.kidId ? (
-                        <Pressable
-                          onPress={() => {
-                            router.push(
-                              `/this-week/family-competition/edit?kidId=${encodeURIComponent(familyCompetition.kidId!)}&openNonce=${encodeURIComponent(
-                                String(Date.now()),
-                              )}`,
-                            );
-                          }}
-                          style={({ pressed }) => ({
-                            paddingVertical: 10,
-                            paddingHorizontal: 12,
-                            borderRadius: FEED.radius,
-                            borderWidth: 1,
-                            borderColor: FEED.lineStrong,
-                            backgroundColor: pressed
-                              ? FEED.panel3
-                              : "transparent",
-                            alignSelf: "stretch",
-                            alignItems: "center",
-                          })}
-                          accessibilityRole="button"
-                          accessibilityLabel="Add competition"
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: "700", color: FEED.muted }}>
-                            Add competition
-                          </Text>
-                        </Pressable>
-                      ) : null}
-                    </View>
-                  </View>
-                </View>
-              ) : null}
-
-                {competitionCalendarExpanded ? (
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      color: UI.textSecondary,
-                      lineHeight: 21,
-                      marginBottom: 12,
-                    }}
-                  >
-                    {familyCompetition.kidName
-                      ? `${familyCompetition.kidName}: tap a competition to open it.`
-                      : familyCompetition.kidId
-                        ? "Tap a competition to open it."
-                        : "Add an athlete below to start this calendar."}
-                  </Text>
-                ) : null}
-
-                {!familyCompetition.kidId ? (
-                  <>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        color: UI.textPrimary,
-                        lineHeight: 22,
-                        fontWeight: "600",
-                      }}
-                    >
-                      No athlete selected on this phone yet
-                    </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 6 }}>
-                      Add someone on the coach roster on this device to track their competitions
-                      here. Nothing is shared until you link with your coach.
-                    </Text>
-                  </>
-                ) : null}
-
-                {familyCompetition.kidId ? (
-                  null
-                ) : null}
-
-                {familyCompetitionGlobalEmpty && familyCompetition.kidId ? (
-                  <>
-                    <Text
-                      style={{
-                        fontSize: 15,
-                        color: UI.textPrimary,
-                        lineHeight: 22,
-                        fontWeight: "600",
-                      }}
-                    >
-                      Nothing on the calendar yet
-                    </Text>
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 6 }}>
-                      When you are ready, add a tournament date for your family, or check back if your
-                      coach shared one on this phone.
-                    </Text>
-                  </>
-                ) : null}
-
-                {!familyCompetitionGlobalEmpty ? (
-                  <>
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        letterSpacing: 0.9,
-                        color: "#5b21b6",
-                        fontWeight: "700",
-                        marginBottom: 10,
-                      }}
-                    >
-                      Coming up
-                    </Text>
-                    {familyCompetition.upcoming.length === 0 ? (
-                      <View style={{ marginBottom: 18 }}>
-                        <Text
-                          style={{
-                            fontSize: 15,
-                            color: UI.textPrimary,
-                            lineHeight: 22,
-                            fontWeight: "600",
-                          }}
-                        >
-                          No upcoming dates right now
-                        </Text>
-                        <Text
-                          style={{
-                            fontSize: 14,
-                            color: UI.textSecondary,
-                            lineHeight: 21,
-                            marginTop: 6,
-                          }}
-                        >
-                          Add one when you know the next tournament, or scroll to Recent to look back
-                          at past events.
-                        </Text>
-                      </View>
-                    ) : familyUpcomingExcludingHero.length > 0 ? (
-                      <View style={{ marginBottom: tokens.layout.sectionGap }}>
-                        <FlatList
-                          data={familyUpcomingExcludingHero}
-                          keyExtractor={(e) => e.id}
-                          horizontal={true}
-                          showsHorizontalScrollIndicator={false}
-                          nestedScrollEnabled={true}
-                          contentContainerStyle={{ paddingRight: tokens.space[2] }}
-                          renderItem={({ item }) => {
-                            const t = (item.tournamentName ?? "").trim() || "Competition";
-                            const media = familyCompetition.mediaByEntryId[item.id] ?? {
-                              hasVideo: false,
-                              hasImage: false,
-                            };
-                            return (
-                              <Pressable
-                                onPress={() => {
-                                  router.push(
-                                    `/competition/${encodeURIComponent(item.id)}` as Href,
-                                  );
-                                }}
-                                style={({ pressed }) => ({
-                                  width: 208,
-                                  marginRight: tokens.space[3],
-                                  paddingVertical: tokens.space[3],
-                                  paddingHorizontal: tokens.space[3],
-                                  borderRadius: tokens.radius.md,
-                                  borderWidth: 1,
-                                  borderColor: UI.competitionRowBorder,
-                                  backgroundColor: pressed ? UI.bgCard : UI.competitionRowBg,
-                                })}
-                                accessibilityRole="button"
-                                accessibilityLabel={t}
-                              >
-                                <View
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "flex-start",
-                                    gap: 8,
-                                  }}
-                                >
-                                  <Text
-                                    numberOfLines={2}
-                                    ellipsizeMode="tail"
-                                    style={{
-                                      flex: 1,
-                                      minWidth: 0,
-                                      fontSize: 15,
-                                      fontWeight: "700",
-                                      color: UI.textPrimary,
-                                      lineHeight: 21,
-                                    }}
-                                  >
-                                    {t}
-                                  </Text>
-                                  <CompetitionMediaPills {...media} />
-                                </View>
-                                <Text
-                                  style={{
-                                    marginTop: tokens.space[2],
-                                    fontSize: 13,
-                                    color: UI.textSecondary,
-                                    lineHeight: 18,
-                                  }}
-                                >
-                                  {formatFamilyCompetitionDate(item.eventDate)}
-                                </Text>
-                              </Pressable>
-                            );
-                          }}
-                        />
-                      </View>
-                    ) : null}
-
-
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        letterSpacing: 0.9,
-                        color: "#5b21b6",
-                        fontWeight: "700",
-                        marginBottom: 10,
-                        marginTop: 2,
-                      }}
-                    >
-                      Recent competitions
-                    </Text>
-                    {familyCompetition.recent.length === 0 ? (
-                      <View>
-                        <Text
-                          style={{
-                            fontSize: 15,
-                            color: UI.textPrimary,
-                            lineHeight: 22,
-                            fontWeight: "600",
-                          }}
-                        >
-                          No recent events logged yet
-                        </Text>
-                        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 21, marginTop: 6 }}>
-                          After a competition day passes, it moves here so you can add results when you
-                          are ready.
-                        </Text>
-                      </View>
-                    ) : (
-                      <View>
-                        <FlatList
-                          data={familyCompetition.recent}
-                          keyExtractor={(e) => e.id}
-                          horizontal={true}
-                          showsHorizontalScrollIndicator={false}
-                          nestedScrollEnabled={true}
-                          contentContainerStyle={{ paddingRight: tokens.space[2] }}
-                          renderItem={({ item }) => {
-                            const t = (item.tournamentName ?? "").trim() || "Competition";
-                            const media = familyCompetition.mediaByEntryId[item.id] ?? {
-                              hasVideo: false,
-                              hasImage: false,
-                            };
-                            return (
-                              <Pressable
-                                onPress={() => {
-                                  router.push(
-                                    `/competition/${encodeURIComponent(item.id)}` as Href,
-                                  );
-                                }}
-                                style={({ pressed }) => ({
-                                  width: 208,
-                                  marginRight: tokens.space[3],
-                                  paddingVertical: tokens.space[3],
-                                  paddingHorizontal: tokens.space[3],
-                                  borderRadius: tokens.radius.md,
-                                  borderWidth: 1,
-                                  borderColor: UI.competitionRowBorder,
-                                  backgroundColor: pressed ? UI.bgCard : UI.competitionRowBg,
-                                })}
-                                accessibilityRole="button"
-                                accessibilityLabel={t}
-                              >
-                                <View
-                                  style={{
-                                    flexDirection: "row",
-                                    alignItems: "flex-start",
-                                    gap: 8,
-                                  }}
-                                >
-                                  <Text
-                                    numberOfLines={2}
-                                    ellipsizeMode="tail"
-                                    style={{
-                                      flex: 1,
-                                      minWidth: 0,
-                                      fontSize: 15,
-                                      fontWeight: "700",
-                                      color: UI.textPrimary,
-                                      lineHeight: 21,
-                                    }}
-                                  >
-                                    {t}
-                                  </Text>
-                                  <CompetitionMediaPills {...media} />
-                                </View>
-                                <Text
-                                  style={{
-                                    marginTop: tokens.space[2],
-                                    fontSize: 13,
-                                    color: UI.textSecondary,
-                                    lineHeight: 18,
-                                  }}
-                                >
-                                  {formatFamilyCompetitionDate(item.eventDate)}
-                                </Text>
-                              </Pressable>
-                            );
-                          }}
-                        />
-                      </View>
-                    )}
-
-                    </>
-                ) : null}
-              </Section>
 
             {isLinked && hasCompletionSummary ? (
               <Section title="Nice work">
@@ -3350,18 +2660,6 @@ function ParentThisWeekScreen() {
                       }}
                     >
                       Add or remove athletes, or remove this invite from this device only.
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => void refreshParentData()}
-                    style={({ pressed }) => ({
-                      marginTop: 10,
-                      alignSelf: "flex-start",
-                      opacity: pressed ? 0.85 : 1,
-                    })}
-                  >
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: FEED.text }}>
-                      {useWeeklySyncHero ? "Refresh weekly note now" : "Refresh shared updates"}
                     </Text>
                   </Pressable>
                 </>

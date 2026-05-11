@@ -1,5 +1,6 @@
+import type { CoachWeeklySyncCacheEntry } from "../storage/coachWeeklySyncCacheStore";
 import { coachSyncFetchSession } from "../services/coachWeeklySyncApi";
-import type { Kid } from "../types/coachKid";
+import type { KidsById, Kid } from "../types/coachKid";
 import type { CoachLink, CoachLinkStatus } from "../types/coachShare";
 import { inviteLinkTokenTail, normalizeInviteLinkToken } from "./inviteLinkToken";
 
@@ -191,6 +192,34 @@ export function parentKidPresentedAsLinkedToCoach(kid: Kid, activeLinks: CoachLi
  * For Athletes-on-invite: kid is coherently bound to this invite token on this phone
  * (active link row + parent secret + matching stored token norm).
  */
+/**
+ * Identity backbone: local `Kid` rows claim `sharedAthleteId` for this invite, but the cached
+ * session snapshot’s `athletes[]` does not contain those IDs (empty roster cache, or stale write).
+ * `loadCoachShareData` must not `skipSessionNetwork` while this is true.
+ */
+export function parentLocalLinkageConflictsWithCachedSessionRoster(
+  kidsById: KidsById,
+  inviteTokenNorm: string,
+  cached: CoachWeeklySyncCacheEntry | null,
+): boolean {
+  if (!inviteTokenNorm) return false;
+  const rosterIds = new Set(
+    (cached?.athletes ?? [])
+      .map((a) => (typeof a.id === "string" ? a.id.trim() : ""))
+      .filter(Boolean),
+  );
+  for (const k of Object.values(kidsById)) {
+    const kt = normalizeInviteLinkToken(k.sharedFromInviteTokenNorm ?? "");
+    if (kt !== inviteTokenNorm) continue;
+    const aid = (k.sharedAthleteId ?? "").trim();
+    if (!aid) continue;
+    if (!rosterIds.has(aid)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function parentKidCoherentlyLinkedToInviteToken(
   kid: Kid,
   inviteTokenNorm: string,

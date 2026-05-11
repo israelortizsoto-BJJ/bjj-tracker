@@ -347,7 +347,7 @@ export default function CoachDashboardScreen() {
           actions={[
             {
               label: "Athlete roster and parent links",
-              icon: "▣",
+              icon: "+",
               onPress: () => router.push("/coach/kids"),
             },
             {

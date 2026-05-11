@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -23,6 +24,12 @@ import {
   coachSyncFetchSession,
   coachSyncRedeemParentWriter,
 } from "../../../src/services/coachWeeklySyncApi";
+import {
+  getActiveAthleteId,
+  getAthletes,
+  setActiveAthleteId,
+  type ParentAthlete,
+} from "../../../src/storage/athleteStore";
 import { getCoachLinks, setCoachLinks } from "../../../src/storage/coachShareStore";
 import {
   attachSharedAthleteToKid,
@@ -33,6 +40,7 @@ import {
   unlinkParentAthleteFromCoachSession,
 } from "../../../src/storage/coachKidStore";
 import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
+import { StorageKeys } from "../../../src/storage/storageKeys";
 import type { CoachLink } from "../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
@@ -62,6 +70,76 @@ function patchLinkParentSecret(links: CoachLink[], linkId: string, secret: strin
   );
 }
 
+/**
+ * Identity-merge bind: rewrite a `ParentAthlete` row's id (parent-side truth) to the server-issued
+ * `sharedAthleteId` so `linkedKidIdForParentAthlete(kidsById, activeAthleteId)` resolves the projected
+ * `Kid` for downstream This Week / activeKidId hydration. ParentAthlete remains parent-side truth (we
+ * preserve name/household/etc.); only the id is reissued to align with the coach/share projection layer.
+ * If the active athlete pointed at the old id, it is moved to the new id.
+ */
+async function rewriteParentAthleteIdToSharedAthleteId(
+  parentAthleteOldId: string,
+  newSharedAthleteId: string,
+): Promise<{ rewrote: boolean; wasActive: boolean }> {
+  const oldId = parentAthleteOldId.trim();
+  const newId = newSharedAthleteId.trim();
+  if (!oldId || !newId || oldId === newId) {
+    return { rewrote: false, wasActive: false };
+  }
+  const all = await getAthletes();
+  const target = all.find((a) => a.id === oldId);
+  if (!target) {
+    return { rewrote: false, wasActive: false };
+  }
+  const next = all
+    .filter((a) => a.id !== oldId && a.id !== newId)
+    .concat({ ...target, id: newId });
+  await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+  const active = await getActiveAthleteId();
+  const wasActive = (active ?? "").trim() === oldId;
+  if (wasActive) {
+    await setActiveAthleteId(newId);
+  }
+  return { rewrote: true, wasActive };
+}
+
+/** After POST /athletes: GET session, confirm roster includes the new id, persist verified snapshot to cache. */
+async function verifyRemoteRosterAfterAthletePost(
+  linkToken: string,
+  apiBaseUrl: string | undefined | null,
+  createdAthleteId: string,
+): Promise<SyncedSharedAthlete[]> {
+  const session = await coachSyncFetchSession(linkToken, apiBaseUrl ?? undefined);
+  const expected = createdAthleteId.trim();
+  const onRoster = session.athletes.some(
+    (a) => (typeof a.id === "string" ? a.id.trim() : "") === expected,
+  );
+  if (!onRoster) {
+    if (__DEV__) {
+      console.error("[mm:identity-backbone] PARTIAL_LINK_POST_VERIFICATION_FAILED", {
+        expectedAthleteId: expected,
+        remoteAthleteIds: session.athletes.map((a) => a.id),
+        tokenTail: inviteLinkTokenTail(normalizeInviteLinkToken(linkToken)),
+      });
+    }
+    throw new CoachWeeklySyncApiError(
+      "Could not confirm the athlete on the coach session. Try again in a moment.",
+      502,
+    );
+  }
+  const nowIso = new Date().toISOString();
+  await setCachedWeeklyForLinkToken(
+    linkToken,
+    session.weekly,
+    nowIso,
+    session.weeklyByAthleteId ?? {},
+    session.athletes,
+    session,
+    normalizeInviteLinkToken(linkToken),
+  );
+  return session.athletes;
+}
+
 export default function ParentLinkedAthletesScreen() {
   const { linkId } = useLocalSearchParams<{ linkId?: string }>();
   const id = linkId ? String(linkId) : "";
@@ -70,9 +148,12 @@ export default function ParentLinkedAthletesScreen() {
   const [link, setLink] = useState<CoachLink | null>(null);
   const [sessionAthletes, setSessionAthletes] = useState<SyncedSharedAthlete[]>([]);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
+  /** Domain A — parent-side identity truth (lives in `parentAthletes`, e.g. Luca). */
+  const [parentAthletes, setParentAthletes] = useState<ParentAthlete[]>([]);
   const [nameDraft, setNameDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [linkingKidId, setLinkingKidId] = useState<string | null>(null);
+  const [linkingParentAthleteId, setLinkingParentAthleteId] = useState<string | null>(null);
   const [unlinkingKidId, setUnlinkingKidId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   /** After a successful `coachSyncFetchSession` this visit; enables stale `sharedAthleteId` relink. */
@@ -140,8 +221,19 @@ export default function ParentLinkedAthletesScreen() {
       }
 
       setLink(working);
-      const localKids = await getKidsById();
+      const [localKids, localParentAthletes] = await Promise.all([
+        getKidsById(),
+        getAthletes(),
+      ]);
       setKidsByIdState(localKids);
+      setParentAthletes(localParentAthletes);
+      if (__DEV__) {
+        console.log("[mm:identity-merge] refresh:sources_loaded", {
+          kidCount: Object.keys(localKids).length,
+          parentAthleteCount: localParentAthletes.length,
+          tokenTail: inviteLinkTokenTail(ws.linkToken),
+        });
+      }
       if (syncOk && ws.parentWriterSecret) {
         const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
         setSessionAthletes(session.athletes);
@@ -156,6 +248,25 @@ export default function ParentLinkedAthletesScreen() {
           session,
           normalizeInviteLinkToken(ws.linkToken),
         );
+        if (__DEV__) {
+          const remoteIds = new Set(
+            session.athletes.map((a) => (typeof a.id === "string" ? a.id.trim() : "")).filter(Boolean),
+          );
+          const tn = normalizeInviteLinkToken(ws.linkToken);
+          for (const k of Object.values(localKids)) {
+            const kt = normalizeInviteLinkToken(k.sharedFromInviteTokenNorm ?? "");
+            if (kt !== tn) continue;
+            const aid = (k.sharedAthleteId ?? "").trim();
+            if (aid && !remoteIds.has(aid)) {
+              console.warn("[mm:identity-backbone] PARTIAL_LINK_session_GET_missing_local_linked_athlete", {
+                kidId: k.id,
+                localSharedAthleteId: aid,
+                tokenTail: inviteLinkTokenTail(tn),
+                remoteAthleteCount: session.athletes.length,
+              });
+            }
+          }
+        }
       }
     } catch (e) {
       const msg =
@@ -181,20 +292,18 @@ export default function ParentLinkedAthletesScreen() {
   );
 
   /**
-   * Profiles that can be tied to this invite without creating a duplicate roster row:
-   * - never linked, or
-   * - linked id is not on this session anymore (reconnect / server removed athlete) when the session
-   *   fetch succeeded — local `sharedAthleteId` can be stale if the parent unlinked on the server but
-   *   storage was not cleared, or they removed the phone link before “Remove from coach”.
-   * Omit kids already on this session **and** coherently bound to this invite on this phone (active link
-   * + parent writer secret + matching token norm).
+   * Local child profiles selectable for linkage (Domain A — device roster), not suppressed by roster GET.
+   * After an authoritative session fetch, omit only kids already on this invite coherently (same invite
+   * token norm + roster id) so linking does not create a duplicate session athlete row.
    */
   const relinkCandidateKids = useMemo(() => {
     return Object.values(kidsById)
       .filter((k) => {
         const sid = (k.sharedAthleteId ?? "").trim();
         if (!sid) return true;
-        if (!sessionAthletesAuthoritative) return false;
+        // Selection must show locals with linkage unknown or stale until GET completes; hiding them here
+        // left `sharedAthleteId`-set profiles invisible whenever roster never became authoritative.
+        if (!sessionAthletesAuthoritative) return true;
         const onSession = sessionAthleteIds.has(sid);
         const tokenMatchesCurrentInvite =
           Boolean(currentInviteTokenNorm) &&
@@ -222,6 +331,67 @@ export default function ParentLinkedAthletesScreen() {
     return rows;
   }, [currentInviteTokenNorm, kidsById, sessionAthletes, sessionAthletesAuthoritative]);
 
+  /**
+   * Parent-side identity rows (Domain A — `parentAthletes`) that still need a coach/share `Kid`
+   * projection on this invite. Hidden when:
+   *  - the parent athlete id is already a `sharedAthleteId` on any `Kid` (already projected), OR
+   *  - a `Kid` candidate with the same trimmed/lowercased name is already rendered (visual dedupe), OR
+   *  - the parent athlete id matches a session roster id (the bind already exists upstream).
+   */
+  const parentAthleteCandidates = useMemo(() => {
+    const projectedAthleteIds = new Set<string>();
+    for (const k of Object.values(kidsById)) {
+      const sid = (k.sharedAthleteId ?? "").trim();
+      if (sid) projectedAthleteIds.add(sid);
+    }
+    const candidateKidNames = new Set(
+      relinkCandidateKids.map((k) => k.name.trim().toLowerCase()).filter(Boolean),
+    );
+    const suppressed: {
+      id: string;
+      name: string;
+      reason: "projected_kid" | "name_dup" | "on_session";
+    }[] = [];
+    const kept = parentAthletes.filter((pa) => {
+      const pid = pa.id.trim();
+      const pname = pa.name.trim().toLowerCase();
+      if (!pid || !pname) return false;
+      if (projectedAthleteIds.has(pid)) {
+        suppressed.push({ id: pid, name: pa.name, reason: "projected_kid" });
+        return false;
+      }
+      if (sessionAthleteIds.has(pid)) {
+        suppressed.push({ id: pid, name: pa.name, reason: "on_session" });
+        return false;
+      }
+      if (candidateKidNames.has(pname)) {
+        suppressed.push({ id: pid, name: pa.name, reason: "name_dup" });
+        return false;
+      }
+      return true;
+    });
+    const sorted = [...kept].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
+    );
+    if (__DEV__) {
+      console.log("[mm:identity-merge] candidates_computed", {
+        kidCount: Object.keys(kidsById).length,
+        parentAthleteCount: parentAthletes.length,
+        kidCandidates: relinkCandidateKids.length,
+        parentAthleteCandidates: sorted.length,
+        suppressed,
+        sessionAuthoritative: sessionAthletesAuthoritative,
+      });
+    }
+    return sorted;
+  }, [
+    kidsById,
+    parentAthletes,
+    relinkCandidateKids,
+    sessionAthleteIds,
+    sessionAthletesAuthoritative,
+  ]);
+
   useFocusEffect(
     useCallback(() => {
       if (!id) return;
@@ -245,6 +415,12 @@ export default function ParentLinkedAthletesScreen() {
           link.weeklySync.apiBaseUrl,
         );
 
+        const verifiedAthletes = await verifyRemoteRosterAfterAthletePost(
+          link.weeklySync.linkToken,
+          link.weeklySync.apiBaseUrl,
+          athlete.id,
+        );
+
         if (__DEV__) {
           const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
           console.log("[bjj-sync-debug] parent-athletes relink existing kid", {
@@ -254,6 +430,7 @@ export default function ParentLinkedAthletesScreen() {
             tokenNorm,
             tokenTail: inviteLinkTokenTail(tokenNorm),
             linkId: link.id,
+            verifiedRemoteRosterCount: verifiedAthletes.length,
           });
         }
 
@@ -268,7 +445,7 @@ export default function ParentLinkedAthletesScreen() {
         }
 
         setKidsByIdState((prev) => ({ ...prev, [kid.id]: updated }));
-        setSessionAthletes((prev) => [...prev, athlete]);
+        setSessionAthletes(verifiedAthletes);
       } catch (e) {
         const msg =
           e instanceof CoachWeeklySyncApiError
@@ -279,6 +456,89 @@ export default function ParentLinkedAthletesScreen() {
         setError(msg);
       } finally {
         setLinkingKidId(null);
+      }
+    },
+    [link],
+  );
+
+  /**
+   * Bind a `ParentAthlete` (Domain A — parent-side identity truth) to this invite:
+   * 1. POST /athletes (same path as `onAddAthlete`) so the server issues a `sharedAthleteId`.
+   * 2. Verify the roster GET contains that id (Fresh Invite Truth backbone — unchanged).
+   * 3. Create the `Kid` projection row carrying `sharedAthleteId = athlete.id` and the invite token.
+   * 4. Reissue the `ParentAthlete.id` to that `sharedAthleteId` so `linkedKidIdForParentAthlete`
+   *    can resolve the projection, and downstream This Week / `activeKidId` hydration converges.
+   *    The row is preserved (name, household, etc.); only the id field aligns to the share plane.
+   */
+  const onLinkExistingParentAthlete = useCallback(
+    async (pa: ParentAthlete) => {
+      const name = pa.name.trim();
+      if (!name || !link?.weeklySync?.linkToken || !link.weeklySync.parentWriterSecret) {
+        return;
+      }
+      setLinkingParentAthleteId(pa.id);
+      setError(null);
+      try {
+        const { athlete } = await coachSyncCreateSessionAthlete(
+          link.weeklySync.linkToken,
+          link.weeklySync.parentWriterSecret,
+          { name },
+          link.weeklySync.apiBaseUrl,
+        );
+
+        const verifiedAthletes = await verifyRemoteRosterAfterAthletePost(
+          link.weeklySync.linkToken,
+          link.weeklySync.apiBaseUrl,
+          athlete.id,
+        );
+
+        const nowIso = new Date().toISOString();
+        const localKidId = `kid_${Date.now()}`;
+        const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
+        const existing = await getKidsById();
+        const createdKid: Kid = {
+          id: localKidId,
+          name: athlete.name,
+          sharedAthleteId: athlete.id,
+          sharedFromInviteTokenNorm: tokenNorm,
+          isParentManagedChildProfile: true,
+          createdAt: nowIso,
+          updatedAt: nowIso,
+        };
+        const nextKids: KidsById = { ...existing, [localKidId]: createdKid };
+        await setKidsById(nextKids);
+
+        const bind = await rewriteParentAthleteIdToSharedAthleteId(pa.id, athlete.id);
+
+        const refreshedParentAthletes = await getAthletes();
+
+        if (__DEV__) {
+          console.log("[mm:identity-merge] parent_athlete_bind_complete", {
+            parentAthleteOldId: pa.id,
+            parentAthleteName: pa.name,
+            linkedAthleteId: athlete.id,
+            kidLocalId: localKidId,
+            tokenTail: inviteLinkTokenTail(link.weeklySync.linkToken),
+            rewroteParentAthleteId: bind.rewrote,
+            switchedActiveAthleteId: bind.wasActive,
+            verifiedRemoteRosterCount: verifiedAthletes.length,
+            resultingLinkedKidId: localKidId,
+          });
+        }
+
+        setKidsByIdState(nextKids);
+        setParentAthletes(refreshedParentAthletes);
+        setSessionAthletes(verifiedAthletes);
+      } catch (e) {
+        const msg =
+          e instanceof CoachWeeklySyncApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Could not link athlete.";
+        setError(msg);
+      } finally {
+        setLinkingParentAthleteId(null);
       }
     },
     [link],
@@ -297,6 +557,12 @@ export default function ParentLinkedAthletesScreen() {
         link.weeklySync.parentWriterSecret,
         { name: trimmed },
         link.weeklySync.apiBaseUrl,
+      );
+
+      const verifiedAthletes = await verifyRemoteRosterAfterAthletePost(
+        link.weeklySync.linkToken,
+        link.weeklySync.apiBaseUrl,
+        athlete.id,
       );
 
       const nowIso = new Date().toISOString();
@@ -321,6 +587,7 @@ export default function ParentLinkedAthletesScreen() {
           tokenTail: inviteLinkTokenTail(tokenNorm),
           linkId: link.id,
           hasWriterSecret: Boolean(link.weeklySync?.writerSecret?.trim()),
+          verifiedRemoteRosterCount: verifiedAthletes.length,
         });
       }
 
@@ -329,7 +596,7 @@ export default function ParentLinkedAthletesScreen() {
 
       setKidsByIdState(nextKids);
       setNameDraft("");
-      setSessionAthletes((prev) => [...prev, athlete]);
+      setSessionAthletes(verifiedAthletes);
     } catch (e) {
       const msg =
         e instanceof CoachWeeklySyncApiError
@@ -456,7 +723,7 @@ export default function ParentLinkedAthletesScreen() {
           <Text style={{ color: UI.textSecondary }}>This link is no longer available.</Text>
         ) : (
           <>
-            {relinkCandidateKids.length > 0 ? (
+            {relinkCandidateKids.length > 0 || parentAthleteCandidates.length > 0 ? (
               <View style={{ marginBottom: 20, gap: 10 }}>
                 <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary }}>
                   EXISTING CHILD PROFILES
@@ -470,6 +737,7 @@ export default function ParentLinkedAthletesScreen() {
                   const isLinking = linkingKidId === k.id;
                   const disableRow =
                     isLinking ||
+                    linkingParentAthleteId !== null ||
                     unlinkingKidId !== null ||
                     busy ||
                     !link.weeklySync?.parentWriterSecret ||
@@ -495,6 +763,51 @@ export default function ParentLinkedAthletesScreen() {
                         <>
                           <Text style={{ fontSize: 16, fontWeight: "600", color: UI.textPrimary }}>
                             {k.name}
+                          </Text>
+                          {household ? (
+                            <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 4 }}>
+                              {household}
+                            </Text>
+                          ) : null}
+                          <Text style={{ fontSize: 12, color: UI.primaryFill, marginTop: 8, fontWeight: "700" }}>
+                            Link to this invite
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  );
+                })}
+                {parentAthleteCandidates.map((pa) => {
+                  const household = (pa.household ?? "").trim();
+                  const isLinking = linkingParentAthleteId === pa.id;
+                  const disableRow =
+                    isLinking ||
+                    linkingKidId !== null ||
+                    unlinkingKidId !== null ||
+                    busy ||
+                    !link.weeklySync?.parentWriterSecret ||
+                    !pa.name.trim();
+                  return (
+                    <Pressable
+                      key={`pa:${pa.id}`}
+                      disabled={disableRow}
+                      onPress={() => void onLinkExistingParentAthlete(pa)}
+                      style={({ pressed }) => ({
+                        paddingVertical: 14,
+                        paddingHorizontal: 14,
+                        borderRadius: CARD_RADIUS,
+                        borderWidth: 1,
+                        borderColor: UI.border,
+                        backgroundColor: pressed ? "#f9fafb" : UI.bgCard,
+                        opacity: disableRow ? 0.55 : 1,
+                      })}
+                    >
+                      {isLinking ? (
+                        <ActivityIndicator color={UI.primaryFill} />
+                      ) : (
+                        <>
+                          <Text style={{ fontSize: 16, fontWeight: "600", color: UI.textPrimary }}>
+                            {pa.name}
                           </Text>
                           {household ? (
                             <Text style={{ fontSize: 13, color: UI.textSecondary, marginTop: 4 }}>
@@ -542,7 +855,11 @@ export default function ParentLinkedAthletesScreen() {
                       const name = (athlete.name ?? kid.name ?? "").trim() || "Athlete";
                       const isUnlinking = unlinkingKidId === kid.id;
                       const disableRemove =
-                        isUnlinking || busy || linkingKidId !== null || !link.weeklySync?.parentWriterSecret;
+                        isUnlinking ||
+                        busy ||
+                        linkingKidId !== null ||
+                        linkingParentAthleteId !== null ||
+                        !link.weeklySync?.parentWriterSecret;
                       return (
                         <Pressable
                           key={kid.id}
@@ -608,6 +925,7 @@ export default function ParentLinkedAthletesScreen() {
               editable={
                 !busy &&
                 linkingKidId === null &&
+                linkingParentAthleteId === null &&
                 unlinkingKidId === null &&
                 Boolean(link.weeklySync?.parentWriterSecret)
               }
@@ -631,6 +949,7 @@ export default function ParentLinkedAthletesScreen() {
               disabled={
                 busy ||
                 linkingKidId !== null ||
+                linkingParentAthleteId !== null ||
                 unlinkingKidId !== null ||
                 !link.weeklySync?.parentWriterSecret ||
                 !nameDraft.trim()
@@ -644,6 +963,7 @@ export default function ParentLinkedAthletesScreen() {
                 opacity:
                   busy ||
                   linkingKidId !== null ||
+                  linkingParentAthleteId !== null ||
                   unlinkingKidId !== null ||
                   !link.weeklySync?.parentWriterSecret ||
                   !nameDraft.trim()

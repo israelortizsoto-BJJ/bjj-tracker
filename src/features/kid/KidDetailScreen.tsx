@@ -36,7 +36,7 @@ import {
 } from "../../coach/familyResourceUrl";
 import { kidWeeklyFocusToPublishPayload } from "../../coach/weeklyFocusPublish";
 import {
-  READ_TOGETHER_TITLE_ORDER,
+  READ_TOGETHER_TITLES,
   buildReadTogetherStoryCards,
 } from "../../family/readTogetherStoryCards";
 import { ReadTogetherStoryModal } from "../../family/ReadTogetherStoryModal";
@@ -1182,33 +1182,34 @@ export default function KidDetailScreen() {
     const journeyLine =
       "From class or program notes when you add them, otherwise a short encouragement line.";
 
-    const getSafeHeading = (index: number) => {
-      return READ_TOGETHER_TITLE_ORDER[index] ?? "Additional focus";
-    };
-
+    // Each row's heading is the canonical parent-facing card title for that source
+    // (mission ≠ recap ≠ study ≠ mats ≠ journey). The Family Huddle modal renders
+    // a subset of these (coach recap, study, journey) — mission and mats render on
+    // the parent main This Week card. Keeping the source-map headings tied to the
+    // shared titles keeps coach preview semantics aligned with parent rendering.
     return [
       {
-        heading: READ_TOGETHER_TITLE_ORDER[0],
+        heading: READ_TOGETHER_TITLES.mission,
         badge: "Weekly Focus" as const,
         status: missionLine,
       },
       {
-        heading: READ_TOGETHER_TITLE_ORDER[1],
+        heading: READ_TOGETHER_TITLES.coachRecap,
         badge: "You write" as const,
         status: recapStatus,
       },
       {
-        heading: READ_TOGETHER_TITLE_ORDER[2],
+        heading: READ_TOGETHER_TITLES.mats,
         badge: "From training" as const,
         status: matsLine,
       },
       {
-        heading: getSafeHeading(3),
+        heading: READ_TOGETHER_TITLES.studyMove,
         badge: "Optional" as const,
         status: studyLine,
       },
       {
-        heading: getSafeHeading(4),
+        heading: READ_TOGETHER_TITLES.journey,
         badge: "Auto" as const,
         status: journeyLine,
       },
@@ -1220,11 +1221,23 @@ export default function KidDetailScreen() {
     const payload = kidWeeklyFocusToPublishPayload(currentWeekEntry, weekStartYMD, {
       sameWeekEntriesForMissionFallback: weeklyFocusEntriesThisWeek,
     });
+    // Synthetic payload mirrors the SyncedWeeklyMessagePayload shape parents hydrate
+    // (headline, body, missionResourceUrl/Label, familyResourceUrl/Label,
+    // familyCoachRecapNote). youtubeUrl and other coach-only fields are intentionally
+    // excluded — they live on the coach UI only and never enter parent-facing render.
     const synthetic: SyncedWeeklyMessagePayload = {
       weekStartYMD: payload.weekStartYMD,
       headline: payload.headline,
       body: payload.body,
       updatedAt: currentWeekEntry.updatedAt,
+      ...(payload.missionResourceUrl
+        ? {
+            missionResourceUrl: payload.missionResourceUrl,
+            ...(payload.missionResourceLabel
+              ? { missionResourceLabel: payload.missionResourceLabel }
+              : {}),
+          }
+        : {}),
       ...(payload.familyResourceUrl
         ? {
             familyResourceUrl: payload.familyResourceUrl,

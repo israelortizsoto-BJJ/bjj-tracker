@@ -216,6 +216,12 @@ export default function CoachJoinScreen() {
         token,
       );
 
+      if (__DEV__ && session.athletes.length === 0) {
+        console.log("[mm:identity-backbone] join_cached_session_roster_empty", {
+          tokenTail: inviteLinkTokenTail(token),
+        });
+      }
+
       if (__DEV__) {
         const after = await getCoachLinks();
         const activeForTokenAfter = after.filter(

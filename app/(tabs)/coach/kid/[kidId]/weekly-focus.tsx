@@ -34,6 +34,21 @@ const UI = {
 
 const CARD_RADIUS = 16;
 
+/** Coach-only reference block: visually separated from publish-facing fields (not data changes). */
+const coachOnlySection = {
+  marginTop: 6,
+  paddingTop: 16,
+  paddingHorizontal: 12,
+  paddingBottom: 12,
+  borderTopWidth: 1,
+  borderTopColor: "#e5e7eb",
+  borderRadius: 12,
+  backgroundColor: "#f9fafb",
+  borderWidth: 1,
+  borderColor: "#e7e5e4",
+  gap: 8,
+} as const;
+
 type Tab = "templates" | "custom";
 
 export default function KidWeeklyFocusScreen() {
@@ -394,11 +409,15 @@ export default function KidWeeklyFocusScreen() {
               gap: 10,
             }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
-              Mission of the week
+            <Text style={{ fontSize: 12, fontWeight: "800", color: "#1d4ed8", letterSpacing: 0.4 }}>
+              MISSION OF THE WEEK
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "900", color: UI.textPrimary, marginTop: 2 }}>
+              Primary weekly message
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Pilot catalog · title + template detail · publishes into the shared weekly note for this invite.
+              Pilot catalog: title + detail become the family-facing direction. Publishes in the shared weekly note
+              when you publish from the kid screen.
             </Text>
 
             <View style={{ gap: 10 }}>
@@ -431,144 +450,166 @@ export default function KidWeeklyFocusScreen() {
               })}
             </View>
 
-            <TextInput
-              value={referenceUrl}
-              onChangeText={setReferenceUrl}
-              placeholder="Reference video URL — coach only, not published"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                color: UI.textPrimary,
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              What we sharpened with Coach
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for
-              this invite.
-            </Text>
-            <TextInput
-              value={familyCoachRecapNote}
-              onChangeText={setFamilyCoachRecapNote}
-              onFocus={bumpScrollToFocusedInput}
-              onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="e.g. We drilled base and one clean stand-up escape…"
-              placeholderTextColor={UI.textSecondary}
-              multiline
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-                minHeight: 88,
-                textAlignVertical: "top",
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              Mission (Optional)
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Primary focus for the athlete this week.
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional family link · https only · publishes after you publish from the kid screen.
-            </Text>
-            <TextInput
-              value={missionResourceUrl}
-              onChangeText={setMissionResourceUrl}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="https://…"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <TextInput
-              value={missionResourceLabel}
-              onChangeText={setMissionResourceLabel}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="Short label (optional)"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="sentences"
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              Study the move
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional family link · https only · publishes after you publish from the kid screen.
-            </Text>
-            <TextInput
-              value={familyResourceUrl}
-              onChangeText={setFamilyResourceUrl}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="https://…"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <TextInput
-              value={familyResourceLabel}
-              onChangeText={setFamilyResourceLabel}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="Short label (e.g. Drill video, Academy schedule)"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="sentences"
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
+            <View style={{ marginTop: 4, gap: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary, marginTop: 10 }}>
+                Mission link (optional)
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Same mission, optional https link + label for parents. Not a second topic.
+              </Text>
+              <TextInput
+                value={missionResourceUrl}
+                onChangeText={setMissionResourceUrl}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="https://…"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  marginTop: 4,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+              <TextInput
+                value={missionResourceLabel}
+                onChangeText={setMissionResourceLabel}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="Short label for parents (optional)"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="sentences"
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+            </View>
+
+            <View style={{ marginTop: 16, gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#047857", letterSpacing: 0.3 }}>
+                WHAT WE SHARPENED WITH COACH
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                Supporting context
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Reflection / recap for families — not private mat notes. Publishes in the shared weekly note.
+              </Text>
+              <TextInput
+                value={familyCoachRecapNote}
+                onChangeText={setFamilyCoachRecapNote}
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
+                placeholder="e.g. We drilled base and one clean stand-up escape…"
+                placeholderTextColor={UI.textSecondary}
+                multiline
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                  minHeight: 88,
+                  textAlignVertical: "top",
+                }}
+              />
+            </View>
+
+            <View style={{ marginTop: 16, gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#92400e", letterSpacing: 0.3 }}>
+                STUDY THE MOVE
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                Optional supplemental resource
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Separate from the mission: optional https link + label (e.g. drill clip, schedule).
+              </Text>
+              <TextInput
+                value={familyResourceUrl}
+                onChangeText={setFamilyResourceUrl}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="https://…"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  marginTop: 6,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+              <TextInput
+                value={familyResourceLabel}
+                onChangeText={setFamilyResourceLabel}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="Short label (e.g. Drill video, Academy schedule)"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="sentences"
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+            </View>
+
+            <View style={coachOnlySection}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary, letterSpacing: 0.3 }}>
+                REFERENCE VIDEO · COACH ONLY
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                Not shared with family
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                For your bench-side planning only. Does not appear in the parent weekly note.
+              </Text>
+              <TextInput
+                value={referenceUrl}
+                onChangeText={setReferenceUrl}
+                placeholder="Reference video URL (optional)"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  marginTop: 4,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#d6d3d1",
+                  backgroundColor: "#fafaf9",
+                  color: UI.textPrimary,
+                }}
+              />
+            </View>
           </View>
         ) : (
           <View
@@ -581,11 +622,15 @@ export default function KidWeeklyFocusScreen() {
               gap: 10,
             }}
           >
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
-              Mission of the week
+            <Text style={{ fontSize: 12, fontWeight: "800", color: "#1d4ed8", letterSpacing: 0.4 }}>
+              MISSION OF THE WEEK
+            </Text>
+            <Text style={{ fontSize: 16, fontWeight: "900", color: UI.textPrimary, marginTop: 2 }}>
+              Primary weekly message
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Title + note · publishes into the shared weekly note for this invite.
+              Title + family note are the direction for this week. Publishes in the shared weekly note when you
+              publish from the kid screen.
             </Text>
 
             <View>
@@ -635,143 +680,166 @@ export default function KidWeeklyFocusScreen() {
               />
             </View>
 
-            <TextInput
-              value={customYoutubeUrl}
-              onChangeText={setCustomYoutubeUrl}
-              placeholder="Reference video URL — coach only, not published"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                color: UI.textPrimary,
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              What we sharpened with Coach
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional · parent-safe recap — not private check-in notes. Publishes into the shared weekly note for
-              this invite.
-            </Text>
-            <TextInput
-              value={familyCoachRecapNote}
-              onChangeText={setFamilyCoachRecapNote}
-              onFocus={bumpScrollToFocusedInput}
-              onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="e.g. We drilled base and one clean stand-up escape…"
-              placeholderTextColor={UI.textSecondary}
-              multiline
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-                minHeight: 88,
-                textAlignVertical: "top",
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              Mission (Optional)
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Primary focus for the athlete this week.
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional family link · https only · publishes after you publish from the kid screen.
-            </Text>
-            <TextInput
-              value={missionResourceUrl}
-              onChangeText={setMissionResourceUrl}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="https://…"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <TextInput
-              value={missionResourceLabel}
-              onChangeText={setMissionResourceLabel}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="Short label (optional)"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="sentences"
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary, marginTop: 14 }}>
-              Study the move
-            </Text>
-            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Optional family link · https only · publishes after you publish from the kid screen.
-            </Text>
-            <TextInput
-              value={familyResourceUrl}
-              onChangeText={setFamilyResourceUrl}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="https://…"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              style={{
-                marginTop: 6,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
-            <TextInput
-              value={familyResourceLabel}
-              onChangeText={setFamilyResourceLabel}
-              onFocus={bumpScrollToFocusedInput}
-              placeholder="Short label for parents (optional)"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="sentences"
-              style={{
-                marginTop: 8,
-                paddingVertical: 10,
-                paddingHorizontal: 12,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#6ee7b7",
-                backgroundColor: "#f0fdf4",
-                color: UI.textPrimary,
-              }}
-            />
+            <View style={{ marginTop: 4, gap: 6 }}>
+              <Text style={{ fontSize: 13, fontWeight: "800", color: UI.textPrimary, marginTop: 6 }}>
+                Mission link (optional)
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Same mission, optional https link + label for parents. Not a second topic.
+              </Text>
+              <TextInput
+                value={missionResourceUrl}
+                onChangeText={setMissionResourceUrl}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="https://…"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  marginTop: 4,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+              <TextInput
+                value={missionResourceLabel}
+                onChangeText={setMissionResourceLabel}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="Short label for parents (optional)"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="sentences"
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+            </View>
+
+            <View style={{ marginTop: 16, gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#047857", letterSpacing: 0.3 }}>
+                WHAT WE SHARPENED WITH COACH
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                Supporting context
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Reflection / recap for families — not private mat notes. Publishes in the shared weekly note.
+              </Text>
+              <TextInput
+                value={familyCoachRecapNote}
+                onChangeText={setFamilyCoachRecapNote}
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
+                placeholder="e.g. We drilled base and one clean stand-up escape…"
+                placeholderTextColor={UI.textSecondary}
+                multiline
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                  minHeight: 88,
+                  textAlignVertical: "top",
+                }}
+              />
+            </View>
+
+            <View style={{ marginTop: 16, gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: "#92400e", letterSpacing: 0.3 }}>
+                STUDY THE MOVE
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                Optional supplemental resource
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                Separate from the mission: optional https link + label (e.g. drill clip, schedule).
+              </Text>
+              <TextInput
+                value={familyResourceUrl}
+                onChangeText={setFamilyResourceUrl}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="https://…"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  marginTop: 6,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+              <TextInput
+                value={familyResourceLabel}
+                onChangeText={setFamilyResourceLabel}
+                onFocus={bumpScrollToFocusedInput}
+                placeholder="Short label (e.g. Drill video, Academy schedule)"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="sentences"
+                style={{
+                  marginTop: 8,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#6ee7b7",
+                  backgroundColor: "#f0fdf4",
+                  color: UI.textPrimary,
+                }}
+              />
+            </View>
+
+            <View style={coachOnlySection}>
+              <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary, letterSpacing: 0.3 }}>
+                REFERENCE VIDEO · COACH ONLY
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
+                Not shared with family
+              </Text>
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+                For your bench-side planning only. Does not appear in the parent weekly note.
+              </Text>
+              <TextInput
+                value={customYoutubeUrl}
+                onChangeText={setCustomYoutubeUrl}
+                placeholder="Reference video URL (optional)"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                style={{
+                  marginTop: 4,
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#d6d3d1",
+                  backgroundColor: "#fafaf9",
+                  color: UI.textPrimary,
+                }}
+              />
+            </View>
           </View>
         )}
 
