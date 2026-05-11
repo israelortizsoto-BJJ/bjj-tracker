@@ -11,6 +11,8 @@ export type SyncedWeeklyParentFeedback = {
  */
 export type SyncedWeeklyMessagePayload = {
   weekStartYMD: string;
+  /** Stable Level 1 taxonomy id used for deterministic signal routing. */
+  systemKey?: string;
   /** Hero + Read together headline */
   headline: string;
   /** Hero + Read together body (family-facing text only) */
@@ -87,6 +89,8 @@ export type CoachWeeklySyncCreateSessionResponse = {
 
 export type CoachWeeklySyncPublishBody = {
   weekStartYMD: string;
+  /** Stable Level 1 taxonomy id used for deterministic signal routing. */
+  systemKey?: string;
   headline: string;
   body: string;
   classLine?: string;

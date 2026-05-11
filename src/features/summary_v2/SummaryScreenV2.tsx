@@ -37,6 +37,7 @@ import type {
 import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../storage/competitionStore";
 import { getCompetitionVersion, subscribeCompetition } from "../../storage/kidCompetitionStore";
 import { getKidsById, startOfWeekMondayYMD, todayYMD as todayKidYMD } from "../../storage/coachKidStore";
+import { kidExcludedFromCoachActiveRoster } from "../../types/coachKid";
 import { getSessions } from "../../storage/sessionsStore";
 import { StorageKeys } from "../../storage/storageKeys";
 import type { Session } from "../../types";
@@ -162,7 +163,10 @@ export default function SummaryScreenV2() {
 
   const athleteOptions: AthleteOption[] = useMemo(() => {
     const kidsSorted = Object.values(kidsByIdSnapshot)
-      .filter((k) => (k?.name ?? "").trim().length > 0)
+      .filter(
+        (k) =>
+          (k?.name ?? "").trim().length > 0 && !kidExcludedFromCoachActiveRoster(k),
+      )
       .slice()
       .sort((a, b) => a.name.localeCompare(b.name));
 

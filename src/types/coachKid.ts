@@ -26,6 +26,8 @@ export type KidWeeklyFocusEntry = {
   id: string;
   kidId: KidId;
   weekStartYMD: string; // YYYY-MM-DD (Monday)
+  /** Stable Level 1 taxonomy id used for deterministic Summary/coach alignment. */
+  systemKey?: string;
   createdAt: string;
   updatedAt: string;
 
@@ -56,6 +58,11 @@ export type Kid = {
   id: KidId;
   name: string;
   householdLabel?: string;
+  /**
+   * Coach soft-archive (ISO). Row stays in storage for history; hidden from coach active roster.
+   * Parent-managed profiles may remain visible to the parent on this device.
+   */
+  coachArchivedAt?: string;
   /** When set, this roster row is tied to a parent-created athlete on the linked sync session. */
   sharedAthleteId?: string;
   /**
@@ -71,6 +78,24 @@ export type Kid = {
   createdAt: string;
   updatedAt: string;
 };
+
+/** True when the coach has archived this roster row (soft-delete). */
+export function isKidCoachArchived(kid: Pick<Kid, "coachArchivedAt">): boolean {
+  return Boolean((kid.coachArchivedAt ?? "").trim());
+}
+
+/** Hidden from coach roster, coach insights, and coach athlete surfaces. */
+export function kidExcludedFromCoachActiveRoster(kid: Kid): boolean {
+  return isKidCoachArchived(kid);
+}
+
+/**
+ * Parent this-week kids list: omit archived coach-only rows; keep parent-managed rows visible
+ * so families still see their child after the coach hides them locally.
+ */
+export function kidExcludedFromParentThisWeekKidsList(kid: Kid): boolean {
+  return isKidCoachArchived(kid) && !kid.isParentManagedChildProfile;
+}
 
 export type KidsById = Record<KidId, Kid>;
 export type KidWeeklyFocusEntries = KidWeeklyFocusEntry[];

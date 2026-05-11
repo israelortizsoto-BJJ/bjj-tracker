@@ -12,6 +12,8 @@ type WeeklyDoc = {
   weekStartYMD: string;
   headline: string;
   body: string;
+  /** Level-1 taxonomy id from coach publish (e.g. `l1.top_passing`). */
+  systemKey?: string;
   classLine?: string;
   programLine?: string;
   missionResourceUrl?: string | null;
@@ -65,6 +67,9 @@ type SessionRecord = {
   parentWriterSecret?: string;
 };
 
+/** TEMP: grep worker tail for this id to confirm deployed bundle matches this file. */
+const WORKER_AUDIT_BUILD_ID = "coach-sync-worker:systemKey-audit-2026-05-11";
+
 const TOKEN_RE = /^[a-f0-9]{48,128}$/i;
 const SESSION_SCHEMA_VERSION = 3 as const;
 const MAX_ATHLETES_PER_SESSION = 24;
@@ -73,6 +78,33 @@ const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "part
 const EVENT_STATUS_SET = new Set<CompetitionEventStatus>(["upcoming", "completed", "cancelled", "unknown"]);
 const FORMAT_SET = new Set<CompetitionFormat>(["gi", "nogi", "both"]);
 const COACH_OUTCOME_SET = new Set<CoachOutcome>(["not_yet", "close", "hit"]);
+const MAX_SYSTEM_KEY_LEN = 160;
+
+/** Accepts taxonomy ids like `l1.top_passing` / `l1.guard_bottom.l2.closed_guard`. */
+function parseOptionalSystemKey(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (!t || t.length > MAX_SYSTEM_KEY_LEN) return undefined;
+  if (!/^[a-z0-9_.]+$/.test(t)) return undefined;
+  return t;
+}
+
+/** TEMP audit: raw KV JSON node for weeklyByAthleteId before parseWeeklyDoc. */
+function summarizeRawWeeklyByAthleteSystemKey(rawWeeklyBy: unknown): Record<
+  string,
+  { hasSystemKeyProp: boolean; raw: unknown; typeofRaw: string }
+> {
+  const out: Record<string, { hasSystemKeyProp: boolean; raw: unknown; typeofRaw: string }> = {};
+  if (!rawWeeklyBy || typeof rawWeeklyBy !== "object" || Array.isArray(rawWeeklyBy)) return out;
+  for (const [athleteId, v] of Object.entries(rawWeeklyBy as Record<string, unknown>)) {
+    if (!v || typeof v !== "object" || Array.isArray(v)) continue;
+    const o = v as Record<string, unknown>;
+    const hasSystemKeyProp = Object.prototype.hasOwnProperty.call(o, "systemKey");
+    const raw = hasSystemKeyProp ? o.systemKey : undefined;
+    out[athleteId] = { hasSystemKeyProp, raw: raw ?? null, typeofRaw: typeof raw };
+  }
+  return out;
+}
 
 function json(data: unknown, status = 200, cors = true): Response {
   const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8" };
@@ -245,10 +277,35 @@ function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
     typeof o.coachOutcome === "string" && COACH_OUTCOME_SET.has(o.coachOutcome as CoachOutcome)
       ? (o.coachOutcome as CoachOutcome)
       : undefined;
+  const systemKey = parseOptionalSystemKey(o.systemKey);
+  if (Object.prototype.hasOwnProperty.call(o, "systemKey") || o.systemKey != null) {
+    let dropReason: string | null = null;
+    if (!Object.prototype.hasOwnProperty.call(o, "systemKey")) dropReason = "no_prop";
+    else if (typeof o.systemKey !== "string") dropReason = `non_string:${typeof o.systemKey}`;
+    else {
+      const t = (o.systemKey as string).trim();
+      if (!t) dropReason = "empty_trim";
+      else if (t.length > MAX_SYSTEM_KEY_LEN) dropReason = "too_long";
+      else if (!/^[a-z0-9_.]+$/.test(t)) dropReason = "pattern";
+    }
+    console.log("[SYSTEMKEY TRACE WORKER]", {
+      traceStage: "parseWeeklyDoc_pipeline",
+      headline: headline.slice(0, 120),
+      weekStartYMD,
+      rawSystemKey: o.systemKey,
+      parsedSystemKey: systemKey ?? null,
+      workerParserDroppedKey:
+        (Object.prototype.hasOwnProperty.call(o, "systemKey") || o.systemKey != null) &&
+        !systemKey,
+      dropReason: systemKey ? null : dropReason,
+      source: "parseWeeklyDoc",
+    });
+  }
   const weekly: WeeklyDoc = {
     weekStartYMD,
     headline,
     body: bodyText,
+    ...(systemKey ? { systemKey } : {}),
     ...(classLine ? { classLine } : {}),
     ...(programLine ? { programLine } : {}),
     ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
@@ -292,6 +349,11 @@ function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
       missionAlias: entry.mission ?? null,
       familyResourceUrl: entry.familyResourceUrl ?? null,
       studyAlias: entry.study ?? null,
+      hasSystemKeyProp: Object.prototype.hasOwnProperty.call(entry, "systemKey"),
+      systemKeyRaw: Object.prototype.hasOwnProperty.call(entry, "systemKey") ? entry.systemKey : undefined,
+      systemKeyRawType: Object.prototype.hasOwnProperty.call(entry, "systemKey")
+        ? typeof entry.systemKey
+        : "absent",
     });
     const doc = parseWeeklyDoc(v);
     if (doc) out[id] = doc;
@@ -326,7 +388,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
   const academyName = academyRaw.length > 0 ? academyRaw : undefined;
 
   const weekly =
-    r.weekly && typeof r.weekly === "object" ? (r.weekly as WeeklyDoc) : null;
+    r.weekly && typeof r.weekly === "object" ? parseWeeklyDoc(r.weekly) : null;
 
   const schemaVersion = typeof r.schemaVersion === "number" ? r.schemaVersion : 1;
   const athletes = schemaVersion >= 2 ? parseSharedAthletes(r.athletes) : [];
@@ -355,7 +417,39 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
 
 async function readSession(kv: KVNamespace, token: string): Promise<SessionRecord | null> {
   const raw = await kv.get(`s:${token}`, "json");
-  return normalizeSessionRecord(raw);
+  const rawRoot = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+  const rawWeeklyBy = rawRoot?.weeklyByAthleteId;
+  const rawWeeklyJsonSnippet = JSON.stringify(rawWeeklyBy ?? null)?.slice(0, 4000);
+  console.log("[SYSTEMKEY TRACE WORKER]", {
+    traceStage: "6_KV_read_payload_after_json",
+    rawWeeklyByAthleteSystemKey: summarizeRawWeeklyByAthleteSystemKey(rawWeeklyBy),
+    source: "readSession_kv_get_json",
+  });
+  console.log("[AUDIT KV_READ_AFTER_GET]", {
+    mark: WORKER_AUDIT_BUILD_ID,
+    tokenSuffix: token.slice(-8),
+    rawIsNull: raw == null,
+    rawWeeklyByAthleteSystemKey: summarizeRawWeeklyByAthleteSystemKey(rawWeeklyBy),
+    rawWeeklyByAthleteJsonSnippet: rawWeeklyJsonSnippet,
+  });
+  const normalized = normalizeSessionRecord(raw);
+  console.log("[AUDIT KV_READ_AFTER_NORMALIZE]", {
+    mark: WORKER_AUDIT_BUILD_ID,
+    tokenSuffix: token.slice(-8),
+    normalizedOk: Boolean(normalized),
+    normalizedWeeklyByAthleteSystemKey: normalized
+      ? Object.fromEntries(
+          Object.entries(normalized.weeklyByAthleteId).map(([aid, doc]) => [
+            aid,
+            {
+              hasOwnSystemKey: Object.prototype.hasOwnProperty.call(doc, "systemKey"),
+              systemKey: doc.systemKey ?? null,
+            },
+          ]),
+        )
+      : null,
+  });
+  return normalized;
 }
 
 async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord): Promise<void> {
@@ -366,7 +460,50 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
     athletes: rec.athletes.slice(0, MAX_ATHLETES_PER_SESSION),
     competitions: rec.competitions.slice(0, MAX_COMPETITIONS_PER_SESSION),
   };
-  await kv.put(`s:${token}`, JSON.stringify(toStore));
+  const putJson = JSON.stringify(toStore);
+  console.log("[SYSTEMKEY TRACE WORKER]", {
+    traceStage: "5_KV_serialized_payload_put",
+    headline: null,
+    systemKey: null,
+    athleteId: null,
+    weekStartYMD: null,
+    weeklyByAthleteSystemKeys: Object.fromEntries(
+      Object.entries(toStore.weeklyByAthleteId).map(([aid, doc]) => [
+        aid,
+        {
+          hasKey: Object.prototype.hasOwnProperty.call(doc, "systemKey"),
+          systemKey: doc.systemKey ?? null,
+          headline: doc.headline?.slice(0, 120) ?? null,
+          weekStartYMD: doc.weekStartYMD,
+        },
+      ]),
+    ),
+    inviteWeeklySystemKey:
+      toStore.weekly && Object.prototype.hasOwnProperty.call(toStore.weekly, "systemKey")
+        ? toStore.weekly.systemKey ?? null
+        : null,
+    source: "writeSession_kv_put",
+  });
+  console.log("[AUDIT KV_PUT_BEFORE]", {
+    mark: WORKER_AUDIT_BUILD_ID,
+    tokenSuffix: token.slice(-8),
+    putJsonBytes: putJson.length,
+    weeklyByAthleteSystemKey: Object.fromEntries(
+      Object.entries(toStore.weeklyByAthleteId).map(([aid, doc]) => [
+        aid,
+        {
+          hasOwnSystemKey: Object.prototype.hasOwnProperty.call(doc, "systemKey"),
+          systemKey: doc.systemKey ?? null,
+        },
+      ]),
+    ),
+    inviteWeeklySystemKey:
+      toStore.weekly && Object.prototype.hasOwnProperty.call(toStore.weekly, "systemKey")
+        ? toStore.weekly.systemKey ?? null
+        : "(no key)",
+    weeklyByAthleteJsonSnippet: JSON.stringify(toStore.weeklyByAthleteId).slice(0, 4000),
+  });
+  await kv.put(`s:${token}`, putJson);
 }
 
 export default {
@@ -475,21 +612,56 @@ export default {
             ]),
           ),
         });
-        return json(
-          {
-            schemaVersion: rec.schemaVersion,
-            coach: {
-              id: rec.coachId,
-              displayName: rec.coachDisplayName,
-              ...(rec.academyName ? { academyName: rec.academyName } : {}),
-            },
-            weekly: rec.weekly,
-            weeklyByAthleteId: apiWeekly,
-            athletes: rec.athletes,
-            competitions: rec.competitions,
+        const getPayload = {
+          schemaVersion: rec.schemaVersion,
+          coach: {
+            id: rec.coachId,
+            displayName: rec.coachDisplayName,
+            ...(rec.academyName ? { academyName: rec.academyName } : {}),
           },
-          200,
-        );
+          weekly: rec.weekly,
+          weeklyByAthleteId: apiWeekly,
+          athletes: rec.athletes,
+          competitions: rec.competitions,
+        };
+        const cf = (request as Request & { cf?: { colo?: string } }).cf;
+        console.log("[SYSTEMKEY TRACE WORKER]", {
+          traceStage: "7_GET_response_payload_worker",
+          weeklyByAthleteSystemKeys: Object.fromEntries(
+            Object.entries(apiWeekly).map(([aid, doc]) => [
+              aid,
+              {
+                headline: doc.headline?.slice(0, 120) ?? null,
+                systemKey: doc.systemKey ?? null,
+                weekStartYMD: doc.weekStartYMD,
+                hasOwnSystemKey: Object.prototype.hasOwnProperty.call(doc, "systemKey"),
+              },
+            ]),
+          ),
+          inviteWeeklySystemKey: rec.weekly?.systemKey ?? null,
+          source: "session_GET_before_json_return",
+        });
+        console.log("[AUDIT GET_BEFORE_JSON_RETURN]", {
+          mark: WORKER_AUDIT_BUILD_ID,
+          tokenSuffix: token.slice(-8),
+          cfColo: cf?.colo ?? null,
+          cfRay: request.headers.get("CF-Ray") ?? request.headers.get("cf-ray") ?? null,
+          weeklyByAthleteSystemKey: Object.fromEntries(
+            Object.entries(apiWeekly).map(([aid, doc]) => [
+              aid,
+              {
+                hasOwnSystemKey: Object.prototype.hasOwnProperty.call(doc, "systemKey"),
+                systemKey: doc.systemKey ?? null,
+              },
+            ]),
+          ),
+          inviteWeeklyHasSystemKey: rec.weekly
+            ? Object.prototype.hasOwnProperty.call(rec.weekly, "systemKey")
+            : false,
+          inviteWeeklySystemKey: rec.weekly?.systemKey ?? null,
+          serializedWeeklyBySnippet: JSON.stringify(getPayload.weeklyByAthleteId).slice(0, 4000),
+        });
+        return json(getPayload, 200);
       }
 
       const parentRedeem = path.match(/^\/v1\/sessions\/([^/]+)\/parent-redeem$/);
@@ -612,6 +784,24 @@ export default {
           return error("Invalid JSON", 400);
         }
         const b = typeof body === "object" && body ? (body as Record<string, unknown>) : {};
+        const skIncomingPresent = Object.prototype.hasOwnProperty.call(b, "systemKey");
+        const skParsedFromBody = parseOptionalSystemKey(b.systemKey);
+        console.log("[SYSTEMKEY TRACE WORKER]", {
+          traceStage: "3_worker_request_body_parse",
+          headline: typeof b.headline === "string" ? b.headline.trim().slice(0, 120) : null,
+          systemKeyRaw: skIncomingPresent ? b.systemKey : undefined,
+          systemKeyParsed: skParsedFromBody ?? null,
+          athleteId:
+            typeof b.sharedAthleteId === "string" ? b.sharedAthleteId.trim() || null : null,
+          weekStartYMD: typeof b.weekStartYMD === "string" ? b.weekStartYMD.trim() : null,
+          keyExistsOnObject: skIncomingPresent,
+          workerParserRemovedKey:
+            skIncomingPresent &&
+            typeof b.systemKey === "string" &&
+            b.systemKey.trim().length > 0 &&
+            !skParsedFromBody,
+          source: "weekly_PUT_after_request_json",
+        });
         const sharedAthleteIdRaw =
           typeof b.sharedAthleteId === "string" ? b.sharedAthleteId.trim() : "";
         const weekStartYMD = typeof b.weekStartYMD === "string" ? b.weekStartYMD.trim() : "";
@@ -758,6 +948,39 @@ export default {
         } else {
           delete mergedWeekly.coachOutcome;
         }
+
+        const hasSystemKeyKey = Object.prototype.hasOwnProperty.call(b, "systemKey");
+        if (hasSystemKeyKey) {
+          const sk = parseOptionalSystemKey(b.systemKey);
+          if (sk) {
+            mergedWeekly.systemKey = sk;
+          } else {
+            delete mergedWeekly.systemKey;
+          }
+          console.log("[coach-sync-weekly-put systemKey]", {
+            weekStartYMD,
+            sharedAthleteId: sharedAthleteIdRaw || null,
+            incomingPresent: hasSystemKeyKey,
+            storedSystemKey: mergedWeekly.systemKey ?? null,
+          });
+        }
+
+        console.log("[SYSTEMKEY TRACE WORKER]", {
+          traceStage: "4_worker_merged_weekly_pre_kv_write",
+          headline: mergedWeekly.headline?.slice(0, 120) ?? null,
+          systemKey: mergedWeekly.systemKey ?? null,
+          athleteId: sharedAthleteIdRaw || null,
+          weekStartYMD: mergedWeekly.weekStartYMD,
+          keyExistsOnObject: Object.prototype.hasOwnProperty.call(mergedWeekly, "systemKey"),
+          incomingPutHadSystemKeyKey: hasSystemKeyKey,
+          putOmittedSystemKeyKeyKeepsPriorKvMerge:
+            !hasSystemKeyKey &&
+            Object.prototype.hasOwnProperty.call(mergedWeekly, "systemKey"),
+          mergedUsedParseOptionalSystemKey: hasSystemKeyKey
+            ? parseOptionalSystemKey(b.systemKey) ?? null
+            : null,
+          source: "weekly_PUT_mergedWeekly",
+        });
 
         console.log("[WORKER FINAL WRITE]", mergedWeekly);
 

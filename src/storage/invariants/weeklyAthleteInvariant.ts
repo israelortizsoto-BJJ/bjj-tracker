@@ -73,7 +73,9 @@ export function enforceWeeklyAthleteInvariant(params: InvariantParams): Invarian
   const normalizedWeeklyByAthleteId = normalizeWeeklyMap(params.weeklyByAthleteId);
   const weeklyIds = Object.keys(normalizedWeeklyByAthleteId);
 
-  const hasSessionAthletes = Array.isArray(params.session?.athletes);
+  /** Empty array is not an authoritative roster (legacy/partial payloads); keep weekly map keys. */
+  const hasSessionAthletes =
+    Array.isArray(params.session?.athletes) && params.session!.athletes!.length > 0;
   const authoritativeAthletes = hasSessionAthletes ? params.session?.athletes : params.athletes;
   const normalizedAthletes = normalizeAthleteList(authoritativeAthletes);
 

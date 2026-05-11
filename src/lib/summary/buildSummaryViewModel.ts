@@ -25,10 +25,13 @@ export type BuildSummaryViewModelInput = SummaryInputs & {
   competitionCount?: number;
   coachWeekly?: {
     headline: string;
+    systemKey?: string | null;
     body?: string;
   } | null;
   exposurePending?: any | null;
   lastAction?: string | null;
+  /** __DEV__ SummaryHeroCard → SummaryV2Card only: final VM derivation trace. */
+  devFinalHeroVmTrace?: { athleteId: string | null } | null;
 };
 
 type SignalSnapshot = {
@@ -37,7 +40,8 @@ type SignalSnapshot = {
   topTechnique: string | null;
 };
 
-function extractSignalSnapshot(raw: unknown): SignalSnapshot {
+/** Exported for dual buildSummaryViewModel audit logs (screen vs hero). */
+export function extractSignalSnapshot(raw: unknown): SignalSnapshot {
   const s = raw as {
     hasData?: boolean;
     patterns?: {
@@ -81,12 +85,51 @@ function formatDisplay(raw: string): string {
     .join(" ");
 }
 
+function displaySystem(raw: string | null | undefined): string | null {
+  const t = raw?.trim();
+  return t ? formatDisplay(t) : null;
+}
+
+function devVmTraceField<T>(
+  sourceOwner: string,
+  raw: T,
+  normalized?: unknown,
+): { sourceOwner: string; raw: T; normalized: unknown } {
+  return {
+    sourceOwner,
+    raw,
+    normalized: normalized !== undefined ? normalized : (raw as unknown) ?? null,
+  };
+}
+
+function coachWeeklyHasMission(
+  cw: BuildSummaryViewModelInput["coachWeekly"],
+): cw is NonNullable<BuildSummaryViewModelInput["coachWeekly"]> {
+  if (!cw) return false;
+  const key = cw.systemKey?.trim();
+  const head = cw.headline?.trim();
+  return Boolean(key || head);
+}
+
+/** Alignment / progression target when a weekly coach mission exists (key beats headline for taxonomy). */
+function resolvedMissionSystemForWeekly(
+  cw: NonNullable<BuildSummaryViewModelInput["coachWeekly"]>,
+  coachSystemKey: string | null,
+): string | null {
+  return coachSystemKey ?? cw.headline?.trim() ?? null;
+}
+
 function buildFocusLine(
   snap: SignalSnapshot,
   identityFocus?: string | null,
-  coachSystem?: string | null,
+  coachWeekly?: BuildSummaryViewModelInput["coachWeekly"],
 ): string {
-  if (coachSystem) return coachSystem;
+  if (coachWeekly && coachWeeklyHasMission(coachWeekly)) {
+    const headline = coachWeekly.headline?.trim();
+    if (headline) return headline;
+    const key = coachWeekly.systemKey?.trim();
+    if (key) return displaySystem(key) ?? key;
+  }
 
   const sys = snap.topSystem ? formatDisplay(snap.topSystem) : "";
   const tech = snap.topTechnique ? formatDisplay(snap.topTechnique) : "";
@@ -104,9 +147,12 @@ function buildFocusLine(
 /**
  * SUMMARY PIPELINE CONTRACT (DO NOT BREAK)
  *
- * 1. System selection happens ONLY in selectFocusSystem
- * 2. Progression logic happens ONLY in computeProgression
- * 3. Identity tone happens ONLY in formatActionByIdentity
+ * 1. When `coachWeekly` carries a mission (headline or systemKey), that mission owns
+ *    alignment target, progression, progress/why labels (via systemLabel), and focus headline.
+ *    Signals only prove alignment in computeCoachAlignment.
+ * 2. Otherwise system selection happens ONLY in selectFocusSystem (coach key, identity, signals).
+ * 3. Progression logic happens ONLY in computeProgression
+ * 4. Identity tone happens ONLY in formatActionByIdentity
  *
  * buildSummaryViewModel is a composition layer ONLY.
  * It must NOT:
@@ -120,6 +166,19 @@ function buildFocusLine(
 export function buildSummaryViewModel(
   input: BuildSummaryViewModelInput,
 ): SummaryViewModel {
+  if (__DEV__) {
+    console.log("[SYSTEMKEY TRACE SUMMARY]", {
+      traceStage: "11_buildSummaryViewModel_input_coachWeekly",
+      headline: input.coachWeekly?.headline?.slice(0, 120) ?? null,
+      systemKey: input.coachWeekly?.systemKey ?? null,
+      athleteId: null,
+      weekStartYMD: null,
+      keyExistsOnObject:
+        input.coachWeekly != null &&
+        Object.prototype.hasOwnProperty.call(input.coachWeekly, "systemKey"),
+      source: "buildSummaryViewModel_entry",
+    });
+  }
   const insights: SummaryInsights = deriveSummaryInsights({
     signals: input.signals,
     identityScore: input.identityScore,
@@ -141,21 +200,29 @@ export function buildSummaryViewModel(
   });
 
   const snap = extractSignalSnapshot(input.signals);
+  const coachSystemKey = input.coachWeekly?.systemKey?.trim() || null;
+  const weeklyMissionDoc =
+    input.coachWeekly && coachWeeklyHasMission(input.coachWeekly)
+      ? input.coachWeekly
+      : null;
+  const system = weeklyMissionDoc
+    ? resolvedMissionSystemForWeekly(weeklyMissionDoc, coachSystemKey)
+    : selectFocusSystem({
+        coachSystem: coachSystemKey,
+        signalSystem: snap.topSystem,
+        identityFocus: input.identityFocus,
+      });
   const identityState = resolveIdentityState({
     sessionCount: input.sessionCount,
     competitionCount: input.competitionCount,
     hasData: snap.hasData,
   });
   const alignment = computeCoachAlignment({
-    coachWeekly: input.coachWeekly ?? null,
     signals: input.signals,
     exposurePending: input.exposurePending ?? null,
+    resolvedFocusSystem: system,
   });
-  const system = selectFocusSystem({
-    coachSystem: input.coachWeekly?.headline,
-    signalSystem: snap.topSystem,
-    identityFocus: input.identityFocus,
-  });
+  const systemLabel = displaySystem(system);
   const progression = computeProgression({
     coachSystem: system,
     topSystem: null,
@@ -186,25 +253,25 @@ export function buildSummaryViewModel(
   const progress = (() => {
     switch (alignment.status) {
       case "no_focus":
-        return "No coach focus set yet";
+        return "No coach system set yet";
 
-      case "no_data":
-        return "No training yet — start building reps";
+      case "directed_no_proof":
+        return `${systemLabel ?? "Coach direction"} is set — log proof next`;
 
       case "misaligned":
         return input.sessionCount
-          ? `${system ?? "This position"} is not being trained`
+          ? `${systemLabel ?? "This position"} is not being trained`
           : "Training does not match your focus";
 
       case "aligned":
         return input.sessionCount
-          ? `${system ?? "This position"} is being trained (${input.sessionCount} sessions)`
-          : `${system ?? "This position"} is being trained`;
+          ? `${systemLabel ?? "This position"} is being trained (${input.sessionCount} sessions)`
+          : `${systemLabel ?? "This position"} is being trained`;
 
       case "validated":
         return input.competitionCount
-          ? `${system ?? "This position"} is working in competition`
-          : `${system ?? "This position"} is working in live rounds`;
+          ? `${systemLabel ?? "This position"} is working in competition`
+          : `${systemLabel ?? "This position"} is working in live rounds`;
 
       default:
         return "";
@@ -214,15 +281,15 @@ export function buildSummaryViewModel(
   const why = (() => {
     switch (alignment.status) {
       case "no_focus":
-        return "No coach focus has been set.";
+        return "This weekly note does not include a system classification yet.";
 
-      case "no_data":
-        return "There are no sessions logged for this focus yet.";
+      case "directed_no_proof":
+        return "Coach direction is ready, but this athlete has not logged training proof for it yet.";
 
       case "misaligned":
         return input.sessionCount
-          ? `Your last ${input.sessionCount} sessions are not focused on ${system ?? "this position"}`
-          : `Your recent sessions are not focused on ${system ?? "this position"}`;
+          ? `Your last ${input.sessionCount} sessions are not focused on ${systemLabel ?? "this position"}`
+          : `Your recent sessions are not focused on ${systemLabel ?? "this position"}`;
 
       case "aligned":
         return input.sessionCount
@@ -244,12 +311,124 @@ export function buildSummaryViewModel(
     identityState,
   );
 
+  const focus = buildFocusLine(snap, input.identityFocus, input.coachWeekly ?? null);
+
+  if (__DEV__) {
+    console.log("[SUMMARY WEEKLY TRACE] buildSummaryViewModel.focusPipeline", {
+      path: "buildSummaryViewModel → buildFocusLine",
+      focus,
+      weeklyMissionLocksCoachTruth: weeklyMissionDoc != null,
+      focusSource: weeklyMissionDoc
+        ? input.coachWeekly?.headline?.trim()
+          ? "coach_weekly_headline"
+          : coachSystemKey
+            ? "coach_weekly_systemKey_display"
+            : "coach_weekly_unknown"
+        : "signals_identity_selectFocusSystem_fallback",
+      coachSystemKey: coachSystemKey ?? null,
+      coachWeeklyHeadline: input.coachWeekly?.headline?.slice(0, 120) ?? null,
+      resolvedAlignmentSystem: system,
+      signalTopSystem: snap.topSystem,
+      signalTopTechnique: snap.topTechnique,
+      identityFocusSnippet:
+        typeof input.identityFocus === "string"
+          ? input.identityFocus.slice(0, 80)
+          : null,
+    });
+  }
+
+  if (__DEV__ && input.devFinalHeroVmTrace) {
+    const sig = input.signals as {
+      patterns?: { topSystem?: string | null };
+      systems?: { topSystem?: string | null };
+    } | null;
+    const rawPatternsTop = sig?.patterns?.topSystem ?? null;
+    const rawSystemsTop = sig?.systems?.topSystem ?? null;
+    const progStepKey = progression.stepKey;
+    const progSysNorm =
+      typeof progStepKey === "string" && !progStepKey.startsWith("none:")
+        ? progStepKey.split(":")[0] ?? null
+        : null;
+
+    console.log("[SUMMARY FINAL HERO VM TRACE] buildSummaryViewModel", {
+      path: "SummaryHeroCard → buildSummaryViewModel (card VM only)",
+      athleteId: devVmTraceField(
+        "SummaryHeroCard.devFinalHeroVmTrace",
+        input.devFinalHeroVmTrace.athleteId,
+        input.devFinalHeroVmTrace.athleteId?.trim() || null,
+      ),
+      coachWeeklySystemKey: devVmTraceField(
+        "input.coachWeekly.systemKey",
+        input.coachWeekly?.systemKey ?? null,
+        input.coachWeekly?.systemKey?.trim() || null,
+      ),
+      coachWeeklyHeadline: devVmTraceField(
+        "input.coachWeekly.headline",
+        input.coachWeekly?.headline ?? null,
+        input.coachWeekly?.headline?.trim() || null,
+      ),
+      selectedSystemKey: devVmTraceField(
+        weeklyMissionDoc
+          ? "coachWeeklyMission → systemKey ?? headline (signals excluded)"
+          : "selectFocusSystem(coachSystemKey, snap.topSystem, identityFocus)",
+        system,
+        system?.trim() || null,
+      ),
+      signalsPatternsTopSystem: devVmTraceField(
+        "input.signals.patterns.topSystem (hero hybridConfidence)",
+        rawPatternsTop,
+        typeof rawPatternsTop === "string" ? rawPatternsTop.trim() || null : null,
+      ),
+      signalsSystemsTopSystem: devVmTraceField(
+        "input.signals.systems.topSystem (hero hybridConfidence)",
+        rawSystemsTop,
+        typeof rawSystemsTop === "string" ? rawSystemsTop.trim() || null : null,
+      ),
+      identityFocus: devVmTraceField(
+        "BuildSummaryViewModelInput.identityFocus",
+        input.identityFocus ?? null,
+        typeof input.identityFocus === "string" ? input.identityFocus.trim() || null : null,
+      ),
+      hybridConfidencePatternsTopSystem: devVmTraceField(
+        "same object as input.signals — patterns.topSystem",
+        rawPatternsTop,
+        typeof rawPatternsTop === "string" ? rawPatternsTop.trim() || null : null,
+      ),
+      hybridConfidenceSystemsTopSystem: devVmTraceField(
+        "same object as input.signals — systems.topSystem",
+        rawSystemsTop,
+        typeof rawSystemsTop === "string" ? rawSystemsTop.trim() || null : null,
+      ),
+      progressionSystemKey: devVmTraceField(
+        "computeProgression → stepKey system prefix (normalized internal)",
+        progStepKey,
+        progSysNorm,
+      ),
+      alignmentStatus: devVmTraceField(
+        "computeCoachAlignment(resolvedFocusSystem=selectedSystemKey)",
+        alignment.status,
+        alignment.status,
+      ),
+      finalFocus: devVmTraceField(
+        "buildSummaryViewModel output.focus",
+        focus,
+        focus.trim(),
+      ),
+      finalProgress: devVmTraceField(
+        "buildSummaryViewModel output.progress",
+        progress,
+        progress.trim(),
+      ),
+      finalWhy: devVmTraceField(
+        "buildSummaryViewModel output.why",
+        why,
+        why.trim(),
+      ),
+    });
+  }
+
   return {
-    focus: buildFocusLine(
-      snap,
-      input.identityFocus,
-      input.coachWeekly?.headline?.trim() || null,
-    ),
+    focus,
     action,
     progress,
     why,

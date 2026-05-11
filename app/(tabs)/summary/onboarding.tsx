@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -12,62 +13,23 @@ import {
 } from "react-native";
 
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
+import {
+  ATHLETE_BELT_RANK_OPTIONS,
+  ATHLETE_EXPERIENCE_LEVEL_OPTIONS,
+  canonicalBeltRankFromStored,
+  canonicalExperienceLevelFromStored,
+  isKnownAthleteBeltRank,
+  isKnownAthleteExperienceLevel,
+} from "@/src/lib/athlete/athleteBeltExperience";
 import { getActiveAthleteId, setActiveAthleteId, updateAthlete } from "@/src/storage/athleteStore";
-
-const BELT_OPTIONS = [
-  { label: "White", value: "white" },
-  { label: "Blue", value: "blue" },
-  { label: "Purple", value: "purple" },
-  { label: "Brown", value: "brown" },
-  { label: "Black", value: "black" },
-  { label: "Kids", value: "kids" },
-];
-
-const EXPERIENCE_OPTIONS = [
-  { label: "Beginner", value: "beginner" },
-  { label: "Developing", value: "developing" },
-  { label: "Experienced", value: "experienced" },
-];
 
 function normalizeExperienceKey(experienceLevel: string): string {
   return experienceLevel.trim().toLowerCase();
 }
 
-function normalizeBeltKey(beltRank: string): string {
-  return beltRank
-    .trim()
-    .toLowerCase()
-    .replace(/\s+belt\s*$/i, "")
-    .trim();
-}
-
-function canonicalBeltFromStored(raw: string | undefined): string {
-  if (!raw?.trim()) return "";
-  const k = normalizeBeltKey(raw);
-  const hit = BELT_OPTIONS.find((o) => o.value === k || normalizeBeltKey(o.label) === k);
-  return hit?.value ?? "";
-}
-
-function canonicalExperienceFromStored(raw: string | undefined): string {
-  if (!raw?.trim()) return "";
-  const k = normalizeExperienceKey(raw);
-  const hit = EXPERIENCE_OPTIONS.find((o) => o.value === k);
-  return hit?.value ?? "";
-}
-
-function isCanonicalBelt(v: string): boolean {
-  return BELT_OPTIONS.some((o) => o.value === v);
-}
-
-function isCanonicalExperience(v: string): boolean {
-  return EXPERIENCE_OPTIONS.some((o) => o.value === v);
-}
-
 function beltSkipsSkillScreen(beltRank: string): boolean {
-  const k = normalizeBeltKey(beltRank);
-  if (!k) return false;
-  const head = k.split(/\s+/)[0] ?? "";
-  return head === "purple" || head === "brown" || head === "black";
+  const k = canonicalBeltRankFromStored(beltRank) || beltRank.trim().toLowerCase();
+  return k === "purple" || k === "brown" || k === "black";
 }
 
 function experienceSkipsSkillScreen(expNorm: string): boolean {
@@ -93,8 +55,8 @@ export default function AthleteOnboardingScreen() {
     if (!hydrationReady || !athlete) return;
     if (hydratedForIdRef.current === athlete.id) return;
     hydratedForIdRef.current = athlete.id;
-    setBeltRank(canonicalBeltFromStored(athlete.beltRank));
-    setExperienceLevel(canonicalExperienceFromStored(athlete.experienceLevel));
+    setBeltRank(canonicalBeltRankFromStored(athlete.beltRank));
+    setExperienceLevel(canonicalExperienceLevelFromStored(athlete.experienceLevel));
     setIsCompetitor(athlete.isCompetitor ?? false);
   }, [hydrationReady, athlete]);
 
@@ -108,8 +70,8 @@ export default function AthleteOnboardingScreen() {
   const canSubmit =
     hydrationReady &&
     Boolean(athleteId.trim()) &&
-    isCanonicalBelt(beltRank) &&
-    isCanonicalExperience(experienceLevel);
+    isKnownAthleteBeltRank(beltRank) &&
+    isKnownAthleteExperienceLevel(experienceLevel);
 
   const onSubmit = useCallback(async () => {
     if (!canSubmit || busy) return;
@@ -119,14 +81,7 @@ export default function AthleteOnboardingScreen() {
     try {
       const trimmedBelt = beltRank.trim();
       const trimmedExp = experienceLevel.trim();
-      const expNormForDebug = normalizeExperienceKey(trimmedExp);
-      const skipSkills = experienceSkipsSkillScreen(expNormForDebug);
       const shouldGoToSkills = shouldShowSkillsStep(trimmedBelt, trimmedExp);
-
-      console.log("[ONBOARDING DEBUG] raw experienceLevel:", experienceLevel);
-      console.log("[ONBOARDING DEBUG] raw beltRank:", beltRank);
-      console.log("[ONBOARDING DEBUG] skipSkills:", skipSkills);
-      console.log("[ONBOARDING DEBUG] shouldGoToSkills:", shouldGoToSkills);
 
       const basePatch = {
         beltRank: trimmedBelt,
@@ -135,7 +90,6 @@ export default function AthleteOnboardingScreen() {
       };
 
       if (shouldGoToSkills) {
-        console.log("[ONBOARDING DEBUG] navigating to skills");
         await updateAthlete(id, basePatch);
         if (id) {
           const current = ((await getActiveAthleteId()) ?? "").trim();
@@ -180,10 +134,14 @@ export default function AthleteOnboardingScreen() {
       style={styles.screen}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.inner}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.inner}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.label}>Belt rank</Text>
         <View style={styles.optionRow}>
-          {BELT_OPTIONS.map((opt) => {
+          {ATHLETE_BELT_RANK_OPTIONS.map((opt) => {
             const selected = beltRank === opt.value;
             return (
               <Pressable
@@ -208,7 +166,7 @@ export default function AthleteOnboardingScreen() {
 
         <Text style={[styles.label, styles.labelSpaced]}>Experience level</Text>
         <View style={styles.optionRow}>
-          {EXPERIENCE_OPTIONS.map((opt) => {
+          {ATHLETE_EXPERIENCE_LEVEL_OPTIONS.map((opt) => {
             const selected = experienceLevel === opt.value;
             return (
               <Pressable
@@ -258,7 +216,7 @@ export default function AthleteOnboardingScreen() {
             <Text style={styles.saveBtnText}>Continue</Text>
           )}
         </Pressable>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -268,10 +226,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0b0f12",
   },
-  inner: {
+  scroll: {
     flex: 1,
+  },
+  inner: {
     padding: 20,
     paddingTop: 8,
+    paddingBottom: 32,
   },
   centered: {
     flex: 1,

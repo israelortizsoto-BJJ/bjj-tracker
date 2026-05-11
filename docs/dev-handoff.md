@@ -1,5 +1,264 @@
 # BJJ Tracker - Dev Handoff Notes
 
+#Date: 2026-05-10
+
+## Major Focus Today
+Stabilization, multi-athlete weekly sync reliability, navigation safety, roster lifecycle management, onboarding identity structure, and pre-TestFlight UI polish.
+
+---
+
+# 1. Multi-Athlete Weekly Sync Stabilization
+
+## Core Result
+Successfully stabilized parent rendering + per-athlete weekly resolution.
+
+## Verified Behaviors
+- Weekly publish remains isolated per athlete.
+- Luca and Scenario A maintain separate weekly focus payloads.
+- Cold start + app relaunch preserves correct athlete weekly state.
+- Parent switching between athletes resolves correct:
+  - mission
+  - family resource
+  - recap
+  - weekly payload
+- Weekly sync now properly hydrates from:
+  - `weeklyByAthleteId`
+  - resolved `sharedAthleteId`
+  - linked kid mappings
+
+## Validation Performed
+- Coach → publish athlete A
+- Coach → publish athlete B
+- Parent → switch athlete
+- Cold restart
+- Relaunch
+- Multiple render passes
+- Identity hydration verification
+- Weekly pipeline trace validation
+
+## Important Logs Confirmed
+- `WEEKLY PIPELINE TRACE`
+- `DERIVED ATHLETE RESOLVE`
+- `IDENTITY SHADOW`
+- `RENDER ATHLETE SOURCE`
+- `weeklyByAthleteIdKeys`
+
+## Commit
+- `774ba48`
+- "Stabilize multi-athlete weekly sync and parent rendering"
+
+---
+
+# 2. Navigation / Native Stack Crash Fix
+
+## Problem
+React Navigation native-stack mismatch:
+
+"The screen 'kid/[kidId]' was removed natively but didn't get removed from JS state"
+
+Caused by:
+- `beforeRemove`
+- `preventDefault`
+- async `router.replace`
+- nested stack transitions
+
+## Fix Applied
+### Removed
+- `beforeRemove` interception logic entirely
+
+### Kept
+- Android `BackHandler`
+
+### Simplified
+- Weekly focus save:
+  - old → `replace(/coach/kid/:id)`
+  - new → `replace(/coach)`
+
+## Result
+- Reduced native/JS stack race conditions
+- Cleaner navigation collapse behavior
+- Safer stabilization path before TestFlight
+
+---
+
+# 3. Kids Belt + Experience System
+
+## New Direction
+Expanded athlete onboarding/profile identity system.
+
+## Added
+### Full Kids Belt Structure
+- Grey/White
+- Grey
+- Grey/Black
+- Yellow/White
+- Yellow
+- Yellow/Black
+- Orange/White
+- Orange
+- Orange/Black
+- Green/White
+- Green
+- Green/Black
+
+### Adult Belts
+- White
+- Blue
+- Purple
+- Brown
+- Black
+
+## Experience Layer
+Per belt:
+- Beginner
+- Developing
+- Experienced
+
+## New Shared Module
+`athleteBeltExperience.ts`
+
+Centralizes:
+- canonical belt handling
+- formatting
+- normalization
+- identity weighting
+- validation
+
+## Product Impact
+- More realistic youth athlete identity modeling
+- Cleaner onboarding
+- Better future summary logic
+- Better identity scoring potential
+
+---
+
+# 4. Coach Athlete Archive / Delete Flow
+
+## New Capability
+Coach can now archive/remove athletes from active roster.
+
+## Architecture
+Soft archive model:
+- `coachArchivedAt`
+
+No destructive deletion.
+
+## Preserved
+- sync relationships
+- history
+- competition data
+- weekly data
+
+## UI Added
+- Coach athlete danger zone
+- archive confirmation flow
+- redirect after archive
+
+## Behavioral Changes
+Archived athletes:
+- hidden from coach roster
+- removed from insights
+- excluded from active rendering
+- protected from accidental reconcile resurrection
+
+## Important Design Decision
+No hard-delete during stabilization phase.
+
+---
+
+# 5. Training Tab UI Stabilization Pass
+
+## Goal
+Improve presentation quality before next TestFlight cut without redesigning architecture.
+
+## Improvements
+### Visual Compression
+- reduced hero dominance
+- reduced spacing
+- compressed segmented controls
+- tighter rhythm
+
+### Styling Consistency
+- unified radius
+- normalized padding
+- softened active states
+- calmer visual hierarchy
+
+### Tonal Improvements
+- reduced neon green intensity
+- softened black surfaces
+- reduced harsh contrast
+- improved dark surface cohesion
+
+### Utility UI
+- beta feedback card reduced in prominence
+
+## Result
+Training tab now:
+- calmer
+- denser
+- more productized
+- less prototype-like
+
+---
+
+# 6. QA / Validation Work
+
+## Heavy Real Device Validation
+Performed:
+- cold starts
+- athlete switching
+- coach publishing
+- parent rendering
+- weekly persistence
+- stack navigation
+- render tracing
+- identity hydration verification
+
+## Key Observation
+System now behaves reliably under:
+- rapid athlete switching
+- app relaunches
+- weekly publishes
+- tab transitions
+
+---
+
+# 7. Current State
+
+## Stable Areas
+- multi-athlete weekly sync
+- parent athlete rendering
+- weekly publish isolation
+- navigation stack stability
+- onboarding identity structure
+- coach archive flow
+- training tab presentation polish
+
+## Remaining Before TestFlight
+- regression QA pass
+- operator validation pass
+- trim remaining noisy logs
+- final navigation sanity check
+- smoke test role switching
+- verify archived athlete edge cases
+- verify training flows after UI pass
+
+---
+
+# 8. Recommended Next Session
+
+## Highest ROI
+1. Full stabilization QA pass
+2. Remove temporary debug logging
+3. Final TestFlight polish sweep
+4. Build candidate freeze
+5. Cut next external testing build
+
+EOF
+
+
+
 # EOD — 2026-05-08 
 
 SYSTEM STATE (END OF DAY)

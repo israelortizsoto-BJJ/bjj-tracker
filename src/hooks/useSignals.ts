@@ -5,6 +5,11 @@ import {
   type SignalInput,
   type SignalOutput,
 } from "../lib/signals/computeSignals";
+import { useDeviceRole } from "../deviceRole/DeviceRoleProvider";
+import {
+  filterSessionsLikeTrainingRefresh,
+  normalizeSessionsLikeTraining,
+} from "../domain/sessionUtils";
 
 import { useAthleteData } from "./useAthleteData";
 
@@ -21,16 +26,27 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
   const trimmedAthlete =
     typeof athleteId === "string" ? athleteId.trim() : "";
   const { sessions, competitions } = useAthleteData(trimmedAthlete);
+  const { role: deviceRole } = useDeviceRole();
 
   const previousSignalsRef = useRef<SignalOutput | null>(null);
 
   return useMemo(() => {
     const hasAthlete = trimmedAthlete.length > 0;
 
+    const scopedSessions = filterSessionsLikeTrainingRefresh(
+      normalizeSessionsLikeTraining(sessions),
+      {
+        deviceRole,
+        athleteId: trimmedAthlete,
+        linkedKidId:
+          typeof kidId === "string" && kidId.trim() ? kidId.trim() : undefined,
+      },
+    );
+
     if (__DEV__) {
       console.log("SIGNALS INPUT", {
         athleteId: hasAthlete ? trimmedAthlete : null,
-        sessionCount: sessions.length,
+        sessionCount: scopedSessions.length,
         competitionCount: competitions.length,
       });
     }
@@ -45,7 +61,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     }
 
     const computed = computeSignals({
-      sessions,
+      sessions: scopedSessions,
       competitions,
       referenceDate,
       declaredInput,
@@ -63,6 +79,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
   }, [
     sessions,
     competitions,
+    deviceRole,
     referenceDate,
     declaredInput,
     coachData,

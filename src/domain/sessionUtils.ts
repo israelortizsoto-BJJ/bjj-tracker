@@ -3,6 +3,54 @@ import type { DeviceRole } from "../storage/deviceRoleStore";
 import { SUMMARY_IDENTITY_ACCOUNT_SCOPE, type SummaryIdentityScope } from "../types/summaryIdentityScope";
 import type { Session } from "../types";
 
+/** Matches `app/(tabs)/training.tsx` `refresh()` session scoping (kid route vs athlete/kid vs account). */
+export type TrainingRefreshScopeInput = {
+  deviceRole: DeviceRole | null;
+  /** Parent athlete id (`sharedAthleteId` on sessions). */
+  athleteId: string;
+  /** Deep-link kid route param: strict kid-id match only. */
+  kidIdParam?: string;
+  /** Linked roster kid from `useActiveAthlete` / Summary. */
+  linkedKidId?: string;
+};
+
+export function filterSessionsLikeTrainingRefresh(
+  normalized: Session[],
+  input: TrainingRefreshScopeInput,
+): Session[] {
+  const athleteScopeTrim = input.athleteId.trim();
+  const kidParam =
+    typeof input.kidIdParam === "string" && input.kidIdParam.trim()
+      ? input.kidIdParam.trim()
+      : undefined;
+  const linked =
+    typeof input.linkedKidId === "string" && input.linkedKidId.trim()
+      ? input.linkedKidId.trim()
+      : undefined;
+  const effectiveKidId = kidParam ?? linked;
+
+  if (kidParam) {
+    return normalized.filter((s) => {
+      if ((s.kidId ?? "").trim() !== kidParam) return false;
+      if (input.deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
+      return true;
+    });
+  }
+
+  if (athleteScopeTrim || effectiveKidId) {
+    return normalized.filter((s) => {
+      const byShared =
+        !!athleteScopeTrim && (s.sharedAthleteId ?? "").trim() === athleteScopeTrim;
+      const byKid = !!effectiveKidId && (s.kidId ?? "").trim() === effectiveKidId;
+      if (!byShared && !byKid) return false;
+      if (input.deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
+      return true;
+    });
+  }
+
+  return normalized.filter((s) => !(s.kidId ?? "").trim());
+}
+
 /** Local calendar YYYY-MM-DD (matches Training `todayYMD`). */
 function todayYMDLocal(): string {
   const d = new Date();
@@ -33,13 +81,15 @@ export function filterSessionsForTrainingScope(
   deviceRole: DeviceRole | null
 ): Session[] {
   if (!scope.trim() || scope === SUMMARY_IDENTITY_ACCOUNT_SCOPE) {
-    return normalized.filter((s) => !(s.kidId ?? "").trim());
+    return filterSessionsLikeTrainingRefresh(normalized, {
+      deviceRole,
+      athleteId: "",
+    });
   }
-  const kidIdParam = scope.trim();
-  return normalized.filter((s) => {
-    if ((s.kidId ?? "").trim() !== kidIdParam) return false;
-    if (deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
-    return true;
+  return filterSessionsLikeTrainingRefresh(normalized, {
+    deviceRole,
+    athleteId: "",
+    linkedKidId: scope.trim(),
   });
 }
 

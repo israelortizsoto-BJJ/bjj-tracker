@@ -813,6 +813,18 @@ function ParentThisWeekScreen() {
           weeklyByAthleteId: cached?.weeklyByAthleteId ?? {},
           athletes: cached?.athletes ?? [],
         };
+        if (__DEV__) {
+          const keys = Object.keys(nextWeeklySnapshot.weeklyByAthleteId ?? {});
+          console.log("[THIS_WEEK WEEKLY TRACE] loadCoachShareData.skipNetwork", {
+            path: "loadCoachShareData → weeklySessionNetworkOkTokenRef hit (no coachSyncFetchSession)",
+            dataPlane: "cache",
+            tokenTail: inviteLinkTokenTail(rawWeeklyLinkToken),
+            weeklyKeysAvailable: keys,
+            inviteHeadline: nextWeeklySnapshot.weekly?.headline?.slice(0, 120) ?? null,
+            inviteUpdatedAt: nextWeeklySnapshot.weekly?.updatedAt ?? null,
+            inviteSystemKey: nextWeeklySnapshot.weekly?.systemKey ?? null,
+          });
+        }
       } else {
         forceWeeklySessionFetchRef.current = false;
         try {
@@ -849,6 +861,18 @@ function ParentThisWeekScreen() {
           nextWeeklyNetworkOk = true;
           const nowIso = new Date().toISOString();
           nextWeeklyFetchedAt = nowIso;
+          if (__DEV__) {
+            const byAthlete = session.weeklyByAthleteId ?? {};
+            console.log("[THIS_WEEK WEEKLY TRACE] loadCoachShareData.networkOk", {
+              path: "loadCoachShareData → coachSyncFetchSession",
+              dataPlane: "network",
+              tokenTail: inviteLinkTokenTail(rawWeeklyLinkToken),
+              weeklyKeysAvailable: Object.keys(byAthlete),
+              inviteHeadline: session.weekly?.headline?.slice(0, 120) ?? null,
+              inviteUpdatedAt: session.weekly?.updatedAt ?? null,
+              inviteSystemKey: session.weekly?.systemKey ?? null,
+            });
+          }
           if (roleNow === "parent") {
             const incoming = session.weekly;
             const byAthlete = session.weeklyByAthleteId ?? {};
@@ -1085,6 +1109,69 @@ function ParentThisWeekScreen() {
       ? parentStrictOrderForUi[0]
       : activeCoachLinks.find((l) => l.weeklySync);
   const useWeeklySyncHero = Boolean(weeklySyncLink);
+
+  useEffect(() => {
+    if (!__DEV__ || role !== "parent" || !useWeeklySyncHero) return;
+    const rawToken = weeklySyncLink?.weeklySync?.linkToken;
+    const tokenTail = rawToken ? inviteLinkTokenTail(rawToken) : null;
+    const sid = resolvedWeeklySharedAthleteId;
+    const slot =
+      sid && weeklySessionSnapshot?.weeklyByAthleteId
+        ? weeklySessionSnapshot.weeklyByAthleteId[sid]
+        : undefined;
+    const invite = weeklySessionSnapshot?.weekly ?? null;
+    const doc = weeklySyncDoc;
+    let resolvedDocSource: "weeklyByAthleteId" | "invite.weekly" | "unknown" | "none" = "none";
+    if (doc) {
+      if (
+        sid &&
+        slot != null &&
+        slot.headline === doc.headline &&
+        slot.updatedAt === doc.updatedAt
+      ) {
+        resolvedDocSource = "weeklyByAthleteId";
+      } else if (
+        invite != null &&
+        invite.headline === doc.headline &&
+        invite.updatedAt === doc.updatedAt
+      ) {
+        resolvedDocSource = "invite.weekly";
+      } else {
+        resolvedDocSource = "unknown";
+      }
+    }
+    console.log("[THIS_WEEK WEEKLY TRACE] screen+snapshot", {
+      path: "This Week index.tsx → focusTitle uses weeklySyncDoc.headline directly",
+      tokenTail,
+      athleteId: activeParentAthleteId,
+      linkedKidId: activeParentLinkedKidId,
+      resolvedWeeklySharedAthleteId: sid,
+      resolvedDocSource,
+      uiFocusTitle: doc?.headline?.slice(0, 120) ?? null,
+      weeklyUpdatedAt: doc?.updatedAt ?? null,
+      systemKey: doc?.systemKey ?? null,
+      weeklyKeysAvailable: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId ?? {}),
+      snapshotFromCacheFlag: weeklySyncFromCache,
+      weeklySyncNetworkOk,
+      weeklySyncFetchedAt,
+      inviteHeadline: invite?.headline?.slice(0, 120) ?? null,
+      inviteSystemKey: invite?.systemKey ?? null,
+      slotHeadline: slot?.headline?.slice(0, 120) ?? null,
+      slotSystemKey: slot?.systemKey ?? null,
+    });
+  }, [
+    role,
+    useWeeklySyncHero,
+    weeklySyncLink?.weeklySync?.linkToken,
+    activeParentAthleteId,
+    activeParentLinkedKidId,
+    resolvedWeeklySharedAthleteId,
+    weeklySyncDoc,
+    weeklySessionSnapshot,
+    weeklySyncFromCache,
+    weeklySyncNetworkOk,
+    weeklySyncFetchedAt,
+  ]);
 
   const updateWeeklyFeedback = useCallback(
     async (

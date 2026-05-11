@@ -1,4 +1,5 @@
 import { getCoachSyncApiBaseUrl } from "../config/coachSync";
+import { isPublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import type {
   CoachWeeklySyncCreateAthleteBody,
   CoachWeeklySyncCreateAthleteResponse,
@@ -196,6 +197,68 @@ export async function coachSyncFetchSession(
     );
   }
   const weeklyByAthleteId = parseWeeklyByAthleteIdField(p.weeklyByAthleteId);
+  if (__DEV__) {
+    const inviteSk =
+      p.weekly && typeof p.weekly === "object" && !Array.isArray(p.weekly)
+        ? (p.weekly as { systemKey?: unknown }).systemKey
+        : undefined;
+    const rawWeeklyBy = p.weeklyByAthleteId;
+    const inviteWeeklyObj =
+      p.weekly && typeof p.weekly === "object" && !Array.isArray(p.weekly)
+        ? (p.weekly as Record<string, unknown>)
+        : null;
+    const rawKeysSk =
+      rawWeeklyBy && typeof rawWeeklyBy === "object" && !Array.isArray(rawWeeklyBy)
+        ? Object.fromEntries(
+            Object.entries(rawWeeklyBy as Record<string, unknown>).map(([id, node]) => {
+              const o = node && typeof node === "object" && !Array.isArray(node) ? node : null;
+              return [
+                id,
+                o && Object.prototype.hasOwnProperty.call(o, "systemKey")
+                  ? (o as { systemKey?: unknown }).systemKey
+                  : undefined,
+              ];
+            }),
+          )
+        : {};
+    console.log("[SYSTEMKEY TRACE CLIENT]", {
+      traceStage: "7_GET_response_payload_client_parsed",
+      headline:
+        typeof inviteWeeklyObj?.headline === "string"
+          ? inviteWeeklyObj.headline.slice(0, 120)
+          : null,
+      systemKey: typeof inviteSk === "string" ? inviteSk : null,
+      athleteId: null,
+      weekStartYMD:
+        typeof inviteWeeklyObj?.weekStartYMD === "string" ? inviteWeeklyObj.weekStartYMD : null,
+      inviteWeeklyRawSystemKey: inviteWeeklyObj &&
+        Object.prototype.hasOwnProperty.call(inviteWeeklyObj, "systemKey")
+        ? inviteWeeklyObj.systemKey
+        : undefined,
+      weeklyByAthleteRawSystemKeys: rawKeysSk,
+      weeklyByAthleteParsedSystemKeys: Object.fromEntries(
+        Object.entries(weeklyByAthleteId).map(([id, doc]) => [
+          id,
+          doc && typeof doc === "object" ? (doc.systemKey ?? null) : null,
+        ]),
+      ),
+      parseWeeklyByAthleteDroppedAnyDocs:
+        rawWeeklyBy && typeof rawWeeklyBy === "object"
+          ? Object.keys(rawWeeklyBy as object).length !==
+            Object.keys(weeklyByAthleteId).length
+          : false,
+      source: "coachSyncFetchSession_after_parseWeeklyByAthleteIdField",
+    });
+    console.log("[bjj-weekly-session-get systemKey]", {
+      inviteSystemKey: typeof inviteSk === "string" ? inviteSk : null,
+      weeklyByAthleteIdSystemKeys: Object.fromEntries(
+        Object.entries(weeklyByAthleteId).map(([id, doc]) => [
+          id,
+          doc && typeof doc === "object" ? (doc.systemKey ?? null) : null,
+        ]),
+      ),
+    });
+  }
   return {
     ...(typeof p.schemaVersion === "number" ? { schemaVersion: p.schemaVersion } : {}),
     coach: p.coach as CoachWeeklySyncSessionResponse["coach"],
@@ -339,6 +402,7 @@ export async function coachSyncPublishWeekly(
       method: "PUT",
       body,
     });
+    const wireJson = JSON.stringify(body);
     res = await fetch(url, {
       method: "PUT",
       headers: {
@@ -346,8 +410,28 @@ export async function coachSyncPublishWeekly(
         Accept: "application/json",
         Authorization: `Bearer ${writerSecret}`,
       },
-      body: JSON.stringify(body),
+      body: wireJson,
     });
+    if (__DEV__) {
+      console.log("[SYSTEMKEY TRACE CLIENT]", {
+        traceStage: "2_publish_request_body_wire_JSON",
+        headline: typeof body.headline === "string" ? body.headline.slice(0, 120) : null,
+        systemKey: body.systemKey ?? null,
+        athleteId: body.sharedAthleteId?.trim() || null,
+        weekStartYMD: body.weekStartYMD,
+        keyExistsOnObject: Object.prototype.hasOwnProperty.call(body, "systemKey"),
+        wireJsonIncludesSystemKeyKey: wireJson.includes('"systemKey"'),
+        keyValidAfterClientNormalize: isPublishableSystemKey(body.systemKey),
+        clientPublishNormalizerRemovedKey: null,
+        workerParserRemoved: null,
+        source: "coachSyncPublishWeekly_before_fetch",
+      });
+      console.log("[bjj-weekly-publish-api body systemKey]", {
+        systemKey: body.systemKey ?? null,
+        hasSystemKeyKey: Object.prototype.hasOwnProperty.call(body, "systemKey"),
+        sharedAthleteId: body.sharedAthleteId?.trim() || null,
+      });
+    }
   } catch (error) {
     console.error("[PUBLISH \u2192 API ERROR]", error);
     throw error;

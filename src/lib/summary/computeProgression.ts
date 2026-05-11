@@ -15,7 +15,7 @@ type Input = {
   lastAction?: string | null;
   alignmentStatus?:
     | "no_focus"
-    | "no_data"
+    | "directed_no_proof"
     | "misaligned"
     | "aligned"
     | "validated"
@@ -113,12 +113,12 @@ export function computeProgression({
   }
 
   // Alignment controls progression:
-  // no_data → reset (no proof of work)
+  // directed_no_proof → reset (coach direction exists, but no proof of work)
   // misaligned → reset (wrong focus)
   // aligned → hold (keep working)
   // validated → advance
 
-  if (alignmentStatus === "no_data") {
+  if (alignmentStatus === "directed_no_proof") {
     stepIndex = 0;
   } else if (alignmentStatus === "misaligned") {
     stepIndex = 0;

@@ -8,10 +8,13 @@ export type ParentAthlete = {
   id: string;
   name: string;
   household?: string;
+  /** IBJJF-style rank token (e.g. `grey_white`, `blue`) from `ATHLETE_BELT_RANK_OPTIONS`. */
   beltRank?: string;
   stripes?: number;
+  /** Maturity layer: `beginner` | `developing` | `experienced` — independent of belt. */
   experienceLevel?: string;
   trainingAgeMonths?: number;
+  /** Independent of belt rank and experience level. */
   isCompetitor?: boolean;
   competitionIntent?: string;
   declaredSkills?: string[];

@@ -26,7 +26,7 @@ import {
 import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../storage/competitionStore";
 import { StorageKeys } from "../../storage/storageKeys";
 import type { Session } from "../../types";
-import type { Kid, KidWeeklyFocusSparringApplication } from "../../types/coachKid";
+import { kidExcludedFromCoachActiveRoster, type Kid, type KidWeeklyFocusSparringApplication } from "../../types/coachKid";
 import { computeCoachInsight, type CoachInsight } from "./computeCoachInsight";
 
 export type CoachAppliedInSparring =
@@ -145,6 +145,7 @@ export function useCoachInsights(): {
           for (const athlete of Object.values(kidsById)) {
             const athleteId = athlete.id.trim();
             if (!athleteId) continue;
+            if (kidExcludedFromCoachActiveRoster(athlete)) continue;
 
             const [competitions, weeklyFocus] = await Promise.all([
               getKidCompetitionEntriesWithMatchDetailForKid(athleteId),

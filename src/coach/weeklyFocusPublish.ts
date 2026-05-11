@@ -1,6 +1,7 @@
 import type { KidWeeklyFocusEntry } from "../types/coachKid";
 import type { CoachWeeklySyncPublishBody } from "../types/coachWeeklySync";
 
+import { normalizePublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import { defaultFamilyLinkButtonLabel, normalizeFamilyResourceUrl } from "./familyResourceUrl";
 
 const MAX_FAMILY_LABEL = 80;
@@ -54,8 +55,36 @@ function missionFieldsFromOlderSameWeekRow(
   return null;
 }
 
+/**
+ * When the publish row lost `systemKey` but an older same-week row for the same template kept it
+ * (e.g. partial coach updates), reuse that taxonomy id. Custom rows are not inferred from siblings.
+ */
+function systemKeyFromSameWeekEntriesFallback(
+  entry: KidWeeklyFocusEntry,
+  weekStartYMD: string,
+  candidates: KidWeeklyFocusEntry[] | undefined,
+): string | undefined {
+  if (!candidates?.length || entry.focusType !== "template") return undefined;
+  const pool = candidates.filter(
+    (e) =>
+      e.kidId === entry.kidId &&
+      e.weekStartYMD === weekStartYMD &&
+      e.id !== entry.id &&
+      e.focusType === "template" &&
+      e.templateId === entry.templateId &&
+      normalizePublishableSystemKey(e.systemKey),
+  );
+  if (!pool.length) return undefined;
+  pool.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return normalizePublishableSystemKey(pool[0]?.systemKey);
+}
+
 export type KidWeeklyFocusPublishPayloadOptions = {
-  /** Any rows for this Monday week; used to recover mission fields when the latest row omitted them (e.g. check-in append). */
+  /**
+   * Any rows for this Monday week; used to recover mission fields when the latest row omitted them
+   * (e.g. check-in append), and to recover `systemKey` on the published row when it was stripped
+   * locally but an older same-week row for the same template still has it.
+   */
   sameWeekEntriesForMissionFallback?: KidWeeklyFocusEntry[];
 };
 
@@ -78,6 +107,13 @@ export function kidWeeklyFocusToPublishPayload(
   }
 
   const headline = entry.title.trim().slice(0, 200);
+  const systemKeyFromEntry = normalizePublishableSystemKey(entry.systemKey);
+  const systemKeyFromWeekFallback = systemKeyFromSameWeekEntriesFallback(
+    entry,
+    weekStartYMD,
+    options?.sameWeekEntriesForMissionFallback,
+  );
+  const systemKey = systemKeyFromEntry ?? systemKeyFromWeekFallback;
   const bodyRaw =
     entry.focusType === "template"
       ? (entry.metadata ?? "").trim()
@@ -121,6 +157,12 @@ export function kidWeeklyFocusToPublishPayload(
     const rawFam = (entry.familyResourceUrl ?? "").trim();
     const rawRecap = (entry.familyCoachRecapNote ?? "").trim();
     console.log("[bjj-weekly-publish-payload]", {
+      publishPayloadSystemKey: systemKey ?? null,
+      publishPayloadSystemKeySource: systemKeyFromEntry
+        ? "entry"
+        : systemKeyFromWeekFallback
+          ? "same_week_template_fallback"
+          : null,
       storedMissionResourceUrl: rawMission || null,
       publishedMissionResourceUrl: publishedMissionUrl ?? null,
       storedFamilyResourceUrl: rawFam || null,
@@ -136,6 +178,7 @@ export function kidWeeklyFocusToPublishPayload(
 
   const payload: CoachWeeklySyncPublishBody = {
     weekStartYMD,
+    ...(systemKey ? { systemKey } : {}),
     headline,
     body: body.slice(0, 8000),
     // Always send so JSON includes the key; empty string clears on the worker. Omitting the key
@@ -153,6 +196,28 @@ export function kidWeeklyFocusToPublishPayload(
   if (publishedFamilyUrl) {
     payload.familyResourceUrl = publishedFamilyUrl;
     payload.familyResourceLabel = publishedFamilyLabel ?? null;
+  }
+
+  if (__DEV__) {
+    const rawSk = entry.systemKey;
+    const trimmedRaw = typeof rawSk === "string" ? rawSk.trim() : "";
+    const publishNormalizerRemoved =
+      Boolean(trimmedRaw) && systemKey === undefined;
+    console.log("[SYSTEMKEY TRACE CLIENT]", {
+      traceStage: "1_local_publish_payload",
+      headline: headline.slice(0, 120),
+      systemKey: systemKey ?? null,
+      athleteId: null,
+      weekStartYMD,
+      keyExistsOnPayload: Object.prototype.hasOwnProperty.call(payload, "systemKey"),
+      keyValidAfterClientNormalize: Boolean(systemKey),
+      clientPublishNormalizerRemovedKey: publishNormalizerRemoved,
+      workerParserRemoved: null,
+      source: "kidWeeklyFocusToPublishPayload_return",
+      rawEntrySystemKey: typeof rawSk === "string" ? rawSk : null,
+      systemKeyFromEntry: systemKeyFromEntry ?? null,
+      systemKeyFromWeekFallback: systemKeyFromWeekFallback ?? null,
+    });
   }
 
   return payload;

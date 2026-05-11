@@ -7,7 +7,12 @@ import type {
   IdentitySuggestionSource,
 } from "@/src/lib/identity/deriveIdentitySuggestions";
 import type { IdentityValidationResult } from "@/src/lib/identity/validateIdentitySignals";
-import { buildSummaryViewModel } from "@/src/lib/summary/buildSummaryViewModel";
+import type { ResolvedSyncedWeeklyDoc } from "@/src/coach/resolveWeeklyDoc";
+import {
+  buildSummaryViewModel,
+  extractSignalSnapshot,
+} from "@/src/lib/summary/buildSummaryViewModel";
+import { selectFocusSystem } from "@/src/lib/summary/selectFocusSystem";
 
 import SummaryV2Card from "./SummaryV2Card";
 
@@ -130,6 +135,16 @@ const SOURCE_PROVENANCE_LABEL: Record<IdentitySuggestionSource, string> = {
 type SummaryHeroProps = {
   signals: SummaryHeroSignals;
   lastAction?: string | null;
+  coachWeekly?: {
+    headline: string;
+    body?: string;
+    systemKey?: string | null;
+  } | null;
+  /** TEMP: dual VM audit — parent passes resolved doc + athlete id in __DEV__ only. */
+  devDualVmAudit?: {
+    athleteId: string;
+    resolvedWeeklyDoc: ResolvedSyncedWeeklyDoc | null;
+  } | null;
   /** When `hasData` is false (activity signals), replaces the default empty-state insight line. */
   emptyInsightCopy?: string | null;
   /** Optional override; prefers `signals.postSessionFeedback` from `deriveSummaryInsights` when present. */
@@ -148,6 +163,8 @@ type SummaryHeroProps = {
 export default function SummaryHeroCard({
   signals,
   lastAction,
+  coachWeekly,
+  devDualVmAudit,
   emptyInsightCopy,
   postSessionFeedback,
   identityReason,
@@ -178,6 +195,15 @@ export default function SummaryHeroCard({
   if (signals.blendedFocus?.trim()) {
     focusText = signals.blendedFocus.trim();
   }
+  const identityFocusForVm = identityBased ? signals.identityFocus : focusText;
+  const resolvedWeeklyDoc = devDualVmAudit?.resolvedWeeklyDoc ?? null;
+  const snapForSelect = extractSignalSnapshot(signals);
+  const coachSystemKeyForVm = coachWeekly?.systemKey?.trim() || null;
+  const selectedSystemKey = selectFocusSystem({
+    coachSystem: coachSystemKeyForVm,
+    signalSystem: snapForSelect.topSystem,
+    identityFocus: identityFocusForVm,
+  });
   const isAllFocus = focus?.toLowerCase() === "all";
   const identityLabel = focus ? (isAllFocus ? "Well-Rounded" : topSystem || "Technique") : null;
   const focusLabel = isAllFocus ? "multiple positions" : focus;
@@ -206,12 +232,30 @@ export default function SummaryHeroCard({
       ? "Built from your training and competition."
       : "This view stays quiet until real activity exists.";
 
+  if (__DEV__) {
+    console.log("[SUMMARY DUAL VM AUDIT] SummaryHeroCard.pre-buildSummaryViewModel", {
+      athleteId: devDualVmAudit?.athleteId ?? null,
+      weeklyHeadline:
+        resolvedWeeklyDoc?.headline?.slice(0, 120) ??
+        coachWeekly?.headline?.slice(0, 120) ??
+        null,
+      weeklySystemKey: resolvedWeeklyDoc?.systemKey ?? coachWeekly?.systemKey ?? null,
+      coachWeekly: coachWeekly ?? null,
+      resolvedWeeklyDoc,
+      selectedSystemKey,
+    });
+  }
+
   const viewModel = buildSummaryViewModel({
     signals,
     identityScore: confidence,
     phase: identityBased ? signals.phase : hasData ? "experienced" : "cold",
-    identityFocus: identityBased ? signals.identityFocus : focusText,
+    identityFocus: identityFocusForVm,
+    coachWeekly: coachWeekly ?? null,
     lastAction: lastAction ?? null,
+    devFinalHeroVmTrace: __DEV__
+      ? { athleteId: devDualVmAudit?.athleteId ?? null }
+      : undefined,
   });
 
   const legacyHero = (

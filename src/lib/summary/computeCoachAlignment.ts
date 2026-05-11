@@ -1,7 +1,7 @@
 import type { SignalOutput } from "@/src/lib/signals/computeSignals";
 
 export type CoachAlignmentResult = {
-  status: "no_focus" | "no_data" | "misaligned" | "aligned" | "validated";
+  status: "no_focus" | "directed_no_proof" | "misaligned" | "aligned" | "validated";
   reason: string;
   matchesTraining: boolean;
   hasData: boolean;
@@ -9,38 +9,59 @@ export type CoachAlignmentResult = {
 };
 
 type CoachAlignmentInput = {
-  coachWeekly?: {
-    headline: string;
-  } | null;
   signals: SignalOutput;
   exposurePending?: any | null;
+  /** Output of `selectFocusSystem` (coach system key, else identity, else signal top system). */
+  resolvedFocusSystem: string | null;
 };
 
 function normalize(value: string | null | undefined): string {
   return (value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+function topSystemFromSignals(signals: unknown): string | null {
+  const s = signals as {
+    patterns?: { topSystem?: string | null } | null;
+    systems?: { topSystem?: string | null } | null;
+  } | null;
+
+  const patternTop = s?.patterns?.topSystem?.trim();
+  if (patternTop) return patternTop;
+
+  const systemTop = s?.systems?.topSystem?.trim();
+  return systemTop || null;
+}
+
+function competitionCountFromSignals(signals: unknown): number {
+  const s = signals as {
+    competition?: { competitionCount?: number | null } | null;
+  } | null;
+  const count = s?.competition?.competitionCount;
+  return typeof count === "number" && Number.isFinite(count) ? count : 0;
+}
+
 export function computeCoachAlignment(
   input: CoachAlignmentInput,
 ): CoachAlignmentResult {
-  const coachFocus = input.coachWeekly?.headline?.trim() || null;
+  const focus = input.resolvedFocusSystem?.trim() || null;
   const hasData = input.signals.hasData === true;
   const isExposed = Boolean(input.exposurePending);
+  const topSystem = topSystemFromSignals(input.signals);
 
-  if (!coachFocus) {
+  if (!focus) {
     return {
       status: "no_focus",
-      reason: "No coach focus is set.",
+      reason: "No structured coach focus is set.",
       matchesTraining: false,
       hasData,
       isExposed,
     };
   }
 
-  if (!hasData) {
+  if (!topSystem) {
     return {
-      status: "no_data",
-      reason: "No training data yet.",
+      status: "directed_no_proof",
+      reason: "Coach direction is set, but no matching training proof has been logged yet.",
       matchesTraining: false,
       hasData,
       isExposed,
@@ -48,7 +69,7 @@ export function computeCoachAlignment(
   }
 
   const matchesTraining =
-    normalize(input.signals.patterns.topSystem) === normalize(coachFocus);
+    normalize(topSystem) === normalize(focus);
 
   if (!matchesTraining) {
     return {
@@ -70,7 +91,7 @@ export function computeCoachAlignment(
     };
   }
 
-  if (input.signals.competition.competitionCount > 0) {
+  if (competitionCountFromSignals(input.signals) > 0) {
     return {
       status: "validated",
       reason: "Training matches the coach focus and has competition proof.",

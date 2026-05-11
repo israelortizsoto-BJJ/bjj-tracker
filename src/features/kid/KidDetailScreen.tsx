@@ -35,6 +35,7 @@ import {
   familyResourceUrlForLinking,
 } from "../../coach/familyResourceUrl";
 import { kidWeeklyFocusToPublishPayload } from "../../coach/weeklyFocusPublish";
+import { isPublishableSystemKey } from "../../lib/taxonomy/publishableSystemKey";
 import {
   READ_TOGETHER_TITLES,
   buildReadTogetherStoryCards,
@@ -60,6 +61,7 @@ import {
   setCachedWeeklyForLinkToken,
 } from "../../storage/coachWeeklySyncCacheStore";
 import {
+  archiveKidForCoachRoster,
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
   appendKidWeeklyFocus,
@@ -83,14 +85,15 @@ import {
   upsertSharedCompetitionsForKid,
 } from "../../storage/kidCompetitionStore";
 import type { Session } from "../../types";
-import type {
-  CoachOutcome,
-  KidCompetitionEntry,
-  KidCompetitionFormat,
-  KidCompetitionOutcomeKind,
-  KidCompetitionResult,
-  KidStandingGuidance,
-  KidWeeklyFocusEntry,
+import {
+  isKidCoachArchived,
+  type CoachOutcome,
+  type KidCompetitionEntry,
+  type KidCompetitionFormat,
+  type KidCompetitionOutcomeKind,
+  type KidCompetitionResult,
+  type KidStandingGuidance,
+  type KidWeeklyFocusEntry,
 } from "../../types/coachKid";
 import type {
   CoachWeeklySyncPublishBody,
@@ -100,6 +103,7 @@ import type {
 } from "../../types/coachWeeklySync";
 import { toDateKey } from "../../_domain/dateKey";
 import { FUNDAMENTALS_TAXONOMY } from "../../fundamentals/taxonomy";
+import { clearActiveKidId } from "../../state/activeKidStore";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -487,6 +491,8 @@ export default function KidDetailScreen() {
   const [progressNotesInputKey, setProgressNotesInputKey] = useState(0);
   const [publishingWeekly, setPublishingWeekly] = useState(false);
   const [headerRefreshing, setHeaderRefreshing] = useState(false);
+  /** Coach detail only: row was soft-archived (redirect shortly after). */
+  const [coachRosterRowArchived, setCoachRosterRowArchived] = useState(false);
   /** Set when a header refresh completes successfully (ISO timestamp for display). */
   const [lastHeaderRefreshAtIso, setLastHeaderRefreshAtIso] = useState<string | null>(null);
 
@@ -541,6 +547,7 @@ export default function KidDetailScreen() {
     const promise = (async (): Promise<boolean> => {
     const loadGen = ++coachKidDetailLoadGenRef.current;
     const keepPreviousUiReady = opts?.keepPreviousUiReady ?? false;
+    setCoachRosterRowArchived(false);
     setCompetitionDerivedTrainingFocus(null);
     if (!keepPreviousUiReady) {
       setReady(false);
@@ -549,6 +556,24 @@ export default function KidDetailScreen() {
       const kids = await getKidsById();
       if (loadGen !== coachKidDetailLoadGenRef.current) return false;
       const kid = kids[kidId];
+      if (isCoachKidDetail && kid && isKidCoachArchived(kid)) {
+        setCoachRosterRowArchived(true);
+        setKidName(kid.name ?? "—");
+        const householdLabel = kid.householdLabel ?? "";
+        setHouseholdDraft(householdLabel);
+        setHouseholdBaseline(householdLabel);
+        setCurrentWeekEntry(null);
+        setWeeklyFocusEntriesThisWeek([]);
+        setThisWeekReflections([]);
+        setCompetitions([]);
+        setKidWeekSessions([]);
+        setStandingGuidance(null);
+        setPublishedWeeklyFeedback(null);
+        if (loadGen === coachKidDetailLoadGenRef.current) {
+          setReady(true);
+        }
+        return loadGen === coachKidDetailLoadGenRef.current;
+      }
       setKidName(kid?.name ?? "—");
       const householdLabel = kid?.householdLabel ?? "";
       setHouseholdDraft(householdLabel);
@@ -836,7 +861,7 @@ export default function KidDetailScreen() {
       });
     }
     return promise;
-  }, [kidId, weekStartYMD]);
+  }, [isCoachKidDetail, kidId, weekStartYMD]);
 
   const onRefreshFromHeader = useCallback(async () => {
     if (!kidId) return;
@@ -955,22 +980,6 @@ export default function KidDetailScreen() {
     }, [load]),
   );
 
-  useEffect(() => {
-    if (!isCoachKidDetail && !isThisWeekKidDetail) return;
-    return navigation.addListener("beforeRemove", (e) => {
-      const type = e.data?.action?.type;
-      if (type !== "POP" && type !== "GO_BACK") return;
-      e.preventDefault();
-      queueMicrotask(() => {
-        if (isCoachKidDetail) {
-          router.replace("/coach");
-        } else {
-          router.replace("/this-week/kids");
-        }
-      });
-    });
-  }, [navigation, isCoachKidDetail, isThisWeekKidDetail]);
-
   useFocusEffect(
     useCallback(() => {
       if (!isCoachKidDetail && !isThisWeekKidDetail) return;
@@ -1021,6 +1030,22 @@ export default function KidDetailScreen() {
   useEffect(() => {
     setHouseholdSavedAck(false);
   }, [kidId]);
+
+  useEffect(() => {
+    if (!isCoachKidDetail || !kidId) return;
+    let cancelled = false;
+    void (async () => {
+      const kids = await getKidsById();
+      if (cancelled) return;
+      const k = kids[kidId];
+      if (k && isKidCoachArchived(k)) {
+        router.replace("/coach");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isCoachKidDetail, kidId]);
 
   const householdDirty = householdDraft !== householdBaseline;
 
@@ -1227,6 +1252,7 @@ export default function KidDetailScreen() {
     // excluded — they live on the coach UI only and never enter parent-facing render.
     const synthetic: SyncedWeeklyMessagePayload = {
       weekStartYMD: payload.weekStartYMD,
+      ...(payload.systemKey ? { systemKey: payload.systemKey } : {}),
       headline: payload.headline,
       body: payload.body,
       updatedAt: currentWeekEntry.updatedAt,
@@ -1449,6 +1475,21 @@ export default function KidDetailScreen() {
       Alert.alert("Set focus first", "Save this week’s focus before publishing to families.");
       return;
     }
+    if (!isPublishableSystemKey(latestEntry.systemKey)) {
+      const rawTrim = (latestEntry.systemKey ?? "").trim();
+      if (rawTrim) {
+        Alert.alert(
+          "Cannot publish this system id",
+          "The saved system classification cannot be sent to families (use lowercase letters, numbers, dots, and underscores). Edit this weekly focus and pick a BJJ system again.",
+        );
+      } else {
+        Alert.alert(
+          "Pick a system",
+          "Edit this weekly focus and select its BJJ system before publishing.",
+        );
+      }
+      return;
+    }
     const sameWeekFallbackPool = (
       await getKidWeeklyFocusEntriesForKid(kidId)
     ).filter((e) => e.weekStartYMD === weekStartYMD);
@@ -1542,6 +1583,22 @@ export default function KidDetailScreen() {
     };
     setPublishingWeekly(true);
     try {
+      if (__DEV__) {
+        console.log("[SYSTEMKEY TRACE CLIENT]", {
+          traceStage: "2_publish_request_body",
+          headline: payload.headline?.slice(0, 120) ?? null,
+          systemKey: payload.systemKey ?? null,
+          athleteId: payload.sharedAthleteId ?? null,
+          weekStartYMD: payload.weekStartYMD,
+          keyExistsOnObject: Object.prototype.hasOwnProperty.call(payload, "systemKey"),
+          keyValidAfterClientNormalize: isPublishableSystemKey(payload.systemKey),
+          clientPublishNormalizerRemovedKey: null,
+          workerParserRemoved: null,
+          source: "KidDetailScreen_onPublishWeeklyToFamilies_payload",
+          latestEntryRawSystemKey:
+            typeof latestEntry.systemKey === "string" ? latestEntry.systemKey : null,
+        });
+      }
       console.log("PUBLISH DEBUG", {
         kidId,
         sharedAthleteId,
@@ -1551,6 +1608,7 @@ export default function KidDetailScreen() {
       const publishedAt = new Date().toISOString();
       const publishedWeekly: SyncedWeeklyMessagePayload = {
         weekStartYMD: payload.weekStartYMD,
+        ...(payload.systemKey ? { systemKey: payload.systemKey } : {}),
         headline: payload.headline,
         body: payload.body,
         updatedAt: publishedAt,
@@ -1634,6 +1692,32 @@ export default function KidDetailScreen() {
     },
     [load],
   );
+
+  const requestArchiveAthleteFromCoachRoster = useCallback(() => {
+    if (!isCoachKidDetail || !kidId) return;
+    const label = kidName.trim() || "This athlete";
+    Alert.alert(
+      "Remove from roster?",
+      `${label} will disappear from your active coach roster on this device. Sessions, competitions, and notes are kept locally. Weekly co-publishing stops showing this athlete in coach views; it does not delete the family’s linked athlete on the server.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove from roster",
+          style: "destructive",
+          onPress: () =>
+            void (async () => {
+              const next = await archiveKidForCoachRoster(kidId);
+              if (!next) {
+                Alert.alert("Could not remove", "Try again from the roster.");
+                return;
+              }
+              clearActiveKidId();
+              router.replace("/coach");
+            })(),
+        },
+      ],
+    );
+  }, [isCoachKidDetail, kidId, kidName]);
 
   return (
     <>
@@ -2926,6 +3010,48 @@ export default function KidDetailScreen() {
           <Text style={{ marginTop: 14, fontSize: 13, color: UI.textSecondary }}>
             Loading…
           </Text>
+        ) : null}
+
+        {isCoachKidDetail && ready && !coachRosterRowArchived ? (
+          <View
+            style={{
+              marginTop: 28,
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: "#fecaca",
+              backgroundColor: "#fef2f2",
+              gap: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                letterSpacing: 0.6,
+                fontWeight: "800",
+                color: "#991b1b",
+                textTransform: "uppercase",
+              }}
+            >
+              Danger zone
+            </Text>
+            <Text style={{ fontSize: 13, color: "#7f1d1d", lineHeight: 20 }}>
+              Remove this athlete from your active coach roster. This is a soft archive: nothing is permanently
+              erased from this device.
+            </Text>
+            <Pressable
+              onPress={requestArchiveAthleteFromCoachRoster}
+              style={({ pressed }) => ({
+                alignSelf: "flex-start",
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                backgroundColor: pressed ? "#b91c1c" : UI.danger,
+              })}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "800", color: "#ffffff" }}>Remove from roster</Text>
+            </Pressable>
+          </View>
         ) : null}
 
         <Text style={{ marginTop: 12, fontSize: 12, color: UI.textSecondary, opacity: 0.9 }}>

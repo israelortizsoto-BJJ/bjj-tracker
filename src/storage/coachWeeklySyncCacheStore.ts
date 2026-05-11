@@ -140,10 +140,39 @@ function normalizeReadEntry(
     typeof e.tokenNorm === "string" && e.tokenNorm.trim().length > 0 ? e.tokenNorm.trim() : "";
   const tokenNorm = storedTokenNorm || normalizeInviteLinkToken(linkToken);
   const session = normalizeStoredSession(e.session, linkToken);
+  const weeklyByAthleteId = normalizeWeeklyByAthleteId(e.weeklyByAthleteId);
+  if (__DEV__) {
+    console.log("[SYSTEMKEY TRACE CLIENT]", {
+      traceStage: "8_client_cache_hydrate",
+      headline: weekly?.headline?.slice(0, 120) ?? null,
+      systemKey: weekly?.systemKey ?? null,
+      athleteId: null,
+      weekStartYMD: weekly?.weekStartYMD ?? null,
+      inviteWeeklyKeyExists: weekly != null && Object.prototype.hasOwnProperty.call(weekly, "systemKey"),
+      weeklyByAthleteSystemKeys: Object.fromEntries(
+        Object.entries(weeklyByAthleteId).map(([id, doc]) => [
+          id,
+          {
+            headline: doc?.headline?.slice(0, 120) ?? null,
+            systemKey: doc?.systemKey ?? null,
+            weekStartYMD: doc?.weekStartYMD ?? null,
+          },
+        ]),
+      ),
+      cacheDroppedDocDueToInvalidShape: false,
+      source: "coachWeeklySyncCacheStore_normalizeReadEntry",
+    });
+    console.log("[bjj-weekly-cache-hydrate systemKey]", {
+      inviteSystemKey: weekly?.systemKey ?? null,
+      weeklyByAthleteIdSystemKeys: Object.fromEntries(
+        Object.entries(weeklyByAthleteId).map(([id, doc]) => [id, doc?.systemKey ?? null]),
+      ),
+    });
+  }
   return {
     weekly,
     fetchedAt,
-    weeklyByAthleteId: normalizeWeeklyByAthleteId(e.weeklyByAthleteId),
+    weeklyByAthleteId,
     athletes: normalizeAthletes("athletes" in e ? e.athletes : []),
     tokenNorm,
     session,
@@ -236,6 +265,17 @@ export async function setCachedWeeklyForLinkToken(
     tokenNorm: nextTokenNorm,
     session: nextSession ?? undefined,
   };
+  if (__DEV__) {
+    console.log("[bjj-weekly-cache-write systemKey]", {
+      inviteSystemKey: map[linkToken].weekly?.systemKey ?? null,
+      weeklyByAthleteIdSystemKeys: Object.fromEntries(
+        Object.entries(normalizedWeeklyByAthleteId).map(([id, doc]) => [
+          id,
+          doc?.systemKey ?? null,
+        ]),
+      ),
+    });
+  }
   await writeMap(map);
 }
 

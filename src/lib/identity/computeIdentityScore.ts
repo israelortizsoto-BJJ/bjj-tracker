@@ -1,3 +1,8 @@
+import {
+  ATHLETE_BELT_IDENTITY_WEIGHT,
+  resolveBeltRankForIdentityScore,
+} from "@/src/lib/athlete/athleteBeltExperience";
+
 export type IdentityInputs = {
   beltRank?: string | null;
   declaredSkills?: string[] | null;
@@ -10,21 +15,9 @@ export type IdentityScoreResult = {
   phase: "cold" | "developing" | "experienced";
 };
 
-const BELT_BASE: Record<string, number> = {
-  white: 20,
-  blue: 40,
-  purple: 70,
-  brown: 85,
-  black: 95,
-};
-
-function normalizeBelt(belt?: string | null): string {
-  return (belt ?? "").toLowerCase().split(" ")[0];
-}
-
 function getBeltScore(belt?: string | null): number {
-  const key = normalizeBelt(belt);
-  return BELT_BASE[key] ?? 10; // fallback minimal
+  const key = resolveBeltRankForIdentityScore(belt);
+  return ATHLETE_BELT_IDENTITY_WEIGHT[key] ?? 10;
 }
 
 function getSkillsScore(skills?: string[] | null): number {

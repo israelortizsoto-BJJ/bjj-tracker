@@ -1,5 +1,6 @@
 import type { CompetitionTrainingSkillFocus } from "../ai-coach/competitionTrainingSkillFocus";
 import { recommendedFocusAreaFromTrainingSkillFocus } from "../ai-coach/competitionTrainingSkillFocus";
+import type { KidsById } from "../types/coachKid";
 import type {
   CoachWeeklySyncSessionResponse,
   SyncedSharedAthlete,
@@ -61,6 +62,47 @@ export function sharedAthleteIdFromParentAthleteForSession(
   return ids.has(raw) ? raw : null;
 }
 
+/**
+ * Parent Summary / This Week: resolve `sharedAthleteId` for `weeklyByAthleteId` lookup.
+ * When the session roster is missing or empty (common on older cache rows), still use the parent
+ * athlete id so `weeklyByAthleteId[pa_*]` resolves — matches strict This Week behavior.
+ */
+export function resolveWeeklySharedAthleteIdForParentSnapshot(
+  parentAthleteId: string | null | undefined,
+  kidsById: KidsById | null | undefined,
+  session: ParentWeeklySessionSnapshot | null | undefined,
+): string | null {
+  const aid = typeof parentAthleteId === "string" ? parentAthleteId.trim() : "";
+  if (!aid || !session) return null;
+
+  let candidate: string | null = null;
+
+  const linkedKid = kidsById
+    ? Object.values(kidsById).find(
+        (k) => k && (k.sharedAthleteId ?? "").trim() === aid,
+      )
+    : undefined;
+
+  if (linkedKid) {
+    candidate = sharedAthleteIdFromRosterForSession(
+      linkedKid.id,
+      linkedKid.sharedAthleteId,
+      session.athletes,
+    );
+  }
+  if (!candidate) {
+    candidate = sharedAthleteIdFromParentAthleteForSession(aid, session.athletes);
+  }
+
+  const roster = session.athletes;
+  const rosterEmpty = !Array.isArray(roster) || roster.length === 0;
+  if (!candidate && rosterEmpty && aid) {
+    candidate = aid;
+  }
+
+  return candidate;
+}
+
 function isValidWeeklyDoc(v: unknown): v is SyncedWeeklyMessagePayload {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
   const o = v as Record<string, unknown>;
@@ -72,10 +114,23 @@ function isValidWeeklyDoc(v: unknown): v is SyncedWeeklyMessagePayload {
   );
 }
 
+function weeklyByAthleteMapHasValidDoc(
+  map: ResolveWeeklyDocSession["weeklyByAthleteId"],
+): boolean {
+  if (!map || typeof map !== "object" || Array.isArray(map)) return false;
+  for (const v of Object.values(map)) {
+    if (v != null && isValidWeeklyDoc(v)) return true;
+  }
+  return false;
+}
+
 /**
  * Resolves the weekly doc for a parent view using athlete scope when available.
- * Per-athlete `weeklyByAthleteId[id]` is preferred; when that slot is missing or empty, falls back to
- * invite-level `weekly` so parents still see a coach message when only legacy invite data exists.
+ * Per-athlete `weeklyByAthleteId[id]` wins when present and valid. Invite-level `weekly` is used only
+ * when the resolved athlete id has **no** map entry (legacy invite data), and **only if** there is no
+ * valid per-athlete weekly anywhere in `weeklyByAthleteId` (avoids stale invite when athlete-scoped
+ * data exists). If the map **has** the id but the slot is null or structurally invalid, returns null
+ * — no silent invite fallback.
  * When `trainingSkillFocus` is present, merges `recommendedFocusArea` onto the resolved doc — augments coach copy only.
  * Never throws.
  */
@@ -87,29 +142,39 @@ export function resolveWeeklyDoc(
   try {
     const id = typeof sharedAthleteId === "string" ? sharedAthleteId.trim() : "";
 
+    const map = session.weeklyByAthleteId;
+    const mapKeys = map && typeof map === "object" && !Array.isArray(map) ? Object.keys(map) : [];
+
+    if (__DEV__) {
+      console.log("[WEEKLY RESOLVE TRACE]", {
+        resolvedAthleteId: id || null,
+        weeklyByAthleteIdKeys: mapKeys,
+        inviteSystemKey: session?.weekly?.systemKey ?? null,
+        inviteHeadline: session?.weekly?.headline?.slice(0, 40) ?? null,
+      });
+    }
+
     if (__DEV__ && id) {
-      const map = session?.weeklyByAthleteId ?? {};
+      const devMap = session?.weeklyByAthleteId ?? {};
 
       console.log("[WEEKLY PIPELINE TRACE]", {
         athleteId: id,
-        hasAthleteDoc: !!map[id],
-        mission: map[id]?.missionResourceUrl ?? null,
-        available: Object.keys(map),
+        hasAthleteDoc: !!devMap[id],
+        mission: devMap[id]?.missionResourceUrl ?? null,
+        available: Object.keys(devMap),
       });
 
-      if (!(id in map)) {
+      if (!(id in devMap)) {
         console.log("[weekly-doc-missing-athlete]", {
           requested: id,
-          available: Object.keys(map),
+          available: Object.keys(devMap),
         });
-      } else if (map[id] == null) {
+      } else if (devMap[id] == null) {
         console.warn("[ATHLETE DOC EMPTY]", {
           sharedAthleteId: id,
         });
       }
     }
-
-    const map = session.weeklyByAthleteId;
 
     if (id && map && typeof map === "object" && !Array.isArray(map)) {
       if (Object.prototype.hasOwnProperty.call(map, id)) {
@@ -118,20 +183,64 @@ export function resolveWeeklyDoc(
           const recommendedFocusArea = recommendedFocusAreaFromTrainingSkillFocus(
             trainingSkillFocus ?? null,
           );
+          if (__DEV__) {
+            console.log("[SYSTEMKEY TRACE SUMMARY]", {
+              traceStage: "9_resolveWeeklyDoc_result",
+              headline: athleteDoc.headline?.slice(0, 120) ?? null,
+              systemKey: athleteDoc.systemKey ?? null,
+              athleteId: id || null,
+              weekStartYMD: athleteDoc.weekStartYMD ?? null,
+              keyExistsOnObject: Object.prototype.hasOwnProperty.call(athleteDoc, "systemKey"),
+              selectedWeeklySource: "weeklyByAthleteId",
+              source: "resolveWeeklyDoc",
+            });
+            console.log("[WEEKLY RESOLVE TRACE]", {
+              selectedWeeklySource: "weeklyByAthleteId",
+              selectedSystemKey: athleteDoc.systemKey ?? null,
+              fallbackReason: null,
+            });
+          }
           if (recommendedFocusArea) {
             return { ...athleteDoc, recommendedFocusArea };
           }
           return athleteDoc;
         }
+        if (__DEV__) {
+          console.log("[WEEKLY RESOLVE TRACE]", {
+            selectedWeeklySource: null,
+            selectedSystemKey: null,
+            fallbackReason: "athlete_slot_present_not_usable_no_invite",
+          });
+        }
+        return null;
       }
     }
 
+    const mapHasValidAthleteDoc = weeklyByAthleteMapHasValidDoc(map);
     const inviteWeekly = session?.weekly;
     if (
       id &&
       inviteWeekly != null &&
-      isValidWeeklyDoc(inviteWeekly)
+      isValidWeeklyDoc(inviteWeekly) &&
+      !mapHasValidAthleteDoc
     ) {
+      if (__DEV__) {
+        console.log("[SYSTEMKEY TRACE SUMMARY]", {
+          traceStage: "9_resolveWeeklyDoc_result",
+          headline: inviteWeekly.headline?.slice(0, 120) ?? null,
+          systemKey: inviteWeekly.systemKey ?? null,
+          athleteId: id || null,
+          weekStartYMD: inviteWeekly.weekStartYMD ?? null,
+          keyExistsOnObject: Object.prototype.hasOwnProperty.call(inviteWeekly, "systemKey"),
+          selectedWeeklySource: "invite_weekly",
+          source: "resolveWeeklyDoc",
+        });
+        console.log("[WEEKLY RESOLVE TRACE]", {
+          selectedWeeklySource: "invite_weekly",
+          selectedSystemKey: inviteWeekly.systemKey ?? null,
+          fallbackReason: "no_athlete_weekly_key_legacy_invite",
+        });
+      }
       const recommendedFocusArea = recommendedFocusAreaFromTrainingSkillFocus(
         trainingSkillFocus ?? null,
       );
@@ -139,6 +248,23 @@ export function resolveWeeklyDoc(
         return { ...inviteWeekly, recommendedFocusArea };
       }
       return inviteWeekly;
+    }
+
+    if (__DEV__) {
+      const skippedInviteDueToAthleteMap =
+        Boolean(id) &&
+        inviteWeekly != null &&
+        isValidWeeklyDoc(inviteWeekly) &&
+        mapHasValidAthleteDoc;
+      console.log("[WEEKLY RESOLVE TRACE]", {
+        selectedWeeklySource: null,
+        selectedSystemKey: null,
+        fallbackReason: !id
+          ? "no_resolved_shared_athlete_id"
+          : skippedInviteDueToAthleteMap
+            ? "invite_skipped_per_athlete_map_present"
+            : "no_usable_weekly_doc",
+      });
     }
 
     return null;

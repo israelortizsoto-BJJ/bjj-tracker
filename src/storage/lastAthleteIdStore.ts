@@ -22,3 +22,16 @@ export async function setLastAthleteKidId(kidId: string): Promise<void> {
     /* ignore */
   }
 }
+
+export async function clearLastAthleteKidIdIfMatches(kidId: string): Promise<void> {
+  const want = typeof kidId === "string" ? kidId.trim() : "";
+  if (!want) return;
+  try {
+    const cur = await getLastAthleteKidId();
+    if (cur === want) {
+      await AsyncStorage.removeItem(StorageKeys.lastAthleteId);
+    }
+  } catch {
+    /* ignore */
+  }
+}

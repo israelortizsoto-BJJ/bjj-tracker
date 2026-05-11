@@ -1,6 +1,6 @@
 import type { CoachWeeklySyncCacheEntry } from "../storage/coachWeeklySyncCacheStore";
 import { coachSyncFetchSession } from "../services/coachWeeklySyncApi";
-import type { KidsById, Kid } from "../types/coachKid";
+import { isKidCoachArchived, type KidsById, type Kid } from "../types/coachKid";
 import type { CoachLink, CoachLinkStatus } from "../types/coachShare";
 import { inviteLinkTokenTail, normalizeInviteLinkToken } from "./inviteLinkToken";
 
@@ -209,6 +209,7 @@ export function parentLocalLinkageConflictsWithCachedSessionRoster(
       .filter(Boolean),
   );
   for (const k of Object.values(kidsById)) {
+    if (isKidCoachArchived(k)) continue;
     const kt = normalizeInviteLinkToken(k.sharedFromInviteTokenNorm ?? "");
     if (kt !== inviteTokenNorm) continue;
     const aid = (k.sharedAthleteId ?? "").trim();

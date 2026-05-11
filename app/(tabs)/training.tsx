@@ -34,7 +34,6 @@ import { FUNDAMENTALS_TAXONOMY } from "../../src/fundamentals/taxonomy";
 import type { TechniqueIndexItem } from "../../src/fundamentals/types";
 
 import type { Session } from "../../src/types";
-import { useAthleteData } from "@/src/hooks/useAthleteData";
 import { useSignals } from "../../src/hooks/useSignals";
 import { deriveTrend } from "@/src/lib/summary/deriveSummaryInsights";
 
@@ -42,33 +41,6 @@ type PreviewState =
   | null
   | { type: "image"; uri: string; assetId?: string | null }
   | { type: "video"; uri: string; assetId?: string | null };
-
-const openBetaFeedbackEmail = async () => {
-  const subject = encodeURIComponent("MatMind Beta Feedback");
-  const body = encodeURIComponent(
-    [
-      "Device model:",
-      "iOS version:",
-      "",
-      "What you expected:",
-      "",
-      "What happened:",
-      "",
-      "Steps to reproduce (if you can):",
-      "",
-      "Screenshot/video:",
-    ].join("\n")
-  );
-
-  const url = `mailto:support@ortizdigitalstudio.com?subject=${subject}&body=${body}`;
-
-  const canOpen = await Linking.canOpenURL(url);
-  if (!canOpen) {
-    Alert.alert("Email not available", "Please email support@ortizdigitalstudio.com");
-    return;
-  }
-  await Linking.openURL(url);
-};
 
 // System id -> label (for week list + cards)
 const SYSTEM_LABEL_BY_ID = new Map<string, string>([
@@ -296,18 +268,24 @@ async function loadSessions(): Promise<Session[]> {
 }
 
 const UI = {
-  screenBg: "#f3f4f6",
-  bgCard: "#ffffff",
-  bgCardActive: "#edf2ff",
-  border: "#e5e7eb",
-  textPrimary: "#111827",
-  textSecondary: "#4b5563",
-  textHeader: "#111827",
-  badgeBg: "#f3f4f6",
-  accent: "#1d4ed8",
+  screenBg: "#0b0f14",
+  bgCard: "#121821",
+  bgCardActive: "#172233",
+  border: "rgba(226, 232, 240, 0.11)",
+  textPrimary: "#f2f4f6",
+  textSecondary: "#a9b0b8",
+  textHeader: "#f2f4f6",
+  badgeBg: "#172233",
+  accent: "#4f7cff",
+  darkSurface: "#10161d",
+  darkSurfaceRaised: "#141b24",
+  darkSurfaceGreen: "#162016",
+  darkBorder: "rgba(226, 232, 240, 0.1)",
+  darkGreenBorder: "rgba(190, 242, 100, 0.16)",
+  calendarBg: "#121821",
 };
-const CARD_RADIUS = 18;
-const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.1, color: "#6b7280", fontWeight: "600" as const };
+const CARD_RADIUS = 22;
+const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.1, color: "#8a94a3", fontWeight: "600" as const };
 const INSIGHT_STYLES = {
   hero: { color: UI.textPrimary, fontSize: 28, fontWeight: "900" as const },
   title: { color: UI.textPrimary, fontSize: 14, fontWeight: "800" as const, marginTop: 6 },
@@ -316,7 +294,7 @@ const INSIGHT_STYLES = {
 const INSIGHT_CARD_CONTAINER = {
   width: CARD_W,
   marginRight: GAP,
-  padding: 18,
+  padding: 14,
   borderRadius: CARD_RADIUS,
   borderWidth: 1,
   borderColor: UI.border,
@@ -324,47 +302,18 @@ const INSIGHT_CARD_CONTAINER = {
 } as const;
 
 const styles = StyleSheet.create({
-  trainingFilterRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginTop: 2,
-  },
-  trainingFilterButton: {
-    flex: 1,
-    minHeight: 42,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  trainingFilterButtonActive: {
-    backgroundColor: "#edf2ff",
-    borderColor: "#d1d5db",
-  },
-  trainingFilterButtonInactive: {
-    backgroundColor: "#ffffff",
-    borderColor: "#e5e7eb",
-  },
-  trainingFilterButtonText: {
-    color: "#111827",
-    fontSize: 13,
-    fontWeight: "800",
-    textAlign: "center",
-  },
   trainingIdentityBlock: {
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "#11161a",
+    marginBottom: 0,
+    padding: 11,
+    borderRadius: CARD_RADIUS,
+    backgroundColor: UI.darkSurfaceGreen,
     borderWidth: 1,
-    borderColor: "#1f2a30",
+    borderColor: UI.darkGreenBorder,
   },
   trainingIdentityText: {
-    color: "#c7f36b",
+    color: "#dceda7",
     fontSize: 14,
-    lineHeight: 18,
+    lineHeight: 19,
   },
   trainingTrendLabel: {
     marginTop: 4,
@@ -372,32 +321,6 @@ const styles = StyleSheet.create({
     color: "#6b7c86",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
-  nextLogBlock: {
-    marginBottom: 16,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: "#0f1418",
-    borderWidth: 1,
-    borderColor: "#243038",
-  },
-  nextLogTitle: {
-    color: "#8fa3ad",
-    fontSize: 12,
-    marginBottom: 4,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  nextLogText: {
-    color: "#ffffff",
-    fontSize: 14,
-    lineHeight: 18,
-  },
-  postSessionFeedback: {
-    marginTop: 10,
-    fontSize: 13,
-    color: "#c7f36b",
-    lineHeight: 18,
   },
 });
 // ------------------------------
@@ -428,7 +351,6 @@ export default function Training() {
   /** Effective roster kid scope (legacy session `kidId`); deep links win over linked roster kid. */
   const effectiveKidId = kidIdParam ?? trainingLinkedKidId ?? undefined;
   const athleteScopeTrim = trainingAthleteId.trim();
-  const { competitions: recentCompetitionEntries = [] } = useAthleteData(athleteScopeTrim);
   const cameFromWeekly =
     typeof params.fromWeekly === "string" &&
     (params.fromWeekly === "1" || params.fromWeekly === "true");
@@ -671,19 +593,6 @@ const signals = useSignals({
 });
 
 const trend = deriveTrend(signals);
-
-const sessionConfirmationMessage = useMemo(() => {
-  const latestSession = weekSessionsRaw?.[0] ?? null;
-  if (!latestSession) return null;
-  const techLabels = getTechniqueLabelsFromSession(latestSession);
-  const systemLabel =
-    resolveSystemLabel(latestSession.system) !== "—"
-      ? resolveSystemLabel(latestSession.system)
-      : null;
-  const primary = techLabels[0]?.trim() || systemLabel;
-  if (!primary) return null;
-  return `${primary} was emphasized in your latest session. Detailed coaching cues are on Summary.`;
-}, [weekSessionsRaw]);
 
 const getTrainingMessage = () => {
   if (experienceLevel === "beginner") {
@@ -1060,67 +969,6 @@ const searchedSessions = useMemo(() => {
   });
 }, [filteredSessions, searchQuery]);
 
-  const getTrendAwareLogNext = () => {
-    const exp = athlete?.experienceLevel ?? "";
-    const skills = athlete?.declaredSkills ?? [];
-    const competitor = !!athlete?.isCompetitor;
-
-    const hasSessions = (weekSessionsRaw?.length ?? 0) > 0;
-    const hasCompetitions = (recentCompetitionEntries?.length ?? 0) > 0;
-
-    const formatSkill = (skill: string) =>
-      skill.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-
-    const topSkills = skills.slice(0, 2).map(formatSkill).join(" & ");
-
-    if (trend === "improving") {
-      if (topSkills) {
-        return `Log a session reinforcing your ${topSkills} during live rounds.`;
-      }
-      return "Log a session reinforcing what's already working.";
-    }
-
-    if (trend === "stable") {
-      if (topSkills) {
-        return `Log a session focusing on refining your ${topSkills} under pressure.`;
-      }
-      return "Log a session focused on tightening execution and details.";
-    }
-
-    if (trend === "developing") {
-      if (topSkills) {
-        return `Log a session simplifying your ${topSkills} and building consistency.`;
-      }
-      return "Log a session focused on simplifying your game and building consistency.";
-    }
-
-    if (!hasSessions) {
-      return "Log your first training session to start building your game.";
-    }
-
-    if (exp === "beginner") {
-      return "Log a session focused on repeating core positions.";
-    }
-
-    if (exp === "developing") {
-      if (topSkills) {
-        return `Log a session focused on connecting your ${topSkills}.`;
-      }
-      return "Log a session focused on recognizing patterns in your training.";
-    }
-
-    if (exp === "experienced") {
-      if (competitor) {
-        return hasCompetitions
-          ? "Log a session refining sequences from your last competition."
-          : "Log a competition-focused session (situational rounds + intensity).";
-      }
-      return "Log a session refining your strongest systems.";
-    }
-
-    return "Log your next session to continue building your game.";
-  };
-
 const weekHasVisibleSessions = useMemo(() => {
   if (viewMode !== "week") return true;
 
@@ -1140,9 +988,9 @@ const renderSearchBar = () => (
       borderWidth: 1,
       borderColor: UI.border,
       backgroundColor: UI.bgCard,
-      borderRadius: 14,
-      paddingHorizontal: 14,
-      paddingVertical: 12,
+      borderRadius: CARD_RADIUS,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
       flexDirection: "row",
       alignItems: "center",
       gap: 10,
@@ -1176,8 +1024,8 @@ const renderSearchBar = () => (
 );
 const DAY_WEEK_CHIP_BASE = {
   flex: 1,
-  padding: 10,
-  borderRadius: 12,
+  padding: 9,
+  borderRadius: CARD_RADIUS,
   borderWidth: 1,
 } as const;
 
@@ -1198,7 +1046,7 @@ const getDayWeekChipSubtitleStyle = (isActive: boolean) => ({
 
 // 7C) Day / Week header row
 const renderDayWeekHeader = () => (
-  <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+  <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
     <Pressable
       onPress={() => {
         setViewMode("day");
@@ -1253,8 +1101,8 @@ const renderNewSessionCTA = () => (
   <Pressable
     onPress={openNewSession}
     style={({ pressed }) => ({
-      paddingVertical: 14,
-      paddingHorizontal: 18,
+      paddingVertical: 11,
+      paddingHorizontal: 16,
       borderRadius: CARD_RADIUS,
       borderWidth: 1,
       borderColor: UI.border,
@@ -1263,7 +1111,7 @@ const renderNewSessionCTA = () => (
       justifyContent: "center",
     })}
   >
-    <Text style={{ color: UI.textPrimary, fontSize: 16, fontWeight: "700", textAlign: "center" }}>
+    <Text style={{ color: UI.textPrimary, fontSize: 15, fontWeight: "700", textAlign: "center" }}>
       Add Session for Selected Day
     </Text>
   </Pressable>
@@ -1275,13 +1123,15 @@ const renderNewSessionCTA = () => (
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
-    contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 32, gap: 18 }}
+    contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 22, gap: 12 }}
     >
       <OperatingHeader
+        density="compact"
+        surfaceTone="soft"
         mode="athlete"
         eyebrow="Training / Execution"
         title="Day-based session log"
-        subtitle="Record one session with techniques, notes, and media."
+        subtitle="Capture the work that shapes the next round."
         athlete={{
           name: athlete?.name?.trim() || "Athlete",
           initials: initialsFromName(athlete?.name ?? ""),
@@ -1305,26 +1155,6 @@ const renderNewSessionCTA = () => (
           },
         ]}
       />
-  <Pressable
-  onPress={openBetaFeedbackEmail}
-  style={({ pressed }) => ({
-    marginTop: 4,
-    marginBottom: 4,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: UI.border,
-    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-  })}
->
-  <Text style={{ color: UI.textPrimary, fontSize: 15, fontWeight: "700" }}>
-    Send Beta Feedback
-  </Text>
-  <Text style={{ color: UI.textSecondary, fontSize: 13, marginTop: 4 }}>
-    Email support@ortizdigitalstudio.com
-  </Text>
-</Pressable>    
 
       <View style={styles.trainingIdentityBlock}>
         <Text style={styles.trainingIdentityText}>{getTrendAwareTrainingMessage()}</Text>
@@ -1333,44 +1163,45 @@ const renderNewSessionCTA = () => (
         ) : null}
       </View>
 
-      <View style={styles.nextLogBlock}>
-        <Text style={styles.nextLogTitle}>What to log next</Text>
-        <Text style={styles.nextLogText}>{getTrendAwareLogNext()}</Text>
-        {sessionConfirmationMessage ? (
-          <Text style={styles.postSessionFeedback}>{sessionConfirmationMessage}</Text>
-        ) : null}
-      </View>
-
-      <View style={styles.trainingFilterRow}>
-        {(["Gi", "No-Gi", "System"] as const).map((label, index) => (
-          <Pressable
-            key={label}
-            onPress={() => {}}
-            style={[
-              styles.trainingFilterButton,
-              index === 0
-                ? styles.trainingFilterButtonActive
-                : styles.trainingFilterButtonInactive,
-            ]}
-          >
-            <Text style={styles.trainingFilterButtonText}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      <Text style={[SECTION_LABEL, { marginTop: 4 }]}>
+      <Text style={[SECTION_LABEL, { marginTop: 0, marginBottom: -6 }]}>
         LOG TRAINING
       </Text>
 
-      <Calendar
-        markedDates={markedDates}
-        onDayPress={(day) => setSelectedDate(day.dateString)}
-      />
+      <View
+        style={{
+          marginTop: -4,
+          marginBottom: -2,
+          overflow: "hidden",
+          borderRadius: CARD_RADIUS,
+          borderWidth: 1,
+          borderColor: UI.border,
+          backgroundColor: UI.calendarBg,
+        }}
+      >
+        <Calendar
+          markedDates={markedDates}
+          onDayPress={(day) => setSelectedDate(day.dateString)}
+          style={{
+            backgroundColor: UI.calendarBg,
+          }}
+          theme={{
+            calendarBackground: UI.calendarBg,
+            monthTextColor: "#d7dee8",
+            textSectionTitleColor: "#8793a3",
+            dayTextColor: "#d7dee8",
+            textDisabledColor: "#465260",
+            arrowColor: "#6bbfe8",
+            todayTextColor: UI.accent,
+            selectedDayBackgroundColor: "#3559e6",
+            selectedDayTextColor: "#ffffff",
+          }}
+        />
+      </View>
 
       {renderNewSessionCTA()}
       {renderDayWeekHeader()}
 
-      <Text style={[SECTION_LABEL, { marginTop: 8 }]}>
+      <Text style={[SECTION_LABEL, { marginTop: 2 }]}>
         REVIEW TRAINING
       </Text>
 
@@ -1781,8 +1612,8 @@ const renderNewSessionCTA = () => (
                 borderRadius: 3,
                 backgroundColor:
                   i === safeInsightIndex
-                    ? "#111827"
-                    : "#d1d5db",
+                    ? UI.textSecondary
+                    : "rgba(226, 232, 240, 0.18)",
               }}
             />
           ))}

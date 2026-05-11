@@ -1,8 +1,9 @@
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
+  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -10,15 +11,15 @@ import {
 } from "react-native";
 
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
+import {
+  ATHLETE_BELT_RANK_OPTIONS,
+  ATHLETE_EXPERIENCE_LEVEL_OPTIONS,
+  canonicalBeltRankFromStored,
+  canonicalExperienceLevelFromStored,
+  isKnownAthleteBeltRank,
+  isKnownAthleteExperienceLevel,
+} from "@/src/lib/athlete/athleteBeltExperience";
 import { updateAthlete } from "@/src/storage/athleteStore";
-
-const BELT_OPTIONS = ["white", "blue", "purple", "brown", "black"];
-
-const EXPERIENCE_OPTIONS = [
-  { label: "Beginner", value: "beginner" },
-  { label: "Developing", value: "developing" },
-  { label: "Experienced", value: "experienced" },
-];
 
 export default function AthleteProfileScreen() {
   const router = useRouter();
@@ -32,10 +33,25 @@ export default function AthleteProfileScreen() {
   useEffect(() => {
     if (!athlete) return;
 
-    setBeltRank(athlete.beltRank ?? "");
-    setExperienceLevel(athlete.experienceLevel ?? "");
+    setBeltRank(canonicalBeltRankFromStored(athlete.beltRank));
+    setExperienceLevel(canonicalExperienceLevelFromStored(athlete.experienceLevel));
     setIsCompetitor(!!athlete.isCompetitor);
-  }, [athlete?.id]);
+  }, [athlete]);
+
+  const canSave = useMemo(
+    () =>
+      isKnownAthleteBeltRank(beltRank) &&
+      isKnownAthleteExperienceLevel(experienceLevel),
+    [beltRank, experienceLevel],
+  );
+
+  const legacyBeltNeedsUpdate = Boolean(
+    athlete?.beltRank?.trim() && !canonicalBeltRankFromStored(athlete.beltRank),
+  );
+  const legacyExperienceNeedsUpdate = Boolean(
+    athlete?.experienceLevel?.trim() &&
+      !canonicalExperienceLevelFromStored(athlete.experienceLevel),
+  );
 
   if (!hydrationReady || !athleteId) {
     return (
@@ -46,13 +62,13 @@ export default function AthleteProfileScreen() {
   }
 
   const handleSave = async () => {
-    if (!athleteId) return;
+    if (!athleteId || !canSave) return;
 
     setSaving(true);
 
     await updateAthlete(athleteId, {
-      beltRank,
-      experienceLevel,
+      beltRank: beltRank.trim(),
+      experienceLevel: experienceLevel.trim().toLowerCase(),
       isCompetitor,
     });
 
@@ -61,25 +77,31 @@ export default function AthleteProfileScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
       <Text style={styles.title}>Athlete Profile</Text>
 
-      <Text style={styles.label}>Belt</Text>
+      {legacyBeltNeedsUpdate || legacyExperienceNeedsUpdate ? (
+        <Text style={styles.hint}>
+          Select values below to match the new lists. Anything that no longer matches will be updated when you save.
+        </Text>
+      ) : null}
+
+      <Text style={styles.label}>Belt rank</Text>
       <View style={styles.row}>
-        {BELT_OPTIONS.map((belt) => (
+        {ATHLETE_BELT_RANK_OPTIONS.map((opt) => (
           <Pressable
-            key={belt}
-            onPress={() => setBeltRank(belt)}
-            style={[styles.chip, beltRank === belt && styles.selected]}
+            key={opt.value}
+            onPress={() => setBeltRank(opt.value)}
+            style={[styles.chip, beltRank === opt.value && styles.selected]}
           >
-            <Text style={styles.chipText}>{belt}</Text>
+            <Text style={styles.chipText}>{opt.label}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.label}>Experience</Text>
+      <Text style={styles.label}>Experience level</Text>
       <View style={styles.row}>
-        {EXPERIENCE_OPTIONS.map((exp) => (
+        {ATHLETE_EXPERIENCE_LEVEL_OPTIONS.map((exp) => (
           <Pressable
             key={exp.value}
             onPress={() => setExperienceLevel(exp.value)}
@@ -95,17 +117,28 @@ export default function AthleteProfileScreen() {
         <Switch value={isCompetitor} onValueChange={setIsCompetitor} />
       </View>
 
-      <Pressable onPress={handleSave} disabled={saving} style={styles.saveBtn}>
+      <Pressable
+        onPress={handleSave}
+        disabled={saving || !canSave}
+        style={[styles.saveBtn, (!canSave || saving) && styles.saveBtnDisabled]}
+      >
         <Text style={styles.saveText}>{saving ? "Saving..." : "Save"}</Text>
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, backgroundColor: "#0b0f12" },
+  scroll: { flex: 1, backgroundColor: "#0b0f12" },
+  container: { padding: 20, paddingBottom: 40, backgroundColor: "#0b0f12" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   title: { fontSize: 22, color: "#fff", marginBottom: 20 },
+  hint: {
+    color: "#fca5a5",
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
   label: { color: "#aaa", marginTop: 20, marginBottom: 8 },
   row: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
@@ -131,6 +164,9 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     alignItems: "center",
+  },
+  saveBtnDisabled: {
+    opacity: 0.45,
   },
   saveText: { color: "#000", fontWeight: "600" },
 });

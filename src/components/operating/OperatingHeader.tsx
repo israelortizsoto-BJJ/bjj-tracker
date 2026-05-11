@@ -27,16 +27,20 @@ type AthleteIdentityChipProps = {
   name: string;
   initials: string;
   meta?: string | null;
+  surfaceTone?: "default" | "soft";
 };
 
 export function AthleteIdentityChip({
   name,
   initials,
   meta,
+  surfaceTone = "default",
 }: AthleteIdentityChipProps) {
   return (
     <View style={styles.identityChip}>
-      <View style={styles.avatar}>
+      <View
+        style={[styles.avatar, surfaceTone === "soft" ? styles.avatarSoft : null]}
+      >
         <Text style={styles.avatarText} numberOfLines={1}>
           {initials}
         </Text>
@@ -57,9 +61,13 @@ export function AthleteIdentityChip({
 
 type HeaderActionGroupProps = {
   actions?: HeaderAction[];
+  surfaceTone?: "default" | "soft";
 };
 
-export function HeaderActionGroup({ actions = [] }: HeaderActionGroupProps) {
+export function HeaderActionGroup({
+  actions = [],
+  surfaceTone = "default",
+}: HeaderActionGroupProps) {
   if (actions.length === 0) return null;
 
   return (
@@ -83,7 +91,14 @@ export function HeaderActionGroup({ actions = [] }: HeaderActionGroupProps) {
               style={
                 isStatusBadge
                   ? styles.statusBadge
-                  : [styles.actionButton, action.selected ? styles.actionButtonSelected : null]
+                  : [
+                      styles.actionButton,
+                      surfaceTone === "soft" ? styles.actionButtonSoft : null,
+                      action.selected ? styles.actionButtonSelected : null,
+                      action.selected && surfaceTone === "soft"
+                        ? styles.actionButtonSelectedSoft
+                        : null,
+                    ]
               }
             >
               {content}
@@ -101,8 +116,13 @@ export function HeaderActionGroup({ actions = [] }: HeaderActionGroupProps) {
             onPress={action.onPress}
             style={({ pressed }) => [
               styles.actionButton,
+              surfaceTone === "soft" ? styles.actionButtonSoft : null,
               action.selected ? styles.actionButtonSelected : null,
+              action.selected && surfaceTone === "soft"
+                ? styles.actionButtonSelectedSoft
+                : null,
               pressed ? styles.actionButtonPressed : null,
+              pressed && surfaceTone === "soft" ? styles.actionButtonPressedSoft : null,
               action.disabled ? styles.actionButtonDisabled : null,
             ]}
           >
@@ -116,6 +136,8 @@ export function HeaderActionGroup({ actions = [] }: HeaderActionGroupProps) {
 
 export type OperatingHeaderProps = {
   mode: "athlete" | "team";
+  density?: "default" | "compact";
+  surfaceTone?: "default" | "soft";
   eyebrow: string;
   title: string;
   subtitle?: string | null;
@@ -128,6 +150,8 @@ export type OperatingHeaderProps = {
 
 export default function OperatingHeader({
   mode,
+  density = "default",
+  surfaceTone = "default",
   eyebrow,
   title,
   subtitle,
@@ -138,13 +162,20 @@ export default function OperatingHeader({
   actions,
 }: OperatingHeaderProps) {
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        surfaceTone === "soft" ? styles.containerSoft : null,
+      ]}
+    >
       <View style={styles.topRow}>
         {mode === "athlete" && athlete ? (
-          <AthleteIdentityChip {...athlete} />
+          <AthleteIdentityChip {...athlete} surfaceTone={surfaceTone} />
         ) : (
           <View style={styles.teamContext}>
-            <View style={styles.teamMark}>
+            <View
+              style={[styles.teamMark, surfaceTone === "soft" ? styles.teamMarkSoft : null]}
+            >
               <Text style={styles.teamMarkText}>MM</Text>
             </View>
             <View style={styles.identityTextBlock}>
@@ -159,15 +190,32 @@ export default function OperatingHeader({
             </View>
           </View>
         )}
-        <HeaderActionGroup actions={actions} />
+        <HeaderActionGroup actions={actions} surfaceTone={surfaceTone} />
       </View>
 
-      <View style={styles.titleBlock}>
+      <View
+        style={[
+          styles.titleBlock,
+          density === "compact" ? styles.titleBlockCompact : null,
+        ]}
+      >
         <Text style={styles.eyebrow}>{eyebrow}</Text>
-        <Text onLongPress={onTitleLongPress} style={styles.title}>
+        <Text
+          onLongPress={onTitleLongPress}
+          style={[styles.title, density === "compact" ? styles.titleCompact : null]}
+        >
           {title}
         </Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {subtitle ? (
+          <Text
+            style={[
+              styles.subtitle,
+              density === "compact" ? styles.subtitleCompact : null,
+            ]}
+          >
+            {subtitle}
+          </Text>
+        ) : null}
       </View>
     </View>
   );
@@ -176,6 +224,9 @@ export default function OperatingHeader({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.bg,
+  },
+  containerSoft: {
+    backgroundColor: "#10161d",
   },
   topRow: {
     alignItems: "center",
@@ -208,6 +259,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 36,
   },
+  avatarSoft: {
+    backgroundColor: "#1a222c",
+    borderColor: "rgba(226, 232, 240, 0.11)",
+  },
   avatarText: {
     color: COLORS.text,
     fontSize: 11,
@@ -220,6 +275,9 @@ const styles = StyleSheet.create({
     height: 36,
     justifyContent: "center",
     width: 36,
+  },
+  teamMarkSoft: {
+    backgroundColor: "#d6ff3f",
   },
   teamMarkText: {
     color: "#111315",
@@ -259,12 +317,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     width: 36,
   },
+  actionButtonSoft: {
+    backgroundColor: "rgba(226,232,240,0.055)",
+    borderColor: "rgba(226,232,240,0.12)",
+  },
   actionButtonSelected: {
     backgroundColor: COLORS.panel3,
     borderColor: COLORS.lineStrong,
   },
+  actionButtonSelectedSoft: {
+    backgroundColor: "#202a35",
+    borderColor: "rgba(226,232,240,0.16)",
+  },
   actionButtonPressed: {
     backgroundColor: COLORS.panel3,
+  },
+  actionButtonPressedSoft: {
+    backgroundColor: "#1a222c",
   },
   actionButtonDisabled: {
     opacity: 0.42,
@@ -289,6 +358,9 @@ const styles = StyleSheet.create({
   titleBlock: {
     marginTop: 18,
   },
+  titleBlockCompact: {
+    marginTop: 12,
+  },
   eyebrow: {
     color: COLORS.muted,
     fontSize: 12,
@@ -304,10 +376,20 @@ const styles = StyleSheet.create({
     lineHeight: 34,
     marginTop: 5,
   },
+  titleCompact: {
+    fontSize: 24,
+    lineHeight: 29,
+    marginTop: 3,
+  },
   subtitle: {
     color: COLORS.muted,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 7,
+  },
+  subtitleCompact: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 5,
   },
 });

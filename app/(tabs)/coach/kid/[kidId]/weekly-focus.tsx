@@ -5,6 +5,8 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { useFocusEffect } from "@react-navigation/native";
 
 import { normalizeFamilyResourceUrl } from "../../../../../src/coach/familyResourceUrl";
+import { normalizePublishableSystemKey } from "../../../../../src/lib/taxonomy/publishableSystemKey";
+import { FUNDAMENTALS_TAXONOMY } from "../../../../../src/fundamentals/taxonomy";
 import {
   appendKidWeeklyFocus,
   getKidWeeklyFocusEntryById,
@@ -72,6 +74,11 @@ export default function KidWeeklyFocusScreen() {
     }));
   }, []);
 
+  const systemOptions = useMemo(
+    () => FUNDAMENTALS_TAXONOMY.map((system) => ({ id: system.id, label: system.label })),
+    [],
+  );
+
   const [ready, setReady] = useState(false);
 
   const [tab, setTab] = useState<Tab>("templates");
@@ -103,6 +110,7 @@ export default function KidWeeklyFocusScreen() {
   const [familyResourceUrl, setFamilyResourceUrl] = useState<string>("");
   const [familyResourceLabel, setFamilyResourceLabel] = useState<string>("");
   const [familyCoachRecapNote, setFamilyCoachRecapNote] = useState<string>("");
+  const [systemKey, setSystemKey] = useState<string>("");
 
   // Custom selection
   const [customTitle, setCustomTitle] = useState<string>("");
@@ -137,6 +145,7 @@ export default function KidWeeklyFocusScreen() {
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
           setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
+          setSystemKey(normalizePublishableSystemKey(existing.systemKey) ?? "");
         } else {
           setTab("custom");
           setCustomTitle(existing.title);
@@ -147,6 +156,7 @@ export default function KidWeeklyFocusScreen() {
           setFamilyResourceUrl(existing.familyResourceUrl ?? "");
           setFamilyResourceLabel(existing.familyResourceLabel ?? "");
           setFamilyCoachRecapNote(existing.familyCoachRecapNote ?? "");
+          setSystemKey(normalizePublishableSystemKey(existing.systemKey) ?? "");
         }
       } else {
         setTab("templates");
@@ -157,6 +167,7 @@ export default function KidWeeklyFocusScreen() {
         setFamilyResourceUrl("");
         setFamilyResourceLabel("");
         setFamilyCoachRecapNote("");
+        setSystemKey("");
         setCustomTitle("");
         setCustomNote("");
         setCustomYoutubeUrl("");
@@ -186,7 +197,19 @@ export default function KidWeeklyFocusScreen() {
       }
       const missionUrl = missionUrlTrim ? missionUrlTrim : undefined;
       const missionLabel = missionResourceLabel.trim() ? missionResourceLabel.trim() : undefined;
-
+      const normalizedSk = normalizePublishableSystemKey(systemKey);
+      if (!normalizedSk) {
+        const raw = systemKey.trim();
+        if (!raw) {
+          Alert.alert("Pick a system", "Select the BJJ system this weekly focus belongs to.");
+        } else {
+          Alert.alert(
+            "Invalid system id",
+            "Use the BJJ system chips above (taxonomy ids only). If this persists, pick your system again.",
+          );
+        }
+        return;
+      }
       if (editEntryId) {
         if (tab === "templates") {
           if (!selectedTemplateId) {
@@ -205,6 +228,7 @@ export default function KidWeeklyFocusScreen() {
             focusType: "template",
             templateId: selectedTemplateId,
             title: t.title,
+            systemKey: normalizedSk,
             metadata: t.metadata,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
             missionResourceUrl: missionUrl,
@@ -226,6 +250,7 @@ export default function KidWeeklyFocusScreen() {
           await updateKidWeeklyFocusFocusById(editEntryId, kidId, {
             focusType: "custom",
             title: trimmedTitle,
+            systemKey: normalizedSk,
             note: trimmedNote ? trimmedNote : undefined,
             youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
             missionResourceUrl: missionUrl,
@@ -253,6 +278,7 @@ export default function KidWeeklyFocusScreen() {
           focusType: "template",
           templateId: selectedTemplateId,
           title: t.title,
+          systemKey: normalizedSk,
           metadata: t.metadata,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
           missionResourceUrl: missionUrl,
@@ -279,6 +305,7 @@ export default function KidWeeklyFocusScreen() {
           weekStartYMD,
           focusType: "custom",
           title: trimmedTitle,
+          systemKey: normalizedSk,
           note: trimmedNote ? trimmedNote : undefined,
           youtubeUrl: trimmedUrl ? trimmedUrl : undefined,
           missionResourceUrl: missionUrl,
@@ -309,6 +336,7 @@ export default function KidWeeklyFocusScreen() {
     familyResourceUrl,
     familyResourceLabel,
     familyCoachRecapNote,
+    systemKey,
   ]);
 
   const tabButtonStyle = (active: boolean) => ({
@@ -327,6 +355,61 @@ export default function KidWeeklyFocusScreen() {
     textAlign: "center" as const,
     fontSize: 13,
   });
+
+  const renderSystemSelector = () => (
+    <View
+      style={{
+        padding: 16,
+        borderRadius: CARD_RADIUS,
+        borderWidth: 1,
+        borderColor: UI.border,
+        backgroundColor: UI.bgCard,
+        gap: 10,
+      }}
+    >
+      <Text style={{ fontSize: 12, fontWeight: "800", color: "#1d4ed8", letterSpacing: 0.4 }}>
+        SYSTEM CLASSIFICATION
+      </Text>
+      <Text style={{ fontSize: 16, fontWeight: "900", color: UI.textPrimary }}>
+        BJJ system
+      </Text>
+      <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+        Used for Summary alignment and progression. Families still see your headline and note.
+      </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {systemOptions.map((system) => {
+          const active = system.id === systemKey;
+          return (
+            <Pressable
+              key={system.id}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              onPress={() => setSystemKey(system.id)}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 10,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: active ? "#1d4ed8" : UI.border,
+                backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                opacity: pressed ? 0.86 : 1,
+              })}
+            >
+              <Text
+                style={{
+                  color: UI.textPrimary,
+                  fontSize: 12,
+                  fontWeight: active ? "900" : "700",
+                }}
+              >
+                {system.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
 
   return (
     <>
@@ -372,6 +455,10 @@ export default function KidWeeklyFocusScreen() {
             </>
           )}
         </Text>
+
+        <View style={{ height: 14 }} />
+
+        {renderSystemSelector()}
 
         <View style={{ height: 14 }} />
 
@@ -870,4 +957,3 @@ export default function KidWeeklyFocusScreen() {
     </>
   );
 }
-

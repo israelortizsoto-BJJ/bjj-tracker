@@ -1,3 +1,4 @@
+import { useFocusEffect } from "@react-navigation/native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -25,6 +26,10 @@ import {
   deriveCompetitionTrainingSkillFocus,
   principalTrainingSkillBucketFromDerivedFocus,
 } from "../../ai-coach/competitionTrainingSkillFocus";
+import {
+  formatAthleteBeltRankLabel,
+  formatAthleteExperienceLevelLabel,
+} from "@/src/lib/athlete/athleteBeltExperience";
 import { computeIdentityScore } from "@/src/lib/identity/computeIdentityScore";
 import {
   aggregateCoachSignals,
@@ -40,8 +45,30 @@ import {
 } from "@/src/lib/identity/validateIdentitySignals";
 import { deriveSummaryExplanation } from "@/src/lib/summary/deriveSummaryExplanation";
 import { deriveSummaryInsights, type SummaryTrend } from "@/src/lib/summary/deriveSummaryInsights";
-import { buildSummaryViewModel } from "@/src/lib/summary/buildSummaryViewModel";
+import {
+  buildSummaryViewModel,
+  extractSignalSnapshot,
+} from "@/src/lib/summary/buildSummaryViewModel";
+import { selectFocusSystem } from "@/src/lib/summary/selectFocusSystem";
+import {
+  resolveWeeklyDoc,
+  resolveWeeklySharedAthleteIdForParentSnapshot,
+  type ParentWeeklySessionSnapshot,
+} from "../../coach/resolveWeeklyDoc";
+import { parentStrictWeeklyLinkedCoachLinksForUi } from "../../coachShare/coachLinkBinding";
+import { normalizeInviteLinkToken, inviteLinkTokenTail } from "../../coachShare/inviteLinkToken";
+import { coachSyncFetchSession } from "../../services/coachWeeklySyncApi";
+import {
+  getCachedWeeklyForLinkToken,
+  setCachedWeeklyForLinkToken,
+} from "../../storage/coachWeeklySyncCacheStore";
+import { getCoachLinks } from "../../storage/coachShareStore";
 import { resolvePrincipalBucketEvidenceLine } from "../../lib/signals/competitionBucketHistory";
+import { useDeviceRole } from "../../deviceRole/DeviceRoleProvider";
+import {
+  filterSessionsLikeTrainingRefresh,
+  normalizeSessionsLikeTraining,
+} from "../../domain/sessionUtils";
 import { useActiveAthlete } from "../../hooks/useActiveAthlete";
 import { useAthleteData } from "../../hooks/useAthleteData";
 import { useSignals } from "../../hooks/useSignals";
@@ -62,32 +89,6 @@ const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
 function getSuggestionKey(s: IdentitySuggestion): string {
   return `${s.type}-${String(s.suggestedValue ?? "none")}`;
-}
-
-function titleCaseWords(s: string): string {
-  return s
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-    .join(" ");
-}
-
-function formatBeltLabel(beltRank: string | undefined): string | null {
-  const t = beltRank?.trim();
-  if (!t) return null;
-  const base = t.replace(/\s+belt\s*$/i, "").trim();
-  if (!base) return null;
-  return `${titleCaseWords(base)} Belt`;
-}
-
-function formatExperienceLabel(experienceLevel: string | undefined): string | null {
-  const t = experienceLevel?.trim();
-  if (!t) return null;
-  const k = t.toLowerCase();
-  if (k === "beginner") return "Beginner";
-  if (k === "developing") return "Developing";
-  if (k === "experienced") return "Experienced";
-  return titleCaseWords(t);
 }
 
 function initialsFromName(name: string): string {
@@ -163,6 +164,7 @@ export default function SummaryScreen() {
     athleteId: activeAthleteId,
     athlete,
     athletes,
+    kidsById,
   } = useActiveAthlete();
 
   const [appliedProfile, setAppliedProfile] = useState<ParentAthlete | null>(null);
@@ -175,6 +177,9 @@ export default function SummaryScreen() {
   >({});
   const [nowTick, setNowTick] = useState(Date.now());
   const [lastAction, setLastActionState] = useState<string | null>(null);
+  const [weeklySessionSnapshot, setWeeklySessionSnapshot] =
+    useState<ParentWeeklySessionSnapshot | null>(null);
+  const weeklySessionSourceRef = useRef<"cache" | "network" | "none">("none");
   const previousValidationRef = useRef<IdentityValidationResult | null>(null);
   const previousTrendRef = useRef<SummaryTrend | null>(null);
   const prevAthleteIdForPrevSignalsRef = useRef(activeAthleteId);
@@ -186,6 +191,7 @@ export default function SummaryScreen() {
 
   const prevVisibleSuggestionKeysRef = useRef<Set<string>>(new Set());
   const resurfacedKeysRef = useRef<Set<string>>(new Set());
+  const lastProgressionMemoryScopeRef = useRef<string | null>(null);
 
   useEffect(() => {
     setAppliedProfile(null);
@@ -198,17 +204,102 @@ export default function SummaryScreen() {
     resurfacedKeysRef.current = new Set();
   }, [activeAthleteId]);
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      if (!activeAthleteId) return;
-      const val = await getLastSummaryAction(activeAthleteId);
-      if (mounted) setLastActionState(val);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [activeAthleteId]);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      void (async () => {
+        const links = await getCoachLinks();
+        const weeklyLink = parentStrictWeeklyLinkedCoachLinksForUi(links)[0];
+        const weeklySync = weeklyLink?.weeklySync;
+        if (!weeklySync?.linkToken?.trim()) {
+          if (!cancelled) {
+            weeklySessionSourceRef.current = "none";
+            setWeeklySessionSnapshot(null);
+          }
+          return;
+        }
+
+        const token = weeklySync.linkToken;
+        const tokenNorm = normalizeInviteLinkToken(token);
+        const tokenTail = inviteLinkTokenTail(token);
+
+        const applySnapshot = (
+          source: "cache" | "network" | "none",
+          snapshot: ParentWeeklySessionSnapshot | null,
+        ) => {
+          if (cancelled) return;
+          weeklySessionSourceRef.current = source;
+          if (__DEV__) {
+            const weeklyKeys = Object.keys(snapshot?.weeklyByAthleteId ?? {});
+            console.log("[SUMMARY WEEKLY TRACE] hydration.applySnapshot", {
+              sourcePath: "SummaryScreen.useFocusEffect → getCachedWeeklyForLinkToken | coachSyncFetchSession",
+              dataPlane: source,
+              tokenTail,
+              athleteId: activeAthleteId,
+              linkedKidId: summaryLinkedKidId,
+              weeklyKeysAvailable: weeklyKeys,
+              inviteHeadline: snapshot?.weekly?.headline?.slice(0, 120) ?? null,
+              inviteUpdatedAt: snapshot?.weekly?.updatedAt ?? null,
+              inviteSystemKey: snapshot?.weekly?.systemKey ?? null,
+              firstAthleteKey: weeklyKeys[0] ?? null,
+              firstAthleteHeadline: weeklyKeys[0]
+                ? snapshot?.weeklyByAthleteId?.[weeklyKeys[0]]?.headline?.slice(0, 120) ?? null
+                : null,
+              firstAthleteSystemKey: weeklyKeys[0]
+                ? snapshot?.weeklyByAthleteId?.[weeklyKeys[0]]?.systemKey ?? null
+                : null,
+              at: new Date().toISOString(),
+            });
+          }
+          setWeeklySessionSnapshot(snapshot);
+        };
+
+        const cached = await getCachedWeeklyForLinkToken(token);
+        if (cached) {
+          applySnapshot("cache", {
+            weekly: cached.weekly,
+            weeklyByAthleteId: cached.weeklyByAthleteId,
+            athletes: cached.athletes,
+          });
+        }
+
+        try {
+          const session = await coachSyncFetchSession(token, weeklySync.apiBaseUrl);
+          const nowIso = new Date().toISOString();
+          await setCachedWeeklyForLinkToken(
+            token,
+            session.weekly,
+            nowIso,
+            session.weeklyByAthleteId ?? {},
+            session.athletes,
+            session,
+            tokenNorm,
+          );
+          applySnapshot("network", {
+            weekly: session.weekly,
+            weeklyByAthleteId: session.weeklyByAthleteId ?? {},
+            athletes: session.athletes,
+          });
+        } catch (error) {
+          if (__DEV__) {
+            console.warn("[SUMMARY WEEKLY TRACE] hydration.networkError", {
+              athleteId: activeAthleteId,
+              tokenNorm,
+              tokenTail,
+              message: error instanceof Error ? error.message : String(error),
+              keptCacheSnapshot: Boolean(cached),
+            });
+          }
+          if (!cached) applySnapshot("none", null);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [activeAthleteId, summaryLinkedKidId]),
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -335,7 +426,22 @@ export default function SummaryScreen() {
     }
   }, [activeAthleteId, athleteForSummary?.name, router]);
 
-  const { sessions, competitions } = useAthleteData(activeAthleteId);
+  const { role: deviceRole } = useDeviceRole();
+  const { sessions: sessionsRaw, competitions } = useAthleteData(activeAthleteId);
+
+  const sessions = useMemo(() => {
+    return filterSessionsLikeTrainingRefresh(
+      normalizeSessionsLikeTraining(sessionsRaw),
+      {
+        deviceRole,
+        athleteId: activeAthleteId.trim(),
+        linkedKidId:
+          typeof summaryLinkedKidId === "string" && summaryLinkedKidId.trim()
+            ? summaryLinkedKidId.trim()
+            : undefined,
+      },
+    );
+  }, [sessionsRaw, deviceRole, activeAthleteId, summaryLinkedKidId]);
 
   const identityScore = computeIdentityScore({
     beltRank: athleteForSummary?.beltRank,
@@ -356,15 +462,13 @@ export default function SummaryScreen() {
         }
       : undefined;
   const signals = useSignals({
-    sessions,
-    competitions,
     athleteId: activeAthleteId.trim() || null,
     kidId: summaryLinkedKidId,
     declaredInput,
   });
 
-  const beltLabel = formatBeltLabel(athleteForSummary?.beltRank);
-  const experienceLabel = formatExperienceLabel(athleteForSummary?.experienceLevel);
+  const beltLabel = formatAthleteBeltRankLabel(athleteForSummary?.beltRank);
+  const experienceLabel = formatAthleteExperienceLevelLabel(athleteForSummary?.experienceLevel);
   const hasIdentityHeader = Boolean(beltLabel && experienceLabel);
   const declaredSkills = athleteForSummary?.declaredSkills ?? [];
 
@@ -620,27 +724,161 @@ export default function SummaryScreen() {
     ],
   );
 
-  const hybridConfidence = hasRealData
-    ? {
-        ...signals,
-        blendedFocus: summaryInsights.focus ?? undefined,
-        focusMode: summaryInsights.focusMode,
-        trend: summaryInsights.trend,
-        trendFeedback: summaryInsights.trendFeedback,
-        postSessionFeedback: summaryInsights.postSessionFeedback,
+  const hybridConfidence = useMemo(
+    () =>
+      hasRealData
+        ? {
+            ...signals,
+            blendedFocus: summaryInsights.focus ?? undefined,
+            focusMode: summaryInsights.focusMode,
+            trend: summaryInsights.trend,
+            trendFeedback: summaryInsights.trendFeedback,
+            postSessionFeedback: summaryInsights.postSessionFeedback,
+          }
+        : {
+            hasData: true as const,
+            isIdentityBased: true as const,
+            confidenceScore: identityScore.score,
+            phase: identityScore.phase,
+            identityFocus,
+            blendedFocus: summaryInsights.focus ?? undefined,
+            focusMode: summaryInsights.focusMode,
+            trend: summaryInsights.trend,
+            trendFeedback: summaryInsights.trendFeedback,
+            postSessionFeedback: summaryInsights.postSessionFeedback,
+          },
+    [
+      hasRealData,
+      identityFocus,
+      identityScore.phase,
+      identityScore.score,
+      signals,
+      summaryInsights.focus,
+      summaryInsights.focusMode,
+      summaryInsights.postSessionFeedback,
+      summaryInsights.trend,
+      summaryInsights.trendFeedback,
+    ],
+  );
+
+  const resolvedWeeklySharedAthleteId = useMemo(() => {
+    if (!weeklySessionSnapshot) return null;
+    return resolveWeeklySharedAthleteIdForParentSnapshot(
+      activeAthleteId,
+      kidsById,
+      weeklySessionSnapshot,
+    );
+  }, [activeAthleteId, kidsById, weeklySessionSnapshot]);
+
+  const weeklySyncDoc = useMemo(() => {
+    const doc = weeklySessionSnapshot
+      ? resolveWeeklyDoc(weeklySessionSnapshot, resolvedWeeklySharedAthleteId)
+      : null;
+    if (__DEV__) {
+      const sid = resolvedWeeklySharedAthleteId;
+      const slot =
+        sid && weeklySessionSnapshot?.weeklyByAthleteId
+          ? weeklySessionSnapshot.weeklyByAthleteId[sid]
+          : undefined;
+      const invite = weeklySessionSnapshot?.weekly ?? null;
+      let resolvedDocSource: "weeklyByAthleteId" | "invite.weekly" | "unknown" | "none" = "none";
+      if (doc) {
+        if (
+          sid &&
+          slot != null &&
+          slot.headline === doc.headline &&
+          slot.updatedAt === doc.updatedAt
+        ) {
+          resolvedDocSource = "weeklyByAthleteId";
+        } else if (
+          invite != null &&
+          invite.headline === doc.headline &&
+          invite.updatedAt === doc.updatedAt
+        ) {
+          resolvedDocSource = "invite.weekly";
+        } else {
+          resolvedDocSource = "unknown";
+        }
       }
-    : {
-        hasData: true as const,
-        isIdentityBased: true as const,
-        confidenceScore: identityScore.score,
-        phase: identityScore.phase,
-        identityFocus,
-        blendedFocus: summaryInsights.focus ?? undefined,
-        focusMode: summaryInsights.focusMode,
-        trend: summaryInsights.trend,
-        trendFeedback: summaryInsights.trendFeedback,
-        postSessionFeedback: summaryInsights.postSessionFeedback,
-      };
+      console.log("[SUMMARY WEEKLY TRACE] resolveWeeklyDoc+snapshot", {
+        path: "SummaryScreen.weeklySyncDoc useMemo → resolveWeeklyDoc(session, resolvedWeeklySharedAthleteId)",
+        athleteId: activeAthleteId,
+        linkedKidId: summaryLinkedKidId,
+        resolvedWeeklySharedAthleteId: sid,
+        resolvedDocSource,
+        snapshotHydration: weeklySessionSourceRef.current,
+        headline: doc?.headline?.slice(0, 120) ?? null,
+        weeklyUpdatedAt: doc?.updatedAt ?? null,
+        systemKey: doc?.systemKey ?? null,
+        weeklyKeysAvailable: Object.keys(weeklySessionSnapshot?.weeklyByAthleteId ?? {}),
+        slotHeadline: slot?.headline?.slice(0, 120) ?? null,
+        slotSystemKey: slot?.systemKey ?? null,
+        inviteHeadline: invite?.headline?.slice(0, 120) ?? null,
+        inviteSystemKey: invite?.systemKey ?? null,
+        at: new Date().toISOString(),
+      });
+    }
+    return doc;
+  }, [activeAthleteId, resolvedWeeklySharedAthleteId, summaryLinkedKidId, weeklySessionSnapshot]);
+
+  const coachWeeklyForSummary = useMemo(() => {
+    const built =
+      weeklySyncDoc
+        ? {
+            headline: weeklySyncDoc.headline,
+            body: weeklySyncDoc.body,
+            systemKey: weeklySyncDoc.systemKey ?? null,
+          }
+        : null;
+    if (__DEV__) {
+      console.log("[SYSTEMKEY TRACE SUMMARY]", {
+        traceStage: "10_SummaryScreen_coachWeeklyForSummary",
+        headline: built?.headline?.slice(0, 120) ?? null,
+        systemKey: built?.systemKey ?? null,
+        athleteId: resolvedWeeklySharedAthleteId ?? null,
+        weekStartYMD: weeklySyncDoc?.weekStartYMD ?? null,
+        keyExistsOnObject:
+          built != null && Object.prototype.hasOwnProperty.call(built, "systemKey"),
+        source: "weeklySyncDoc → coachWeeklyForSummary_useMemo",
+      });
+    }
+    return built;
+  }, [weeklySyncDoc, resolvedWeeklySharedAthleteId]);
+
+  const progressionMemoryWeekStart = weeklySyncDoc?.weekStartYMD ?? null;
+  const progressionMemorySystemKey = weeklySyncDoc?.systemKey ?? null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!activeAthleteId) {
+      setLastActionState(null);
+      lastProgressionMemoryScopeRef.current = null;
+      return;
+    }
+
+    const scopeTicket = `${activeAthleteId}|${progressionMemoryWeekStart ?? ""}|${progressionMemorySystemKey ?? ""}`;
+    if (lastProgressionMemoryScopeRef.current !== scopeTicket) {
+      lastProgressionMemoryScopeRef.current = scopeTicket;
+      setLastActionState(null);
+    }
+
+    void (async () => {
+      const val = await getLastSummaryAction(
+        activeAthleteId,
+        progressionMemoryWeekStart,
+        progressionMemorySystemKey,
+      );
+      if (!cancelled) setLastActionState(val);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeAthleteId,
+    progressionMemoryWeekStart,
+    progressionMemorySystemKey,
+  ]);
 
   const summaryV2ViewModel = useMemo(() => {
     const signals = hybridConfidence;
@@ -658,21 +896,58 @@ export default function SummaryScreen() {
     if (signals.blendedFocus?.trim()) {
       focusText = signals.blendedFocus.trim();
     }
+    const identityFocusForVm = identityBased ? signals.identityFocus : focusText;
+    const snapForSelect = extractSignalSnapshot(signals);
+    const coachSystemKeyForVm = coachWeeklyForSummary?.systemKey?.trim() || null;
+    const selectedSystemKey = selectFocusSystem({
+      coachSystem: coachSystemKeyForVm,
+      signalSystem: snapForSelect.topSystem,
+      identityFocus: identityFocusForVm,
+    });
+    if (__DEV__) {
+      console.log("[SUMMARY DUAL VM AUDIT] SummaryScreen.pre-buildSummaryViewModel", {
+        athleteId: activeAthleteId,
+        weeklyHeadline: weeklySyncDoc?.headline?.slice(0, 120) ?? null,
+        weeklySystemKey: weeklySyncDoc?.systemKey ?? null,
+        coachWeekly: coachWeeklyForSummary,
+        resolvedWeeklyDoc: weeklySyncDoc,
+        selectedSystemKey,
+      });
+    }
     return buildSummaryViewModel({
       signals,
       identityScore: confidence,
       phase: identityBased ? signals.phase : hasData ? "experienced" : "cold",
-      identityFocus: identityBased ? signals.identityFocus : focusText,
+      identityFocus: identityFocusForVm,
+      coachWeekly: coachWeeklyForSummary,
       lastAction: lastAction,
     });
-  }, [hybridConfidence, lastAction]);
+  }, [
+    activeAthleteId,
+    coachWeeklyForSummary,
+    hybridConfidence,
+    lastAction,
+    summaryLinkedKidId,
+    weeklySessionSnapshot,
+    weeklySyncDoc,
+  ]);
 
   useEffect(() => {
     if (!activeAthleteId) return;
     if (summaryV2ViewModel.stepKey) {
-      setLastSummaryAction(activeAthleteId, summaryV2ViewModel.stepKey);
+      void setLastSummaryAction(
+        activeAthleteId,
+        progressionMemoryWeekStart,
+        progressionMemorySystemKey,
+        summaryV2ViewModel.stepKey,
+      );
     }
-  }, [activeAthleteId, summaryV2ViewModel?.stepKey]);
+  }, [
+    activeAthleteId,
+    progressionMemoryWeekStart,
+    progressionMemorySystemKey,
+    summaryV2ViewModel?.stepKey,
+  ]);
 
   const competitionSkillFocus = useMemo(
     () =>
@@ -803,6 +1078,15 @@ export default function SummaryScreen() {
         <SummaryHeroCard
           signals={hybridConfidence}
           lastAction={lastAction}
+          coachWeekly={coachWeeklyForSummary}
+          devDualVmAudit={
+            __DEV__
+              ? {
+                  athleteId: activeAthleteId,
+                  resolvedWeeklyDoc: weeklySyncDoc,
+                }
+              : undefined
+          }
           emptyInsightCopy={personalizedEmptyInsight}
           identityReason={explanation.identityReason}
           signalReason={explanation.signalReason}

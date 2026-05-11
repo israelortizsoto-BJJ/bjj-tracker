@@ -24,7 +24,7 @@ import {
 import { getKidCompetitionEntriesForKid } from "../../storage/kidCompetitionStore";
 import { StorageKeys } from "../../storage/storageKeys";
 import type { CoachLink } from "../../types/coachShare";
-import type { Kid, KidsById } from "../../types/coachKid";
+import { kidExcludedFromCoachActiveRoster, type Kid, type KidsById } from "../../types/coachKid";
 import type { SyncedSharedAthlete } from "../../types/coachWeeklySync";
 import { computeCoachInsight, type CoachInsight } from "./computeCoachInsight";
 import {
@@ -200,8 +200,10 @@ export default function CoachRoster() {
   );
 
   const kids = useMemo(() => {
-    const visible = Object.values(kidsById).filter((kid) =>
-      kidVisibleOnCoachRoster(kid, activeWriterTokenNorms, activeWriterAthleteIds),
+    const visible = Object.values(kidsById).filter(
+      (kid) =>
+        !kidExcludedFromCoachActiveRoster(kid) &&
+        kidVisibleOnCoachRoster(kid, activeWriterTokenNorms, activeWriterAthleteIds),
     );
     return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [activeWriterAthleteIds, activeWriterTokenNorms, kidsById]);

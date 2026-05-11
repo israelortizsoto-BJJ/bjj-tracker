@@ -1,22 +1,25 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
+import { normalizePublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import { CoachWeeklySyncApiError, coachSyncDeleteSessionAthlete } from "../services/coachWeeklySyncApi";
 import {
   deleteAllKidCompetitionEntriesForKid,
   stripWorkerSyncLinkageForKid,
 } from "./kidCompetitionStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
+import { clearLastAthleteKidIdIfMatches } from "./lastAthleteIdStore";
 import { deleteSessionsForKid } from "./sessionsStore";
 import { StorageKeys } from "./storageKeys";
-import type {
-  CoachOutcome,
-  Kid,
-  KidId,
-  KidWeeklyFocusEntry,
-  KidWeeklyFocusEntryCustom,
-  KidWeeklyFocusEntryTemplate,
-  KidsById,
+import {
+  isKidCoachArchived,
+  type CoachOutcome,
+  type Kid,
+  type KidId,
+  type KidWeeklyFocusEntry,
+  type KidWeeklyFocusEntryCustom,
+  type KidWeeklyFocusEntryTemplate,
+  type KidsById,
 } from "../types/coachKid";
 import type { SyncedSharedAthlete } from "../types/coachWeeklySync";
 
@@ -24,6 +27,7 @@ type KidWeeklyFocusAppendInput =
   | (KidWeeklyFocusEntryTemplate & {
       kidId: KidId;
       weekStartYMD: string;
+      systemKey?: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
       sparringApplication?: KidWeeklyFocusEntry["sparringApplication"];
       coachNotes?: string;
@@ -36,6 +40,7 @@ type KidWeeklyFocusAppendInput =
   | (KidWeeklyFocusEntryCustom & {
       kidId: KidId;
       weekStartYMD: string;
+      systemKey?: string;
       coachOutcome?: KidWeeklyFocusEntry["coachOutcome"];
       sparringApplication?: KidWeeklyFocusEntry["sparringApplication"];
       coachNotes?: string;
@@ -303,6 +308,9 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
 
       const existing = byShared.get(id);
       if (existing) {
+        if (isKidCoachArchived(existing)) {
+          continue;
+        }
         const existingTok = normalizeInviteLinkToken(existing.sharedFromInviteTokenNorm);
         const needsToken = !existingTok || existingTok !== token;
         if (existing.name !== a.name || needsToken) {
@@ -321,6 +329,9 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
       const localId = `kid_shared_${id}` as KidId;
       const rowAtId = next[localId];
       if (rowAtId) {
+        if (isKidCoachArchived(rowAtId)) {
+          continue;
+        }
         const updated: Kid = {
           ...rowAtId,
           name: a.name,
@@ -363,6 +374,7 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
 
   if (allFetched) {
     for (const k of Object.values(current)) {
+      if (isKidCoachArchived(k)) continue;
       const sid = k.sharedAthleteId?.trim();
       if (!sid || remoteUnionIds.has(sid)) continue;
       toDelete.add(k.id);
@@ -375,6 +387,7 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
           .filter(Boolean),
       );
       for (const k of Object.values(current)) {
+        if (isKidCoachArchived(k)) continue;
         const sid = k.sharedAthleteId?.trim();
         if (!sid || idsInSnap.has(sid)) continue;
         const t = normalizeInviteLinkToken(k.sharedFromInviteTokenNorm);
@@ -416,7 +429,7 @@ export async function mergeRemoteSharedAthletesIntoKids(
   for (const a of remote) {
     const existing = byShared.get(a.id);
     if (existing) {
-      if (existing.name !== a.name) {
+      if (!isKidCoachArchived(existing) && existing.name !== a.name) {
         const updated: Kid = {
           ...existing,
           name: a.name,
@@ -449,6 +462,7 @@ export async function mergeRemoteSharedAthletesIntoKids(
     const orphanIds = Object.values(current)
       .filter(
         (k) =>
+          !isKidCoachArchived(k) &&
           typeof k.sharedAthleteId === "string" &&
           k.sharedAthleteId.trim() !== "" &&
           !remoteIds.has(k.sharedAthleteId.trim()),
@@ -490,7 +504,13 @@ export async function updateKidHouseholdLabel(
   const normalized = normalizeKidHouseholdLabel(householdLabelRaw);
   const nowIso = new Date().toISOString();
 
-  const syncFields: Pick<Kid, "sharedAthleteId" | "sharedFromInviteTokenNorm" | "isParentManagedChildProfile"> = {};
+  const syncFields: Pick<
+    Kid,
+    | "sharedAthleteId"
+    | "sharedFromInviteTokenNorm"
+    | "isParentManagedChildProfile"
+    | "coachArchivedAt"
+  > = {};
   if (existing.sharedAthleteId?.trim()) {
     syncFields.sharedAthleteId = existing.sharedAthleteId;
   }
@@ -499,6 +519,9 @@ export async function updateKidHouseholdLabel(
   }
   if (existing.isParentManagedChildProfile) {
     syncFields.isParentManagedChildProfile = true;
+  }
+  if (existing.coachArchivedAt?.trim()) {
+    syncFields.coachArchivedAt = existing.coachArchivedAt;
   }
   const next: Kid = normalized
     ? {
@@ -575,6 +598,32 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   return true;
 }
 
+/**
+ * Coach-only soft archive: keeps sessions, competitions, weekly logs, and sync fields on disk.
+ * Clears auxiliary pointers that would keep this kid as the “current” selection where applicable.
+ */
+export async function archiveKidForCoachRoster(kidId: KidId): Promise<Kid | null> {
+  const trimmed = typeof kidId === "string" ? kidId.trim() : "";
+  if (!trimmed) return null;
+
+  const kids = await getKidsById();
+  const existing = kids[trimmed];
+  if (!existing) return null;
+  if (isKidCoachArchived(existing)) return existing;
+
+  const nowIso = new Date().toISOString();
+  const next: Kid = { ...existing, coachArchivedAt: nowIso, updatedAt: nowIso };
+  await setKidsById({ ...kids, [trimmed]: next });
+
+  const familyCompPick = await getFamilyCompetitionSelectedKidId();
+  if (familyCompPick === trimmed) {
+    await clearFamilyCompetitionSelectedKidId();
+  }
+  await clearLastAthleteKidIdIfMatches(trimmed);
+
+  return next;
+}
+
 export async function getKidWeeklyFocusEntriesForKid(
   kidId: KidId,
 ): Promise<KidWeeklyFocusEntry[]> {
@@ -618,6 +667,7 @@ export type KidWeeklyFocusFocusUpdate =
       focusType: "template";
       templateId: string;
       title: string;
+      systemKey?: string;
       metadata?: string;
       youtubeUrl?: string;
       missionResourceUrl?: string;
@@ -629,6 +679,7 @@ export type KidWeeklyFocusFocusUpdate =
   | {
       focusType: "custom";
       title: string;
+      systemKey?: string;
       note?: string;
       youtubeUrl?: string;
       missionResourceUrl?: string;
@@ -653,10 +704,15 @@ export async function updateKidWeeklyFocusFocusById(
   if (existing.kidId !== expectedKidId) return null;
 
   const nowIso = new Date().toISOString();
+  const nextSystemKey = Object.prototype.hasOwnProperty.call(focus, "systemKey")
+    ? normalizePublishableSystemKey(focus.systemKey)
+    : normalizePublishableSystemKey(existing.systemKey);
+
   const base = {
     id: existing.id,
     kidId: existing.kidId,
     weekStartYMD: existing.weekStartYMD,
+    systemKey: nextSystemKey,
     createdAt: existing.createdAt,
     updatedAt: nowIso,
     coachOutcome: existing.coachOutcome,
@@ -758,6 +814,7 @@ export async function appendKidWeeklyFocus(
           id,
           kidId: input.kidId,
           weekStartYMD: input.weekStartYMD,
+          systemKey: normalizePublishableSystemKey(input.systemKey),
           createdAt: nowIso,
           updatedAt: nowIso,
           focusType: "template",
@@ -778,6 +835,7 @@ export async function appendKidWeeklyFocus(
           id,
           kidId: input.kidId,
           weekStartYMD: input.weekStartYMD,
+          systemKey: normalizePublishableSystemKey(input.systemKey),
           createdAt: nowIso,
           updatedAt: nowIso,
           focusType: "custom",

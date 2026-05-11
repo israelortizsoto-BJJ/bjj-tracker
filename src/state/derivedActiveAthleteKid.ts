@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { getLastAthleteKidId } from "../storage/lastAthleteIdStore";
 import type { CoachLink } from "../types/coachShare";
-import type { Kid, KidId, KidsById } from "../types/coachKid";
+import { kidExcludedFromParentThisWeekKidsList, type Kid, type KidId, type KidsById } from "../types/coachKid";
 
 import { getActiveKidId, setActiveKidId, useActiveKidId } from "./activeKidStore";
 
@@ -16,7 +16,10 @@ export function eligibleParentWeeklyKidIds(
   if (!norm) return null;
   const rows = Object.values(kidsById)
     .filter(
-      (k): k is Kid => Boolean(k?.id) && Boolean((k.sharedAthleteId ?? "").trim()),
+      (k): k is Kid =>
+        Boolean(k?.id) &&
+        Boolean((k.sharedAthleteId ?? "").trim()) &&
+        !kidExcludedFromParentThisWeekKidsList(k),
     )
     .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }));
   return rows.map((k) => k.id);
@@ -36,7 +39,7 @@ export type DerivedActiveAthleteKidInput = {
 
 function sortedRosterKidIds(kidsById: KidsById): KidId[] {
   return Object.values(kidsById)
-    .filter((k): k is Kid => Boolean(k?.id))
+    .filter((k): k is Kid => Boolean(k?.id) && !kidExcludedFromParentThisWeekKidsList(k))
     .sort((a, b) => (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" }))
     .map((k) => k.id);
 }

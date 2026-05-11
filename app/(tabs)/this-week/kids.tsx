@@ -51,7 +51,12 @@ import {
 } from "../../../src/storage/coachKidStore";
 import { safeReplace } from "../../../src/navigation/safeNavigate";
 import type { CoachIdentity, CoachLink } from "../../../src/types/coachShare";
-import type { Kid, KidsById } from "../../../src/types/coachKid";
+import {
+  kidExcludedFromCoachActiveRoster,
+  kidExcludedFromParentThisWeekKidsList,
+  type Kid,
+  type KidsById,
+} from "../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
 
 type InviteSessionAthletesState = { names: string[]; fetchFailed: boolean };
@@ -231,12 +236,14 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
   );
 
   const { kids, householdSections } = useMemo(() => {
-    const visible = Object.values(kidsById).filter((k) =>
-      kidVisibleOnCoachRoster(k, activeWriterTokenNorms, activeWriterAthleteIds),
-    );
+    const visible = Object.values(kidsById).filter((k) => {
+      if (kidExcludedFromCoachActiveRoster(k) && surface === "coach") return false;
+      if (kidExcludedFromParentThisWeekKidsList(k)) return false;
+      return kidVisibleOnCoachRoster(k, activeWriterTokenNorms, activeWriterAthleteIds);
+    });
     const sorted = visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return { kids: sorted, householdSections: buildHouseholdSections(sorted) };
-  }, [kidsById, activeWriterTokenNorms, activeWriterAthleteIds]);
+  }, [kidsById, activeWriterTokenNorms, activeWriterAthleteIds, surface]);
 
   /** Same rule as the roster “· linked” badge: invite token on device + sharedAthleteId. */
   const hasLinkedAthleteOnRoster = useMemo(

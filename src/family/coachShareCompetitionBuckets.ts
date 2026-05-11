@@ -1,11 +1,12 @@
 import { getPlacementLabel } from "../features/competition/placementLabel";
-import type {
-  Kid,
-  KidCompetitionEntry,
-  KidCompetitionFormat,
-  KidCompetitionResult,
-  KidId,
-  KidsById,
+import {
+  kidExcludedFromParentThisWeekKidsList,
+  type Kid,
+  type KidCompetitionEntry,
+  type KidCompetitionFormat,
+  type KidCompetitionResult,
+  type KidId,
+  type KidsById,
 } from "../types/coachKid";
 
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -14,12 +15,16 @@ function compareYMD(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
+function kidsEligibleForFamilyCompetitionUi(kidsById: KidsById): Kid[] {
+  return Object.values(kidsById).filter((k) => !kidExcludedFromParentThisWeekKidsList(k));
+}
+
 /**
  * Single-child family MVP: one deterministic kid from the pilot roster.
  * When multiple kids exist, uses the earliest `createdAt` (first added on this device).
  */
 export function pickFamilyCompetitionKidId(kidsById: KidsById): KidId | null {
-  const kids = Object.values(kidsById);
+  const kids = kidsEligibleForFamilyCompetitionUi(kidsById);
   if (kids.length === 0) return null;
   if (kids.length === 1) return kids[0]!.id;
   const sorted = kids.slice().sort((a, b) => {
@@ -32,7 +37,7 @@ export function pickFamilyCompetitionKidId(kidsById: KidsById): KidId | null {
 
 /** Same ordering as `pickFamilyCompetitionKidId` (first-added-first on device). */
 export function sortedKidsForFamilyCompetitionChips(kidsById: KidsById): Kid[] {
-  const kids = Object.values(kidsById);
+  const kids = kidsEligibleForFamilyCompetitionUi(kidsById);
   if (kids.length <= 1) return kids;
   return kids.slice().sort((a, b) => {
     const c = a.createdAt.localeCompare(b.createdAt);
@@ -51,11 +56,13 @@ export function resolveFamilyCompetitionKidId(
   kidsById: KidsById,
   storedKidId: string | null | undefined,
 ): KidId | null {
-  const kids = Object.values(kidsById);
+  const kids = kidsEligibleForFamilyCompetitionUi(kidsById);
   if (kids.length === 0) return null;
   if (kids.length === 1) return kids[0]!.id;
   const trimmed = storedKidId?.trim();
-  if (trimmed && kidsById[trimmed]) return trimmed;
+  if (trimmed && kidsById[trimmed] && !kidExcludedFromParentThisWeekKidsList(kidsById[trimmed])) {
+    return trimmed;
+  }
   return pickFamilyCompetitionKidId(kidsById);
 }
 
