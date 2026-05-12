@@ -204,6 +204,12 @@ export default function CompetitionTab() {
                 );
               },
             },
+            {
+              label: "Device profile and settings",
+              icon: "⚙",
+              accessibilityLabel: "Device profile and settings",
+              onPress: () => router.push("/profile"),
+            },
           ]}
         />
 

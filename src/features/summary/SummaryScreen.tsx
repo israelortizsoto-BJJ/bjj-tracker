@@ -1073,6 +1073,12 @@ export default function SummaryScreen() {
             icon: "+",
             onPress: () => router.push("/summary/add-athlete"),
           },
+          {
+            label: "Device profile and settings",
+            icon: "⚙",
+            accessibilityLabel: "Device profile and settings",
+            onPress: () => router.push("/profile"),
+          },
         ]}
       />
 

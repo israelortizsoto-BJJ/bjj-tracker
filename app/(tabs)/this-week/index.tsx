@@ -2014,6 +2014,12 @@ function ParentThisWeekScreen() {
                 label: isLinked ? "Coach linked" : "Not linked",
                 statusColor: isLinked ? FEED.accent : FEED.faint,
               },
+              {
+                label: "Device profile and settings",
+                icon: "⚙",
+                accessibilityLabel: "Device profile and settings",
+                onPress: () => router.push("/profile"),
+              },
             ]}
           />
         </View>

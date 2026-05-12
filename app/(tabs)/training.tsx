@@ -1153,6 +1153,12 @@ const renderNewSessionCTA = () => (
             icon: "+",
             onPress: openNewSession,
           },
+          {
+            label: "Device profile and settings",
+            icon: "⚙",
+            accessibilityLabel: "Device profile and settings",
+            onPress: () => router.push("/profile"),
+          },
         ]}
       />
 

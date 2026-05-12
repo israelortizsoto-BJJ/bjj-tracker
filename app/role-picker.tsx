@@ -38,8 +38,8 @@ export default function RolePickerScreen() {
           <Text style={styles.kicker}>MATMIND PILOT</Text>
           <Text style={styles.title}>How will you use MatMind on this phone?</Text>
           <Text style={styles.subtitle}>
-            Pick the pilot lane that matches this device. You can change this later in Profile for
-            internal testing — your saved data stays on this phone.
+            Pick the pilot lane that matches this device. You can change this later from the gear
+            on Summary, This Week, Training, Compete, or Coach — your saved data stays on this phone.
           </Text>
 
           <Pressable
