@@ -38,7 +38,8 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "israel.ortizsoto@gmail.com"
+        "appleId": "israel.ortizsoto@gmail.com",
+        "ascAppId": "6759698073"
       }
     }
   }
