@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 const HIDDEN = { href: null, headerShown: false } as const;
 
 /**
- * Tab bar: only the first four screens are visible.
+ * Tab bar: primary tabs are visible; `href: null` hides routes that stay linkable (e.g. learn).
  *
  * Expo Router merges `Tabs.Screen` with file routes. Any direct child of this layout
  * that is not matched by a `Tabs.Screen` `name` is appended as an extra tab
@@ -30,7 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen name="coach" options={{ title: "Coach", headerShown: false }} />
       <Tabs.Screen name="training" options={{ title: "Training", headerShown: false }} />
       <Tabs.Screen name="compete" options={{ title: "Compete", headerShown: false }} />
-      <Tabs.Screen name="learn" options={{ title: "Learn", headerShown: false }} />
+      <Tabs.Screen name="learn" options={HIDDEN} />
       <Tabs.Screen name="profile" options={{ title: "Profile", headerShown: false }} />
       <Tabs.Screen name="welcome" options={HIDDEN} />
       <Tabs.Screen name="Fundamentals" options={HIDDEN} />
