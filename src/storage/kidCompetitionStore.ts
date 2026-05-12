@@ -313,13 +313,55 @@ function capCompetitionsByKid(all: KidCompetitionEntry[]): KidCompetitionEntry[]
   return capped;
 }
 
+/**
+ * Legacy rows persisted `kidId` without `sharedAthleteId`, so Summary (scoped by parent athlete id)
+ * missed them while Compete still matched on `kidId`. Repair only from the live roster kid row —
+ * never invent an id. Skips synthetic `unlinked__*` compete-tab ids (no roster row).
+ */
+function rowEligibleForRosterSharedAthleteBackfill(entry: KidCompetitionEntry): boolean {
+  if ((entry.sharedAthleteId ?? "").trim()) return false;
+  const kidId = typeof entry.kidId === "string" ? entry.kidId.trim() : "";
+  if (!kidId) return false;
+  if (parentAthleteIdFromUnlinkedCompetitionKidId(kidId as KidId)) return false;
+  return true;
+}
+
+async function backfillMissingSharedAthleteIdsFromRosterIfNeeded(
+  entries: KidCompetitionEntry[],
+): Promise<KidCompetitionEntry[]> {
+  if (!entries.some(rowEligibleForRosterSharedAthleteBackfill)) return entries;
+
+  const { getKidsById } = await import("./coachKidStore");
+  const kidsById = await getKidsById();
+  const nowIso = new Date().toISOString();
+  let changed = false;
+  const next = entries.map((e) => {
+    if (!rowEligibleForRosterSharedAthleteBackfill(e)) return e;
+    const kid = kidsById[e.kidId];
+    const sid = kid?.sharedAthleteId?.trim();
+    if (!sid) return e;
+    changed = true;
+    return normalizeKidCompetitionEntry({
+      ...e,
+      sharedAthleteId: sid,
+      updatedAt: nowIso,
+    });
+  });
+  if (!changed) return entries;
+
+  const capped = capCompetitionsByKid(next);
+  await setRaw(capped);
+  return capped;
+}
+
 async function getRaw(): Promise<KidCompetitionEntry[]> {
   const raw = await AsyncStorage.getItem(StorageKeys.kidCompetitionEntries);
   const parsed = safeParseOrDefault<KidCompetitionEntry[] | null>(raw, null);
   if (!parsed || !Array.isArray(parsed)) return [];
-  return parsed
+  const normalized = parsed
     .filter((e): e is KidCompetitionEntry => Boolean(e && typeof e === "object"))
     .map((e) => normalizeKidCompetitionEntry(e as KidCompetitionEntry));
+  return backfillMissingSharedAthleteIdsFromRosterIfNeeded(normalized);
 }
 
 async function setRaw(entries: KidCompetitionEntry[]): Promise<void> {

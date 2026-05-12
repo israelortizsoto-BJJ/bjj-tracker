@@ -23,7 +23,7 @@ import {
   getCompetitionDetailByEntryId,
   setCompetitionDetailForEntryId,
 } from "../../../../../../src/storage/competitionStore";
-import { todayYMD } from "../../../../../../src/storage/coachKidStore";
+import { getKidsById, todayYMD } from "../../../../../../src/storage/coachKidStore";
 import type {
   KidCompetitionEventStatus,
   KidCompetitionFormat,
@@ -382,9 +382,14 @@ export default function KidCompetitionEditScreen() {
 
     setSaving(true);
     try {
+      const kidsByIdForShared = await getKidsById();
+      const resolvedSharedAthleteId =
+        (kidsByIdForShared[kidId]?.sharedAthleteId ?? "").trim() || undefined;
+
       if (isNew) {
         const created = await createKidCompetitionEntry({
           kidId,
+          ...(resolvedSharedAthleteId ? { sharedAthleteId: resolvedSharedAthleteId } : {}),
           tournamentName: name,
           eventDate,
           result: resultDraft,
@@ -402,6 +407,7 @@ export default function KidCompetitionEditScreen() {
         await setCompetitionDetailForEntryId(created.id, { matches: snapshots });
       } else {
         await updateKidCompetitionEntry(entryId, {
+          ...(resolvedSharedAthleteId ? { sharedAthleteId: resolvedSharedAthleteId } : {}),
           tournamentName: name,
           eventDate,
           result: resultDraft,
