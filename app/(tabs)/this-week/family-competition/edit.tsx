@@ -8,25 +8,17 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  deleteParentKidCompetitionEntry,
-  resolveLinkedTargetForParentWriter,
-} from "../../../../src/family/parentKidCompetitionDelete";
-import {
-  CoachWeeklySyncApiError,
-  coachSyncCreateSessionCompetition,
-  coachSyncUpdateSessionCompetition,
-} from "../../../../src/services/coachWeeklySyncApi";
-import { getKidsById, todayYMD } from "../../../../src/storage/coachKidStore";
+  createCompetition,
+  deleteCompetition,
+  updateCompetition,
+} from "../../../../src/domain/competition/CompetitionSync";
+import { competitionFamilySaveTrace } from "../../../../src/domain/competition/CompetitionTypes";
+import { todayYMD } from "../../../../src/storage/coachKidStore";
 import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../../../../src/media/persistCameraRollMedia";
-import {
-  createKidCompetitionEntry,
-  getKidCompetitionEntryById,
-  getWorkerCompetitionIdForEntry,
-  updateKidCompetitionEntry,
-} from "../../../../src/storage/kidCompetitionStore";
+import { getKidCompetitionEntryById, getWorkerCompetitionIdForEntry } from "../../../../src/storage/kidCompetitionStore";
 import type {
   KidCompetitionEventStatus,
   KidCompetitionFormat,
@@ -34,7 +26,7 @@ import type {
 } from "../../../../src/types/coachKid";
 import { getPlacementLabel } from "../../../../src/features/competition/placementLabel";
 import { exitToCompeteAfterCompetitionSave } from "../../../../src/features/competition/syncTabAndExit";
-import { medalTierFromKidResult } from "../../../../src/types/coachKid";
+
 const UI = {
   screenBg: "#f3f4f6",
   bgCard: "#ffffff",
@@ -105,12 +97,6 @@ function searchParamOne(v: string | string[] | undefined): string {
   return Array.isArray(v) ? String(v[0] ?? "") : String(v);
 }
 
-function toOpErrorMessage(e: unknown): string {
-  if (e instanceof CoachWeeklySyncApiError) return e.message;
-  if (e instanceof Error) return e.message;
-  return "Try again shortly.";
-}
-
 export default function FamilyCompetitionEditScreen() {
   const navigation = useNavigation();
   const params = useLocalSearchParams<{
@@ -153,6 +139,26 @@ export default function FamilyCompetitionEditScreen() {
    */
   const lastProcessedOpenNonceRef = useRef<string | null>(null);
   const familyNewFormBootstrapKidRef = useRef<string | null>(null);
+  /** TEMP: parent competition POST vs navigation ordering (do not rely for product logic). */
+  const mountedRef = useRef(false);
+  const saveTraceKidIdRef = useRef(kidId);
+  const saveTraceIsNewRef = useRef(isNew);
+  saveTraceKidIdRef.current = kidId;
+  saveTraceIsNewRef.current = isNew;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen", {
+        stage: "unmount",
+        parentSavePhase: competitionFamilySaveTrace.phase,
+        mountedBeforeTeardown: mountedRef.current,
+        kidId: saveTraceKidIdRef.current,
+        isNew: saveTraceIsNewRef.current,
+      });
+      mountedRef.current = false;
+    };
+  }, []);
 
   const loadExisting = useCallback(async () => {
     if (!entryId) return;
@@ -307,20 +313,32 @@ export default function FamilyCompetitionEditScreen() {
     }
 
     setSaving(true);
+    const saveT0 = Date.now();
+    const trace = {
+      saveT0,
+      isNew,
+      kidId,
+      mounted: () => mountedRef.current,
+    };
     try {
       let savedCompetitionId: string | null = isNew ? null : entryId;
-      const kids = await getKidsById();
-      const kid = kids[kidId];
-      const linkedAthleteId = kid?.sharedAthleteId?.trim();
 
       if (isNew) {
-        if (linkedAthleteId && kid) {
-          const target = await resolveLinkedTargetForParentWriter(
-            linkedAthleteId,
-            undefined,
-            __DEV__ ? { kidLocalId: kidId, kidName: kid.name } : undefined,
-          );
-          if (!target) {
+        const created = await createCompetition({
+          surface: "family",
+          kidId,
+          tournamentName: name,
+          eventDate,
+          resultDraft,
+          eventStatusDraft,
+          formatDraft,
+          promoterDraft,
+          medalImageDraft,
+          trace,
+        });
+        if (!created.ok) {
+          if (created.blocked.kind === "resolve_miss_new") {
+            competitionFamilySaveTrace.phase = "resolve_miss_abort_no_post";
             Alert.alert(
               "Could not sync",
               "This athlete is linked here, but this phone could not open the coach invite that lists them for writing. Open Coach link & sharing, confirm the channel shows “Linked — competition sync ready”, then tap Athletes on this invite to relink or add them on that code.",
@@ -334,73 +352,30 @@ export default function FamilyCompetitionEditScreen() {
             );
             return;
           }
-          try {
-            const remote = await coachSyncCreateSessionCompetition(
-              target.linkToken,
-              target.parentWriterSecret,
-              {
-                sharedAthleteId: linkedAthleteId,
-                tournamentName: name,
-                eventDate,
-                ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
-                eventStatus: eventStatusDraft,
-                organizationOrPromoter: promoterDraft.trim()
-                  ? promoterDraft.trim()
-                  : undefined,
-                format: formatDraft,
-              },
-              target.apiBaseUrl,
-            );
-            const createdRow = await createKidCompetitionEntry({
-              kidId,
-              sharedAthleteId: linkedAthleteId,
-              sharedCompetitionId: remote.competition.id,
-              tournamentName: name,
-              eventDate,
-              ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
-              medal: medalTierFromKidResult(resultDraft),
-              medalImageUri: medalImageDraft,
-              status: eventStatusDraft,
-              eventStatus: eventStatusDraft,
-              organizationOrPromoter: promoterDraft.trim()
-                ? promoterDraft.trim()
-                : undefined,
-              format: formatDraft,
-            });
-            savedCompetitionId = createdRow.id;
-          } catch (e) {
-            Alert.alert("Could not sync", toOpErrorMessage(e) || "Try again shortly.");
-            return;
-          }
-        } else {
-          const createdRow = await createKidCompetitionEntry({
-            kidId,
-            tournamentName: name,
-            eventDate,
-            ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
-            medal: medalTierFromKidResult(resultDraft),
-            medalImageUri: medalImageDraft,
-            status: eventStatusDraft,
-            eventStatus: eventStatusDraft,
-            organizationOrPromoter: promoterDraft.trim()
-              ? promoterDraft.trim()
-              : undefined,
-            format: formatDraft,
-          });
-          savedCompetitionId = createdRow.id;
+          const msg =
+            created.blocked.kind === "sync_api"
+              ? created.blocked.message
+              : "Try again shortly.";
+          Alert.alert("Could not sync", msg || "Try again shortly.");
+          return;
         }
+        savedCompetitionId = created.savedCompetitionId;
       } else {
-        const existing = await getKidCompetitionEntryById(entryId);
-        const workerCompetitionId = existing
-          ? getWorkerCompetitionIdForEntry(existing)
-          : "";
-        const athleteForRemote = (existing?.sharedAthleteId ?? kid?.sharedAthleteId)?.trim();
-        if (athleteForRemote && workerCompetitionId) {
-          const target = await resolveLinkedTargetForParentWriter(
-            athleteForRemote,
-            workerCompetitionId,
-          );
-          if (!target) {
+        const updated = await updateCompetition({
+          surface: "family",
+          kidId,
+          entryId,
+          tournamentName: name,
+          eventDate,
+          resultDraft,
+          eventStatusDraft,
+          formatDraft,
+          promoterDraft,
+          medalImageDraft,
+          trace: { ...trace, isNew: false },
+        });
+        if (!updated.ok) {
+          if (updated.blocked.kind === "resolve_miss_edit") {
             Alert.alert(
               "Could not sync",
               "This entry is synced, but this phone could not match it to a writable invite (wrong channel, stale link, or setup not finished). Open Coach link & sharing → Athletes on this invite for the code that ends with the same suffix as your coach shared, then relink this child if needed.",
@@ -414,54 +389,52 @@ export default function FamilyCompetitionEditScreen() {
             );
             return;
           }
-          try {
-            await coachSyncUpdateSessionCompetition(
-              target.linkToken,
-              workerCompetitionId,
-              target.parentWriterSecret,
-              {
-                tournamentName: name,
-                eventDate,
-                result: resultDraft,
-                eventStatus: eventStatusDraft,
-                organizationOrPromoter: promoterDraft.trim()
-                  ? promoterDraft.trim()
-                  : undefined,
-                format: formatDraft,
-              },
-              target.apiBaseUrl,
-            );
-          } catch (e) {
-            Alert.alert("Could not sync", toOpErrorMessage(e) || "Try again shortly.");
-            return;
-          }
+          Alert.alert(
+            "Could not sync",
+            updated.blocked.kind === "sync_api"
+              ? updated.blocked.message || "Try again shortly."
+              : "Try again shortly.",
+          );
+          return;
         }
-        await updateKidCompetitionEntry(entryId, {
-          ...(athleteForRemote ? { sharedAthleteId: athleteForRemote } : {}),
-          ...(workerCompetitionId ? { sharedCompetitionId: workerCompetitionId } : {}),
-          tournamentName: name,
-          eventDate,
-          result: resultDraft,
-          medal: medalTierFromKidResult(resultDraft),
-          medalImageUri: medalImageDraft,
-          status: eventStatusDraft,
-          eventStatus: eventStatusDraft,
-          organizationOrPromoter: promoterDraft.trim()
-            ? promoterDraft.trim()
-            : undefined,
-          format: formatDraft,
-        });
+        savedCompetitionId = updated.savedCompetitionId;
       }
+      competitionFamilySaveTrace.phase = "pre_exitToCompeteAfterCompetitionSave";
+      console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
+        stage: "calling_exitToCompeteAfterCompetitionSave",
+        elapsedMs: Date.now() - saveT0,
+        savedCompetitionId,
+        mounted: mountedRef.current,
+      });
       exitToCompeteAfterCompetitionSave({
         navigation,
         actorRole: "parent",
         athleteId: kidId,
         competitionId: savedCompetitionId,
       });
+      competitionFamilySaveTrace.phase = "after_exitToCompeteAfterCompetitionSave";
+      console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
+        stage: "returned_after_exitToCompeteAfterCompetitionSave",
+        elapsedMs: Date.now() - saveT0,
+        mounted: mountedRef.current,
+      });
     } catch (e) {
+      competitionFamilySaveTrace.phase = "onSave_outer_catch";
+      console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
+        stage: "outer_catch",
+        elapsedMs: Date.now() - saveT0,
+        error: e instanceof Error ? e.message : String(e),
+        mounted: mountedRef.current,
+      });
       const msg = e instanceof Error ? e.message : String(e);
       Alert.alert("Could not save", msg || "Try again.");
     } finally {
+      competitionFamilySaveTrace.phase = "onSave_finally";
+      console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
+        stage: "finally",
+        elapsedMs: Date.now() - saveT0,
+        mounted: mountedRef.current,
+      });
       setSaving(false);
     }
   }
@@ -485,11 +458,10 @@ export default function FamilyCompetitionEditScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const outcome = await deleteParentKidCompetitionEntry(
+            const outcome = await deleteCompetition({
               entryId,
               kidId,
-              getKidsById,
-            );
+            });
             if (!outcome.ok) {
               Alert.alert(outcome.alertTitle, outcome.alertMessage);
               return;

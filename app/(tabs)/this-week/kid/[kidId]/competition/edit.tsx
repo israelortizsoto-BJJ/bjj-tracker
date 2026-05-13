@@ -28,17 +28,18 @@ import {
   requestMediaLibraryPermission,
 } from "../../../../../../src/media/persistCameraRollMedia";
 import {
-  createKidCompetitionEntry,
-  deleteKidCompetitionEntry,
-  getKidCompetitionEntryById,
-  updateKidCompetitionEntry,
-  parentAthleteIdFromUnlinkedCompetitionKidId,
-} from "../../../../../../src/storage/kidCompetitionStore";
+  createCompetition,
+  deleteCompetition,
+  updateCompetition,
+} from "@/src/domain/competition/CompetitionSync";
 import {
   competitionVideoRefsFromMatches,
   getCompetitionDetailByEntryId,
-  setCompetitionDetailForEntryId,
 } from "../../../../../../src/storage/competitionStore";
+import {
+  getKidCompetitionEntryById,
+  parentAthleteIdFromUnlinkedCompetitionKidId,
+} from "../../../../../../src/storage/kidCompetitionStore";
 import { getKidsById, todayYMD } from "../../../../../../src/storage/coachKidStore";
 import type {
   KidCompetitionEventStatus,
@@ -46,7 +47,6 @@ import type {
   KidCompetitionResult,
 } from "../../../../../../src/types/coachKid";
 import { getPlacementLabel } from "../../../../../../src/features/competition/placementLabel";
-import { medalTierFromKidResult } from "../../../../../../src/types/coachKid";
 import {
   createEmptyMatch,
   deriveInitialMatches,
@@ -455,49 +455,85 @@ export default function KidCompetitionEditScreen() {
 
       let savedCompetitionId = entryId;
       if (isNew) {
-        const created = await createKidCompetitionEntry({
+        const created = await createCompetition({
+          surface: "kid",
           kidId,
-          ...(resolvedSharedAthleteId ? { sharedAthleteId: resolvedSharedAthleteId } : {}),
+          resolvedSharedAthleteId,
           tournamentName: name,
           eventDate,
-          result: resultDraft,
-          medal: medalTierFromKidResult(resultDraft),
-          medalImageUri: medalImageDraft,
-          status: eventStatusDraft,
-          eventStatus: eventStatusDraft,
-          organizationOrPromoter: promoterDraft.trim()
-            ? promoterDraft.trim()
-            : undefined,
-          format: formatDraft,
-          coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
-          ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
-        });
-        await setCompetitionDetailForEntryId(created.id, { matches: snapshots });
-        savedCompetitionId = created.id;
-      } else {
-        await updateKidCompetitionEntry(entryId, {
-          ...(resolvedSharedAthleteId ? { sharedAthleteId: resolvedSharedAthleteId } : {}),
-          tournamentName: name,
-          eventDate,
-          result: resultDraft,
-          medal: medalTierFromKidResult(resultDraft),
-          medalImageUri: medalImageDraft,
-          status: eventStatusDraft,
-          eventStatus: eventStatusDraft,
-          organizationOrPromoter: promoterDraft.trim()
-            ? promoterDraft.trim()
-            : undefined,
-          format: formatDraft,
-          coachNotes: notesDraft.trim() ? notesDraft.trim() : undefined,
+          resultDraft,
+          eventStatusDraft,
+          formatDraft,
+          promoterDraft,
+          medalImageDraft,
+          coachNotes: notesDraft,
           competitionVideos,
+          matchSnapshots: snapshots,
         });
-        await setCompetitionDetailForEntryId(entryId, { matches: snapshots });
+        if (!created.ok) {
+          if (created.blocked.kind === "resolve_miss_new") {
+            Alert.alert(
+              "Could not sync",
+              "This athlete is linked here, but this phone could not open the coach invite that lists them for writing. Open Coach link & sharing, confirm the channel shows “Linked — competition sync ready”, then tap Athletes on this invite to relink or add them on that code.",
+              [
+                { text: "Not now", style: "cancel" },
+                {
+                  text: "Coach link settings",
+                  onPress: () => router.push("/this-week/manage"),
+                },
+              ],
+            );
+            return;
+          }
+          const msg =
+            created.blocked.kind === "sync_api"
+              ? created.blocked.message
+              : "Try again shortly.";
+          Alert.alert("Could not sync", msg || "Try again shortly.");
+          return;
+        }
+        savedCompetitionId = created.savedCompetitionId;
+      } else {
+        const updated = await updateCompetition({
+          surface: "kid",
+          kidId,
+          entryId,
+          resolvedSharedAthleteId,
+          tournamentName: name,
+          eventDate,
+          resultDraft,
+          eventStatusDraft,
+          formatDraft,
+          promoterDraft,
+          medalImageDraft,
+          coachNotes: notesDraft,
+          competitionVideos,
+          matchSnapshots: snapshots,
+        });
+        if (!updated.ok) {
+          if (updated.blocked.kind === "resolve_miss_edit") {
+            Alert.alert(
+              "Could not sync",
+              "This entry is synced, but this phone could not match it to a writable invite (wrong channel, stale link, or setup not finished). Open Coach link & sharing → Athletes on this invite for the code that ends with the same suffix as your coach shared, then relink this child if needed.",
+              [
+                { text: "Not now", style: "cancel" },
+                {
+                  text: "Coach link settings",
+                  onPress: () => router.push("/this-week/manage"),
+                },
+              ],
+            );
+            return;
+          }
+          const msg =
+            updated.blocked.kind === "sync_api"
+              ? updated.blocked.message
+              : "Try again shortly.";
+          Alert.alert("Could not sync", msg || "Try again shortly.");
+          return;
+        }
+        savedCompetitionId = updated.savedCompetitionId;
       }
-      console.log("[COMPETITION_SAVE]", {
-        competitionId: savedCompetitionId,
-        sharedAthleteId: resolvedSharedAthleteId ?? null,
-        actorRole: "parent",
-      });
       exitToCompeteAfterCompetitionSave({
         navigation,
         actorRole: "parent",
@@ -532,7 +568,11 @@ export default function KidCompetitionEditScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteKidCompetitionEntry(entryId);
+          const outcome = await deleteCompetition({ entryId, kidId });
+          if (!outcome.ok) {
+            Alert.alert(outcome.alertTitle, outcome.alertMessage);
+            return;
+          }
           exitToCompeteAfterCompetitionSave({
             navigation,
             actorRole: "parent",
