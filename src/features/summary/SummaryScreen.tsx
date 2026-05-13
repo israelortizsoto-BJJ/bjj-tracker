@@ -6,11 +6,13 @@ import {
   ActionSheetIOS,
   ActivityIndicator,
   Alert,
+  LayoutAnimation,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  UIManager,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -26,6 +28,8 @@ import {
   deriveCompetitionTrainingSkillFocus,
   principalTrainingSkillBucketFromDerivedFocus,
 } from "../../ai-coach/competitionTrainingSkillFocus";
+import { labelForSubmissionTypeKey } from "@/src/features/competition/submissionTypes";
+import type { KidCompetitionEntryWithMatchDetail } from "@/src/storage/competitionStore";
 import {
   formatAthleteBeltRankLabel,
   formatAthleteExperienceLevelLabel,
@@ -90,6 +94,35 @@ import {
 
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+
+function recentSubmissionTypesSummaryLine(
+  competitions: readonly KidCompetitionEntryWithMatchDetail[],
+): string | null {
+  if (!competitions.length) return null;
+  const sorted = [...competitions].sort((a, b) => {
+    const c = b.eventDate.localeCompare(a.eventDate);
+    if (c !== 0) return c;
+    return b.createdAt.localeCompare(a.createdAt);
+  });
+  for (const c of sorted) {
+    const { matches } = c;
+    if (!Array.isArray(matches) || matches.length === 0) continue;
+    const labels: string[] = [];
+    const seen = new Set<string>();
+    for (const m of matches) {
+      if (m.matchResult !== "win" || m.outcome !== "Submission") continue;
+      const lab = labelForSubmissionTypeKey(m.submissionType ?? null);
+      if (!lab || seen.has(lab)) continue;
+      seen.add(lab);
+      labels.push(lab);
+      if (labels.length >= 4) break;
+    }
+    if (labels.length > 0) {
+      return `Submission types (latest event): ${labels.join(" · ")}`;
+    }
+  }
+  return null;
+}
 
 function getSuggestionKey(s: IdentitySuggestion): string {
   return `${s.type}-${String(s.suggestedValue ?? "none")}`;
@@ -184,6 +217,8 @@ export default function SummaryScreen() {
   const [weeklySessionSnapshot, setWeeklySessionSnapshot] =
     useState<ParentWeeklySessionSnapshot | null>(null);
   const [coachLinkRowsForTrustUi, setCoachLinkRowsForTrustUi] = useState<CoachLink[]>([]);
+  /** Session-only: Recognized Skills starts collapsed for a calmer first paint. */
+  const [recognizedSkillsExpanded, setRecognizedSkillsExpanded] = useState(false);
   const weeklySessionSourceRef = useRef<"cache" | "network" | "none">("none");
   const previousValidationRef = useRef<IdentityValidationResult | null>(null);
   const previousTrendRef = useRef<SummaryTrend | null>(null);
@@ -953,6 +988,11 @@ export default function SummaryScreen() {
         selectedSystemKey,
       });
     }
+    console.log("[SUMMARY_RECOMPUTE]", {
+      athleteId: activeAthleteId,
+      competitionCount: competitions?.length ?? 0,
+      identityScore: identityScore.score,
+    });
     return buildSummaryViewModel({
       signals,
       identityScore: confidence,
@@ -964,7 +1004,9 @@ export default function SummaryScreen() {
   }, [
     activeAthleteId,
     coachWeeklyForSummary,
+    competitions?.length,
     hybridConfidence,
+    identityScore.score,
     lastAction,
     summaryLinkedKidId,
     weeklySessionSnapshot,
@@ -1005,6 +1047,11 @@ export default function SummaryScreen() {
     competitionSkillFocus.summaryLabel
       ? competitionSkillFocus.summaryLabel
       : undefined;
+
+  const recentSubmissionTypesLine = useMemo(
+    () => recentSubmissionTypesSummaryLine(competitions),
+    [competitions],
+  );
 
   const principalFocusBucket = useMemo(
     () => principalTrainingSkillBucketFromDerivedFocus(competitionSkillFocus),
@@ -1055,12 +1102,19 @@ export default function SummaryScreen() {
     >
       <OperatingHeader
         mode="athlete"
+        semanticLead
         eyebrow="Summary / Identity"
         title="A mirror of the athlete"
+        subtitle={
+          activeAthleteName?.trim()
+            ? `Active context · ${activeAthleteName.trim()}`
+            : null
+        }
         athlete={{
           name: activeAthleteName || "Athlete",
           initials: initialsFromName(activeAthleteName),
           meta: summaryOperatingHeaderMeta,
+          identityHighlight: true,
         }}
         actions={[
           {
@@ -1084,7 +1138,7 @@ export default function SummaryScreen() {
 
       <View style={styles.identityScoreRow}>
         <Text style={styles.identityScoreText}>
-          Identity Score: {identityScore.score}
+          Identity score · {identityScore.score}
         </Text>
       </View>
 
@@ -1098,24 +1152,47 @@ export default function SummaryScreen() {
         </View>
       ) : null}
 
-      {declaredSkills.length > 0 ? (
-        <View style={styles.skillsSection}>
+      <View style={styles.skillsSection}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: recognizedSkillsExpanded }}
+          accessibilityLabel={
+            recognizedSkillsExpanded ? "Collapse recognized skills" : "Expand recognized skills"
+          }
+          hitSlop={8}
+          onPress={() => {
+            if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+              UIManager.setLayoutAnimationEnabledExperimental(true);
+            }
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setRecognizedSkillsExpanded((v) => !v);
+          }}
+          style={[
+            styles.skillsHeaderRow,
+            recognizedSkillsExpanded ? styles.skillsHeaderRowExpanded : null,
+          ]}
+        >
           <Text style={styles.skillsTitle}>Recognized Skills</Text>
-          <View style={styles.skillsRow}>
-            {declaredSkills.map((skill) => (
-              <View key={skill} style={styles.skillChip}>
-                <Text style={styles.skillText}>{formatSkill(skill)}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={styles.skillsSection}>
-          <Text style={styles.skillsEmpty}>
-            Add skills to help us understand your game
+          <Text style={styles.skillsChevron} importantForAccessibility="no">
+            {recognizedSkillsExpanded ? "▼" : "▶"}
           </Text>
-        </View>
-      )}
+        </Pressable>
+        {recognizedSkillsExpanded ? (
+          declaredSkills.length > 0 ? (
+            <View style={styles.skillsRow}>
+              {declaredSkills.map((skill) => (
+                <View key={skill} style={styles.skillChip}>
+                  <Text style={styles.skillText}>{formatSkill(skill)}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.skillsEmpty}>
+              Add skills to help us understand your game
+            </Text>
+          )
+        ) : null}
+      </View>
 
       <View style={styles.section}>
         <SummaryHeroCard
@@ -1184,6 +1261,7 @@ export default function SummaryScreen() {
           podiumCountLast30Days={signals.competition.podiumCountLast30Days}
           podiumCountLast90Days={signals.competition.podiumCountLast90Days}
           record={signals.competition.record}
+          recentSubmissionTypesLine={recentSubmissionTypesLine ?? undefined}
           submissionRate={signals.competition.submissionRate}
           totalMatches={signals.competition.totalMatches}
           winRate={signals.competition.winRate}
@@ -1312,22 +1390,53 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   identityScoreRow: {
-    marginTop: 8,
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(199, 243, 107, 0.22)",
+    backgroundColor: "rgba(26, 42, 26, 0.35)",
   },
   identityScoreText: {
-    color: "#8fa3ad",
+    color: "#c7f36b",
     fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
   selectorSection: {
     marginBottom: 24,
+    paddingBottom: 12,
+    paddingTop: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(199, 243, 107, 0.18)",
   },
   skillsSection: {
     marginTop: 20,
   },
-  skillsTitle: {
-    color: "#aaa",
+  skillsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
+  skillsHeaderRowExpanded: {
     marginBottom: 10,
-    fontSize: 14,
+  },
+  skillsTitle: {
+    color: "#b6cf68",
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800",
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+  },
+  skillsChevron: {
+    color: "#8faa4a",
+    fontSize: 12,
+    fontWeight: "700",
+    paddingVertical: 2,
+    paddingHorizontal: 4,
   },
   skillsRow: {
     flexDirection: "row",

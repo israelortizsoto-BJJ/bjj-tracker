@@ -1,6 +1,15 @@
 import { Audio } from "expo-av";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, type LayoutChangeEvent, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Alert,
+  type LayoutChangeEvent,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 
 import { MatchMediaAttachments } from "../../components/MatchMediaAttachments";
 import {
@@ -8,7 +17,7 @@ import {
   getCompetitionDetailByEntryId,
 } from "../../storage/competitionStore";
 import type { KidCompetitionEntry } from "../../types/coachKid";
-import { getPlacementLabel } from "./placementLabel";
+import { normalizeStoredSubmissionType, SUBMISSION_TYPE_CHIPS } from "./submissionTypes";
 
 /** UI tokens mirror the coach competition editor. */
 const UI = {
@@ -38,6 +47,8 @@ export type LocalMatch = {
   matchResult: (typeof MATCH_RESULT_OPTIONS)[number]["value"] | null;
   outcome: (typeof HOW_ENDED_OPTIONS)[number] | null;
   submissionTime: string | null;
+  /** Canonical key from `SUBMISSION_TYPE_CHIPS` when outcome is Submission */
+  submissionType: string | null;
   coachNote?: string;
   imageUri: string | null;
   videoUri: string | null;
@@ -51,6 +62,7 @@ export function createEmptyMatch(idSuffix: string): LocalMatch {
     matchResult: null,
     outcome: null,
     submissionTime: null,
+    submissionType: null,
     coachNote: "",
     imageUri: null,
     videoUri: null,
@@ -64,6 +76,7 @@ export function snapshotFromLocal(m: LocalMatch): CompetitionDetailMatchSnapshot
     typeof m.submissionTime === "string" && m.submissionTime.trim().length > 0
       ? m.submissionTime.trim()
       : null;
+  const st = normalizeStoredSubmissionType(m.submissionType);
   const coachNote =
     typeof m.coachNote === "string" && m.coachNote.trim().length > 0 ? m.coachNote.trim() : undefined;
   return {
@@ -71,6 +84,7 @@ export function snapshotFromLocal(m: LocalMatch): CompetitionDetailMatchSnapshot
     matchResult: m.matchResult,
     outcome: m.outcome,
     submissionTime,
+    ...(st ? { submissionType: st } : {}),
     coachNote,
     imageUri: m.imageUri,
     videoUri: m.videoUri,
@@ -104,11 +118,13 @@ export function localMatchFromSnapshot(m: CompetitionDetailMatchSnapshot): Local
   }
   const rawCoachNote = (m as { coachNote?: unknown }).coachNote;
   const coachNote = typeof rawCoachNote === "string" ? rawCoachNote : "";
+  const submissionType = normalizeStoredSubmissionType((m as { submissionType?: unknown }).submissionType);
   return {
     id: m.id,
     matchResult: m.matchResult,
     outcome: m.outcome,
     submissionTime,
+    submissionType,
     coachNote,
     imageUri: m.imageUri,
     videoUri: m.videoUri,
@@ -138,6 +154,7 @@ export function deriveInitialMatches(
         matchResult: null,
         outcome: null,
         submissionTime: null,
+        submissionType: null,
         coachNote: "",
         imageUri: null,
         videoUri: u,
@@ -166,6 +183,7 @@ export function MatchBlock({
   onToggleMatchResult,
   onToggleOutcome,
   onSubmissionTimeChange,
+  onSubmissionTypeChange,
   onCoachNoteChange,
   onCoachNoteFocus,
   onCoachNoteLayout,
@@ -177,6 +195,7 @@ export function MatchBlock({
   onToggleMatchResult: (v: (typeof MATCH_RESULT_OPTIONS)[number]["value"]) => void;
   onToggleOutcome: (label: (typeof HOW_ENDED_OPTIONS)[number]) => void;
   onSubmissionTimeChange: (text: string) => void;
+  onSubmissionTypeChange: (key: string | null) => void;
   onCoachNoteChange: (text: string) => void;
   onCoachNoteFocus?: () => void;
   onCoachNoteLayout?: (y: number) => void;
@@ -187,6 +206,18 @@ export function MatchBlock({
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const { width: windowWidth } = useWindowDimensions();
+  /** Compact multi-column chip grid (long labels wrap); avoids a single tall column of pills. */
+  const submissionChipLayout = useMemo(() => {
+    const outerPad = 48;
+    const gap = 6;
+    const minChip = 84;
+    const usable = Math.max(260, windowWidth - outerPad);
+    let cols = Math.floor((usable + gap) / (minChip + gap));
+    cols = Math.max(2, Math.min(4, cols));
+    const chipWidth = (usable - gap * (cols - 1)) / cols;
+    return { chipWidth, gap };
+  }, [windowWidth]);
 
   useEffect(() => {
     if (match.videoUri) return;
@@ -587,6 +618,57 @@ export function MatchBlock({
                       >
                         Time of finish
                       </Text>
+                      <Text
+                        style={{
+                          marginTop: 12,
+                          fontSize: 12,
+                          letterSpacing: 0.6,
+                          fontWeight: "600",
+                          color: UI.textSecondary,
+                        }}
+                      >
+                        Submission type
+                      </Text>
+                      <View
+                        style={{
+                          marginTop: 6,
+                          flexDirection: "row",
+                          flexWrap: "wrap",
+                          gap: submissionChipLayout.gap,
+                        }}
+                      >
+                        {SUBMISSION_TYPE_CHIPS.map(({ key, label }) => {
+                          const active = match.submissionType === key;
+                          return (
+                            <Pressable
+                              key={key}
+                              onPress={() => onSubmissionTypeChange(active ? null : key)}
+                              style={({ pressed }) => ({
+                                ...chipPressable(active)({ pressed }),
+                                width: submissionChipLayout.chipWidth,
+                                minHeight: 40,
+                                paddingVertical: 8,
+                                paddingHorizontal: 8,
+                                alignItems: "center",
+                                justifyContent: "center",
+                              })}
+                            >
+                              <Text
+                                numberOfLines={2}
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: active ? "800" : "600",
+                                  color: UI.textPrimary,
+                                  textAlign: "center",
+                                  width: "100%",
+                                }}
+                              >
+                                {label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
                     </View>
                   ) : null}
                 </View>
