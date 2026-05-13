@@ -790,6 +790,10 @@ function isPointsStyleOutcome(value: unknown): boolean {
 }
 
 function parseMatchTimeSeconds(value: unknown): number | null {
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value < 0) return null;
+    return Math.round(value);
+  }
   if (typeof value !== "string") return null;
   const text = value.trim();
   if (!text) return null;
