@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#26303a",
+    borderColor: "rgba(236, 241, 245, 0.12)",
   },
   headerRow: {
     flexDirection: "row",
@@ -80,12 +80,12 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
   goalTag: {
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderWidth: 1,
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.1)",
   },
   goalTagText: {
     color: "#ffffff",
@@ -99,20 +99,20 @@ const styles = StyleSheet.create({
   },
   metricBox: {
     width: "48%",
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 6,
     padding: 14,
     minHeight: 92,
     borderWidth: 1,
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.1)",
     justifyContent: "center",
   },
   emptyState: {
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 6,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.1)",
   },
   emptyTitle: {
     color: "#d1d5db",
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   primaryMetricBox: {
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.14)",
   },
   itemLabel: {
     color: "#c7cbd1",

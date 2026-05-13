@@ -6,7 +6,6 @@ import {
   Alert,
   Pressable,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -150,8 +149,6 @@ export default function ParentLinkedAthletesScreen() {
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
   /** Domain A — parent-side identity truth (lives in `parentAthletes`, e.g. Luca). */
   const [parentAthletes, setParentAthletes] = useState<ParentAthlete[]>([]);
-  const [nameDraft, setNameDraft] = useState("");
-  const [busy, setBusy] = useState(false);
   const [linkingKidId, setLinkingKidId] = useState<string | null>(null);
   const [linkingParentAthleteId, setLinkingParentAthleteId] = useState<string | null>(null);
   const [unlinkingKidId, setUnlinkingKidId] = useState<string | null>(null);
@@ -463,7 +460,7 @@ export default function ParentLinkedAthletesScreen() {
 
   /**
    * Bind a `ParentAthlete` (Domain A — parent-side identity truth) to this invite:
-   * 1. POST /athletes (same path as `onAddAthlete`) so the server issues a `sharedAthleteId`.
+   * 1. POST /athletes so the server issues a `sharedAthleteId`.
    * 2. Verify the roster GET contains that id (Fresh Invite Truth backbone — unchanged).
    * 3. Create the `Kid` projection row carrying `sharedAthleteId = athlete.id` and the invite token.
    * 4. Reissue the `ParentAthlete.id` to that `sharedAthleteId` so `linkedKidIdForParentAthlete`
@@ -543,72 +540,6 @@ export default function ParentLinkedAthletesScreen() {
     },
     [link],
   );
-
-  const onAddAthlete = useCallback(async () => {
-    const trimmed = nameDraft.trim();
-    if (!trimmed || !link?.weeklySync?.linkToken || !link.weeklySync.parentWriterSecret) {
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const { athlete } = await coachSyncCreateSessionAthlete(
-        link.weeklySync.linkToken,
-        link.weeklySync.parentWriterSecret,
-        { name: trimmed },
-        link.weeklySync.apiBaseUrl,
-      );
-
-      const verifiedAthletes = await verifyRemoteRosterAfterAthletePost(
-        link.weeklySync.linkToken,
-        link.weeklySync.apiBaseUrl,
-        athlete.id,
-      );
-
-      const nowIso = new Date().toISOString();
-      const localId = `kid_${Date.now()}`;
-      const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
-      const existing = await getKidsById();
-      const created: Kid = {
-        id: localId,
-        name: athlete.name,
-        sharedAthleteId: athlete.id,
-        sharedFromInviteTokenNorm: tokenNorm,
-        isParentManagedChildProfile: true,
-        createdAt: nowIso,
-        updatedAt: nowIso,
-      };
-
-      if (__DEV__) {
-        console.log("[bjj-sync-debug] parent-athletes add new kid", {
-          kidLocalId: localId,
-          linkedAthleteId: athlete.id,
-          tokenNorm,
-          tokenTail: inviteLinkTokenTail(tokenNorm),
-          linkId: link.id,
-          hasWriterSecret: Boolean(link.weeklySync?.writerSecret?.trim()),
-          verifiedRemoteRosterCount: verifiedAthletes.length,
-        });
-      }
-
-      const nextKids: KidsById = { ...existing, [localId]: created };
-      await setKidsById(nextKids);
-
-      setKidsByIdState(nextKids);
-      setNameDraft("");
-      setSessionAthletes(verifiedAthletes);
-    } catch (e) {
-      const msg =
-        e instanceof CoachWeeklySyncApiError
-          ? e.message
-          : e instanceof Error
-            ? e.message
-            : "Could not add athlete.";
-      setError(msg);
-    } finally {
-      setBusy(false);
-    }
-  }, [link, nameDraft]);
 
   const requestRemoveAthleteFromCoach = useCallback(
     (kid: Kid, displayName: string) => {
@@ -713,8 +644,8 @@ export default function ParentLinkedAthletesScreen() {
           Who’s on this invite?
         </Text>
         <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 16 }}>
-          Pick an existing child below, or add a new athlete if they are not on this phone yet. Reuse the same
-          profile when you reconnect so your coach sees one roster row per child.
+          Link a child profile that already exists on this phone (from Summary). New household athletes are added
+          under Summary first so identity and weekly sync stay aligned.
         </Text>
 
         {!ready ? (
@@ -739,7 +670,6 @@ export default function ParentLinkedAthletesScreen() {
                     isLinking ||
                     linkingParentAthleteId !== null ||
                     unlinkingKidId !== null ||
-                    busy ||
                     !link.weeklySync?.parentWriterSecret ||
                     !k.name.trim();
                   return (
@@ -784,7 +714,6 @@ export default function ParentLinkedAthletesScreen() {
                     isLinking ||
                     linkingKidId !== null ||
                     unlinkingKidId !== null ||
-                    busy ||
                     !link.weeklySync?.parentWriterSecret ||
                     !pa.name.trim();
                   return (
@@ -856,7 +785,6 @@ export default function ParentLinkedAthletesScreen() {
                       const isUnlinking = unlinkingKidId === kid.id;
                       const disableRemove =
                         isUnlinking ||
-                        busy ||
                         linkingKidId !== null ||
                         linkingParentAthleteId !== null ||
                         !link.weeklySync?.parentWriterSecret;
@@ -900,83 +828,51 @@ export default function ParentLinkedAthletesScreen() {
                   ON THIS INVITE
                 </Text>
                 <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22 }}>
-                  No athletes are on this coach session yet. Add a new athlete below, or link an existing child
-                  profile.
+                  No athletes are on this coach session yet. Add the athlete under Summary on this phone, then
+                  link them from the lists above.
                 </Text>
               </View>
             ) : null}
 
-            <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary, marginBottom: 8 }}>
-              ADD NEW ATHLETE
-            </Text>
-            <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18, marginBottom: 12 }}>
-              Only if they are not listed above — this creates a new child profile on this phone.
-            </Text>
-
-            <TextInput
-              value={nameDraft}
-              onChangeText={(t) => {
-                setError(null);
-                setNameDraft(t);
-              }}
-              placeholder="Athlete name"
-              placeholderTextColor={UI.textSecondary}
-              autoCapitalize="words"
-              editable={
-                !busy &&
-                linkingKidId === null &&
-                linkingParentAthleteId === null &&
-                unlinkingKidId === null &&
-                Boolean(link.weeklySync?.parentWriterSecret)
-              }
+            {relinkCandidateKids.length === 0 && parentAthleteCandidates.length === 0 ? (
+            <View
               style={{
-                paddingVertical: 12,
-                paddingHorizontal: 12,
-                borderRadius: 12,
+                marginBottom: 8,
+                padding: 14,
+                borderRadius: CARD_RADIUS,
                 borderWidth: 1,
                 borderColor: UI.border,
                 backgroundColor: UI.bgCard,
-                color: UI.textPrimary,
-                marginBottom: 12,
+                gap: 10,
               }}
-            />
+            >
+              <Text style={{ fontSize: 12, fontWeight: "700", color: UI.textSecondary }}>NEW ATHLETE</Text>
+              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                Household athletes are created in Summary. After saving, come back here to attach them to this
+                invite.
+              </Text>
+              <Pressable
+                disabled={linkingKidId !== null || linkingParentAthleteId !== null || unlinkingKidId !== null}
+                onPress={() => router.push("/summary/add-athlete")}
+                style={({ pressed }) => ({
+                  paddingVertical: 14,
+                  borderRadius: CARD_RADIUS,
+                  backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+                  alignItems: "center",
+                  opacity:
+                    linkingKidId !== null || linkingParentAthleteId !== null || unlinkingKidId !== null
+                      ? 0.55
+                      : 1,
+                })}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Open Summary — Add athlete</Text>
+              </Pressable>
+            </View>
+            ) : null}
 
             {error ? (
               <Text style={{ fontSize: 14, color: UI.danger, marginBottom: 12 }}>{error}</Text>
             ) : null}
-
-            <Pressable
-              disabled={
-                busy ||
-                linkingKidId !== null ||
-                linkingParentAthleteId !== null ||
-                unlinkingKidId !== null ||
-                !link.weeklySync?.parentWriterSecret ||
-                !nameDraft.trim()
-              }
-              onPress={() => void onAddAthlete()}
-              style={({ pressed }) => ({
-                paddingVertical: 14,
-                borderRadius: CARD_RADIUS,
-                backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
-                alignItems: "center",
-                opacity:
-                  busy ||
-                  linkingKidId !== null ||
-                  linkingParentAthleteId !== null ||
-                  unlinkingKidId !== null ||
-                  !link.weeklySync?.parentWriterSecret ||
-                  !nameDraft.trim()
-                    ? 0.55
-                    : 1,
-              })}
-            >
-              {busy ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <Text style={{ fontSize: 16, fontWeight: "700", color: "#ffffff" }}>Add new athlete</Text>
-              )}
-            </Pressable>
 
             <Pressable
               onPress={() => router.replace("/this-week")}

@@ -24,9 +24,9 @@ export type CompeteKidEntryMerged = KidCompetitionEntry & {
 };
 
 export const SYSTEM_MEDAL_BACKGROUND: Record<KidCompetitionMedalTier, string> = {
-  gold: "#f5c84b",
-  silver: "#cbd5e1",
-  bronze: "#c98143",
+  gold: "#8a6a2b",
+  silver: "#64748b",
+  bronze: "#7c4a2c",
   participated: "#334155",
 };
 
@@ -50,7 +50,7 @@ export function normalizedCompetitionMedalImageUri(uri: string | undefined): str
 
 function systemLetterColor(medal: KidCompetitionMedalTier): string {
   if (medal === "participated") return FEED.text;
-  return "#1e293b";
+  return FEED.text;
 }
 
 /** Shared medal visuals: user photo preserves natural aspect (no circular mask); fallback uses tier badge. */
@@ -92,7 +92,7 @@ export function CompetitionMedalMark({
         alignItems: "center",
         justifyContent: "center",
         backgroundColor,
-        borderWidth: medal === "participated" ? 1 : 2,
+        borderWidth: 1,
         borderColor: fallbackMedalBorderColor(medal),
         paddingHorizontal: 4,
       }}

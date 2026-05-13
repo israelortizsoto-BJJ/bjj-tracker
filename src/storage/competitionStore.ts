@@ -20,6 +20,11 @@ export type CompetitionDetailMatchSnapshot = {
   outcome: "Submission" | "Points" | "Ref Decision" | "DQ" | "Injury" | null;
   /** Free-form (e.g. seconds as number or mm:ss); only surfaced in UI when outcome is Submission */
   submissionTime: string | null;
+  /**
+   * When `outcome === "Submission"`, optional stable key (see `SUBMISSION_TYPE_CHIPS`).
+   * Omitted on legacy JSON — readers treat as unknown.
+   */
+  submissionType?: string | null;
   coachNote?: string;
   imageUri: string | null;
   videoUri: string | null;

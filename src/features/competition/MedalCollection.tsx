@@ -104,8 +104,8 @@ export function MedalCollection({ entries }: { entries: CompeteKidEntryMerged[] 
   return (
     <View style={styles.card}>
       <View style={styles.headerBlock}>
-        <Text style={styles.eyebrow}>Achievements</Text>
-        <Text style={styles.sectionTitle}>Podium medals</Text>
+        <Text style={styles.eyebrow}>Record archive</Text>
+        <Text style={styles.sectionTitle}>Podium record</Text>
         {hasCompetitions ? (
           <Text style={styles.subtitle}>
             {podiumCount} podium {podiumCount === 1 ? "finish" : "finishes"} out of{" "}
@@ -166,13 +166,13 @@ export function MedalCollection({ entries }: { entries: CompeteKidEntryMerged[] 
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: 20,
+    marginTop: 18,
     marginBottom: 8,
-    paddingVertical: 20,
-    paddingHorizontal: 18,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: "rgba(236, 241, 245, 0.18)",
-    borderRadius: FEED.radius + 2,
+    borderColor: FEED.line,
+    borderRadius: FEED.radius,
     backgroundColor: FEED.panel,
   },
   headerBlock: {
@@ -188,9 +188,9 @@ const styles = StyleSheet.create({
   sectionTitle: {
     marginTop: 6,
     color: FEED.text,
-    fontSize: 19,
+    fontSize: 17,
     fontWeight: "900",
-    letterSpacing: -0.3,
+    letterSpacing: 0,
   },
   subtitle: {
     marginTop: 6,
@@ -221,14 +221,14 @@ const styles = StyleSheet.create({
   },
   medalTile: {
     width: "23%",
-    minHeight: 108,
+    minHeight: 100,
     alignItems: "center",
     justifyContent: "center",
     padding: 8,
     borderWidth: 1,
     borderColor: FEED.line,
     borderRadius: FEED.radius,
-    backgroundColor: FEED.panel2,
+    backgroundColor: "#181b1f",
   },
   medalTileIdle: {
     opacity: 1,
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   },
   tileDate: {
     marginTop: 5,
-    color: FEED.accentText,
+    color: FEED.muted,
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 0.2,
@@ -255,15 +255,14 @@ const styles = StyleSheet.create({
   },
   sourceNote: {
     marginTop: 10,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 2,
     borderWidth: 1,
-    borderColor: "rgba(214, 255, 63, 0.22)",
+    borderColor: "transparent",
     borderRadius: FEED.radius,
-    backgroundColor: "rgba(214, 255, 63, 0.06)",
   },
   sourceNoteText: {
-    color: FEED.accentText,
+    color: FEED.muted,
     fontSize: 12,
     fontWeight: "800",
   },

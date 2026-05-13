@@ -13,7 +13,7 @@ export default function SummaryLayout() {
       <Stack.Screen name="add-athlete" options={{ title: "Add Athlete" }} />
       <Stack.Screen name="profile" options={{ title: "Athlete Profile" }} />
       <Stack.Screen name="onboarding" options={{ title: "Athlete setup" }} />
-      <Stack.Screen name="onboarding-skills" options={{ title: "Your skills" }} />
+      <Stack.Screen name="onboarding-skills" options={{ title: "Known techniques" }} />
     </Stack>
   );
 }

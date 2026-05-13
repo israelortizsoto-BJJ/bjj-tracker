@@ -1325,7 +1325,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#0b0f12",
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 18,
+    paddingTop: 20,
     paddingBottom: 36,
   },
   headerRow: {
@@ -1391,28 +1392,22 @@ const styles = StyleSheet.create({
   },
   identityScoreRow: {
     marginTop: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 2,
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "rgba(199, 243, 107, 0.22)",
-    backgroundColor: "rgba(26, 42, 26, 0.35)",
   },
   identityScoreText: {
-    color: "#c7f36b",
+    color: "#777f89",
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.2,
   },
   selectorSection: {
-    marginBottom: 24,
-    paddingBottom: 12,
+    marginBottom: 22,
     paddingTop: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(199, 243, 107, 0.18)",
   },
   skillsSection: {
-    marginTop: 20,
+    marginTop: 18,
   },
   skillsHeaderRow: {
     flexDirection: "row",
@@ -1424,7 +1419,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   skillsTitle: {
-    color: "#b6cf68",
+    color: "#a9b0b8",
     flex: 1,
     fontSize: 13,
     fontWeight: "800",
@@ -1432,7 +1427,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   skillsChevron: {
-    color: "#8faa4a",
+    color: "#777f89",
     fontSize: 12,
     fontWeight: "700",
     paddingVertical: 2,
@@ -1445,15 +1440,16 @@ const styles = StyleSheet.create({
   },
   skillChip: {
     borderWidth: 1,
-    borderColor: "#c7f36b",
-    borderRadius: 12,
+    borderColor: "rgba(236, 241, 245, 0.12)",
+    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: "#1a2a1a",
+    backgroundColor: "#181b1f",
   },
   skillText: {
-    color: "#c7f36b",
+    color: "#d1d5db",
     fontSize: 12,
+    fontWeight: "700",
   },
   skillsEmpty: {
     color: "#666",

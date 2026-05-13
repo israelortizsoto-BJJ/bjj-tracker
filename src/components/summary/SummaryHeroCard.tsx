@@ -258,6 +258,10 @@ export default function SummaryHeroCard({
       : undefined,
   });
 
+  const weeklyCoachActive = Boolean(
+    coachWeekly?.headline?.trim() || coachWeekly?.systemKey?.trim(),
+  );
+
   const legacyHero = (
     <View style={[styles.container, !hasData ? styles.emptyContainer : null]}>
       <View style={styles.headerRow}>
@@ -389,7 +393,7 @@ export default function SummaryHeroCard({
 
   void legacyHero;
 
-  return <SummaryV2Card viewModel={viewModel} />;
+  return <SummaryV2Card viewModel={viewModel} weeklyCoachActive={weeklyCoachActive} />;
 }
 
 const styles = StyleSheet.create({

@@ -1,5 +1,12 @@
 import { useHeaderHeight } from "@react-navigation/elements";
-import { Stack, router, useLocalSearchParams, useSegments } from "expo-router";
+import {
+  Stack,
+  router,
+  useLocalSearchParams,
+  usePathname,
+  useSegments,
+  type Href,
+} from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ResizeMode, Video } from "expo-av";
 import * as MediaLibrary from "expo-media-library";
@@ -437,11 +444,35 @@ export default function KidDetailScreen() {
   const params = useLocalSearchParams<{ kidId?: string }>();
   const kidId = params.kidId ? String(params.kidId) : "";
   const segments = useSegments();
+  const pathname = usePathname();
   const segmentKeys = segments as readonly string[];
   const isCoachKidDetail =
     segmentKeys.includes("coach") && segmentKeys.includes("kid");
   const isThisWeekKidDetail =
     segmentKeys.includes("this-week") && segmentKeys.includes("kid");
+
+  /** Stack prefix for nested kid routes (shared coach + parent kid detail). */
+  const kidLaneBase = useMemo(() => {
+    if (!kidId) return "";
+    if (isThisWeekKidDetail) return `/this-week/kid/${kidId}`;
+    return `/coach/kid/${kidId}`;
+  }, [kidId, isThisWeekKidDetail]);
+
+  /** Match competition editor to the tab stack that mounted this screen. */
+  const competitionEditBaseHref = useMemo(() => {
+    if (kidLaneBase) return `${kidLaneBase}/competition/edit`;
+    return `/coach/kid/${kidId}/competition/edit`;
+  }, [kidLaneBase, kidId]);
+
+  useEffect(() => {
+    const lane = isThisWeekKidDetail ? "parent" : isCoachKidDetail ? "coach" : "unknown";
+    console.log("[KID_DETAIL_LANE]", {
+      pathname: String(pathname ?? ""),
+      segments: [...segments],
+      lane,
+      kidId,
+    });
+  }, [pathname, segments, isThisWeekKidDetail, isCoachKidDetail, kidId]);
 
   const kidDetailMountRef = useRef(0);
   useEffect(() => {
@@ -1023,9 +1054,9 @@ export default function KidDetailScreen() {
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing kid id", "Choose a kid from the roster first.");
-      router.replace("/coach/kids");
+      router.replace(isThisWeekKidDetail ? "/this-week/kids" : "/coach/kids");
     }
-  }, [kidId]);
+  }, [kidId, isThisWeekKidDetail]);
 
   useEffect(() => {
     setHouseholdSavedAck(false);
@@ -1317,7 +1348,7 @@ export default function KidDetailScreen() {
       const updated = await updateKidHouseholdLabel(kidId, householdDraft);
       if (!updated) {
         Alert.alert("Kid not found", "This roster entry may have been removed.");
-        router.replace("/coach/kids");
+        router.replace(isThisWeekKidDetail ? "/this-week/kids" : "/coach/kids");
         return;
       }
       const savedHouseholdLabel = updated.householdLabel ?? "";
@@ -1327,7 +1358,7 @@ export default function KidDetailScreen() {
     } finally {
       setSavingHousehold(false);
     }
-  }, [kidId, householdDraft]);
+  }, [kidId, householdDraft, isThisWeekKidDetail]);
 
   const appendCoachWeeklyCheckIn = useCallback(
     async (coachOutcome: CoachOutcome, coachNotes?: string) => {
@@ -1605,6 +1636,10 @@ export default function KidDetailScreen() {
         payload,
       });
       await coachSyncPublishWeekly(ws.linkToken, writerSecret, payload, ws.apiBaseUrl);
+      console.log("[WEEKLY_PUBLISH]", {
+        sharedAthleteId,
+        coachId: chosen.coachId,
+      });
       const publishedAt = new Date().toISOString();
       const publishedWeekly: SyncedWeeklyMessagePayload = {
         weekStartYMD: payload.weekStartYMD,
@@ -1791,8 +1826,9 @@ export default function KidDetailScreen() {
           {kidName}
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          This is your coaching space. Private notes stay here. The green section below is what you can publish to
-          linked parent phones.
+          {isThisWeekKidDetail
+            ? "This athlete's detail lives in This Week. Notes you keep here stay on your device. The green section is what you can share when you publish to your coach's linked invite."
+            : "This is your coaching space. Private notes stay here. The green section below is what you can publish to linked parent phones."}
         </Text>
 
         <View style={{ height: 12 }} />
@@ -1818,7 +1854,9 @@ export default function KidDetailScreen() {
             Roster · Household
           </Text>
           <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
-            Groups this athlete on your roster view only — does not change coaching data.
+            {isThisWeekKidDetail
+              ? "Groups this athlete in your list for your own organization only."
+              : "Groups this athlete on your roster view only — does not change coaching data."}
           </Text>
           <TextInput
             value={householdDraft}
@@ -1935,7 +1973,7 @@ export default function KidDetailScreen() {
             </Text>
             <Pressable
               onPress={() =>
-                router.push(`/coach/kid/${kidId}/what-matters-next`)
+                router.push(`${kidLaneBase}/what-matters-next` as Href)
               }
               style={({ pressed }) => ({
                 marginTop: 2,
@@ -2108,7 +2146,7 @@ export default function KidDetailScreen() {
                       <Pressable
                         onPress={() =>
                           router.push(
-                            `/coach/kid/${kidId}/progress-reflection?entryId=${encodeURIComponent(r.id)}`,
+                            `${kidLaneBase}/progress-reflection?entryId=${encodeURIComponent(r.id)}` as Href,
                           )
                         }
                         style={({ pressed }) => ({
@@ -2140,7 +2178,7 @@ export default function KidDetailScreen() {
                 })}
                 {thisWeekReflections.length > 3 ? (
                   <Pressable
-                    onPress={() => router.push(`/coach/kid/${kidId}/history`)}
+                    onPress={() => router.push(`${kidLaneBase}/history` as Href)}
                     style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
                   >
                     <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
@@ -2498,9 +2536,9 @@ export default function KidDetailScreen() {
               onPress={() =>
                 currentWeekEntry
                   ? router.push(
-                      `/coach/kid/${kidId}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}`,
+                      `${kidLaneBase}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}` as Href,
                     )
-                  : router.push(`/coach/kid/${kidId}/weekly-focus`)
+                  : router.push(`${kidLaneBase}/weekly-focus` as Href)
               }
               style={({ pressed }) => ({
                 marginTop: 6,
@@ -2562,7 +2600,7 @@ export default function KidDetailScreen() {
             </Pressable>
 
             <Pressable
-              onPress={() => router.push(`/coach/kid/${kidId}/history`)}
+              onPress={() => router.push(`${kidLaneBase}/history` as Href)}
               style={({ pressed }) => ({
                 paddingVertical: 4,
                 alignSelf: "flex-start",
@@ -2805,7 +2843,7 @@ export default function KidDetailScreen() {
           ) : null}
 
           <Pressable
-            onPress={() => router.push(`/coach/kid/${kidId}/competition/edit`)}
+            onPress={() => router.push(competitionEditBaseHref as Href)}
             style={({ pressed }) => ({
               paddingVertical: 10,
               paddingHorizontal: 12,
@@ -2896,7 +2934,7 @@ export default function KidDetailScreen() {
                               onPress={() => {
                                 if (isSyncedRow) return;
                                 router.push(
-                                  `/coach/kid/${kidId}/competition/edit?entryId=${encodeURIComponent(row.id)}`,
+                                  `${competitionEditBaseHref}?entryId=${encodeURIComponent(row.id)}` as Href,
                                 );
                               }}
                               style={({ pressed }) => ({

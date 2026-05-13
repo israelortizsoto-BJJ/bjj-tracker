@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
+import { labelForSubmissionTypeKey } from "./submissionTypes";
 
 const FEED = {
   panel: "#181b1f",
@@ -35,6 +36,9 @@ export function MatchCard({
       methodLines.push(snapshot.outcome);
     }
   }
+  const subLabel = labelForSubmissionTypeKey(
+    typeof snapshot.submissionType === "string" ? snapshot.submissionType : null,
+  );
 
   return (
     <View style={styles.match}>
@@ -56,6 +60,14 @@ export function MatchCard({
         <View style={styles.matchField}>
           <Text style={styles.label}>How it ended</Text>
           <Text style={styles.value}>{methodLines.length ? methodLines.join("\n") : "None"}</Text>
+        </View>
+        <View style={styles.matchField}>
+          <Text style={styles.label}>Submission type</Text>
+          <Text style={styles.value}>
+            {snapshot.outcome === "Submission"
+              ? subLabel ?? "—"
+              : "—"}
+          </Text>
         </View>
         <View style={styles.matchField}>
           <Text style={styles.label}>Submission time</Text>

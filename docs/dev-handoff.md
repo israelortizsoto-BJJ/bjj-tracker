@@ -1,5 +1,387 @@
 # BJJ Tracker - Dev Handoff Notes
 
+
+
+## 2026-05-11 → 2026-05-12 Combined Dev Handoff
+
+## Phase: QA Stabilization + Visual Maturity Pass
+
+---
+
+# Current Branch
+
+`summary-rebuild-v2`
+
+---
+
+# High-Level Outcome
+
+This phase successfully stabilized the most fragile architectural layer in the app:
+
+* multi-athlete weekly synchronization
+* parent ↔ coach athlete ownership
+* competition persistence
+* summary recompute
+* save/navigation contracts
+* stack cleanup behavior
+* shell consistency
+* visual maturity direction
+
+The product moved from:
+
+* fragmented prototype surfaces
+  to:
+* a more cohesive athlete operating system.
+
+This was a major stabilization milestone.
+
+---
+
+# Major Systems Stabilized
+
+## 1. Competition Shared-Athlete Propagation
+
+### Root Cause
+
+Competition entries for linked athletes were being saved without `sharedAthleteId`.
+
+Summary and identity pipelines filtered competitions by:
+
+```ts
+competition.sharedAthleteId === athleteId
+```
+
+Compete loaded correctly because it loaded by `kidId`, but Summary never saw those competitions.
+
+### Fix
+
+On competition save:
+
+* roster `sharedAthleteId` is now resolved from `getKidsById()`
+* persisted into create/update competition flows
+* legacy rows get repaired on resave
+
+### Result
+
+Competition entries now:
+
+* appear in Summary
+* affect identity recompute
+* affect patterns/proof
+* sync correctly between coach and parent
+
+Commit:
+`918bc13`
+
+---
+
+# 2. Save → Compete Product Contract
+
+### Product Requirement
+
+After competition save:
+
+* user lands on Compete
+* sees updated entry immediately
+* This Week remains This Week
+* no stale editor route
+
+### Original Failure
+
+Compete pushed:
+
+```txt
+/this-week/kid/[kidId]/competition/edit
+```
+
+Save switched active tab to Compete but DID NOT clear the This Week stack.
+
+Result:
+Tapping This Week reopened stale competition editor.
+
+### Important Architectural Lesson
+
+The issue was:
+
+* stack preservation
+  NOT:
+* role corruption
+* provider leakage
+* Expo Router failure
+
+### Final Fix
+
+* identified actual lane stack owner
+* correctly targeted stack navigator
+* conditionally dispatched `popToTop`
+* guarded against route depth = 1
+
+### Result
+
+Stable behavior:
+
+```txt
+Compete → Add → Save → Compete → This Week
+```
+
+No stale stack.
+No redbox.
+No route contamination.
+
+Commit:
+`b751fd1`
+
+---
+
+# 3. Summary V2 Stabilization
+
+Summary V2 architecture stabilized around:
+
+* progression engine
+* alignment states
+* identity tone
+* proof system
+* pattern tracking
+* competition integration
+* weekly sync interpretation
+
+Signals now recompute correctly after:
+
+* competition saves
+* weekly updates
+* linked athlete changes
+
+Important observation:
+Summary is becoming the PRIMARY product surface.
+
+It is now:
+
+* athlete mirror
+* proof interpreter
+* coach direction synthesis layer
+* execution narrative surface
+
+---
+
+# 4. Operating Shell Stabilization
+
+Global shell direction aligned around:
+
+* graphite surfaces
+* restrained lime accents
+* compact density
+* premium sports-performance aesthetic
+
+This Week became:
+
+* the calibration surface
+* strongest current implementation
+* reference point for the other tabs
+
+---
+
+# 5. Visual Maturity Pass
+
+Large unstaged refinement pass currently exists locally.
+
+### Key Areas
+
+* OperatingHeader normalization
+* Summary card cleanup
+* lime semantic tightening
+* Training density polish
+* Compete archive/proof energy
+* medal restraint
+* border normalization
+* reduced “AI dashboard” feel
+* reduced card soup
+
+### Current Repo Status
+
+UNCOMMITTED LOCAL MODIFICATIONS EXIST.
+
+Includes:
+
+* Summary
+* Training
+* Compete
+* OperatingHeader
+* Competition visual system
+* Medal surfaces
+* Athlete switcher
+* Card normalization
+
+`submissionTypes.ts`
+is currently UNTRACKED.
+
+---
+
+# Architectural Lessons Learned
+
+## 1. Navigation Truth
+
+Tab switching does NOT clear sibling stacks.
+
+The bug was:
+
+* stale stack preservation
+  NOT:
+* tab corruption
+
+## 2. Repo Truth > Guessing
+
+The breakthrough occurred only after:
+
+* navigator ownership tracing
+* runtime telemetry
+* stack hierarchy validation
+
+## 3. Visual Consistency Matters
+
+The app quality increased significantly after:
+
+* reducing visual noise
+* reducing decorative green
+* tightening density
+* normalizing shell language
+
+## 4. MatMind Identity Direction
+
+The product should feel:
+
+* calm
+* operational
+* premium
+* athlete-focused
+* restrained
+
+NOT:
+
+* gamified
+* flashy
+* startup-dashboard-like
+* “AI generated”
+
+---
+
+# Current Product Direction
+
+MatMind is becoming:
+
+```txt
+an athlete operating system
+```
+
+NOT:
+
+```txt
+a fitness app
+```
+
+Primary visual references:
+
+* Nike Training Club
+* Strava
+* Whoop
+
+But filtered through:
+
+* coach alignment
+* athlete development
+* family execution
+* proof tracking
+
+---
+
+# Remaining Risks
+
+## Medium
+
+* remaining visual inconsistency between tabs
+* possible remaining “card soup” in Summary
+* Training calendar still potentially too generic
+
+## Low
+
+* telemetry cleanup still pending
+* temporary QA logs still exist
+* medal/archive emotional tone refinement
+
+## Resolved
+
+* stale competition editor stack
+* summary recompute failures
+* competition ownership mismatch
+* shared-athlete propagation bug
+* Compete → This Week corruption
+
+---
+
+# Tomorrow’s Highest ROI Sequence
+
+## 1. Review Local Uncommitted Polish Pass
+
+Carefully inspect:
+
+```bash
+git diff
+```
+
+## 2. Stage/Commit Visual Maturity Pass
+
+Potentially separate commit from stabilization logic.
+
+## 3. Full Regression QA
+
+Parent:
+
+* Summary
+* This Week
+* Training
+* Compete
+* Multi-save flows
+
+Coach:
+
+* athlete switching
+* competition review
+* summary visibility
+* weekly sync
+
+## 4. Multi-Athlete Validation
+
+Critical:
+
+* athlete isolation
+* identity ownership
+* competition separation
+* weekly sync separation
+
+## 5. Telemetry Cleanup Plan
+
+Remove temporary:
+
+* ownership audit logs
+* navigation debug logs
+* stabilization telemetry
+  after confidence increases.
+
+---
+
+# Important Repo State Reminder
+
+Before continuing tomorrow:
+
+```bash
+git status -sb
+git diff
+```
+
+Large unstaged refinement work currently exists locally and should NOT be forgotten before future QA or merges.
+
+
+
+
 #Date: 2026-05-10
 
 ## Major Focus Today

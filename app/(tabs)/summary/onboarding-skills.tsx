@@ -14,18 +14,32 @@ import { updateAthlete } from "@/src/storage/athleteStore";
 
 const MAX_SKILLS = 10;
 
-const SKILLS_OPTIONS = [
+/** Display strings stored as `declaredSkills` (matches Summary `formatSkill` expectations). */
+const POSITION_AND_MOVEMENT_OPTIONS = [
   "Closed Guard",
   "Open Guard",
   "Half Guard",
+  "Mount",
+  "Side Control",
+  "Back Control",
   "Guard Pass",
   "Pressure Passing",
+  "Takedowns",
+] as const;
+
+const SUBMISSION_AND_ESCAPES_OPTIONS = [
   "Armbar",
   "Triangle",
+  "Kimura",
+  "Guillotine",
   "Rear Naked Choke",
+  "Straight Ankle Lock",
   "Mount Escape",
   "Side Control Escape",
+  "Back Escape",
 ] as const;
+
+const SKILLS_OPTIONS = [...POSITION_AND_MOVEMENT_OPTIONS, ...SUBMISSION_AND_ESCAPES_OPTIONS] as const;
 
 const SKILL_SET = new Set<string>(SKILLS_OPTIONS);
 
@@ -78,6 +92,18 @@ export default function OnboardingSkillsScreen() {
     }
   }, [athleteId, busy, selectedOrder]);
 
+  const onSkip = useCallback(async () => {
+    const id = typeof athleteId === "string" ? athleteId.trim() : "";
+    if (!id || busy) return;
+    setBusy(true);
+    try {
+      await updateAthlete(id, { onboardingVersion: "v2" });
+      router.replace("/summary");
+    } finally {
+      setBusy(false);
+    }
+  }, [athleteId, busy]);
+
   if (!hydrationReady) {
     return (
       <View style={styles.centered}>
@@ -105,12 +131,12 @@ export default function OnboardingSkillsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
-      <Text style={styles.subtitle}>
-      Pick what you&apos;re comfortable with
-      </Text>
+      <Text style={styles.title}>What techniques does this athlete already know?</Text>
+      <Text style={styles.subtitle}>Quick tap — optional. You can change this anytime in profile.</Text>
 
+      <Text style={styles.groupLabel}>Positions & movement</Text>
       <View style={styles.chipWrap}>
-        {SKILLS_OPTIONS.map((skill) => {
+        {POSITION_AND_MOVEMENT_OPTIONS.map((skill) => {
           const on = selectedOrder.includes(skill);
           const frozenOut = selectedOrder.length >= MAX_SKILLS && !on;
           return (
@@ -133,22 +159,58 @@ export default function OnboardingSkillsScreen() {
         })}
       </View>
 
-      <Pressable
-        accessibilityRole="button"
-        disabled={busy}
-        onPress={() => void onSubmit()}
-        style={({ pressed }) => [
-          styles.saveBtn,
-          busy ? styles.saveBtnDisabled : null,
-          pressed && !busy ? styles.saveBtnPressed : null,
-        ]}
-      >
-        {busy ? (
-          <ActivityIndicator color="#111827" />
-        ) : (
-          <Text style={styles.saveBtnText}>Continue</Text>
-        )}
-      </Pressable>
+      <Text style={[styles.groupLabel, styles.groupLabelSpaced]}>Submissions & escapes</Text>
+      <View style={styles.chipWrap}>
+        {SUBMISSION_AND_ESCAPES_OPTIONS.map((skill) => {
+          const on = selectedOrder.includes(skill);
+          const frozenOut = selectedOrder.length >= MAX_SKILLS && !on;
+          return (
+            <Pressable
+              key={skill}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on, disabled: frozenOut || busy }}
+              disabled={frozenOut || busy}
+              onPress={() => toggleSkill(skill)}
+              style={({ pressed }) => [
+                styles.chip,
+                on ? styles.chipOn : null,
+                frozenOut ? styles.chipDisabled : null,
+                pressed && !frozenOut && !busy ? styles.chipPressed : null,
+              ]}
+            >
+              <Text style={[styles.chipText, on ? styles.chipTextOn : null]}>{skill}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={styles.footerActions}>
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => void onSkip()}
+          style={({ pressed }) => [styles.skipBtn, pressed && !busy ? styles.skipBtnPressed : null]}
+        >
+          <Text style={styles.skipBtnText}>Skip for now</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => void onSubmit()}
+          style={({ pressed }) => [
+            styles.saveBtn,
+            busy ? styles.saveBtnDisabled : null,
+            pressed && !busy ? styles.saveBtnPressed : null,
+          ]}
+        >
+          {busy ? (
+            <ActivityIndicator color="#111827" />
+          ) : (
+            <Text style={styles.saveBtnText}>Continue</Text>
+          )}
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -170,11 +232,29 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  title: {
+    color: "#f3f4f6",
+    fontSize: 20,
+    fontWeight: "800",
+    lineHeight: 26,
+    marginBottom: 10,
+  },
   subtitle: {
     color: "#9ca3af",
-    fontSize: 15,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 21,
     marginBottom: 20,
+  },
+  groupLabel: {
+    color: "#b6cf68",
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 10,
+  },
+  groupLabelSpaced: {
+    marginTop: 6,
   },
   chipWrap: {
     flexDirection: "row",
@@ -208,13 +288,34 @@ const styles = StyleSheet.create({
   chipTextOn: {
     color: "#c7f36b",
   },
+  footerActions: {
+    marginTop: "auto",
+    gap: 12,
+  },
+  skipBtn: {
+    minHeight: 48,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#374151",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
+  },
+  skipBtnPressed: {
+    opacity: 0.85,
+    backgroundColor: "#111827",
+  },
+  skipBtnText: {
+    color: "#9ca3af",
+    fontSize: 15,
+    fontWeight: "700",
+  },
   saveBtn: {
     minHeight: 48,
     borderRadius: 12,
     backgroundColor: "#c7f36b",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: "auto",
   },
   saveBtnDisabled: {
     opacity: 0.45,

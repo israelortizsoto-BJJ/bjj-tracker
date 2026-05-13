@@ -375,7 +375,7 @@ export default function CoachManageScreen() {
                             lineHeight: 16,
                           }}
                         >
-                          Add another athlete, relink after unlink, or finish setup if you see “Needs setup”.
+                          Relink roster rows to sync athletes, or finish setup if you see “Needs setup”.
                         </Text>
                       </Pressable>
                     ) : null}

@@ -23,25 +23,6 @@ import {
 } from "@/src/lib/athlete/athleteBeltExperience";
 import { getActiveAthleteId, setActiveAthleteId, updateAthlete } from "@/src/storage/athleteStore";
 
-function normalizeExperienceKey(experienceLevel: string): string {
-  return experienceLevel.trim().toLowerCase();
-}
-
-function beltSkipsSkillScreen(beltRank: string): boolean {
-  const k = canonicalBeltRankFromStored(beltRank) || beltRank.trim().toLowerCase();
-  return k === "purple" || k === "brown" || k === "black";
-}
-
-function experienceSkipsSkillScreen(expNorm: string): boolean {
-  return expNorm === "experienced" || expNorm === "advanced";
-}
-
-function shouldShowSkillsStep(beltRank: string, experienceLevel: string): boolean {
-  const expNorm = normalizeExperienceKey(experienceLevel);
-  if (beltSkipsSkillScreen(beltRank) || experienceSkipsSkillScreen(expNorm)) return false;
-  return expNorm === "developing";
-}
-
 export default function AthleteOnboardingScreen() {
   const { hydrationReady, athleteId, athlete } = useActiveAthlete();
   const [beltRank, setBeltRank] = useState("");
@@ -81,7 +62,6 @@ export default function AthleteOnboardingScreen() {
     try {
       const trimmedBelt = beltRank.trim();
       const trimmedExp = experienceLevel.trim();
-      const shouldGoToSkills = shouldShowSkillsStep(trimmedBelt, trimmedExp);
 
       const basePatch = {
         beltRank: trimmedBelt,
@@ -89,25 +69,12 @@ export default function AthleteOnboardingScreen() {
         isCompetitor,
       };
 
-      if (shouldGoToSkills) {
-        await updateAthlete(id, basePatch);
-        if (id) {
-          const current = ((await getActiveAthleteId()) ?? "").trim();
-          if (current !== id) await setActiveAthleteId(id);
-        }
-        router.replace("/summary/onboarding-skills");
-        return;
-      }
-
-      await updateAthlete(id, {
-        ...basePatch,
-        onboardingVersion: "v2",
-      });
+      await updateAthlete(id, basePatch);
       if (id) {
         const current = ((await getActiveAthleteId()) ?? "").trim();
         if (current !== id) await setActiveAthleteId(id);
       }
-      router.replace("/summary");
+      router.replace("/summary/onboarding-skills");
     } finally {
       setBusy(false);
     }

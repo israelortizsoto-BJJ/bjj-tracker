@@ -1,6 +1,6 @@
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
-import { Stack, router } from "expo-router";
+import { Stack, router, usePathname, useSegments, type Href } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -80,6 +80,30 @@ const UI = {
 
 const CARD_RADIUS = 16;
 
+function kidDetailPathForSurface(surface: "this-week" | "coach", kidId: string) {
+  return surface === "coach" ? `/coach/kid/${kidId}` : `/this-week/kid/${kidId}`;
+}
+
+/** Temporary QA: roster → kid navigation lane ownership. */
+function logRosterKidNav(args: {
+  surface: "this-week" | "coach";
+  pathname: string;
+  segments: readonly string[];
+  kidId: string;
+  op: "push" | "replace";
+  target: string;
+}) {
+  const tag = args.surface === "this-week" ? "[PARENT_LANE_ROUTE]" : "[COACH_LANE_ROUTE]";
+  console.log(tag, {
+    pathname: args.pathname,
+    segments: [...args.segments],
+    lane: args.surface === "this-week" ? "parent" : "coach",
+    kidId: args.kidId,
+    op: args.op,
+    target: args.target,
+  });
+}
+
 /** Internal map key for kids with no household label (displayed as "No household"). */
 const UNGROUPED_HOUSEHOLD_KEY = "__ungrouped__";
 
@@ -120,6 +144,8 @@ type KidsRosterScreenProps = {
 };
 
 export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterScreenProps) {
+  const pathname = usePathname();
+  const segments = useSegments();
   const [ready, setReady] = useState(false);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
   const [activeWriterAthleteIds, setActiveWriterAthleteIds] = useState<Set<string>>(new Set());
@@ -252,11 +278,11 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
   );
 
   /**
-   * Dev only: full “Add kid” form when roster is empty or no linked athletes yet; otherwise
-   * de-emphasize behind a manual fallback (production unchanged).
+   * Parent This Week: roster rows come from Summary + coach linking — no local "add kid" form.
+   * Coach lane: keep prominent add when roster is empty / unlinked (prod + dev rules).
    */
   const showAddKidProminent =
-    !__DEV__ || kids.length === 0 || !hasLinkedAthleteOnRoster;
+    surface === "coach" && (!__DEV__ || kids.length === 0 || !hasLinkedAthleteOnRoster);
 
   const [devManualAddKidExpanded, setDevManualAddKidExpanded] = useState(false);
 
@@ -477,11 +503,20 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
       setKidName("");
       setHouseholdLabelDraft("");
 
-      router.replace(`/coach/kid/${id}`);
+      const target = kidDetailPathForSurface(surface, id);
+      logRosterKidNav({
+        surface,
+        pathname: String(pathname ?? ""),
+        segments,
+        kidId: id,
+        op: "replace",
+        target,
+      });
+      router.replace(target as Href);
     } finally {
       setSavingKid(false);
     }
-  }, [kidName, householdLabelDraft]);
+  }, [kidName, householdLabelDraft, surface, pathname, segments]);
 
   return (
     <>
@@ -772,6 +807,36 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
 
         {!ready ? (
           <Text style={{ fontSize: 14, color: UI.textSecondary }}>Loading kids…</Text>
+        ) : kids.length === 0 && surface === "this-week" ? (
+          <View
+            style={{
+              padding: 16,
+              borderRadius: 12,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              gap: 10,
+            }}
+          >
+            <Text style={{ color: UI.textPrimary, fontWeight: "700" }}>No roster rows yet</Text>
+            <Text style={{ color: UI.textSecondary, fontSize: 13, lineHeight: 19 }}>
+              Add your athlete under Summary on this phone, then link them from Coach link & sharing → Athletes
+              on this invite so This Week can load their weekly note and shared competitions.
+            </Text>
+            <Pressable
+              onPress={() => router.push("/summary")}
+              style={({ pressed }) => ({
+                marginTop: 4,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                backgroundColor: pressed ? "#4338ca" : "#4f46e5",
+                alignSelf: "flex-start",
+              })}
+            >
+              <Text style={{ color: "#ffffff", fontWeight: "800", fontSize: 14 }}>Open Summary</Text>
+            </Pressable>
+          </View>
         ) : kids.length === 0 ? (
           <View
             style={{
@@ -837,7 +902,16 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
                         onPress={() => {
                           if (parentCoachKidNavLockRef.current) return;
                           parentCoachKidNavLockRef.current = true;
-                          router.push(`/coach/kid/${kid.id}`);
+                          const target = kidDetailPathForSurface(surface, kid.id);
+                          logRosterKidNav({
+                            surface,
+                            pathname: String(pathname ?? ""),
+                            segments,
+                            kidId: kid.id,
+                            op: "push",
+                            target,
+                          });
+                          router.push(target as Href);
                           setTimeout(() => {
                             parentCoachKidNavLockRef.current = false;
                           }, 800);
@@ -874,7 +948,7 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
 
         <View style={{ height: 18 }} />
 
-        {__DEV__ && !showAddKidProminent && !devManualAddKidExpanded ? (
+        {__DEV__ && surface === "coach" && !showAddKidProminent && !devManualAddKidExpanded ? (
           <Pressable
             onPress={() => setDevManualAddKidExpanded(true)}
             style={({ pressed }) => ({
@@ -896,7 +970,7 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
           </Pressable>
         ) : null}
 
-        {showAddKidProminent || (__DEV__ && devManualAddKidExpanded) ? (
+        {showAddKidProminent || (__DEV__ && surface === "coach" && devManualAddKidExpanded) ? (
           <View
             style={{
               padding: 16,
@@ -907,7 +981,7 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
               gap: 12,
             }}
           >
-            {__DEV__ && devManualAddKidExpanded && !showAddKidProminent ? (
+            {__DEV__ && surface === "coach" && devManualAddKidExpanded && !showAddKidProminent ? (
               <Pressable
                 onPress={() => setDevManualAddKidExpanded(false)}
                 style={({ pressed }) => ({
@@ -926,7 +1000,7 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
               </Pressable>
             ) : null}
             <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "600", color: UI.textSecondary }}>
-              {__DEV__ && devManualAddKidExpanded && !showAddKidProminent
+              {__DEV__ && surface === "coach" && devManualAddKidExpanded && !showAddKidProminent
                 ? "ADD KID (MANUAL · DEV)"
                 : "ADD KID"}
             </Text>

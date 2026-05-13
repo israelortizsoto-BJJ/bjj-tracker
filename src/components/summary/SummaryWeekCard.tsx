@@ -28,8 +28,8 @@ export default function SummaryWeekCard(props: SummaryWeekProps) {
   return (
     <View style={styles.container}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>This Week</Text>
-        <Text style={styles.meta}>
+        <Text style={styles.title}>This week</Text>
+        <Text style={[styles.meta, hasSessions ? styles.metaActive : null]}>
           {hasSessions ? `${weeklySessionCount} active` : "No activity"}
         </Text>
       </View>
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#26303a",
+    borderColor: "rgba(236, 241, 245, 0.12)",
   },
   headerRow: {
     flexDirection: "row",
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    color: "#ffffff",
+    color: "#f9fafb",
     fontSize: 15,
     fontWeight: "800",
   },
@@ -103,6 +103,9 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: "700",
   },
+  metaActive: {
+    color: "#d6ff3f",
+  },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -110,21 +113,21 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     width: "48%",
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 6,
     padding: 14,
     minHeight: 88,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.1)",
     justifyContent: "center",
   },
   emptyState: {
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 6,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.1)",
   },
   emptyTitle: {
     color: "#d1d5db",

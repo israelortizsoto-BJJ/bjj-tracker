@@ -11,6 +11,7 @@ const COLORS = {
   muted: "#a9b0b8",
   faint: "#777f89",
   accent: "#d6ff3f",
+  accentDark: "#111315",
 };
 
 export type HeaderAction = {
@@ -28,6 +29,8 @@ type AthleteIdentityChipProps = {
   initials: string;
   meta?: string | null;
   surfaceTone?: "default" | "soft";
+  /** Summary home — subtle avatar ring and name lift without layout change. */
+  identityHighlight?: boolean;
 };
 
 export function AthleteIdentityChip({
@@ -35,18 +38,26 @@ export function AthleteIdentityChip({
   initials,
   meta,
   surfaceTone = "default",
+  identityHighlight = false,
 }: AthleteIdentityChipProps) {
   return (
     <View style={styles.identityChip}>
       <View
-        style={[styles.avatar, surfaceTone === "soft" ? styles.avatarSoft : null]}
+        style={[
+          styles.avatar,
+          surfaceTone === "soft" ? styles.avatarSoft : null,
+          identityHighlight ? styles.avatarHighlight : null,
+        ]}
       >
-        <Text style={styles.avatarText} numberOfLines={1}>
+        <Text style={[styles.avatarText, identityHighlight ? styles.avatarTextHighlight : null]} numberOfLines={1}>
           {initials}
         </Text>
       </View>
       <View style={styles.identityTextBlock}>
-        <Text style={styles.identityName} numberOfLines={1}>
+        <Text
+          style={[styles.identityName, identityHighlight ? styles.identityNameHighlight : null]}
+          numberOfLines={1}
+        >
           {name}
         </Text>
         {meta ? (
@@ -76,7 +87,9 @@ export function HeaderActionGroup({
         const content = action.statusColor ? (
           <View style={[styles.statusDot, { backgroundColor: action.statusColor }]} />
         ) : (
-          <Text style={styles.actionIcon}>{action.icon ?? action.label}</Text>
+          <Text style={[styles.actionIcon, action.selected ? styles.actionIconSelected : null]}>
+            {action.icon ?? action.label}
+          </Text>
         );
 
         if (!action.onPress) {
@@ -138,6 +151,8 @@ export type OperatingHeaderProps = {
   mode: "athlete" | "team";
   density?: "default" | "compact";
   surfaceTone?: "default" | "soft";
+  /** When set, lifts eyebrow / title contrast for primary athlete context (Summary). */
+  semanticLead?: boolean;
   eyebrow: string;
   title: string;
   subtitle?: string | null;
@@ -152,6 +167,7 @@ export default function OperatingHeader({
   mode,
   density = "default",
   surfaceTone = "default",
+  semanticLead = false,
   eyebrow,
   title,
   subtitle,
@@ -199,10 +215,14 @@ export default function OperatingHeader({
           density === "compact" ? styles.titleBlockCompact : null,
         ]}
       >
-        <Text style={styles.eyebrow}>{eyebrow}</Text>
+        <Text style={[styles.eyebrow, semanticLead ? styles.eyebrowLead : null]}>{eyebrow}</Text>
         <Text
           onLongPress={onTitleLongPress}
-          style={[styles.title, density === "compact" ? styles.titleCompact : null]}
+          style={[
+            styles.title,
+            density === "compact" ? styles.titleCompact : null,
+            semanticLead ? styles.titleLead : null,
+          ]}
         >
           {title}
         </Text>
@@ -226,12 +246,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
   },
   containerSoft: {
-    backgroundColor: "#10161d",
+    backgroundColor: COLORS.bg,
   },
   topRow: {
     alignItems: "center",
     flexDirection: "row",
-    gap: 12,
+    gap: 10,
     justifyContent: "space-between",
     minHeight: 38,
   },
@@ -251,7 +271,7 @@ const styles = StyleSheet.create({
   },
   avatar: {
     alignItems: "center",
-    backgroundColor: COLORS.panel2,
+    backgroundColor: COLORS.panel,
     borderColor: COLORS.line,
     borderRadius: 10,
     borderWidth: 1,
@@ -260,27 +280,36 @@ const styles = StyleSheet.create({
     width: 36,
   },
   avatarSoft: {
-    backgroundColor: "#1a222c",
-    borderColor: "rgba(226, 232, 240, 0.11)",
+    backgroundColor: COLORS.panel,
+    borderColor: COLORS.line,
+  },
+  avatarHighlight: {
+    borderColor: COLORS.lineStrong,
+    backgroundColor: COLORS.panel2,
   },
   avatarText: {
     color: COLORS.text,
     fontSize: 11,
     fontWeight: "900",
   },
+  avatarTextHighlight: {
+    color: COLORS.text,
+  },
   teamMark: {
     alignItems: "center",
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.panel2,
+    borderColor: COLORS.line,
     borderRadius: 10,
+    borderWidth: 1,
     height: 36,
     justifyContent: "center",
     width: 36,
   },
   teamMarkSoft: {
-    backgroundColor: "#d6ff3f",
+    backgroundColor: COLORS.panel2,
   },
   teamMarkText: {
-    color: "#111315",
+    color: COLORS.text,
     fontSize: 11,
     fontWeight: "900",
   },
@@ -294,6 +323,9 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     lineHeight: 18,
   },
+  identityNameHighlight: {
+    color: "#f9fafb",
+  },
   identityMeta: {
     color: COLORS.faint,
     fontSize: 10,
@@ -305,11 +337,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     flexShrink: 0,
-    gap: 8,
+    gap: 7,
   },
   actionButton: {
     alignItems: "center",
-    backgroundColor: "rgba(255,255,255,0.045)",
+    backgroundColor: "rgba(255,255,255,0.035)",
     borderColor: COLORS.line,
     borderRadius: 10,
     borderWidth: 1,
@@ -318,16 +350,16 @@ const styles = StyleSheet.create({
     width: 36,
   },
   actionButtonSoft: {
-    backgroundColor: "rgba(226,232,240,0.055)",
-    borderColor: "rgba(226,232,240,0.12)",
+    backgroundColor: "rgba(255,255,255,0.035)",
+    borderColor: COLORS.line,
   },
   actionButtonSelected: {
-    backgroundColor: COLORS.panel3,
-    borderColor: COLORS.lineStrong,
+    backgroundColor: COLORS.accent,
+    borderColor: "rgba(214, 255, 63, 0.95)",
   },
   actionButtonSelectedSoft: {
-    backgroundColor: "#202a35",
-    borderColor: "rgba(226,232,240,0.16)",
+    backgroundColor: COLORS.accent,
+    borderColor: "rgba(214, 255, 63, 0.95)",
   },
   actionButtonPressed: {
     backgroundColor: COLORS.panel3,
@@ -344,6 +376,9 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     lineHeight: 18,
   },
+  actionIconSelected: {
+    color: COLORS.accentDark,
+  },
   statusBadge: {
     alignItems: "center",
     height: 36,
@@ -356,10 +391,10 @@ const styles = StyleSheet.create({
     width: 8,
   },
   titleBlock: {
-    marginTop: 18,
+    marginTop: 17,
   },
   titleBlockCompact: {
-    marginTop: 12,
+    marginTop: 13,
   },
   eyebrow: {
     color: COLORS.muted,
@@ -368,6 +403,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 16,
   },
+  eyebrowLead: {
+    color: COLORS.muted,
+  },
   title: {
     color: COLORS.text,
     fontSize: 29,
@@ -375,6 +413,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
     lineHeight: 34,
     marginTop: 5,
+  },
+  titleLead: {
+    color: "#f9fafb",
   },
   titleCompact: {
     fontSize: 24,

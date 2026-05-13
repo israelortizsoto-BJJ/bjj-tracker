@@ -16,10 +16,10 @@ const FEED = {
 };
 
 function cardBorderColor(medal: KidCompetitionMedalTier): string {
-  if (medal === "gold") return "rgba(200, 162, 74, 0.36)";
-  if (medal === "silver") return "rgba(203, 213, 225, 0.36)";
-  if (medal === "bronze") return "rgba(201, 129, 67, 0.36)";
-  return "rgba(148, 163, 184, 0.28)";
+  if (medal === "gold") return "rgba(200, 162, 74, 0.24)";
+  if (medal === "silver") return "rgba(203, 213, 225, 0.24)";
+  if (medal === "bronze") return "rgba(201, 129, 67, 0.24)";
+  return FEED.line;
 }
 
 export function CompetitionCard({ entry }: { entry: CompeteKidEntryMerged }) {
@@ -44,14 +44,14 @@ export function CompetitionCard({ entry }: { entry: CompeteKidEntryMerged }) {
           </Text>
         </View>
         {isPastCompetition ? (
-          <CompetitionMedalMark medal={tier} medalImageUri={entry.medalImageUri} size={44} />
+          <CompetitionMedalMark medal={tier} medalImageUri={entry.medalImageUri} size={38} />
         ) : null}
       </View>
 
       {isPastCompetition ? (
         <View style={styles.chips}>
           <View style={styles.chip}>
-            <Text style={styles.chipText}>Tournament Result: {getPlacementLabel(tier)}</Text>
+            <Text style={styles.chipText}>Result: {getPlacementLabel(tier)}</Text>
           </View>
           <View style={styles.chip}>
             <Text style={styles.chipText}>Saved locally</Text>
@@ -78,8 +78,8 @@ export function CompetitionCard({ entry }: { entry: CompeteKidEntryMerged }) {
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: 16,
-    padding: 16,
+    marginTop: 12,
+    padding: 14,
     borderWidth: 1,
     borderRadius: FEED.radius,
     backgroundColor: FEED.panel,
@@ -95,11 +95,11 @@ const styles = StyleSheet.create({
   },
   h3: {
     color: FEED.text,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: "900",
   },
   meta: {
-    marginTop: 7,
+    marginTop: 5,
     color: FEED.muted,
     fontSize: 13,
     lineHeight: 18,
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    marginTop: 12,
+    marginTop: 10,
   },
   chip: {
     minHeight: 22,

@@ -25,6 +25,8 @@ type SummaryCompetitionProps = {
   placementTrend: CompetitionPlacementTrend | null;
   /** When match/practice logs surface a clear repeated theme. */
   skillFocusHint?: string;
+  /** Optional line from latest event match rows (submission type keys). */
+  recentSubmissionTypesLine?: string | null;
   /** ≥3 inferred bucket datapoints + stable placement trajectory (signals-derived). */
   bucketFocusEvidenceLine?: string | null;
 };
@@ -50,6 +52,7 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
     placementTrend,
     skillFocusHint,
     bucketFocusEvidenceLine,
+    recentSubmissionTypesLine,
   } = props;
   const trendSubtitle = resolveCompetitionTrendCopy(placementTrend).snapshotLine;
   const hasData = competitionCount > 0 || totalMatches > 0;
@@ -153,6 +156,10 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
             </View>
           ) : null}
 
+          {hasData && recentSubmissionTypesLine ? (
+            <Text style={styles.submissionTypesLine}>{recentSubmissionTypesLine}</Text>
+          ) : null}
+
           {hasData && trendSubtitle ? (
             <Text style={styles.trendLine}>{trendSubtitle}</Text>
           ) : null}
@@ -239,7 +246,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#252a31",
+    borderColor: "rgba(236, 241, 245, 0.12)",
   },
   headerRow: {
     flexDirection: "row",
@@ -248,20 +255,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   title: {
-    color: "#ffffff",
+    color: "#f9fafb",
     fontSize: 15,
     fontWeight: "800",
+    letterSpacing: 0.2,
   },
   highlightBadge: {
     width: 34,
     height: 34,
-    borderRadius: 999,
-    backgroundColor: "#d4ad4f",
+    borderRadius: 8,
+    backgroundColor: "#20242a",
+    borderWidth: 1,
+    borderColor: "rgba(236, 241, 245, 0.12)",
     alignItems: "center",
     justifyContent: "center",
   },
   highlightBadgeText: {
-    color: "#111827",
+    color: "#f2f4f6",
     fontSize: 15,
     fontWeight: "800",
   },
@@ -272,12 +282,12 @@ const styles = StyleSheet.create({
   },
   primaryMetric: {
     width: "48%",
-    backgroundColor: "#0f172a",
+    backgroundColor: "#181b1f",
     borderRadius: 8,
     padding: 16,
     minHeight: 112,
     borderWidth: 1,
-    borderColor: "#2b3542",
+    borderColor: "rgba(236, 241, 245, 0.12)",
     justifyContent: "center",
   },
   primaryLabel: {
@@ -304,7 +314,7 @@ const styles = StyleSheet.create({
   },
   secondaryMetric: {
     width: "48%",
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 8,
     padding: 15,
     minHeight: 96,
@@ -312,11 +322,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emptyState: {
-    backgroundColor: "#20252b",
+    backgroundColor: "#181b1f",
     borderRadius: 6,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#28313c",
+    borderColor: "rgba(236, 241, 245, 0.1)",
   },
   emptyTitle: {
     color: "#d1d5db",
@@ -383,6 +393,14 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     fontSize: 13,
     lineHeight: 18,
+  },
+  submissionTypesLine: {
+    color: "#b6cf68",
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: "600",
+    marginBottom: 10,
+    letterSpacing: 0.12,
   },
   trendLine: {
     color: "#7c8490",

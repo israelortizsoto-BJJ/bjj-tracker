@@ -2,20 +2,20 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { mergeCompetitionMatchDetailIntoEntries } from "@/src/storage/competitionStore";
+import type { KidCompetitionEntryWithMatchDetail } from "@/src/storage/competitionStore";
 import { getKidCompetitionEntries } from "../storage/kidCompetitionStore";
 import { getSessions } from "../storage/sessionsStore";
 import type { Session } from "../types";
-import type { KidCompetitionEntry } from "../types/coachKid";
 
 type AthleteData = {
   sessions: Session[];
-  competitions: KidCompetitionEntry[];
+  competitions: KidCompetitionEntryWithMatchDetail[];
   loading: boolean;
 };
 
 export function useAthleteData(activeAthleteId: string): AthleteData {
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [competitions, setCompetitions] = useState<KidCompetitionEntry[]>([]);
+  const [competitions, setCompetitions] = useState<KidCompetitionEntryWithMatchDetail[]>([]);
   const [loading, setLoading] = useState(false);
   const prevHydratedAthleteRef = useRef<string | undefined>(undefined);
   const loadGenerationRef = useRef(0);

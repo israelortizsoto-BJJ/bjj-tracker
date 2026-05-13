@@ -1870,13 +1870,13 @@ function ParentThisWeekScreen() {
         >
           <Text style={{ fontSize: 22, fontWeight: "900", color: FEED.text }}>No athletes yet</Text>
           <Text style={{ marginTop: 12, fontSize: 15, lineHeight: 22, color: FEED.muted }}>
-            Add your first athlete on this phone to see This Week — one child will stay active whenever
-            anyone is on the roster.
+            Add your first athlete under Summary on this phone. When someone is on the roster, This Week will
+            unlock for weekly direction and coach sync.
           </Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Add athlete"
-            onPress={() => router.push("/this-week/kids")}
+            accessibilityLabel="Open Summary"
+            onPress={() => router.push("/summary")}
             style={({ pressed }) => ({
               alignSelf: "flex-start",
               marginTop: 24,
@@ -1888,7 +1888,7 @@ function ParentThisWeekScreen() {
               backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
             })}
           >
-            <Text style={[tokens.type.title, { color: FEED.text }]}>Add athlete</Text>
+            <Text style={[tokens.type.title, { color: FEED.text }]}>Open Summary</Text>
           </Pressable>
         </View>
       </>

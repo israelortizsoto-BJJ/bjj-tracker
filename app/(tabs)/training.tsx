@@ -268,23 +268,23 @@ async function loadSessions(): Promise<Session[]> {
 }
 
 const UI = {
-  screenBg: "#0b0f14",
-  bgCard: "#121821",
-  bgCardActive: "#172233",
+  screenBg: "#111315",
+  bgCard: "#181b1f",
+  bgCardActive: "#20242a",
   border: "rgba(226, 232, 240, 0.11)",
   textPrimary: "#f2f4f6",
   textSecondary: "#a9b0b8",
   textHeader: "#f2f4f6",
-  badgeBg: "#172233",
-  accent: "#4f7cff",
-  darkSurface: "#10161d",
-  darkSurfaceRaised: "#141b24",
-  darkSurfaceGreen: "#162016",
+  badgeBg: "#20242a",
+  accent: "#d6ff3f",
+  darkSurface: "#181b1f",
+  darkSurfaceRaised: "#20242a",
+  darkSurfaceGreen: "#181b1f",
   darkBorder: "rgba(226, 232, 240, 0.1)",
-  darkGreenBorder: "rgba(190, 242, 100, 0.16)",
-  calendarBg: "#121821",
+  darkGreenBorder: "rgba(226, 232, 240, 0.11)",
+  calendarBg: "#181b1f",
 };
-const CARD_RADIUS = 22;
+const CARD_RADIUS = 8;
 const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.1, color: "#8a94a3", fontWeight: "600" as const };
 const INSIGHT_STYLES = {
   hero: { color: UI.textPrimary, fontSize: 28, fontWeight: "900" as const },
@@ -304,16 +304,15 @@ const INSIGHT_CARD_CONTAINER = {
 const styles = StyleSheet.create({
   trainingIdentityBlock: {
     marginBottom: 0,
-    padding: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 2,
     borderRadius: CARD_RADIUS,
-    backgroundColor: UI.darkSurfaceGreen,
-    borderWidth: 1,
-    borderColor: UI.darkGreenBorder,
   },
   trainingIdentityText: {
-    color: "#dceda7",
-    fontSize: 14,
-    lineHeight: 19,
+    color: UI.textSecondary,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "700",
   },
   trainingTrendLabel: {
     marginTop: 4,
@@ -1101,17 +1100,17 @@ const renderNewSessionCTA = () => (
   <Pressable
     onPress={openNewSession}
     style={({ pressed }) => ({
-      paddingVertical: 11,
-      paddingHorizontal: 16,
+      paddingVertical: 10,
+      paddingHorizontal: 14,
       borderRadius: CARD_RADIUS,
       borderWidth: 1,
-      borderColor: UI.border,
-      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+      borderColor: "rgba(214, 255, 63, 0.85)",
+      backgroundColor: pressed ? "#c7f11f" : UI.accent,
       alignItems: "center",
       justifyContent: "center",
     })}
   >
-    <Text style={{ color: UI.textPrimary, fontSize: 15, fontWeight: "700", textAlign: "center" }}>
+    <Text style={{ color: "#111315", fontSize: 14, fontWeight: "900", textAlign: "center" }}>
       Add Session for Selected Day
     </Text>
   </Pressable>
@@ -1123,7 +1122,7 @@ const renderNewSessionCTA = () => (
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
-    contentContainerStyle={{ paddingHorizontal: 24, paddingVertical: 22, gap: 12 }}
+    contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 20, gap: 12 }}
     >
       <OperatingHeader
         density="compact"
@@ -1196,10 +1195,10 @@ const renderNewSessionCTA = () => (
             textSectionTitleColor: "#8793a3",
             dayTextColor: "#d7dee8",
             textDisabledColor: "#465260",
-            arrowColor: "#6bbfe8",
+            arrowColor: UI.textSecondary,
             todayTextColor: UI.accent,
-            selectedDayBackgroundColor: "#3559e6",
-            selectedDayTextColor: "#ffffff",
+            selectedDayBackgroundColor: UI.accent,
+            selectedDayTextColor: "#111315",
           }}
         />
       </View>

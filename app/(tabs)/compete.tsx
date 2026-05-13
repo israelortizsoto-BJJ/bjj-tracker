@@ -25,16 +25,15 @@ const FEED = {
   radius: 6,
 };
 
-/** Align empty-state card + primary CTA with This Week (`app/(tabs)/this-week/index.tsx` UI tokens). */
 const THIS_WEEK = {
-  bgCard: "#fefdff",
-  border: "#e5e7eb",
-  textPrimary: "#111827",
-  textSecondary: "#4b5563",
-  primaryFill: "#4f46e5",
-  primaryFillPressed: "#4338ca",
-  primaryTextOnFill: "#ffffff",
-  radius: 16,
+  bgCard: "#181b1f",
+  border: "rgba(236, 241, 245, 0.12)",
+  textPrimary: "#f2f4f6",
+  textSecondary: "#a9b0b8",
+  primaryFill: "#d6ff3f",
+  primaryFillPressed: "#c7f11f",
+  primaryTextOnFill: "#111315",
+  radius: 8,
 };
 
 type MonthGroup = {
@@ -401,8 +400,8 @@ const styles = StyleSheet.create({
     backgroundColor: THIS_WEEK.bgCard,
   },
   twEmptyTitle: {
-    fontSize: 26,
-    fontWeight: "700",
+    fontSize: 22,
+    fontWeight: "900",
     color: THIS_WEEK.textPrimary,
   },
   twEmptySubtitle: {
@@ -443,7 +442,7 @@ const styles = StyleSheet.create({
     borderColor: FEED.line,
     borderRadius: FEED.radius,
     overflow: "hidden",
-    backgroundColor: "#181b1f",
+    backgroundColor: FEED.bg,
   },
   monthHeader: {
     flexDirection: "row",
@@ -451,7 +450,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 11,
     paddingHorizontal: 11,
-    backgroundColor: "#181b1f",
+    backgroundColor: FEED.bg,
   },
   monthHeaderPressed: {
     backgroundColor: FEED.panel2,
