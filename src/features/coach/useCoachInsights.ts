@@ -20,6 +20,7 @@ import type { CompetitionPlacementTrend } from "../../lib/signals/computeSignals
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
+  refreshCoachWriterSessionsAndReconcileStores,
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../storage/coachKidStore";
@@ -133,6 +134,7 @@ export function useCoachInsights(): {
         setLoading(true);
 
         try {
+          await refreshCoachWriterSessionsAndReconcileStores();
           const [kidsById, rawSessions] = await Promise.all([
             getKidsById(),
             AsyncStorage.getItem(StorageKeys.sessions),

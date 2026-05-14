@@ -62,14 +62,26 @@ export async function resolveLinkedTargetForParentWriter(
   options?: { requireAthleteOnSessionRoster?: boolean },
 ): Promise<LinkedSyncTarget | null> {
   const trimmedAthleteId = sharedAthleteId.trim();
-  if (!trimmedAthleteId) return null;
+  if (!trimmedAthleteId) {
+    console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+      stage: "reject_empty_sharedAthleteId",
+    });
+    return null;
+  }
   const links = await getCoachLinks();
   const activeParentLinks = links
     .filter((l): l is CoachLink & { weeklySync: NonNullable<CoachLink["weeklySync"]> } =>
       l.status === "active" && Boolean(l.weeklySync?.parentWriterSecret?.trim()),
     )
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  if (!activeParentLinks.length) return null;
+  if (!activeParentLinks.length) {
+    console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+      stage: "reject_no_active_parent_links",
+      trimmedAthleteId,
+      existingSharedCompetitionId: existingSharedCompetitionId ?? null,
+    });
+    return null;
+  }
 
   const listMode: "rosterOrCompetition" | "rosterOnly" = options?.requireAthleteOnSessionRoster
     ? "rosterOnly"
@@ -144,13 +156,36 @@ export async function resolveLinkedTargetForParentWriter(
         parentWriterSecret: ws.parentWriterSecret!.trim(),
       };
       if (!existingSharedCompetitionId) {
+        console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+          stage: "accept_create_path",
+          trimmedAthleteId,
+          linkTokenTail: tokenTail,
+          apiBaseUrl: ws.apiBaseUrl,
+        });
         return target;
       }
       if (session.competitions.some((c) => c.id === existingSharedCompetitionId)) {
+        console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+          stage: "accept_existing_comp_on_session",
+          trimmedAthleteId,
+          existingSharedCompetitionId,
+          linkTokenTail: tokenTail,
+        });
         return target;
       }
       if (!athleteOnlyFallback) athleteOnlyFallback = target;
-    } catch {
+    } catch (err) {
+      console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+        stage: "session_fetch_threw_swallowed_continue",
+        trimmedAthleteId,
+        existingSharedCompetitionId: existingSharedCompetitionId ?? null,
+        linkId: l.id,
+        linkTokenTail:
+          l.weeklySync.linkToken.length > 8
+            ? l.weeklySync.linkToken.slice(-8)
+            : l.weeklySync.linkToken,
+        error: err instanceof Error ? err.message : String(err),
+      });
       if (__DEV__ && devCreate) {
         const tokenTail =
           l.weeklySync.linkToken.length > 8
@@ -173,6 +208,11 @@ export async function resolveLinkedTargetForParentWriter(
     }
   }
   if (existingSharedCompetitionId && athleteOnlyFallback) {
+    console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+      stage: "accept_athlete_only_fallback",
+      trimmedAthleteId,
+      existingSharedCompetitionId,
+    });
     if (__DEV__) {
       console.log("[bjj-sync-debug] resolveLinkedTarget using athlete-only fallback", {
         sharedAthleteId: trimmedAthleteId,
@@ -181,6 +221,12 @@ export async function resolveLinkedTargetForParentWriter(
     }
     return athleteOnlyFallback;
   }
+  console.log("[COMP_SYNC_TRACE] resolveLinkedTargetForParentWriter", {
+    stage: "miss_null",
+    trimmedAthleteId,
+    existingSharedCompetitionId: existingSharedCompetitionId ?? null,
+    activeParentLinksTried: activeParentLinks.length,
+  });
   if (__DEV__) {
     console.log("[bjj-sync-debug] resolveLinkedTarget miss", {
       sharedAthleteId: trimmedAthleteId,

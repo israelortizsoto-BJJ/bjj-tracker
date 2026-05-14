@@ -42,7 +42,10 @@ import {
   familyResourceUrlForLinking,
 } from "../../coach/familyResourceUrl";
 import { kidWeeklyFocusToPublishPayload } from "../../coach/weeklyFocusPublish";
-import { isPublishableSystemKey } from "../../lib/taxonomy/publishableSystemKey";
+import {
+  isPublishableSystemKey,
+  normalizePublishableSystemKey,
+} from "../../lib/taxonomy/publishableSystemKey";
 import {
   READ_TOGETHER_TITLES,
   buildReadTogetherStoryCards,
@@ -74,6 +77,8 @@ import {
   appendKidWeeklyFocus,
   getKidWeeklyFocusEntriesForKid,
   deleteKidWeeklyFocusEntryById,
+  pickPublishedWeeklyParentFeedbackForSharedAthlete,
+  pickRemoteSharedCompetitionsForLinkedAthlete,
   startOfWeekMondayYMD,
   todayYMD,
   updateKidHouseholdLabel,
@@ -105,7 +110,6 @@ import {
 import type {
   CoachWeeklySyncPublishBody,
   CoachWeeklySyncSessionResponse,
-  SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
 } from "../../types/coachWeeklySync";
 import { toDateKey } from "../../_domain/dateKey";
@@ -660,9 +664,7 @@ export default function KidDetailScreen() {
         const syncLinks = sortCoachWriterLinksNewestFirst(
           dedupeActiveCoachWriterLinks(links).filter((l) => l.weeklySync),
         );
-        let remoteForKid: SyncedSharedCompetition[] = [];
-        /** Which writer session we treat as canonical for this kid (newest link that contains the athlete). */
-        let canonicalTokenTail: string | null = null;
+        const successfulSessionsInOrder: CoachWeeklySyncSessionResponse[] = [];
         let sessionFetchFailures = 0;
         let sessionIndex = 0;
         for (const l of syncLinks) {
@@ -717,6 +719,8 @@ export default function KidDetailScreen() {
             }
             if (loadGen !== coachKidDetailLoadGenRef.current) return false;
 
+            successfulSessionsInOrder.push(session);
+
             const athleteIdsInSession = session.athletes.map((a) => a.id);
             const athleteInSession = session.athletes.some((a) => a.id === sharedAthleteId);
             const totalRemote = session.competitions.length;
@@ -736,14 +740,6 @@ export default function KidDetailScreen() {
                 matchingSharedAthleteCount: matching.length,
               });
             }
-            // One session per athlete: merging every link’s competitions lets abandoned/stale sessions
-            // resurrect ids the parent already deleted on their active invite.
-            if (athleteInSession && canonicalTokenTail === null) {
-              canonicalTokenTail = linkTokenTail;
-              remoteForKid = matching;
-              feedbackForPublishedWeekly =
-                session.weeklyByAthleteId?.[sharedAthleteId]?.parentFeedback ?? null;
-            }
           } catch {
             sessionFetchFailures += 1;
             if (__DEV__) {
@@ -757,10 +753,18 @@ export default function KidDetailScreen() {
             // Best-effort read path: keep current local rows if every session fetch fails.
           }
         }
+        const remoteForKid = pickRemoteSharedCompetitionsForLinkedAthlete(
+          successfulSessionsInOrder,
+          sharedAthleteId,
+        );
+        feedbackForPublishedWeekly = pickPublishedWeeklyParentFeedbackForSharedAthlete(
+          successfulSessionsInOrder,
+          sharedAthleteId,
+        );
         if (__DEV__) {
           console.log("[bjj-coach-kid-detail] canonical remote for athlete", {
             loadGen,
-            canonicalTokenTail,
+            successfulSessionCount: successfulSessionsInOrder.length,
             mergedRemoteCount: remoteForKid.length,
             mergedRemoteIds: remoteForKid.map((c) => c.id),
             sessionFetchFailures,
@@ -1364,9 +1368,11 @@ export default function KidDetailScreen() {
     async (coachOutcome: CoachOutcome, coachNotes?: string) => {
       if (!currentWeekEntry) return;
       const trimmedNotes = (coachNotes ?? "").trim();
+      const inheritedSystemKey = currentWeekEntry.systemKey;
 
+      let latestRow: Awaited<ReturnType<typeof appendKidWeeklyFocus>>;
       if (currentWeekEntry.focusType === "template") {
-        await appendKidWeeklyFocus({
+        latestRow = await appendKidWeeklyFocus({
           kidId,
           weekStartYMD,
           focusType: "template",
@@ -1374,6 +1380,7 @@ export default function KidDetailScreen() {
           title: currentWeekEntry.title,
           metadata: currentWeekEntry.metadata,
           youtubeUrl: currentWeekEntry.youtubeUrl,
+          systemKey: inheritedSystemKey,
           missionResourceUrl: currentWeekEntry.missionResourceUrl,
           missionResourceLabel: currentWeekEntry.missionResourceLabel,
           familyResourceUrl: currentWeekEntry.familyResourceUrl,
@@ -1384,13 +1391,14 @@ export default function KidDetailScreen() {
           coachNotes: trimmedNotes ? trimmedNotes : undefined,
         });
       } else {
-        await appendKidWeeklyFocus({
+        latestRow = await appendKidWeeklyFocus({
           kidId,
           weekStartYMD,
           focusType: "custom",
           title: currentWeekEntry.title,
           note: currentWeekEntry.note,
           youtubeUrl: currentWeekEntry.youtubeUrl,
+          systemKey: inheritedSystemKey,
           missionResourceUrl: currentWeekEntry.missionResourceUrl,
           missionResourceLabel: currentWeekEntry.missionResourceLabel,
           familyResourceUrl: currentWeekEntry.familyResourceUrl,
@@ -1401,6 +1409,22 @@ export default function KidDetailScreen() {
           coachNotes: trimmedNotes ? trimmedNotes : undefined,
         });
       }
+
+      const sameWeekPool = (await getKidWeeklyFocusEntriesForKid(kidId)).filter(
+        (e) => e.weekStartYMD === weekStartYMD,
+      );
+      const publishPayload = kidWeeklyFocusToPublishPayload(latestRow, weekStartYMD, {
+        sameWeekEntriesForMissionFallback: sameWeekPool,
+      });
+      const prevNorm = normalizePublishableSystemKey(inheritedSystemKey);
+      const latestNorm = normalizePublishableSystemKey(latestRow.systemKey);
+      console.log("[WEEKLY_SYSTEM_INVARIANT]", {
+        latestRowId: latestRow.id,
+        latestRowSystemKey: latestRow.systemKey ?? null,
+        publishPayloadSystemKey: publishPayload.systemKey ?? null,
+        inheritedFromPrevious: Boolean(prevNorm && prevNorm === latestNorm),
+        sameWeekCandidateCount: sameWeekPool.length,
+      });
 
       console.log("[OUTCOME WRITE]", { kidId, coachOutcome });
       console.log("[SPARRING WRITE]", {

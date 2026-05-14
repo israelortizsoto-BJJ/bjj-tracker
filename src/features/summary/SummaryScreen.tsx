@@ -78,7 +78,7 @@ import {
   normalizeSessionsLikeTraining,
 } from "../../domain/sessionUtils";
 import { useActiveAthlete } from "../../hooks/useActiveAthlete";
-import { useAthleteData } from "../../hooks/useAthleteData";
+import { useAthleteData, type SummaryFlowTraceRole } from "../../hooks/useAthleteData";
 import { useSignals } from "../../hooks/useSignals";
 import {
   deleteAthlete,
@@ -198,11 +198,14 @@ export default function SummaryScreen() {
   const {
     linkedKidId: summaryLinkedKidId,
     hydrationReady,
+    authorityBootstrapState,
+    coachOperatingAthleteChoices,
     athleteId: activeAthleteId,
     athlete,
     athletes,
     kidsById,
   } = useActiveAthlete();
+  const { role: deviceRole } = useDeviceRole();
 
   const [appliedProfile, setAppliedProfile] = useState<ParentAthlete | null>(null);
   const [dismissedAtMap, setDismissedAtMap] = useState<Record<string, number>>({});
@@ -362,6 +365,26 @@ export default function SummaryScreen() {
   const activeAthleteName = athleteForSummary?.name?.trim() ?? "";
   const hasActiveAthlete = Boolean(activeAthleteId && activeAthleteName);
 
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!hydrationReady || !hasActiveAthlete) return;
+    console.log("[SUMMARY_SELECTOR_STATE]", {
+      activeAthleteId: activeAthleteId.trim() || null,
+      summaryLinkedKidId:
+        typeof summaryLinkedKidId === "string" && summaryLinkedKidId.trim()
+          ? summaryLinkedKidId.trim()
+          : null,
+      selectedAthleteName: activeAthleteName.trim() || null,
+      sharedAthleteId: activeAthleteId.trim() || null,
+    });
+  }, [
+    hydrationReady,
+    hasActiveAthlete,
+    activeAthleteId,
+    summaryLinkedKidId,
+    activeAthleteName,
+  ]);
+
   const handleApplySuggestion = useCallback(
     async (suggestion: IdentitySuggestion) => {
       const base = athleteForSummary;
@@ -469,7 +492,8 @@ export default function SummaryScreen() {
     }
   }, [activeAthleteId, athleteForSummary?.name, router]);
 
-  const { role: deviceRole } = useDeviceRole();
+  const summaryFlowTraceRole: SummaryFlowTraceRole =
+    deviceRole === "coach" ? "coach" : deviceRole === "parent" ? "parent" : "unknown";
 
   const parentCoachLinkedTrust = useMemo(
     () => deviceRole === "parent" && parentDeviceCoachLinkedForTrustUi(coachLinkRowsForTrustUi),
@@ -482,7 +506,22 @@ export default function SummaryScreen() {
     [coachLinkRowsForTrustUi, deviceRole],
   );
 
-  const { sessions: sessionsRaw, competitions } = useAthleteData(activeAthleteId);
+  const linkedKidForAthleteData =
+    typeof summaryLinkedKidId === "string" && summaryLinkedKidId.trim()
+      ? summaryLinkedKidId.trim()
+      : null;
+  const { sessions: sessionsRaw, competitions } = useAthleteData(
+    activeAthleteId,
+    linkedKidForAthleteData,
+    summaryFlowTraceRole,
+  );
+
+  useEffect(() => {
+    console.log("[COMP_SYNC_TRACE] SummaryScreen", {
+      activeAthleteId: activeAthleteId.trim(),
+      competitionSnapshotInputCount: competitions?.length ?? 0,
+    });
+  }, [activeAthleteId, competitions]);
 
   const sessions = useMemo(() => {
     return filterSessionsLikeTrainingRefresh(
@@ -955,6 +994,20 @@ export default function SummaryScreen() {
   ]);
 
   const summaryV2ViewModel = useMemo(() => {
+    if (__DEV__) {
+      console.log("[SUMMARY_FLOW_TRACE] 3_sessions_entering_summary_builder", {
+        flow: summaryFlowTraceRole,
+        activeAthleteId,
+        linkedKidId: summaryLinkedKidId,
+        sessionCountAfterTrainingScopeFilter: sessions.length,
+        sampleLineage: sessions.slice(0, 5).map((s) => ({
+          id: s.id,
+          sharedAthleteId: (s.sharedAthleteId ?? "").trim() || null,
+          kidId: (s.kidId ?? "").trim() || null,
+          trainingLoggedByRole: s.trainingLoggedByRole ?? null,
+        })),
+      });
+    }
     const signals = hybridConfidence;
     const identityBased =
       "isIdentityBased" in signals && signals.isIdentityBased === true;
@@ -991,6 +1044,7 @@ export default function SummaryScreen() {
     console.log("[SUMMARY_RECOMPUTE]", {
       athleteId: activeAthleteId,
       competitionCount: competitions?.length ?? 0,
+      sessionCount: sessions?.length ?? 0,
       identityScore: identityScore.score,
     });
     return buildSummaryViewModel({
@@ -1000,6 +1054,10 @@ export default function SummaryScreen() {
       identityFocus: identityFocusForVm,
       coachWeekly: coachWeeklyForSummary,
       lastAction: lastAction,
+      sessionCount: sessions?.length ?? 0,
+      competitionCount: competitions?.length ?? 0,
+      devSummaryFlowTraceRole: summaryFlowTraceRole,
+      devOperatorAthleteId: activeAthleteId,
     });
   }, [
     activeAthleteId,
@@ -1008,6 +1066,8 @@ export default function SummaryScreen() {
     hybridConfidence,
     identityScore.score,
     lastAction,
+    sessions,
+    summaryFlowTraceRole,
     summaryLinkedKidId,
     weeklySessionSnapshot,
     weeklySyncDoc,
@@ -1075,20 +1135,61 @@ export default function SummaryScreen() {
     );
   }
 
-  if (!hasActiveAthlete) {
+  if (
+    deviceRole === "coach" &&
+    (authorityBootstrapState === "coach_unresolved" ||
+      (authorityBootstrapState === "coach_disconnected" &&
+        coachOperatingAthleteChoices.length > 0))
+  ) {
     return (
       <SafeAreaView style={styles.ctaScreen} edges={["top"]}>
         <Text style={styles.ctaTitle}>Summary</Text>
         <Text style={styles.ctaSubtitle}>
-          Add an athlete on this device to see training insights here.
+          {authorityBootstrapState === "coach_disconnected"
+            ? "Coach roster could not be refreshed from the server. Choose an athlete from your locally linked roster to continue."
+            : "Several athletes are linked on this coach device. Choose one for Summary and weekly alignment."}
         </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push("/summary/add-athlete")}
-          style={({ pressed }) => [styles.ctaBtn, pressed ? styles.ctaBtnPressed : null]}
-        >
-          <Text style={styles.ctaBtnText}>Create Athlete</Text>
-        </Pressable>
+        <View style={styles.selectorSection}>
+          <SummaryAthleteSwitcher
+            activeAthleteId={activeAthleteId}
+            athletes={coachOperatingAthleteChoices}
+            onChange={handleSelectAthlete}
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (deviceRole === "coach" && authorityBootstrapState === "coach_disconnected") {
+    return (
+      <SafeAreaView style={styles.ctaScreen} edges={["top"]}>
+        <Text style={styles.ctaTitle}>Summary</Text>
+        <Text style={styles.ctaSubtitle}>
+          Linked coach invites are active, but the roster could not be refreshed. Check your connection and open Summary again to retry.
+        </Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!hasActiveAthlete) {
+    const coachTrulyEmpty = deviceRole === "coach" && authorityBootstrapState === "empty";
+    return (
+      <SafeAreaView style={styles.ctaScreen} edges={["top"]}>
+        <Text style={styles.ctaTitle}>Summary</Text>
+        <Text style={styles.ctaSubtitle}>
+          {coachTrulyEmpty
+            ? "No linked athletes on this coach device yet. When a parent accepts a link, roster rows appear here."
+            : "Add an athlete on this device to see training insights here."}
+        </Text>
+        {coachTrulyEmpty ? null : (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("/summary/add-athlete")}
+            style={({ pressed }) => [styles.ctaBtn, pressed ? styles.ctaBtnPressed : null]}
+          >
+            <Text style={styles.ctaBtnText}>Create Athlete</Text>
+          </Pressable>
+        )}
       </SafeAreaView>
     );
   }
@@ -1199,6 +1300,8 @@ export default function SummaryScreen() {
           signals={hybridConfidence}
           lastAction={lastAction}
           coachWeekly={coachWeeklyForSummary}
+          sessionCount={sessions?.length ?? 0}
+          competitionCount={competitions?.length ?? 0}
           devDualVmAudit={
             __DEV__
               ? {

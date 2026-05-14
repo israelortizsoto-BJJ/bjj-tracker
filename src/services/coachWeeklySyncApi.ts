@@ -454,6 +454,16 @@ export async function coachSyncCreateSessionCompetition(
   body: CoachWeeklySyncCreateCompetitionBody,
   apiBaseUrlOverride?: string | null,
 ): Promise<CoachWeeklySyncCreateCompetitionResponse> {
+  const t0 = Date.now();
+  const tokenTail = linkToken.trim().length > 8 ? linkToken.trim().slice(-8) : linkToken.trim();
+  console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
+    stage: "enter",
+    t0,
+    tokenTail,
+    apiBaseUrlOverride: apiBaseUrlOverride?.trim() || null,
+    hasParentWriterSecret: Boolean(parentWriterSecret?.trim()),
+    requestBody: body,
+  });
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
   const headers = {
@@ -463,12 +473,49 @@ export async function coachSyncCreateSessionCompetition(
   };
   const serialized = JSON.stringify(body);
   const url = joinUrl(base, `/v1/sessions/${enc}/competitions`);
-  const res = await fetch(url, {
+  console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
+    stage: "post_request_wire",
+    elapsedMs: Date.now() - t0,
     method: "POST",
-    headers,
-    body: serialized,
+    path: `/v1/sessions/${enc}/competitions`,
+    url,
+    serializedRequestBody: serialized,
   });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: serialized,
+    });
+  } catch (err) {
+    console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
+      stage: "post_fetch_threw_before_response",
+      elapsedMs: Date.now() - t0,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    throw err;
+  }
   const payload = await parseJsonOrText(res);
+  const competitionNode =
+    payload && typeof payload === "object" && "competition" in (payload as object)
+      ? (payload as { competition?: unknown }).competition
+      : undefined;
+  const remoteCompetitionId =
+    competitionNode &&
+    typeof competitionNode === "object" &&
+    competitionNode !== null &&
+    typeof (competitionNode as { id?: unknown }).id === "string"
+      ? (competitionNode as { id: string }).id
+      : null;
+  console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
+    stage: "post_response_parsed",
+    elapsedMs: Date.now() - t0,
+    httpStatus: res.status,
+    ok: res.ok,
+    responsePayload: payload,
+    remoteCompetitionId,
+  });
   if (__DEV__) {
     console.log("[bjj-sync-debug] parent create competition", {
       url,
@@ -480,14 +527,27 @@ export async function coachSyncCreateSessionCompetition(
     });
   }
   if (!res.ok) {
-    throw new CoachWeeklySyncApiError(coachSyncFailureMessage(res, payload), res.status);
+    const err = new CoachWeeklySyncApiError(coachSyncFailureMessage(res, payload), res.status);
+    console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
+      stage: "post_http_error_rethrow",
+      elapsedMs: Date.now() - t0,
+      status: err.status,
+      message: err.message,
+    });
+    throw err;
   }
   if (
     !payload ||
     typeof payload !== "object" ||
     typeof (payload as { competition?: unknown }).competition !== "object"
   ) {
-    throw new CoachWeeklySyncApiError("Unexpected response from sync service.", res.status);
+    const err = new CoachWeeklySyncApiError("Unexpected response from sync service.", res.status);
+    console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
+      stage: "post_unexpected_shape_rethrow",
+      elapsedMs: Date.now() - t0,
+      message: err.message,
+    });
+    throw err;
   }
   return payload as CoachWeeklySyncCreateCompetitionResponse;
 }

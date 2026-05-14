@@ -30,6 +30,10 @@ export type BuildSummaryViewModelInput = SummaryInputs & {
   } | null;
   exposurePending?: any | null;
   lastAction?: string | null;
+  /** __TEMP__ Operator Mode: labels [SUMMARY_FLOW_TRACE] for parent vs coach. */
+  devSummaryFlowTraceRole?: "parent" | "coach" | "unknown";
+  /** __DEV__ Operator Mode: athlete id for [SUMMARY_PROGRESS_INPUT] only. */
+  devOperatorAthleteId?: string | null;
   /** __DEV__ SummaryHeroCard → SummaryV2Card only: final VM derivation trace. */
   devFinalHeroVmTrace?: { athleteId: string | null } | null;
 };
@@ -223,12 +227,46 @@ export function buildSummaryViewModel(
     resolvedFocusSystem: system,
   });
   const systemLabel = displaySystem(system);
+  const flow = input.devSummaryFlowTraceRole ?? "unknown";
+
+  if (__DEV__) {
+    console.log("[SUMMARY_FLOW_TRACE] 4_progression_computation_input", {
+      flow,
+      sessionCountVm: input.sessionCount ?? 0,
+      resolvedFocusSystem: system,
+      coachWeeklyHeadline: input.coachWeekly?.headline?.slice(0, 120) ?? null,
+      coachWeeklySystemKey: input.coachWeekly?.systemKey ?? null,
+      alignmentStatus: alignment.status,
+      lastAction: input.lastAction ?? null,
+      signalTopSystem: snap.topSystem,
+      signalHasData: snap.hasData,
+    });
+  }
+
   const progression = computeProgression({
     coachSystem: system,
     topSystem: null,
     lastAction: input.lastAction ?? null,
     alignmentStatus: alignment.status,
   });
+
+  if (__DEV__) {
+    const athleteIdForLog =
+      (typeof input.devOperatorAthleteId === "string" && input.devOperatorAthleteId.trim()
+        ? input.devOperatorAthleteId.trim()
+        : null) ??
+      input.devFinalHeroVmTrace?.athleteId?.trim() ??
+      null;
+    console.log("[SUMMARY_PROGRESS_INPUT]", {
+      athleteId: athleteIdForLog,
+      sessionCount: input.sessionCount ?? 0,
+      competitionCount: input.competitionCount ?? 0,
+      topSystem: snap.topSystem,
+      coachSystemKey,
+      progressionStage: progression.stepKey,
+      identityState,
+    });
+  }
 
   /**
    * HERO OUTPUT CONTRACT (LOCKED)
@@ -424,6 +462,19 @@ export function buildSummaryViewModel(
         why,
         why.trim(),
       ),
+    });
+  }
+
+  if (__DEV__) {
+    console.log("[SUMMARY_FLOW_TRACE] 5_final_summary_vm_output", {
+      flow,
+      sessionCountVm: input.sessionCount ?? 0,
+      focus,
+      action,
+      progress,
+      why,
+      stepKey: progression.stepKey ?? null,
+      alignmentStatus: alignment.status,
     });
   }
 

@@ -6,18 +6,13 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import {
   activeCoachWriterInviteTokenNorms,
-  dedupeActiveCoachWriterLinks,
   kidVisibleOnCoachRoster,
 } from "../../coachShare/coachLinkBinding";
-import { normalizeInviteLinkToken } from "../../coachShare/inviteLinkToken";
 import { isCoachSyncConfigured } from "../../config/coachSync";
-import { coachSyncFetchSession } from "../../services/coachWeeklySyncApi";
-import { getCoachLinks } from "../../storage/coachShareStore";
-import { setCachedWeeklyForLinkToken } from "../../storage/coachWeeklySyncCacheStore";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
-  reconcileCoachKidRosterFromWriterSessions,
+  refreshCoachWriterSessionsAndReconcileStores,
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../storage/coachKidStore";
@@ -25,7 +20,6 @@ import { getKidCompetitionEntriesForKid } from "../../storage/kidCompetitionStor
 import { StorageKeys } from "../../storage/storageKeys";
 import type { CoachLink } from "../../types/coachShare";
 import { kidExcludedFromCoachActiveRoster, type Kid, type KidsById } from "../../types/coachKid";
-import type { SyncedSharedAthlete } from "../../types/coachWeeklySync";
 import { computeCoachInsight, type CoachInsight } from "./computeCoachInsight";
 import {
   deriveOutcomeFromSparring,
@@ -73,12 +67,15 @@ function sessionsForAthlete(allSessions: any[], athlete: Kid): any[] {
 
 export default function CoachRoster() {
   const [ready, setReady] = useState(false);
+  /** True once `loadKids` has completed at least one full pass (avoids empty flicker before first hydrate). */
+  const [hasCompletedInitialLoad, setHasCompletedInitialLoad] = useState(false);
   const [kidsById, setKidsByIdState] = useState<KidsById>({});
   const [insightsByAthleteId, setInsightsByAthleteId] = useState<
     Record<string, CoachInsight>
   >({});
   const [activeWriterAthleteIds, setActiveWriterAthleteIds] = useState<Set<string>>(new Set());
   const [writerLinks, setWriterLinks] = useState<CoachLink[]>([]);
+  const [lastWriterRefresh, setLastWriterRefresh] = useState({ writers: 0, sessionOk: 0 });
   const syncConfigured = isCoachSyncConfigured();
   const coachKidNavLockRef = useRef(false);
 
@@ -86,46 +83,14 @@ export default function CoachRoster() {
     setReady(false);
 
     try {
-      const links = await getCoachLinks();
-      const writers = dedupeActiveCoachWriterLinks(links);
-      setWriterLinks(writers);
+      const { successfulSnapshots, writerLinks } = await refreshCoachWriterSessionsAndReconcileStores();
+      setWriterLinks(writerLinks);
+      setLastWriterRefresh({
+        writers: writerLinks.length,
+        sessionOk: successfulSnapshots.length,
+      });
 
-      const successfulSnapshots: {
-        linkTokenNorm: string;
-        athletes: SyncedSharedAthlete[];
-      }[] = [];
-
-      if (syncConfigured) {
-        for (const link of writers) {
-          const weeklySync = link.weeklySync!;
-          const tokenKey = normalizeInviteLinkToken(weeklySync.linkToken);
-
-          try {
-            const session = await coachSyncFetchSession(
-              weeklySync.linkToken,
-              weeklySync.apiBaseUrl,
-            );
-            const nowIso = new Date().toISOString();
-            await setCachedWeeklyForLinkToken(
-              weeklySync.linkToken,
-              session.weekly,
-              nowIso,
-              session.weeklyByAthleteId ?? {},
-              session.athletes,
-              session,
-              tokenKey,
-            );
-            successfulSnapshots.push({
-              linkTokenNorm: tokenKey,
-              athletes: session.athletes,
-            });
-          } catch {
-            // Best-effort: keep local roster if sync is unreachable.
-          }
-        }
-      }
-
-      if (syncConfigured && writers.length > 0 && successfulSnapshots.length > 0) {
+      if (syncConfigured && writerLinks.length > 0 && successfulSnapshots.length > 0) {
         const nextActiveWriterAthleteIds = new Set<string>();
 
         for (const snapshot of successfulSnapshots) {
@@ -138,13 +103,6 @@ export default function CoachRoster() {
         setActiveWriterAthleteIds(nextActiveWriterAthleteIds);
       } else {
         setActiveWriterAthleteIds(new Set());
-      }
-
-      if (writers.length > 0 && syncConfigured && successfulSnapshots.length > 0) {
-        await reconcileCoachKidRosterFromWriterSessions({
-          successfulSnapshots,
-          totalActiveWriterCount: writers.length,
-        });
       }
 
       const kids = await getKidsById();
@@ -185,6 +143,7 @@ export default function CoachRoster() {
       setInsightsByAthleteId(nextInsights);
     } finally {
       setReady(true);
+      setHasCompletedInitialLoad(true);
     }
   }, [syncConfigured]);
 
@@ -208,6 +167,12 @@ export default function CoachRoster() {
     return visible.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [activeWriterAthleteIds, activeWriterTokenNorms, kidsById]);
 
+  const rosterDisconnected =
+    syncConfigured &&
+    lastWriterRefresh.writers > 0 &&
+    lastWriterRefresh.sessionOk === 0 &&
+    hasCompletedInitialLoad;
+
   return (
     <View style={styles.container}>
       <Text style={styles.sectionLabel}>Athletes</Text>
@@ -216,9 +181,13 @@ export default function CoachRoster() {
         <Text style={styles.loadingText}>Loading athletes…</Text>
       ) : kids.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyTitle}>No athletes yet</Text>
+          <Text style={styles.emptyTitle}>
+            {rosterDisconnected ? "Couldn’t refresh roster" : "No athletes yet"}
+          </Text>
           <Text style={styles.emptyText}>
-            Add an athlete to start managing weekly coaching.
+            {rosterDisconnected
+              ? "Coach sync is configured but the server session did not load. Check your connection and pull to revisit this tab."
+              : "Add an athlete to start managing weekly coaching."}
           </Text>
         </View>
       ) : (

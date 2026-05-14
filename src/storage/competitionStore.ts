@@ -119,9 +119,21 @@ export async function getKidCompetitionEntriesWithMatchDetailForKid(
   kidId: string,
 ): Promise<KidCompetitionEntryWithMatchDetail[]> {
   const k = typeof kidId === "string" ? kidId.trim() : "";
-  if (!k) return [];
+  if (!k) {
+    console.log("[COMP_SYNC_TRACE] getKidCompetitionEntriesWithMatchDetailForKid", {
+      requestedKidId: "",
+      rowsReturned: 0,
+      reason: "emptyKidId",
+    });
+    return [];
+  }
   const entries = await getKidCompetitionEntriesForKid(k);
-  return mergeCompetitionMatchDetailIntoEntries(entries);
+  const merged = await mergeCompetitionMatchDetailIntoEntries(entries);
+  console.log("[COMP_SYNC_TRACE] getKidCompetitionEntriesWithMatchDetailForKid", {
+    requestedKidId: k,
+    rowsReturned: merged.length,
+  });
+  return merged;
 }
 
 /** Competitions whose `sharedAthleteId` matches the parent Summary / `athleteStore` id (unlink-safe). */

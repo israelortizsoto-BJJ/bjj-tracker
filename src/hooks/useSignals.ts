@@ -25,61 +25,95 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
 
   const trimmedAthlete =
     typeof athleteId === "string" ? athleteId.trim() : "";
-  const { sessions, competitions } = useAthleteData(trimmedAthlete);
+  const linkedKidTrim =
+    typeof kidId === "string" && kidId.trim() ? kidId.trim() : null;
   const { role: deviceRole } = useDeviceRole();
+  const summaryFlowTraceRole =
+    deviceRole === "coach" ? "coach" : deviceRole === "parent" ? "parent" : "unknown";
+  const { sessions, competitions } = useAthleteData(
+    trimmedAthlete,
+    linkedKidTrim,
+    summaryFlowTraceRole,
+  );
 
-  const previousSignalsRef = useRef<SignalOutput | null>(null);
+  const lastSignalsAthleteScopeRef = useRef<string | null>(null);
 
   return useMemo(() => {
     const hasAthlete = trimmedAthlete.length > 0;
 
-    const scopedSessions = filterSessionsLikeTrainingRefresh(
-      normalizeSessionsLikeTraining(sessions),
-      {
-        deviceRole,
+    if (__DEV__) {
+      const prevScope = lastSignalsAthleteScopeRef.current;
+      if (prevScope !== null && prevScope !== trimmedAthlete) {
+        // TEMP Phase 1 authority stabilization
+        console.log("[useSignals] athlete scope transition (signals reset to scoped input)", {
+          from: prevScope.length > 0 ? prevScope : "(no OAI)",
+          to: trimmedAthlete.length > 0 ? trimmedAthlete : "(no OAI)",
+        });
+      }
+      lastSignalsAthleteScopeRef.current = trimmedAthlete.length > 0 ? trimmedAthlete : "";
+    }
+
+    const scopedSessions = hasAthlete
+      ? filterSessionsLikeTrainingRefresh(
+          normalizeSessionsLikeTraining(sessions),
+          {
+            deviceRole,
+            athleteId: trimmedAthlete,
+            linkedKidId:
+              typeof kidId === "string" && kidId.trim() ? kidId.trim() : undefined,
+          },
+        )
+      : [];
+
+    const scopedCompetitions = hasAthlete ? competitions : [];
+
+    if (__DEV__ && hasAthlete) {
+      const lk = linkedKidTrim ?? "";
+      const matchedBySharedCount = sessions.filter(
+        (s) => (s.sharedAthleteId ?? "").trim() === trimmedAthlete,
+      ).length;
+      const matchedByKidCount = lk
+        ? sessions.filter((s) => (s.kidId ?? "").trim() === lk).length
+        : 0;
+      console.log("[SUMMARY_SESSION_SOURCE]", {
         athleteId: trimmedAthlete,
-        linkedKidId:
-          typeof kidId === "string" && kidId.trim() ? kidId.trim() : undefined,
-      },
-    );
+        linkedKidId: lk || null,
+        totalSessionsLoaded: sessions.length,
+        matchedBySharedCount,
+        matchedByKidCount,
+        finalSessionIds: scopedSessions.map((s) => s.id),
+      });
+    }
 
     if (__DEV__) {
       console.log("SIGNALS INPUT", {
         athleteId: hasAthlete ? trimmedAthlete : null,
         sessionCount: scopedSessions.length,
-        competitionCount: competitions.length,
+        competitionCount: scopedCompetitions.length,
       });
-    }
-
-    if (!hasAthlete) {
-      if (previousSignalsRef.current !== null) {
-        if (__DEV__) {
-          console.warn("⚠️ Skipping signals: missing athleteId");
-        }
-        return previousSignalsRef.current;
+      if (!hasAthlete) {
+        // TEMP Phase 1 authority stabilization
+        console.log("[useSignals] neutral signals: missing operating athlete (no prior output reuse)");
       }
     }
 
     const computed = computeSignals({
       sessions: scopedSessions,
-      competitions,
+      competitions: scopedCompetitions,
       referenceDate,
-      declaredInput,
-      coachData,
-      connectionState,
+      declaredInput: hasAthlete ? declaredInput : undefined,
+      coachData: hasAthlete ? coachData : undefined,
+      connectionState: hasAthlete ? connectionState : undefined,
       athleteId: hasAthlete ? trimmedAthlete : null,
-      kidId,
+      kidId: hasAthlete ? kidId : null,
     });
-
-    if (hasAthlete) {
-      previousSignalsRef.current = computed;
-    }
 
     return computed;
   }, [
     sessions,
     competitions,
     deviceRole,
+    linkedKidTrim,
     referenceDate,
     declaredInput,
     coachData,

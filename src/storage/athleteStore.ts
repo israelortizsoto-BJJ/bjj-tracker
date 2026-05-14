@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { isKidCoachArchived, type KidsById } from "../types/coachKid";
+
 import { StorageKeys } from "./storageKeys";
 
 export type OnboardingVersion = "v1" | "v2";
@@ -117,6 +119,53 @@ export async function getAthletes(): Promise<ParentAthlete[]> {
     return safeParseAthletes(raw);
   } catch {
     return [];
+  }
+}
+
+/**
+ * Coach roster plane (`coachKidsById`) can hold linked rows with `sharedAthleteId` before the operating
+ * plane (`parentAthletes`) has a matching row. Upserts `ParentAthlete` rows with `id === sharedAthleteId`
+ * so `linkedKidIdForParentAthlete` and Summary / Compete resolve. Idempotent; preserves unrelated athletes.
+ */
+export async function ensureOperatingAthletesFromCoachLinkedKids(
+  kidsById: KidsById,
+): Promise<void> {
+  const existing = await getAthletes();
+  const byId = new Map<string, ParentAthlete>();
+  for (const a of existing) {
+    byId.set(a.id, a);
+  }
+
+  let changed = false;
+
+  for (const k of Object.values(kidsById)) {
+    if (!k?.id) continue;
+    if (isKidCoachArchived(k)) continue;
+    const sid = (k.sharedAthleteId ?? "").trim();
+    if (!sid) continue;
+
+    const rosterName = (k.name ?? "").trim();
+    const displayName = rosterName || "Athlete";
+
+    const prev = byId.get(sid);
+    if (prev) {
+      if (rosterName && prev.name !== rosterName) {
+        byId.set(sid, { ...prev, name: rosterName });
+        changed = true;
+      }
+    } else {
+      byId.set(sid, { id: sid, name: displayName });
+      changed = true;
+    }
+  }
+
+  if (!changed) return;
+
+  const next = Array.from(byId.values());
+  try {
+    await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+  } catch {
+    /* ignore */
   }
 }
 

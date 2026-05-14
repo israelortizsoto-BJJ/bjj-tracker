@@ -1,6 +1,5 @@
 import {
   CommonActions,
-  StackActions,
   type NavigationProp,
   type NavigationState,
   type ParamListBase,
@@ -99,34 +98,6 @@ function readTabNavigatorStateForExit(
 }
 
 /**
- * Root stack navigator for the operational lane tab (`this-week` or `coach`):
- * walk from the screen up until the parent is the tab navigator; the owning stack
- * is either that direct child (if it is a stack) or the deepest stack seen below it.
- */
-function laneRootStackNavigatorFromScreen(
-  screenNav: TabSyncScreenNavigation,
-  tabsNav: TabSyncScreenNavigation,
-): TabSyncScreenNavigation | null {
-  let lastStackOnPath: TabSyncScreenNavigation | undefined;
-  let cur: TabSyncScreenNavigation | undefined = screenNav;
-  for (let h = 0; h < 24 && cur; h += 1) {
-    const state = cur.getState?.() as NavigationState | undefined;
-    if (state?.type === "stack") {
-      lastStackOnPath = cur;
-    }
-    const parent = cur.getParent?.() as TabSyncScreenNavigation | undefined;
-    if (parent === tabsNav) {
-      if (state?.type === "stack") {
-        return cur;
-      }
-      return lastStackOnPath ?? null;
-    }
-    cur = parent;
-  }
-  return null;
-}
-
-/**
  * After save, cancel-style back, delete, or load errors: always land on the Competition tab.
  * Athlete scope stays in existing global/store state; this only switches the focused tab.
  */
@@ -183,25 +154,6 @@ export function exitToCompeteAfterCompetitionSave(args: {
   const tabLayerStateBefore = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
   const activeStackBefore = laneStackScreenNames(tabLayerStateBefore, laneRouteName);
 
-  const laneStackNav =
-    tabsNav != null ? laneRootStackNavigatorFromScreen(navigation, tabsNav) : null;
-  const laneStateBefore = laneStackNav?.getState?.() as NavigationState | undefined;
-  const stackNavigatorKey = laneStateBefore?.key ?? null;
-  const routeCountBefore = laneStateBefore?.routes?.length ?? 0;
-  const shouldPopLaneStack =
-    routeCountBefore > 1 ||
-    (typeof laneStackNav?.canGoBack === "function" && laneStackNav.canGoBack());
-
-  let popToTopOk = false;
-  if (laneStackNav && shouldPopLaneStack) {
-    try {
-      laneStackNav.dispatch(StackActions.popToTop());
-      popToTopOk = true;
-    } catch {
-      popToTopOk = false;
-    }
-  }
-
   if (tabsNav) {
     tabsNav.dispatch(navAction);
   } else if (tabsFallback?.key && rootNav) {
@@ -219,24 +171,17 @@ export function exitToCompeteAfterCompetitionSave(args: {
   queueMicrotask(() => {
     const tabLayerAfter = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
     const activeStackAfter = laneStackScreenNames(tabLayerAfter, laneRouteName);
-    const laneStateAfter = laneStackNav?.getState?.() as NavigationState | undefined;
-    const routeCountAfter = laneStateAfter?.routes?.length ?? 0;
     const rootAfter = rootNav?.getRootState() as NavigationState | undefined;
     const focusedTabAfterSave = readFocusedTabFromRootState(rootAfter);
 
     logCompeteExitStackReset({
-      stackNavigatorKey,
-      routeCountBefore,
-      routeCountAfter,
+      stackNavigatorKey: null,
+      routeCountBefore: 0,
+      routeCountAfter: 0,
       focusedTabAfterSave,
     });
 
-    const resetApplied =
-      popToTopOk &&
-      (routeCountAfter < routeCountBefore ||
-        activeStackBefore.length === 0 ||
-        activeStackAfter.length < activeStackBefore.length);
-    logStackReset(resetApplied, activeStackBefore, activeStackAfter);
+    logStackReset(false, activeStackBefore, activeStackAfter);
     scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
   });
 }

@@ -14,6 +14,45 @@ export type TrainingRefreshScopeInput = {
   linkedKidId?: string;
 };
 
+/** __DEV__ only: mirrors `filterSessionsLikeTrainingRefresh` drop reasons for Operator Mode logs. */
+function devTrainingRefreshDropReason(
+  s: Session,
+  input: TrainingRefreshScopeInput,
+): string {
+  const athleteScopeTrim = input.athleteId.trim();
+  const kidParam =
+    typeof input.kidIdParam === "string" && input.kidIdParam.trim()
+      ? input.kidIdParam.trim()
+      : undefined;
+  const linked =
+    typeof input.linkedKidId === "string" && input.linkedKidId.trim()
+      ? input.linkedKidId.trim()
+      : undefined;
+  const effectiveKidId = kidParam ?? linked;
+
+  if (kidParam) {
+    if ((s.kidId ?? "").trim() !== kidParam) return "kid_param_mismatch";
+    if (input.deviceRole === "parent" && s.trainingLoggedByRole === "coach") {
+      return "parent_hides_coach_logged_session";
+    }
+    return "unknown_drop";
+  }
+
+  if (athleteScopeTrim || effectiveKidId) {
+    const byShared =
+      !!athleteScopeTrim && (s.sharedAthleteId ?? "").trim() === athleteScopeTrim;
+    const byKid = !!effectiveKidId && (s.kidId ?? "").trim() === effectiveKidId;
+    if (!byShared && !byKid) return "neither_shared_athlete_nor_linked_kid";
+    if (input.deviceRole === "parent" && s.trainingLoggedByRole === "coach") {
+      return "parent_hides_coach_logged_session";
+    }
+    return "unknown_drop";
+  }
+
+  if ((s.kidId ?? "").trim()) return "account_scope_strips_kid_sessions";
+  return "unknown_drop";
+}
+
 export function filterSessionsLikeTrainingRefresh(
   normalized: Session[],
   input: TrainingRefreshScopeInput,
@@ -30,15 +69,33 @@ export function filterSessionsLikeTrainingRefresh(
   const effectiveKidId = kidParam ?? linked;
 
   if (kidParam) {
-    return normalized.filter((s) => {
+    const out = normalized.filter((s) => {
       if ((s.kidId ?? "").trim() !== kidParam) return false;
       if (input.deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
       return true;
     });
+    if (__DEV__) {
+      const dropped = normalized.filter((s) => !out.some((k) => k.id === s.id));
+      const reasons = dropped.map((s) => devTrainingRefreshDropReason(s, input));
+      const reasonDropped =
+        reasons.length === 0
+          ? "none"
+          : [...new Set(reasons)].length === 1
+            ? reasons[0]!
+            : `mixed:${[...new Set(reasons)].join(",")}`;
+      console.log("[SUMMARY_SESSION_FILTER]", {
+        athleteId: athleteScopeTrim || null,
+        incomingSessionCount: normalized.length,
+        outgoingSessionCount: out.length,
+        droppedSessionIds: dropped.map((s) => s.id),
+        reasonDropped,
+      });
+    }
+    return out;
   }
 
   if (athleteScopeTrim || effectiveKidId) {
-    return normalized.filter((s) => {
+    const out = normalized.filter((s) => {
       const byShared =
         !!athleteScopeTrim && (s.sharedAthleteId ?? "").trim() === athleteScopeTrim;
       const byKid = !!effectiveKidId && (s.kidId ?? "").trim() === effectiveKidId;
@@ -46,9 +103,45 @@ export function filterSessionsLikeTrainingRefresh(
       if (input.deviceRole === "parent" && s.trainingLoggedByRole === "coach") return false;
       return true;
     });
+    if (__DEV__) {
+      const dropped = normalized.filter((s) => !out.some((k) => k.id === s.id));
+      const reasons = dropped.map((s) => devTrainingRefreshDropReason(s, input));
+      const reasonDropped =
+        reasons.length === 0
+          ? "none"
+          : [...new Set(reasons)].length === 1
+            ? reasons[0]!
+            : `mixed:${[...new Set(reasons)].join(",")}`;
+      console.log("[SUMMARY_SESSION_FILTER]", {
+        athleteId: athleteScopeTrim || null,
+        incomingSessionCount: normalized.length,
+        outgoingSessionCount: out.length,
+        droppedSessionIds: dropped.map((s) => s.id),
+        reasonDropped,
+      });
+    }
+    return out;
   }
 
-  return normalized.filter((s) => !(s.kidId ?? "").trim());
+  const out = normalized.filter((s) => !(s.kidId ?? "").trim());
+  if (__DEV__) {
+    const dropped = normalized.filter((s) => !out.some((k) => k.id === s.id));
+    const reasons = dropped.map((s) => devTrainingRefreshDropReason(s, input));
+    const reasonDropped =
+      reasons.length === 0
+        ? "none"
+        : [...new Set(reasons)].length === 1
+          ? reasons[0]!
+          : `mixed:${[...new Set(reasons)].join(",")}`;
+    console.log("[SUMMARY_SESSION_FILTER]", {
+      athleteId: athleteScopeTrim || null,
+      incomingSessionCount: normalized.length,
+      outgoingSessionCount: out.length,
+      droppedSessionIds: dropped.map((s) => s.id),
+      reasonDropped,
+    });
+  }
+  return out;
 }
 
 /** Local calendar YYYY-MM-DD (matches Training `todayYMD`). */

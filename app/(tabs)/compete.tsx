@@ -99,7 +99,13 @@ function buildPastMonthGroups(entries: CompeteKidEntryMerged[]): MonthGroup[] {
 }
 
 export default function CompetitionTab() {
-  const { athleteId, linkedKidId, hydrationReady, athlete } = useActiveAthlete();
+  const {
+    athleteId,
+    linkedKidId,
+    hydrationReady,
+    athlete,
+    authorityBootstrapState,
+  } = useActiveAthlete();
   const [entries, setEntries] = useState<CompeteKidEntryMerged[]>([]);
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
@@ -115,6 +121,11 @@ export default function CompetitionTab() {
     const merged = lk
       ? await getKidCompetitionEntriesWithMatchDetailForKid(lk)
       : await getKidCompetitionEntriesWithMatchDetailForSharedAthlete(trimmedAthleteId);
+    console.log("[COMP_SYNC_TRACE] compete.tsx loadCompetitions", {
+      linkedKidId: lk ?? null,
+      athleteId: trimmedAthleteId,
+      entriesLoaded: merged.length,
+    });
     if (gen !== loadGenerationRef.current) return;
     setEntries(merged);
   }, [athleteId, linkedKidId]);
@@ -126,6 +137,11 @@ export default function CompetitionTab() {
   );
 
   const noAthleteSelected = hydrationReady && !athleteId.trim();
+  const competeNoAthleteSubtitle =
+    authorityBootstrapState === "coach_unresolved" ||
+    authorityBootstrapState === "coach_disconnected"
+      ? "Choose an athlete on Summary when several athletes are linked or roster sync could not refresh."
+      : "Select an athlete in Summary to view competition history";
   const athleteName = (athlete?.name ?? "").trim();
   const athleteInitials = initialsFromName(athleteName || "?");
   const visibleEntries = useMemo(() => {
@@ -215,9 +231,7 @@ export default function CompetitionTab() {
         {noAthleteSelected ? (
           <View style={styles.twEmptyCard}>
             <Text style={styles.twEmptyTitle}>No athlete selected</Text>
-            <Text style={styles.twEmptySubtitle}>
-              Select an athlete in Summary to view competition history
-            </Text>
+            <Text style={styles.twEmptySubtitle}>{competeNoAthleteSubtitle}</Text>
             <Pressable
               onPress={() => router.push("/summary")}
               style={({ pressed }) => ({

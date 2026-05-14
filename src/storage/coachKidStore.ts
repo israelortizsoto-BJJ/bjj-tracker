@@ -1,12 +1,22 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { dedupeActiveCoachWriterLinks } from "../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
+import { isCoachSyncConfigured } from "../config/coachSync";
 import { normalizePublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
-import { CoachWeeklySyncApiError, coachSyncDeleteSessionAthlete } from "../services/coachWeeklySyncApi";
+import {
+  CoachWeeklySyncApiError,
+  coachSyncDeleteSessionAthlete,
+  coachSyncFetchSession,
+} from "../services/coachWeeklySyncApi";
+import type { CoachLink } from "../types/coachShare";
 import {
   deleteAllKidCompetitionEntriesForKid,
   stripWorkerSyncLinkageForKid,
+  upsertSharedCompetitionsForKid,
 } from "./kidCompetitionStore";
+import { getCoachLinks } from "./coachShareStore";
+import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { clearLastAthleteKidIdIfMatches } from "./lastAthleteIdStore";
 import { deleteSessionsForKid } from "./sessionsStore";
@@ -21,7 +31,12 @@ import {
   type KidWeeklyFocusEntryTemplate,
   type KidsById,
 } from "../types/coachKid";
-import type { SyncedSharedAthlete } from "../types/coachWeeklySync";
+import type {
+  CoachWeeklySyncSessionResponse,
+  SyncedSharedAthlete,
+  SyncedSharedCompetition,
+  SyncedWeeklyMessagePayload,
+} from "../types/coachWeeklySync";
 
 type KidWeeklyFocusAppendInput =
   | (KidWeeklyFocusEntryTemplate & {
@@ -271,7 +286,88 @@ export async function unlinkParentAthleteFromCoachSession(opts: {
 export type WriterSessionSnapshotOk = {
   linkTokenNorm: string;
   athletes: SyncedSharedAthlete[];
+  /** Present when a successful GET `/v1/sessions/:token` was merged for this invite. */
+  session?: CoachWeeklySyncSessionResponse;
+  /** Same ordering inputs as `sortCoachWriterLinksNewestFirst` (competition hydration). */
+  writerLinkUpdatedAt?: string;
+  writerLinkCreatedAt?: string;
 };
+
+function sortWriterSessionSnapshotsNewestFirst(
+  snaps: WriterSessionSnapshotOk[],
+): WriterSessionSnapshotOk[] {
+  return [...snaps].sort((a, b) => {
+    const uA = a.writerLinkUpdatedAt ?? "";
+    const uB = b.writerLinkUpdatedAt ?? "";
+    const c = uB.localeCompare(uA);
+    if (c !== 0) return c;
+    const cA = a.writerLinkCreatedAt ?? "";
+    const cB = b.writerLinkCreatedAt ?? "";
+    return cB.localeCompare(cA);
+  });
+}
+
+/**
+ * Walk writer sessions in traversal order (newest invite first on coach roster refresh) and use
+ * the first session whose roster lists the athlete — matches `KidDetailScreen` coach sync.
+ */
+export function pickRemoteSharedCompetitionsForLinkedAthlete(
+  sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
+  sharedAthleteId: string,
+): SyncedSharedCompetition[] {
+  const sid = sharedAthleteId.trim();
+  if (!sid) {
+    console.log("[COMP_SYNC_TRACE] pickRemoteSharedCompetitionsForLinkedAthlete", {
+      targetAthleteId: sid,
+      sessionCount: sessionsInWriterLinkTraversalOrder.length,
+      totalCompetitionsInSession: null,
+      filteredCompetitionsCount: 0,
+      idsSelected: [] as string[],
+      reason: "emptySharedAthleteId",
+    });
+    return [];
+  }
+  for (const session of sessionsInWriterLinkTraversalOrder) {
+    const totalComps = Array.isArray(session.competitions) ? session.competitions.length : 0;
+    const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
+    const filtered = athleteInSession
+      ? session.competitions.filter((c) => c.sharedAthleteId === sid)
+      : [];
+    console.log("[COMP_SYNC_TRACE] pickRemoteSharedCompetitionsForLinkedAthlete", {
+      targetAthleteId: sid,
+      totalCompetitionsInSession: totalComps,
+      filteredCompetitionsCount: filtered.length,
+      idsSelected: filtered.map((c) => c.id),
+      athleteInSession,
+    });
+    if (athleteInSession) {
+      return filtered;
+    }
+  }
+  console.log("[COMP_SYNC_TRACE] pickRemoteSharedCompetitionsForLinkedAthlete", {
+    targetAthleteId: sid,
+    sessionCount: sessionsInWriterLinkTraversalOrder.length,
+    totalCompetitionsInSession: null,
+    filteredCompetitionsCount: 0,
+    idsSelected: [] as string[],
+    reason: "noSessionListedAthlete",
+  });
+  return [];
+}
+
+export function pickPublishedWeeklyParentFeedbackForSharedAthlete(
+  sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
+  sharedAthleteId: string,
+): SyncedWeeklyMessagePayload["parentFeedback"] | null {
+  const sid = sharedAthleteId.trim();
+  if (!sid) return null;
+  for (const session of sessionsInWriterLinkTraversalOrder) {
+    if (session.athletes.some((a) => a.id.trim() === sid)) {
+      return session.weeklyByAthleteId?.[sid]?.parentFeedback ?? null;
+    }
+  }
+  return null;
+}
 
 /**
  * Coach roster: merge athletes from each **successful** writer session GET, then prune stale linked rows.
@@ -403,6 +499,187 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
   }
 
   return getKidsById();
+}
+
+/**
+ * Hydrates local `kidCompetitionStore` from successful writer session GETs. Uses
+ * {@link upsertSharedCompetitionsForKid} as the only merge primitive. Intended to run immediately
+ * after {@link reconcileCoachKidRosterFromWriterSessions} with the same `successfulSnapshots` array.
+ */
+export async function reconcileCoachLinkedCompetitionEntriesFromWriterSessions(opts: {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  totalActiveWriterCount: number;
+}): Promise<void> {
+  const { successfulSnapshots, totalActiveWriterCount } = opts;
+  if (totalActiveWriterCount <= 0) {
+    console.log("[COMP_SYNC_TRACE] reconcileCoachLinkedCompetitionEntriesFromWriterSessions", {
+      earlyExit: "totalActiveWriterCount<=0",
+      totalActiveWriterCount,
+      successfulSnapshotCount: successfulSnapshots.length,
+    });
+    return;
+  }
+  if (successfulSnapshots.length === 0) {
+    console.log("[COMP_SYNC_TRACE] reconcileCoachLinkedCompetitionEntriesFromWriterSessions", {
+      earlyExit: "noSuccessfulSnapshots",
+      totalActiveWriterCount,
+    });
+    return;
+  }
+
+  const withSession = successfulSnapshots.filter(
+    (s): s is WriterSessionSnapshotOk & { session: CoachWeeklySyncSessionResponse } =>
+      Boolean(s.session),
+  );
+  if (withSession.length === 0) {
+    console.log("[COMP_SYNC_TRACE] reconcileCoachLinkedCompetitionEntriesFromWriterSessions", {
+      earlyExit: "noSnapshotsWithSessionPayload",
+      successfulSnapshotCount: successfulSnapshots.length,
+      totalActiveWriterCount,
+    });
+    return;
+  }
+
+  const sorted = sortWriterSessionSnapshotsNewestFirst(withSession);
+  const sessionsOrdered: CoachWeeklySyncSessionResponse[] = [];
+  for (const s of sorted) {
+    if (s.session) sessionsOrdered.push(s.session);
+  }
+
+  const athleteListedInFetchedSessions = (athleteId: string) =>
+    sessionsOrdered.some((sess) => sess.athletes.some((a) => a.id.trim() === athleteId));
+
+  const kids = await getKidsById();
+  for (const k of Object.values(kids)) {
+    if (isKidCoachArchived(k)) continue;
+    const sharedAthleteId = k.sharedAthleteId?.trim() ?? "";
+    if (!sharedAthleteId) continue;
+
+    const rosterKidFound = Boolean(k.id);
+    const athleteOnFetchedSessions = athleteListedInFetchedSessions(sharedAthleteId);
+    const remote = pickRemoteSharedCompetitionsForLinkedAthlete(sessionsOrdered, sharedAthleteId);
+    console.log("[COMP_SYNC_TRACE] reconcileCoachLinkedCompetitionEntriesFromWriterSessions", {
+      sharedAthleteId,
+      rosterKidId: k.id,
+      rosterKidFound,
+      athleteListedInWriterSessions: athleteOnFetchedSessions,
+      remoteCompetitionCountSelected: remote.length,
+    });
+    await upsertSharedCompetitionsForKid(k.id, sharedAthleteId, remote);
+  }
+}
+
+export type CoachInviteSessionAthletesByTokenEntry = {
+  names: string[];
+  fetchFailed: boolean;
+};
+
+export type CoachWriterSessionRefreshResult = {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  writerLinks: CoachLink[];
+  inviteSessionAthletesByToken: Record<string, CoachInviteSessionAthletesByTokenEntry>;
+};
+
+/**
+ * Coach lane: one entry point for writer `coachSyncFetchSession` GETs, weekly cache writes,
+ * roster reconciliation, and shared competition hydration. Safe no-op when sync is not configured
+ * or this profile has no writer invites.
+ */
+export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<CoachWriterSessionRefreshResult> {
+  const inviteSessionAthletesByToken: Record<string, CoachInviteSessionAthletesByTokenEntry> = {};
+  const successfulSnapshots: WriterSessionSnapshotOk[] = [];
+
+  const links = await getCoachLinks();
+  const writerLinks = dedupeActiveCoachWriterLinks(links);
+
+  if (!isCoachSyncConfigured()) {
+    console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
+      earlyExit: "coachSyncNotConfigured",
+      writerLinkCount: writerLinks.length,
+      sessionsFetchedOkCount: 0,
+      tokensFetched: [] as string[],
+      perSession: [] as { tokenNorm: string; competitionsCount: number; athleteIds: string[] }[],
+      athleteIdsUnion: [] as string[],
+    });
+    return { successfulSnapshots, writerLinks, inviteSessionAthletesByToken };
+  }
+
+  for (const link of writerLinks) {
+    const weeklySync = link.weeklySync!;
+    const tokenKey = normalizeInviteLinkToken(weeklySync.linkToken);
+    try {
+      const session = await coachSyncFetchSession(weeklySync.linkToken, weeklySync.apiBaseUrl);
+      const nowIso = new Date().toISOString();
+      await setCachedWeeklyForLinkToken(
+        weeklySync.linkToken,
+        session.weekly,
+        nowIso,
+        session.weeklyByAthleteId ?? {},
+        session.athletes,
+        session,
+        tokenKey,
+      );
+      successfulSnapshots.push({
+        linkTokenNorm: tokenKey,
+        athletes: session.athletes,
+        session,
+        writerLinkUpdatedAt: link.updatedAt,
+        writerLinkCreatedAt: link.createdAt,
+      });
+      const names = session.athletes
+        .map((a) => (typeof a.name === "string" ? a.name.trim() : ""))
+        .filter(Boolean);
+      names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+      inviteSessionAthletesByToken[tokenKey] = { names, fetchFailed: false };
+    } catch {
+      inviteSessionAthletesByToken[tokenKey] = { names: [], fetchFailed: true };
+    }
+  }
+
+  const perSession = successfulSnapshots.map((snap) => {
+    const sess = snap.session;
+    const competitionsCount = sess?.competitions?.length ?? 0;
+    const athleteIds =
+      sess?.athletes
+        ?.map((a) => (typeof a.id === "string" ? a.id.trim() : ""))
+        .filter(Boolean) ?? [];
+    return {
+      tokenNorm: snap.linkTokenNorm,
+      competitionsCount,
+      athleteIds,
+    };
+  });
+  const athleteIdsUnion = [
+    ...new Set(perSession.flatMap((p) => p.athleteIds)),
+  ];
+  console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
+    writerLinkCount: writerLinks.length,
+    sessionsFetchedOkCount: successfulSnapshots.length,
+    tokensFetched: successfulSnapshots.map((s) => s.linkTokenNorm),
+    perSession,
+    athleteIdsUnion,
+    willRunRosterAndCompetitionReconcile:
+      writerLinks.length > 0 && successfulSnapshots.length > 0,
+  });
+
+  if (writerLinks.length > 0 && successfulSnapshots.length > 0) {
+    await reconcileCoachKidRosterFromWriterSessions({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
+    await reconcileCoachLinkedCompetitionEntriesFromWriterSessions({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
+  } else if (writerLinks.length > 0) {
+    console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
+      skipReconcile: "writerLinksButNoSuccessfulSessionFetches",
+      writerLinkCount: writerLinks.length,
+      sessionsFetchedOkCount: successfulSnapshots.length,
+    });
+  }
+
+  return { successfulSnapshots, writerLinks, inviteSessionAthletesByToken };
 }
 
 /**

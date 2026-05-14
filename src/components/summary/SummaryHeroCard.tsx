@@ -158,6 +158,9 @@ type SummaryHeroProps = {
   onApplySuggestion?: (suggestion: IdentitySuggestion) => void;
   onDismissSuggestion?: (suggestion: IdentitySuggestion) => void;
   suggestionProfile?: SummaryHeroSuggestionProfile | null;
+  /** Must match SummaryScreen → buildSummaryViewModel for hero VM parity. */
+  sessionCount?: number;
+  competitionCount?: number;
 };
 
 export default function SummaryHeroCard({
@@ -176,6 +179,8 @@ export default function SummaryHeroCard({
   onApplySuggestion,
   onDismissSuggestion,
   suggestionProfile,
+  sessionCount,
+  competitionCount,
 }: SummaryHeroProps) {
   const mergedPostFeedback =
     (signals.postSessionFeedback ?? postSessionFeedback)?.trim() || null;
@@ -253,6 +258,8 @@ export default function SummaryHeroCard({
     identityFocus: identityFocusForVm,
     coachWeekly: coachWeekly ?? null,
     lastAction: lastAction ?? null,
+    sessionCount,
+    competitionCount,
     devFinalHeroVmTrace: __DEV__
       ? { athleteId: devDualVmAudit?.athleteId ?? null }
       : undefined,

@@ -426,6 +426,7 @@ export async function upsertSharedCompetitionsForKid(
   const all = await getRaw();
   const nowIso = new Date().toISOString();
   const targetKid = all.filter((e) => e.kidId === kidId);
+  const localEntriesBefore = targetKid.length;
   const rest = all.filter((e) => e.kidId !== kidId);
 
   const remoteById = new Map(remote.map((r) => [r.id, r] as const));
@@ -567,6 +568,18 @@ export async function upsertSharedCompetitionsForKid(
         b.eventDate.localeCompare(a.eventDate) ||
         b.createdAt.localeCompare(a.createdAt),
     );
+
+  console.log("[COMP_SYNC_TRACE] upsertSharedCompetitionsForKid", {
+    kidId,
+    sharedAthleteId,
+    remoteCompetitionCount: remote.length,
+    localEntriesBefore,
+    localEntriesAfter: returnedForKid.length,
+    finalPersistedEntryIds: returnedForKid.map((e) => e.id),
+    finalPersistedSharedCompetitionIds: returnedForKid
+      .map((e) => e.sharedCompetitionId)
+      .filter((id): id is string => Boolean(id)),
+  });
 
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({

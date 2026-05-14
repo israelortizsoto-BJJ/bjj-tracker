@@ -1,6 +1,348 @@
 # BJJ Tracker - Dev Handoff Notes
 
 
+# EOD Handoff — 2026-05-13
+
+## Branch
+`summary-rebuild-v2`
+
+---
+
+# TODAY'S PRIMARY OUTCOME
+
+Today was a major architecture clarification day.
+
+We confirmed that the remaining coach-side Summary issue is NOT a rendering bug, NOT a Summary VM bug, and NOT primarily a competition sync bug.
+
+It is a foundational data-plane / athlete-intelligence architecture issue.
+
+This changes the direction of future work.
+
+---
+
+# WHAT WAS VALIDATED TODAY
+
+## 1. Weekly systemKey persistence bug FIXED
+
+### Root cause discovered
+`systemKey` was being lost when:
+- coach check-ins appended new weekly rows
+- newer rows became the “latest row”
+- publish selected latest row
+- publish payload omitted `systemKey`
+- downstream alignment fell back to headline prose
+
+### Fix implemented
+File:
+- `src/features/kid/KidDetailScreen.tsx`
+
+Change:
+- check-in append rows now inherit:
+  `systemKey: currentWeekEntry.systemKey`
+
+Applies to:
+- template flows
+- custom flows
+
+### Result
+Latest weekly rows now preserve taxonomy lineage.
+
+Prevents:
+- alignment drift
+- headline fallback misuse
+- taxonomy loss after coach check-ins
+
+### Validation
+Confirmed:
+- coach publish → parent sync works
+- weekly direction persists correctly
+- no observed regression in weekly flows
+
+Typecheck:
+- passed
+
+Lint:
+- passed
+
+---
+
+# 2. Competition sync architecture confirmed stable
+
+Validated:
+- parent-created competitions appear on coach side
+- shared athlete propagation works
+- reconciliation survives reload
+- competition lineage uses proper remote sync path
+
+This reinforced the discovery that:
+competition has a remote data plane,
+training currently does not.
+
+---
+
+# 3. Major architecture discovery — coach Summary issue
+
+## CONFIRMED FACT
+
+Coach-side Summary currently shows:
+- `sessionCount: 0`
+- `directed_no_proof`
+
+because:
+coach device has NO replicated parent training lineage.
+
+Parent training sessions remain LOCAL ONLY.
+
+---
+
+# IMPORTANT ARCHITECTURE DISCOVERY
+
+## Current architecture
+
+### Coach currently receives remotely:
+- weeklyByAthleteId
+- competitions
+- coach-side local sessions
+
+### Coach does NOT receive:
+- parent-created training sessions
+- parent training proof
+- parent-derived signal lineage
+
+Therefore:
+Summary behaves correctly given current inputs.
+
+---
+
+# THIS IS NOT A SUMMARY BUG
+
+Today confirmed:
+- Summary VM is behaving consistently
+- alignment engine is behaving consistently
+- progression engine is behaving consistently
+
+The issue is:
+coach-side athlete intelligence has no replicated training proof source.
+
+This is a DATA PLANE GAP.
+
+---
+
+# ARCHITECTURAL DECISION
+
+## Selected direction:
+# Recommendation A — Canonical Training Proof Architecture
+
+DO NOT:
+- sync raw parent Session rows directly
+- fake session rows
+- inject synthetic counts
+- add Summary hacks
+
+INSTEAD:
+introduce a dedicated replicated per-athlete Training Proof lane.
+
+---
+
+# RECOMMENDATION A — TARGET MODEL
+
+## Parent device remains source of truth for:
+- full sessions
+- journals
+- notes
+- media
+- detailed logs
+
+## Remote worker should eventually replicate:
+- rolling session counts
+- proof windows
+- signal dominance
+- top systems
+- timestamps
+- alignment-relevant aggregates
+
+NOT:
+- raw journals
+- private parent notes
+- media payloads
+
+---
+
+# WHY THIS MATTERS
+
+This architecture:
+- scales cleanly
+- keeps payloads bounded
+- protects privacy
+- stabilizes Summary inputs
+- avoids route ownership leakage
+- prevents future “patch storms”
+
+---
+
+# IMPORTANT DISCOVERY #2
+
+## Competition issue earlier this week may have exposed broader instability
+
+Strong evidence now points toward:
+# ROUTE OWNERSHIP + ATHLETE IDENTITY LEAKAGE
+
+Potential root causes:
+- multiple athlete truth sources
+- stale athlete cache reuse
+- fallback ownership behavior
+- route crossover between parent/coach flows
+- selector instability
+
+NOT primarily:
+- worker corruption
+- KV corruption
+- competition corruption
+
+This changes future stabilization priorities.
+
+---
+
+# TODAY'S LOGGING + TRACE RESULTS
+
+## Key confirmation
+
+Coach Summary logs showed:
+- `sessionCountVm: 0`
+- `signals.topSystem: null`
+- `rawSessionCount: 0`
+
+while:
+- competitions existed
+- weekly sync existed
+- athlete identity resolved correctly
+
+Meaning:
+the coach app had no session lineage available.
+
+This matched Recommendation A diagnosis exactly.
+
+---
+
+# IMPORTANT IMPLEMENTATION STATUS
+
+## Recommendation A has NOT been implemented yet.
+
+Current behavior remains EXPECTED:
+
+### Parent side
+- training logs visible
+- Summary computes proof
+
+### Coach side
+- no parent training proof visible
+- Summary remains proof-empty
+
+This is now considered expected behavior until the new architecture exists.
+
+---
+
+# FILES TO REVIEW TOMORROW
+
+Potentially valid:
+- `src/features/kid/KidDetailScreen.tsx`
+- `src/hooks/useAthleteData.ts`
+- `src/hooks/useSignals.ts`
+- `src/features/summary/SummaryScreen.tsx`
+- `src/components/summary/SummaryHeroCard.tsx`
+
+Need careful audit before commit.
+
+---
+
+# CURRENT GIT STATUS
+
+Modified files include:
+- Summary plumbing
+- athlete lineage experiments
+- competition stabilization carryover
+- architecture instrumentation
+- possible partial Cursor audit changes
+
+DO NOT blindly commit all changes tonight.
+
+---
+
+# RECOMMENDED NEXT SESSION PRIORITIES
+
+## Priority 1
+Formalize canonical Athlete Intelligence architecture.
+
+## Priority 2
+Audit Recommendation A against entire repo:
+- selectors
+- route ownership
+- sync contracts
+- worker assumptions
+- lineage semantics
+- cache ownership
+
+## Priority 3
+Define explicit visibility contract:
+What EXACTLY should coaches see from parent training?
+
+## Priority 4
+Build formal QA matrix:
+- single athlete
+- multi athlete
+- parent
+- coach
+- device permutations
+- stale cache reloads
+- reconnect flows
+
+---
+
+# QA STATUS
+
+## VALIDATED TODAY
+- weeklyByAthleteId sync
+- coach publish → parent
+- parent competition → coach
+- shared athlete competition propagation
+- weekly systemKey persistence
+- no regression in coach/parent weekly flows
+
+## EXPECTED CURRENT LIMITATION
+- parent training proof does NOT appear on coach Summary
+
+This is expected until Recommendation A implementation.
+
+---
+
+# IMPORTANT OPERATOR RULES
+
+## NO MORE PATCHES
+
+Do NOT:
+- fake session rows
+- overload Summary inputs
+- inject fake counts
+- add temporary proof hacks
+- continue “just one more fallback”
+
+All future work must support:
+# Canonical Athlete Intelligence Architecture
+
+---
+
+# TOMORROW STARTING POINT
+
+Morning focus:
+1. clean git review
+2. isolate validated fixes
+3. architecture audit
+4. Recommendation A repo consistency audit
+5. route ownership stabilization planning
+6. define canonical athlete intelligence model
+
+Do NOT resume random Summary patching.
+
 
 ## 2026-05-11 → 2026-05-12 Combined Dev Handoff
 

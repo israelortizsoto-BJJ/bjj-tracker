@@ -19,7 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   activeCoachWriterInviteTokenNorms,
   coachKidShowsFamilyChannelLinkedBadge,
-  dedupeActiveCoachWriterLinks,
   devSnapshotCoachLinkRow,
   kidVisibleOnCoachRoster,
 } from "../../../src/coachShare/coachLinkBinding";
@@ -31,7 +30,6 @@ import { getCoachSyncApiBaseUrl, isCoachSyncConfigured } from "../../../src/conf
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSession,
-  coachSyncFetchSession,
 } from "../../../src/services/coachWeeklySyncApi";
 import {
   getCoachLinks,
@@ -40,13 +38,12 @@ import {
   setCoachLinks,
   setCoachesById,
 } from "../../../src/storage/coachShareStore";
-import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
 import {
   clearLocalCoachSharingBindingsForInviteToken,
   deleteKidPilot,
   getKidsById,
   normalizeKidHouseholdLabel,
-  reconcileCoachKidRosterFromWriterSessions,
+  refreshCoachWriterSessionsAndReconcileStores,
   setKidsById,
 } from "../../../src/storage/coachKidStore";
 import { safeReplace } from "../../../src/navigation/safeNavigate";
@@ -57,7 +54,6 @@ import {
   type Kid,
   type KidsById,
 } from "../../../src/types/coachKid";
-import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
 
 type InviteSessionAthletesState = { names: string[]; fetchFailed: boolean };
 
@@ -173,45 +169,12 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
       setReady(false);
     }
     try {
-      const links = await getCoachLinks();
-      const writers = dedupeActiveCoachWriterLinks(links);
-      setWriterLinks(writers);
+      const { successfulSnapshots, writerLinks, inviteSessionAthletesByToken } =
+        await refreshCoachWriterSessionsAndReconcileStores();
+      setWriterLinks(writerLinks);
+      setInviteSessionAthletesByToken(inviteSessionAthletesByToken);
 
-      const successfulSnapshots: {
-        linkTokenNorm: string;
-        athletes: SyncedSharedAthlete[];
-      }[] = [];
-      const athletesByToken: Record<string, InviteSessionAthletesState> = {};
-      if (syncConfigured) {
-        for (const l of writers) {
-          const ws = l.weeklySync!;
-          const tokenKey = normalizeInviteLinkToken(ws.linkToken);
-          try {
-            const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
-            const nowIso = new Date().toISOString();
-            await setCachedWeeklyForLinkToken(
-              ws.linkToken,
-              session.weekly,
-              nowIso,
-              session.weeklyByAthleteId ?? {},
-              session.athletes,
-              session,
-              tokenKey,
-            );
-            successfulSnapshots.push({ linkTokenNorm: tokenKey, athletes: session.athletes });
-            const names = session.athletes
-              .map((a) => (typeof a.name === "string" ? a.name.trim() : ""))
-              .filter(Boolean);
-            names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
-            athletesByToken[tokenKey] = { names, fetchFailed: false };
-          } catch {
-            athletesByToken[tokenKey] = { names: [], fetchFailed: true };
-            // Best-effort: keep local roster if sync is unreachable.
-          }
-        }
-      }
-      setInviteSessionAthletesByToken(athletesByToken);
-      if (syncConfigured && writers.length > 0 && successfulSnapshots.length > 0) {
+      if (syncConfigured && writerLinks.length > 0 && successfulSnapshots.length > 0) {
         const nextActiveWriterAthleteIds = new Set<string>();
         for (const snap of successfulSnapshots) {
           for (const athlete of snap.athletes) {
@@ -224,12 +187,6 @@ export default function KidsRosterScreen({ surface = "this-week" }: KidsRosterSc
         setActiveWriterAthleteIds(nextActiveWriterAthleteIds);
       } else {
         setActiveWriterAthleteIds(new Set());
-      }
-      if (writers.length > 0 && syncConfigured && successfulSnapshots.length > 0) {
-        await reconcileCoachKidRosterFromWriterSessions({
-          successfulSnapshots,
-          totalActiveWriterCount: writers.length,
-        });
       }
 
       const kids = await getKidsById();

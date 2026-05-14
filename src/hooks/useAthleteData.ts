@@ -13,17 +13,44 @@ type AthleteData = {
   loading: boolean;
 };
 
-export function useAthleteData(activeAthleteId: string): AthleteData {
+function sessionMatchesAthleteLineage(
+  session: Session,
+  athleteId: string,
+  linkedKidIdTrim: string,
+): boolean {
+  const sid = (session.sharedAthleteId ?? "").trim();
+  if (sid === athleteId) return true;
+  if (linkedKidIdTrim && (session.kidId ?? "").trim() === linkedKidIdTrim) return true;
+  return false;
+}
+
+/**
+ * Loads athlete-scoped competitions (always `sharedAthleteId`) and training sessions tied to the
+ * athlete via `sharedAthleteId` and/or the linked roster `kidId` (coach kid row / parent kid row).
+ * Matches {@link filterSessionsLikeTrainingRefresh} “byShared | byKid” lineage, not viewer-only ids.
+ */
+export type SummaryFlowTraceRole = "parent" | "coach" | "unknown";
+
+/**
+ * @param summaryFlowTraceRole TEMP (Operator Mode): labels console rows for parent vs coach Summary.
+ */
+export function useAthleteData(
+  activeAthleteId: string,
+  linkedKidId?: string | null,
+  summaryFlowTraceRole: SummaryFlowTraceRole = "unknown",
+): AthleteData {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [competitions, setCompetitions] = useState<KidCompetitionEntryWithMatchDetail[]>([]);
   const [loading, setLoading] = useState(false);
-  const prevHydratedAthleteRef = useRef<string | undefined>(undefined);
+  const prevHydratedScopeRef = useRef<string | undefined>(undefined);
   const loadGenerationRef = useRef(0);
 
   useFocusEffect(
     useCallback(() => {
       let mounted = true;
       const athleteId = activeAthleteId.trim();
+      const linkedKidTrim = (linkedKidId ?? "").trim();
+      const scopeKey = `${athleteId}\u0001${linkedKidTrim}`;
 
       async function load() {
         const gen = ++loadGenerationRef.current;
@@ -33,7 +60,7 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
           if (!mounted) return;
           if (gen !== loadGenerationRef.current) return;
 
-          prevHydratedAthleteRef.current = "";
+          prevHydratedScopeRef.current = "";
 
           setSessions([]);
           setCompetitions([]);
@@ -46,16 +73,20 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
               competitionCount: 0,
             });
           }
+          console.log("[COMP_SYNC_TRACE] useAthleteData", {
+            athleteId,
+            competitionsLoadedCount: 0,
+          });
 
           return;
         }
 
-        const prev = prevHydratedAthleteRef.current;
-        if (prev !== undefined && prev !== athleteId) {
+        const prev = prevHydratedScopeRef.current;
+        if (prev !== undefined && prev !== scopeKey) {
           setSessions([]);
           setCompetitions([]);
         }
-        prevHydratedAthleteRef.current = athleteId;
+        prevHydratedScopeRef.current = scopeKey;
 
         try {
           const [allSessions, allCompetitions] = await Promise.all([
@@ -63,10 +94,50 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
             getKidCompetitionEntries(),
           ]);
 
-          const nextSessions = allSessions.filter((session) => {
-            const sharedAthleteId = session.sharedAthleteId?.trim();
-            return sharedAthleteId === athleteId;
-          });
+          if (__DEV__) {
+            console.log("[SUMMARY_FLOW_TRACE] 1_raw_sessions_fetched", {
+              flow: summaryFlowTraceRole,
+              activeAthleteId: athleteId || null,
+              linkedKidId: linkedKidTrim || null,
+              rawSessionCount: allSessions.length,
+            });
+          }
+
+          const matchedBySharedCount = allSessions.filter(
+            (session) => (session.sharedAthleteId ?? "").trim() === athleteId,
+          ).length;
+          const matchedByKidCount = linkedKidTrim
+            ? allSessions.filter(
+                (session) => (session.kidId ?? "").trim() === linkedKidTrim,
+              ).length
+            : 0;
+
+          const nextSessions = allSessions.filter((session) =>
+            sessionMatchesAthleteLineage(session, athleteId, linkedKidTrim),
+          );
+
+          if (__DEV__) {
+            console.log("[SUMMARY_SESSION_SOURCE]", {
+              athleteId,
+              linkedKidId: linkedKidTrim || null,
+              totalSessionsLoaded: allSessions.length,
+              matchedBySharedCount,
+              matchedByKidCount,
+              finalSessionIds: nextSessions.map((s) => s.id),
+            });
+            console.log("[SUMMARY_FLOW_TRACE] 2_sessions_after_athlete_filtering", {
+              flow: summaryFlowTraceRole,
+              activeAthleteId: athleteId || null,
+              linkedKidId: linkedKidTrim || null,
+              lineageMatchCount: nextSessions.length,
+              sampleLineage: nextSessions.slice(0, 5).map((s) => ({
+                id: s.id,
+                sharedAthleteId: (s.sharedAthleteId ?? "").trim() || null,
+                kidId: (s.kidId ?? "").trim() || null,
+                trainingLoggedByRole: s.trainingLoggedByRole ?? null,
+              })),
+            });
+          }
 
           const filteredCompetitions = allCompetitions.filter((competition) => {
             const sharedAthleteId = competition.sharedAthleteId?.trim();
@@ -81,12 +152,24 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
           setCompetitions([...nextCompetitions]);
 
           if (__DEV__) {
+            console.log("[SUMMARY_TRAINING_LINEAGE_RESOLVER]", {
+              athleteId,
+              sharedAthleteId: athleteId,
+              linkedKidId: linkedKidTrim || null,
+              sessionsFound: nextSessions.length,
+              sessionIds: nextSessions.map((s) => s.id),
+              resolverSource: "useAthleteData.sharedOrLinkedKid",
+            });
             console.log("[ATHLETE DATA]", {
               activeAthleteId: athleteId,
               sessionCount: nextSessions.length,
               competitionCount: nextCompetitions.length,
             });
           }
+          console.log("[COMP_SYNC_TRACE] useAthleteData", {
+            athleteId,
+            competitionsLoadedCount: nextCompetitions.length,
+          });
         } catch (error) {
           if (!mounted || gen !== loadGenerationRef.current) return;
 
@@ -101,6 +184,11 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
               error,
             });
           }
+          console.log("[COMP_SYNC_TRACE] useAthleteData", {
+            athleteId,
+            competitionsLoadedCount: 0,
+            error: String(error),
+          });
         } finally {
           if (mounted && gen === loadGenerationRef.current) setLoading(false);
         }
@@ -111,7 +199,7 @@ export function useAthleteData(activeAthleteId: string): AthleteData {
       return () => {
         mounted = false;
       };
-    }, [activeAthleteId]),
+    }, [activeAthleteId, linkedKidId, summaryFlowTraceRole]),
   );
 
   return useMemo(
