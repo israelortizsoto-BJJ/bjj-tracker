@@ -1,5 +1,11 @@
 import { getCoachSyncApiBaseUrl } from "../config/coachSync";
+import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import { isPublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
+import {
+  athleteIdSetFromSynced,
+  logHydrationPipelineWatchAthletes,
+  namesByIdFromSyncedAthletes,
+} from "../identity/hydrationPipelineTrace";
 import type {
   CoachWeeklySyncCreateAthleteBody,
   CoachWeeklySyncCreateAthleteResponse,
@@ -258,6 +264,34 @@ export async function coachSyncFetchSession(
         ]),
       ),
     });
+    logHydrationPipelineWatchAthletes({
+      stage: "1_network_response_receipt",
+      sourceSubsystem: "coachWeeklySyncApi.coachSyncFetchSession",
+      dataOrigin: "remote",
+      inviteTokenHint: linkToken,
+      presentAthleteIds: athleteIdSetFromSynced(athletes),
+      namesById: namesByIdFromSyncedAthletes(athletes),
+      allAthleteIdsInStage: athletes.map((a) => a.id),
+      stageMeta: {
+        athleteCount: athletes.length,
+        weeklyByAthleteKeyCount: Object.keys(weeklyByAthleteId).length,
+        httpStatus: res.status,
+      },
+    });
+    for (const a of athletes) {
+      logAthleteLineageTrace({
+        operation: "hydrate",
+        source: "weekly_sync",
+        athleteName: a.name,
+        sharedAthleteId: a.id,
+        token: linkToken.trim().toLowerCase(),
+        route: "coachSyncFetchSession",
+        extra: {
+          createdAt: a.createdAt,
+          weeklyKeyPresent: Object.prototype.hasOwnProperty.call(weeklyByAthleteId, a.id),
+        },
+      });
+    }
   }
   return {
     ...(typeof p.schemaVersion === "number" ? { schemaVersion: p.schemaVersion } : {}),
@@ -318,6 +352,8 @@ export async function coachSyncCreateSessionAthlete(
   parentWriterSecret: string,
   body: CoachWeeklySyncCreateAthleteBody,
   apiBaseUrlOverride?: string | null,
+  /** When set, client can prove POST /athletes reused an existing roster id (containment QA). */
+  priorSessionAthleteIds?: readonly string[],
 ): Promise<CoachWeeklySyncCreateAthleteResponse> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
@@ -347,7 +383,36 @@ export async function coachSyncCreateSessionAthlete(
   ) {
     throw new CoachWeeklySyncApiError("Unexpected response from sync service.", res.status);
   }
-  return payload as CoachWeeklySyncCreateAthleteResponse;
+  const created = payload as CoachWeeklySyncCreateAthleteResponse;
+  const returnedId = created.athlete.id.trim();
+  const priorIds = priorSessionAthleteIds?.map((id) => id.trim()).filter(Boolean);
+  const reused =
+    priorIds != null && priorIds.length > 0 && priorIds.includes(returnedId);
+  const normalizedName = created.athlete.name.trim().toLowerCase();
+  if (__DEV__) {
+    console.log("[ATHLETE DEDUPE]", {
+      operation: "post_athletes_client",
+      athleteName: created.athlete.name,
+      normalizedName,
+      sharedAthleteId: returnedId,
+      existingSharedAthleteId: reused ? returnedId : null,
+      reused,
+      preventedDuplicate: reused,
+      newIdMinted: !reused,
+      priorRosterKnown: priorIds != null,
+      token: linkToken.trim().toLowerCase(),
+    });
+  }
+  logAthleteLineageTrace({
+    operation: reused ? "attach" : "create",
+    source: "weekly_sync",
+    athleteName: created.athlete.name,
+    sharedAthleteId: returnedId,
+    token: linkToken.trim().toLowerCase(),
+    route: "coachSyncCreateSessionAthlete",
+    extra: { createdAt: created.athlete.createdAt, reused, preventedDuplicate: reused },
+  });
+  return created;
 }
 
 export async function coachSyncDeleteSessionAthlete(

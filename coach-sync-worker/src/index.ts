@@ -68,7 +68,153 @@ type SessionRecord = {
 };
 
 /** TEMP: grep worker tail for this id to confirm deployed bundle matches this file. */
-const WORKER_AUDIT_BUILD_ID = "coach-sync-worker:systemKey-audit-2026-05-11";
+const WORKER_AUDIT_BUILD_ID = "coach-sync-worker:weekly-corruption-trace-2026-05-15";
+
+const WEEKLY_CORRUPTION_TRACE = "[WEEKLY CORRUPTION TRACE]";
+
+/** Field-level probe for before/after diffs across KV → parse → GET assembly. */
+type WeeklyFieldProbe = {
+  weekStartYMD: string | null;
+  headline: string | null;
+  headlineLen: number;
+  bodyLen: number;
+  bodyPreview: string | null;
+  systemKey: string | null;
+  missionResourceUrl: string | null;
+  familyResourceUrl: string | null;
+  updatedAt: string | null;
+  hasMissionResourceUrlKey: boolean;
+  hasMissionAliasKey: boolean;
+  hasFamilyResourceUrlKey: boolean;
+  hasStudyAliasKey: boolean;
+  hasSystemKeyKey: boolean;
+  rawType: string;
+};
+
+function probeWeeklyRaw(raw: unknown): WeeklyFieldProbe {
+  if (raw === null) {
+    return {
+      weekStartYMD: null,
+      headline: null,
+      headlineLen: 0,
+      bodyLen: 0,
+      bodyPreview: null,
+      systemKey: null,
+      missionResourceUrl: null,
+      familyResourceUrl: null,
+      updatedAt: null,
+      hasMissionResourceUrlKey: false,
+      hasMissionAliasKey: false,
+      hasFamilyResourceUrlKey: false,
+      hasStudyAliasKey: false,
+      hasSystemKeyKey: false,
+      rawType: "null",
+    };
+  }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {
+      weekStartYMD: null,
+      headline: null,
+      headlineLen: 0,
+      bodyLen: 0,
+      bodyPreview: null,
+      systemKey: null,
+      missionResourceUrl: null,
+      familyResourceUrl: null,
+      updatedAt: null,
+      hasMissionResourceUrlKey: false,
+      hasMissionAliasKey: false,
+      hasFamilyResourceUrlKey: false,
+      hasStudyAliasKey: false,
+      hasSystemKeyKey: false,
+      rawType: raw == null ? "nullish" : Array.isArray(raw) ? "array" : typeof raw,
+    };
+  }
+  const o = raw as Record<string, unknown>;
+  const headline = typeof o.headline === "string" ? o.headline : null;
+  const body = typeof o.body === "string" ? o.body : null;
+  const missionVal = o.missionResourceUrl ?? o.mission;
+  const familyVal = o.familyResourceUrl ?? o.study;
+  return {
+    weekStartYMD: typeof o.weekStartYMD === "string" ? o.weekStartYMD : null,
+    headline,
+    headlineLen: headline?.length ?? 0,
+    bodyLen: body?.length ?? 0,
+    bodyPreview: body ? body.slice(0, 80) : null,
+    systemKey: typeof o.systemKey === "string" ? o.systemKey : null,
+    missionResourceUrl: typeof missionVal === "string" ? missionVal : missionVal === null ? null : null,
+    familyResourceUrl: typeof familyVal === "string" ? familyVal : familyVal === null ? null : null,
+    updatedAt: typeof o.updatedAt === "string" ? o.updatedAt : null,
+    hasMissionResourceUrlKey: Object.prototype.hasOwnProperty.call(o, "missionResourceUrl"),
+    hasMissionAliasKey: Object.prototype.hasOwnProperty.call(o, "mission"),
+    hasFamilyResourceUrlKey: Object.prototype.hasOwnProperty.call(o, "familyResourceUrl"),
+    hasStudyAliasKey: Object.prototype.hasOwnProperty.call(o, "study"),
+    hasSystemKeyKey: Object.prototype.hasOwnProperty.call(o, "systemKey"),
+    rawType: "object",
+  };
+}
+
+function probeWeeklyDoc(doc: WeeklyDoc | null | undefined): WeeklyFieldProbe {
+  if (!doc) return probeWeeklyRaw(null);
+  return probeWeeklyRaw(doc);
+}
+
+function probeWeeklyByMap(raw: unknown): Record<string, WeeklyFieldProbe> {
+  const out: Record<string, WeeklyFieldProbe> = {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    out[k] = probeWeeklyRaw(v);
+  }
+  return out;
+}
+
+/** Returns field names where a non-empty before value became empty/null after. */
+function diffWeeklyFieldLoss(
+  before: WeeklyFieldProbe | null | undefined,
+  after: WeeklyFieldProbe | null | undefined,
+): string[] {
+  if (!before) return [];
+  const afterProbe = after ?? probeWeeklyRaw(null);
+  const lost: string[] = [];
+  const checks: Array<{ field: string; beforeVal: string | null; afterVal: string | null }> = [
+    { field: "headline", beforeVal: before.headline, afterVal: afterProbe.headline },
+    { field: "weekStartYMD", beforeVal: before.weekStartYMD, afterVal: afterProbe.weekStartYMD },
+    { field: "updatedAt", beforeVal: before.updatedAt, afterVal: afterProbe.updatedAt },
+    { field: "systemKey", beforeVal: before.systemKey, afterVal: afterProbe.systemKey },
+    { field: "missionResourceUrl", beforeVal: before.missionResourceUrl, afterVal: afterProbe.missionResourceUrl },
+    { field: "familyResourceUrl", beforeVal: before.familyResourceUrl, afterVal: afterProbe.familyResourceUrl },
+  ];
+  for (const { field, beforeVal, afterVal } of checks) {
+    const had = beforeVal != null && beforeVal !== "";
+    const nowGone = afterVal == null || afterVal === "";
+    if (had && nowGone) lost.push(field);
+  }
+  if (before.bodyLen > 0 && afterProbe.bodyLen === 0) lost.push("body");
+  return lost;
+}
+
+function logWeeklyCorruptionTrace(
+  traceStage: string,
+  extra: Record<string, unknown> = {},
+): void {
+  console.log(WEEKLY_CORRUPTION_TRACE, { traceStage, mark: WORKER_AUDIT_BUILD_ID, ...extra });
+}
+
+/** Mirrors parseWeeklyDoc guards; null means the doc would be accepted. */
+function explainWeeklyDocParseRejection(raw: unknown): string | null {
+  if (!raw || typeof raw !== "object") return "not_object";
+  const o = raw as Record<string, unknown>;
+  const weekStartYMD = typeof o.weekStartYMD === "string" ? o.weekStartYMD.trim() : "";
+  const headline = typeof o.headline === "string" ? o.headline.trim() : "";
+  const bodyText = typeof o.body === "string" ? o.body.trim() : "";
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStartYMD)) return "invalid_weekStartYMD";
+  if (!headline) return "empty_headline";
+  if (headline.length > 200) return "headline_too_long";
+  if (!updatedAt) return "missing_updatedAt";
+  if (bodyText.length > 8000) return "body_too_long";
+  return null;
+}
 
 const TOKEN_RE = /^[a-f0-9]{48,128}$/i;
 const SESSION_SCHEMA_VERSION = 3 as const;
@@ -127,6 +273,10 @@ function omitUndefinedShallow<T extends Record<string, unknown>>(obj: T): Partia
     if (v !== undefined) out[k] = v;
   }
   return out as Partial<T>;
+}
+
+function normalizeAthleteNameForDedupe(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 function randomHex(bytes: number): string {
@@ -246,16 +396,24 @@ function readFamilyFromStoredWeeklyDoc(o: Record<string, unknown>): { raw: strin
   return { raw: "", hasKey: false };
 }
 
-function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
+function parseWeeklyDoc(raw: unknown, traceContext?: { athleteId?: string; source?: string }): WeeklyDoc | null {
+  const inputProbe = probeWeeklyRaw(raw);
+  const rejection = explainWeeklyDocParseRejection(raw);
+  if (rejection) {
+    logWeeklyCorruptionTrace("parseWeeklyDoc_REJECTED", {
+      athleteId: traceContext?.athleteId ?? null,
+      source: traceContext?.source ?? "parseWeeklyDoc",
+      rejection,
+      inputProbe,
+    });
+    return null;
+  }
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
   const weekStartYMD = typeof o.weekStartYMD === "string" ? o.weekStartYMD.trim() : "";
   const headline = typeof o.headline === "string" ? o.headline.trim() : "";
   const bodyText = typeof o.body === "string" ? o.body.trim() : "";
   const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(weekStartYMD) || !headline || headline.length > 200 || !updatedAt) {
-    return null;
-  }
   if (bodyText.length > 8000) return null;
   const classLine =
     typeof o.classLine === "string" && o.classLine.trim() ? o.classLine.trim().slice(0, 500) : undefined;
@@ -331,12 +489,37 @@ function parseWeeklyDoc(raw: unknown): WeeklyDoc | null {
     weekly.familyResourceLabel =
       familyResourceUrl !== undefined ? (familyResourceLabel ?? null) : null;
   }
+  const outputProbe = probeWeeklyDoc(weekly);
+  const fieldsLostInParse = diffWeeklyFieldLoss(inputProbe, outputProbe);
+  if (fieldsLostInParse.length > 0) {
+    logWeeklyCorruptionTrace("parseWeeklyDoc_FIELD_DIFF", {
+      athleteId: traceContext?.athleteId ?? null,
+      source: traceContext?.source ?? "parseWeeklyDoc",
+      fieldsLostInParse,
+      inputProbe,
+      outputProbe,
+    });
+  } else {
+    logWeeklyCorruptionTrace("parseWeeklyDoc_OK", {
+      athleteId: traceContext?.athleteId ?? null,
+      source: traceContext?.source ?? "parseWeeklyDoc",
+      inputProbe,
+      outputProbe,
+    });
+  }
   return weekly;
 }
 
 function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const rawProbes = probeWeeklyByMap(raw);
+  logWeeklyCorruptionTrace("parseWeeklyByAthleteId_INPUT", {
+    athleteIds: Object.keys(rawProbes),
+    probes: rawProbes,
+    rawJsonSnippet: JSON.stringify(raw).slice(0, 4000),
+  });
   const out: Record<string, WeeklyDoc> = {};
+  const dropped: Array<{ athleteId: string; rejection: string }> = [];
   for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
     const id = k.trim();
     if (!id || id.length > 64) continue;
@@ -355,9 +538,33 @@ function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
         ? typeof entry.systemKey
         : "absent",
     });
-    const doc = parseWeeklyDoc(v);
-    if (doc) out[id] = doc;
+    const rejection = explainWeeklyDocParseRejection(v);
+    const doc = parseWeeklyDoc(v, { athleteId: id, source: "parseWeeklyByAthleteId" });
+    if (doc) {
+      out[id] = doc;
+    } else if (rejection) {
+      dropped.push({ athleteId: id, rejection });
+    }
   }
+  const outProbes = Object.fromEntries(Object.entries(out).map(([id, doc]) => [id, probeWeeklyDoc(doc)]));
+  const stageDiffs: Record<string, { fieldsLost: string[]; rawKeys: string[] }> = {};
+  for (const [id, before] of Object.entries(rawProbes)) {
+    const after = outProbes[id];
+    const fieldsLost = diffWeeklyFieldLoss(before, after);
+    if (fieldsLost.length > 0 || !after) {
+      stageDiffs[id] = {
+        fieldsLost: after ? fieldsLost : [...fieldsLost, "__entire_entry_dropped__"],
+        rawKeys:
+          v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v as Record<string, unknown>) : [],
+      };
+    }
+  }
+  logWeeklyCorruptionTrace("parseWeeklyByAthleteId_OUTPUT", {
+    athleteIds: Object.keys(out),
+    dropped,
+    outProbes,
+    stageDiffs,
+  });
   return out;
 }
 
@@ -388,7 +595,9 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
   const academyName = academyRaw.length > 0 ? academyRaw : undefined;
 
   const weekly =
-    r.weekly && typeof r.weekly === "object" ? parseWeeklyDoc(r.weekly) : null;
+    r.weekly && typeof r.weekly === "object"
+      ? parseWeeklyDoc(r.weekly, { source: "normalizeSessionRecord_invite_weekly" })
+      : null;
 
   const schemaVersion = typeof r.schemaVersion === "number" ? r.schemaVersion : 1;
   const athletes = schemaVersion >= 2 ? parseSharedAthletes(r.athletes) : [];
@@ -420,6 +629,13 @@ async function readSession(kv: KVNamespace, token: string): Promise<SessionRecor
   const rawRoot = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
   const rawWeeklyBy = rawRoot?.weeklyByAthleteId;
   const rawWeeklyJsonSnippet = JSON.stringify(rawWeeklyBy ?? null)?.slice(0, 4000);
+  logWeeklyCorruptionTrace("kv_get_raw_after_json", {
+    tokenSuffix: token.slice(-8),
+    rawWeeklyByAthleteProbes: probeWeeklyByMap(rawWeeklyBy),
+    rawInviteWeeklyProbe: rawRoot?.weekly ? probeWeeklyRaw(rawRoot.weekly) : null,
+    rawWeeklyByJsonSnippet: rawWeeklyJsonSnippet,
+    rawSessionJsonBytes: raw ? JSON.stringify(raw).length : 0,
+  });
   console.log("[SYSTEMKEY TRACE WORKER]", {
     traceStage: "6_KV_read_payload_after_json",
     rawWeeklyByAthleteSystemKey: summarizeRawWeeklyByAthleteSystemKey(rawWeeklyBy),
@@ -433,6 +649,31 @@ async function readSession(kv: KVNamespace, token: string): Promise<SessionRecor
     rawWeeklyByAthleteJsonSnippet: rawWeeklyJsonSnippet,
   });
   const normalized = normalizeSessionRecord(raw);
+  const normalizedWeeklyByProbes = normalized
+    ? Object.fromEntries(
+        Object.entries(normalized.weeklyByAthleteId).map(([id, doc]) => [id, probeWeeklyDoc(doc)]),
+      )
+    : null;
+  const kvToNormalizeDiffs: Record<string, string[]> = {};
+  if (rawWeeklyBy && normalizedWeeklyByProbes) {
+    const rawProbes = probeWeeklyByMap(rawWeeklyBy);
+    for (const [id, before] of Object.entries(rawProbes)) {
+      const after = normalizedWeeklyByProbes[id];
+      const lost = diffWeeklyFieldLoss(before, after);
+      const rejection = explainWeeklyDocParseRejection(
+        (rawWeeklyBy as Record<string, unknown>)[id],
+      );
+      if (lost.length > 0 || !after) {
+        kvToNormalizeDiffs[id] = lost.length > 0 ? lost : rejection ? [`parse_rejected:${rejection}`] : ["entry_dropped"];
+      }
+    }
+  }
+  logWeeklyCorruptionTrace("kv_get_after_normalize", {
+    tokenSuffix: token.slice(-8),
+    normalizedOk: Boolean(normalized),
+    normalizedWeeklyByProbes,
+    kvToNormalizeDiffs,
+  });
   console.log("[AUDIT KV_READ_AFTER_NORMALIZE]", {
     mark: WORKER_AUDIT_BUILD_ID,
     tokenSuffix: token.slice(-8),
@@ -503,7 +744,36 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
         : "(no key)",
     weeklyByAthleteJsonSnippet: JSON.stringify(toStore.weeklyByAthleteId).slice(0, 4000),
   });
+  logWeeklyCorruptionTrace("kv_put_raw_before_write", {
+    tokenSuffix: token.slice(-8),
+    putJsonBytes: putJson.length,
+    weeklyByAthleteProbes: probeWeeklyByMap(toStore.weeklyByAthleteId),
+    inviteWeeklyProbe: toStore.weekly ? probeWeeklyDoc(toStore.weekly) : null,
+    putWeeklyByJsonSnippet: JSON.stringify(toStore.weeklyByAthleteId).slice(0, 4000),
+  });
   await kv.put(`s:${token}`, putJson);
+  const readBack = await kv.get(`s:${token}`, "json");
+  const readBackRoot =
+    readBack && typeof readBack === "object" && !Array.isArray(readBack)
+      ? (readBack as Record<string, unknown>)
+      : null;
+  const readBackWeeklyBy = readBackRoot?.weeklyByAthleteId;
+  const putProbes = probeWeeklyByMap(toStore.weeklyByAthleteId);
+  const readBackProbes = probeWeeklyByMap(readBackWeeklyBy);
+  const putToReadBackDiffs: Record<string, string[]> = {};
+  for (const [id, before] of Object.entries(putProbes)) {
+    const after = readBackProbes[id];
+    const lost = diffWeeklyFieldLoss(before, after);
+    if (lost.length > 0 || !after) {
+      putToReadBackDiffs[id] = lost.length > 0 ? lost : ["missing_after_kv_roundtrip"];
+    }
+  }
+  logWeeklyCorruptionTrace("kv_put_readback_after_write", {
+    tokenSuffix: token.slice(-8),
+    readBackWeeklyByProbes: readBackProbes,
+    putToReadBackDiffs,
+    readBackWeeklyByJsonSnippet: JSON.stringify(readBackWeeklyBy ?? null).slice(0, 4000),
+  });
 }
 
 export default {
@@ -588,30 +858,21 @@ export default {
             });
           }
         }
-        console.log("[WORKER GET VERIFY]", {
-          weeklyByAthleteId: Object.fromEntries(
-            Object.entries(rec.weeklyByAthleteId ?? {}).map(([k, v]) => [
-              k,
-              {
-                mission: v?.missionResourceUrl ?? null,
-                family: v?.familyResourceUrl ?? null,
-              },
-            ]),
-          ),
-        });
         const apiWeekly = weeklyByAthleteIdForStorageAndApi(rec);
-
-        console.log("[WORKER GET VERIFY - API SHAPE]", {
-          weeklyByAthleteId: Object.fromEntries(
-            Object.entries(apiWeekly ?? {}).map(([k, v]) => [
-              k,
-              {
-                mission: v?.missionResourceUrl ?? null,
-                family: v?.familyResourceUrl ?? null,
-              },
-            ]),
-          ),
-        });
+        const normalizedProbes = Object.fromEntries(
+          Object.entries(rec.weeklyByAthleteId ?? {}).map(([k, v]) => [k, probeWeeklyDoc(v)]),
+        );
+        const apiProbes = Object.fromEntries(
+          Object.entries(apiWeekly ?? {}).map(([k, v]) => [k, probeWeeklyDoc(v)]),
+        );
+        const getAssemblyDiffs: Record<string, string[]> = {};
+        for (const [id, before] of Object.entries(normalizedProbes)) {
+          const after = apiProbes[id];
+          const lost = diffWeeklyFieldLoss(before, after);
+          if (lost.length > 0 || !after) {
+            getAssemblyDiffs[id] = lost.length > 0 ? lost : ["filtered_by_weeklyByAthleteIdForStorageAndApi"];
+          }
+        }
         const getPayload = {
           schemaVersion: rec.schemaVersion,
           coach: {
@@ -640,6 +901,26 @@ export default {
           ),
           inviteWeeklySystemKey: rec.weekly?.systemKey ?? null,
           source: "session_GET_before_json_return",
+        });
+        const responseProbes = probeWeeklyByMap(getPayload.weeklyByAthleteId);
+        const normalizeToResponseDiffs: Record<string, string[]> = {};
+        for (const [id, before] of Object.entries(normalizedProbes)) {
+          const after = responseProbes[id];
+          const lost = diffWeeklyFieldLoss(before, after);
+          if (lost.length > 0 || !after) {
+            normalizeToResponseDiffs[id] = lost.length > 0 ? lost : ["missing_in_getPayload"];
+          }
+        }
+        logWeeklyCorruptionTrace("get_response_assembly_diff", {
+          tokenSuffix: token.slice(-8),
+          cfColo: cf?.colo ?? null,
+          cfRay: request.headers.get("CF-Ray") ?? request.headers.get("cf-ray") ?? null,
+          normalizedProbes,
+          apiProbes,
+          responseProbes,
+          getAssemblyDiffs,
+          normalizeToResponseDiffs,
+          serializedWeeklyBySnippet: JSON.stringify(getPayload.weeklyByAthleteId).slice(0, 4000),
         });
         console.log("[AUDIT GET_BEFORE_JSON_RETURN]", {
           mark: WORKER_AUDIT_BUILD_ID,
@@ -714,6 +995,27 @@ export default {
         if (!rec || rec.parentWriterSecret !== secret) {
           return error("Unauthorized", 401);
         }
+
+        const normalizedName = normalizeAthleteNameForDedupe(name);
+        const existingAthlete = rec.athletes.find(
+          (a) => normalizeAthleteNameForDedupe(a.name) === normalizedName,
+        );
+        if (existingAthlete) {
+          console.log("[ATHLETE DEDUPE]", {
+            operation: "post_athletes",
+            athleteName: name,
+            normalizedName,
+            existingSharedAthleteId: existingAthlete.id,
+            sharedAthleteId: existingAthlete.id,
+            reused: true,
+            preventedDuplicate: true,
+            newIdMinted: false,
+            sessionAthleteCount: rec.athletes.length,
+            token,
+          });
+          return json({ athlete: existingAthlete }, 201);
+        }
+
         if (rec.athletes.length >= MAX_ATHLETES_PER_SESSION) {
           return error("Athlete limit reached for this invite", 400);
         }
@@ -726,6 +1028,19 @@ export default {
         };
         const next: SessionRecord = { ...rec, athletes: [...rec.athletes, athlete] };
         await writeSession(env.SESSIONS, token, next);
+
+        console.log("[ATHLETE DEDUPE]", {
+          operation: "post_athletes",
+          athleteName: name,
+          normalizedName,
+          existingSharedAthleteId: null,
+          sharedAthleteId: athlete.id,
+          reused: false,
+          preventedDuplicate: false,
+          newIdMinted: true,
+          sessionAthleteCount: rec.athletes.length + 1,
+          token,
+        });
 
         return json({ athlete }, 201);
       }
@@ -983,6 +1298,16 @@ export default {
         });
 
         console.log("[WORKER FINAL WRITE]", mergedWeekly);
+        logWeeklyCorruptionTrace("put_merged_weekly_pre_kv", {
+          tokenSuffix: token.slice(-8),
+          sharedAthleteId: sharedAthleteIdRaw || null,
+          mergedProbe: probeWeeklyDoc(mergedWeekly),
+          existingProbe: existingWeeklyForMerge ? probeWeeklyRaw(existingWeeklyForMerge) : null,
+          putBodyProbe: probeWeeklyRaw(weeklyFromPut),
+          mergeFieldLossFromExisting: existingWeeklyForMerge
+            ? diffWeeklyFieldLoss(probeWeeklyRaw(existingWeeklyForMerge), probeWeeklyDoc(mergedWeekly))
+            : [],
+        });
 
         // Targeted debug to diagnose "clear doesn't propagate" for Card 2.
         // Logs only when coach sent empty or omitted the recap field.

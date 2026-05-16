@@ -2,79 +2,78 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useDeviceRole } from "../deviceRole/DeviceRoleProvider";
-import { isCoachSyncConfigured } from "../config/coachSync";
 import {
-  ensureOperatingAthletesFromCoachLinkedKids,
-  getActiveAthleteId,
-  getAthletes,
-  setActiveAthleteId,
+  buildAthleteAuthoritySnapshot,
+  linkedKidIdForParentAthlete,
+  traceAthleteAuthoritySnapshotDev,
+} from "../identity/buildAthleteAuthoritySnapshot";
+import { logAuthorityTelemetryDev, takeDevAuthorityRepoFetchOrdinal } from "../identity/authorityTelemetry";
+import { logHydrationPipelineWatchAthletes, namesByIdFromParentAthletes } from "../identity/hydrationPipelineTrace";
+import type {
+  AthleteAuthorityBootstrapState,
+  AthleteAuthoritySnapshot,
+  AuthoritySnapshotSourceTrigger,
+} from "../identity/types";
+import {
   subscribeActiveAthleteChanges,
   type ParentAthlete,
 } from "../storage/athleteStore";
-import {
-  getKidsById,
-  refreshCoachWriterSessionsAndReconcileStores,
-  type CoachWriterSessionRefreshResult,
-} from "../storage/coachKidStore";
 import { clearActiveKidId, setActiveKidId } from "../state/activeKidStore";
-import { isKidCoachArchived, type KidsById } from "../types/coachKid";
+import type { KidsById } from "../types/coachKid";
 
-export type AthleteAuthorityBootstrapState =
-  | "ready"
-  | "empty"
-  | "coach_unresolved"
-  | "coach_disconnected";
+export type { AthleteAuthorityBootstrapState } from "../identity/types";
 
 export type UseActiveAthleteResult = {
   hydrationReady: boolean;
   /**
-   * Set when `hydrationReady` is true. Distinguishes coach roster empty vs unresolved vs network-degraded bootstrap.
+   * Set when `hydrationReady` is true. Distinguishes empty vs multi-athlete unresolved vs coach network-degraded bootstrap.
    */
   authorityBootstrapState: AthleteAuthorityBootstrapState | undefined;
   /** Coach: linked `ParentAthlete` rows the user may pick when bootstrap is unresolved or after a failed sync refresh. */
   coachOperatingAthleteChoices: ParentAthlete[];
   athleteId: string;
   athlete: ParentAthlete | null;
+  /**
+   * LAAG-derived operating membership for UI surfaces (Summary switcher, multi-athlete pickers).
+   * Prefer this over `athletes` for roster visibility.
+   */
+  operatingAthleteRoster: ParentAthlete[];
+  /**
+   * Raw `parentAthletes` storage projection. Do not use for operating roster membership UI.
+   * @deprecated Use `operatingAthleteRoster` for switcher / membership cardinality.
+   */
   athletes: ParentAthlete[];
   linkedKidId: string | null;
   kidsById: KidsById;
 };
 
-export function linkedKidIdForParentAthlete(
-  kidsById: KidsById,
-  athleteId: string,
-): string | null {
-  const aid = typeof athleteId === "string" ? athleteId.trim() : "";
-  if (!aid) return null;
-  for (const k of Object.values(kidsById)) {
-    if (!k?.id) continue;
-    if ((k.sharedAthleteId ?? "").trim() === aid) return k.id;
-  }
-  return null;
-}
-
-function coachLinkedSharedAthleteIdSet(kidsById: KidsById): Set<string> {
-  const ids = new Set<string>();
-  for (const k of Object.values(kidsById)) {
-    if (!k?.id) continue;
-    if (isKidCoachArchived(k)) continue;
-    const sid = (k.sharedAthleteId ?? "").trim();
-    if (sid) ids.add(sid);
-  }
-  return ids;
-}
-
-type IdentitySnapshot = {
-  sorted: ParentAthlete[];
-  resolvedId: string;
-  loadedKids: KidsById;
-  authorityBootstrapState: AthleteAuthorityBootstrapState;
-  coachOperatingAthleteChoices: ParentAthlete[];
+type FetchSnapshotResult = {
+  snap: AthleteAuthoritySnapshot;
+  fetchParallelDepth: number;
+  repoFetchOrdinal: number;
 };
 
-/**
- * Parent identity: `athleteStore` is source of truth; `linkedKidId` is the coach roster row when linked.
- */
+function athleteTraceStoreSourceReason(
+  trigger: AuthoritySnapshotSourceTrigger | undefined,
+): { source: string; reason: string } {
+  switch (trigger) {
+    case "focus_effect":
+      return { source: "hydration", reason: "focus_effect" };
+    case "active_athlete_store_subscription":
+      return { source: "session_restore", reason: "active_athlete_store_subscription" };
+    case "soft_refresh":
+      return { source: "hydration", reason: "soft_refresh" };
+    default:
+      return {
+        source: "fallback_resolution",
+        reason: trigger != null && trigger !== "" ? String(trigger) : "unknown",
+      };
+  }
+}
+
+export { linkedKidIdForParentAthlete } from "../identity/buildAthleteAuthoritySnapshot";
+export type { LinkedKidForParentAthleteOptions } from "../identity/buildAthleteAuthoritySnapshot";
+
 export function useActiveAthlete(): UseActiveAthleteResult {
   const { role } = useDeviceRole();
   const [hydrationReady, setHydrationReady] = useState(false);
@@ -85,39 +84,63 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     [],
   );
   const [athletes, setAthletes] = useState<ParentAthlete[]>([]);
+  const [operatingAthleteRoster, setOperatingAthleteRoster] = useState<ParentAthlete[]>([]);
   const [athleteId, setAthleteIdState] = useState("");
   const [kidsById, setKidsById] = useState<KidsById>({});
-  const lastKnownAthleteIdRef = useRef<string | null>(null);
   const prevBootstrapLabelRef = useRef<string | null>(null);
+  const snapshotGenerationRef = useRef(0);
+  const lastAppliedSnapshotGenerationRef = useRef(0);
+  const parallelHydrationRef = useRef(0);
+  const storeTracePrevAthleteIdRef = useRef<string | null>(null);
 
   const applyStorageSnapshot = useCallback(
     (
-      snap: IdentitySnapshot,
+      snap: AthleteAuthoritySnapshot,
       parentRole: typeof role,
+      fetchCtx: { fetchParallelDepth: number; repoFetchOrdinal: number },
     ) => {
       let idToApply = typeof snap.resolvedId === "string" ? snap.resolvedId.trim() : "";
-      const fallbackRaw = lastKnownAthleteIdRef.current;
-      const fallback =
-        typeof fallbackRaw === "string" && fallbackRaw.trim() !== ""
-          ? fallbackRaw.trim()
-          : "";
-
-      const suppressLastKnownFallback =
-        snap.authorityBootstrapState === "coach_unresolved" ||
-        (snap.authorityBootstrapState === "coach_disconnected" &&
-          snap.coachOperatingAthleteChoices.length > 0);
-
-      if (suppressLastKnownFallback) {
-        lastKnownAthleteIdRef.current = null;
-      } else if (!idToApply && fallback && snap.sorted.some((a) => a.id === fallback)) {
+      if (
+        idToApply &&
+        !snap.operatingAthleteRoster.some((a) => a.id.trim() === idToApply)
+      ) {
         if (__DEV__) {
-          // TEMP Phase 2 bootstrap stabilization
-          console.warn("[coach-bootstrap] ignoring empty athleteId transition (single-gen guard)");
+          console.warn(
+            "[authority] snapshot resolvedId absent from operatingAthleteRoster — rejecting OAI",
+            { idToApply, rosterIds: snap.operatingAthleteRoster.map((a) => a.id) },
+          );
         }
-        idToApply = fallback;
+        idToApply = "";
       }
 
-      lastKnownAthleteIdRef.current = idToApply ? idToApply : null;
+      const incomingGen = snap.meta?.snapshotGeneration ?? 0;
+      const prevApplied = lastAppliedSnapshotGenerationRef.current;
+      const staleGenerationApply =
+        __DEV__ && incomingGen > 0 && prevApplied > 0 && incomingGen < prevApplied;
+      const linkedAfterApply = linkedKidIdForParentAthlete(snap.loadedKids, idToApply);
+
+      const prevTraceId = storeTracePrevAthleteIdRef.current;
+      const prevAthleteIdNorm =
+        prevTraceId && prevTraceId.trim() ? prevTraceId.trim() : null;
+      const nextAthleteIdNorm = idToApply.trim() ? idToApply.trim() : null;
+      if (prevAthleteIdNorm !== nextAthleteIdNorm) {
+        const { source, reason } = athleteTraceStoreSourceReason(snap.meta?.sourceTrigger);
+        const nameRow =
+          nextAthleteIdNorm &&
+          (snap.operatingAthleteRoster.find((a) => a.id.trim() === nextAthleteIdNorm) ??
+            snap.sorted.find((a) => a.id.trim() === nextAthleteIdNorm));
+        console.log("[ATHLETE TRACE][STORE UPDATE]", {
+          source,
+          reason,
+          athleteName: nameRow?.name?.trim() || null,
+          selectedAthleteId: nextAthleteIdNorm,
+          sharedAthleteId: nextAthleteIdNorm,
+          linkedKidId: linkedAfterApply,
+          previousAthleteId: prevAthleteIdNorm,
+          nextAthleteId: nextAthleteIdNorm,
+        });
+      }
+      storeTracePrevAthleteIdRef.current = nextAthleteIdNorm;
 
       if (__DEV__) {
         const label = `${snap.authorityBootstrapState}:${idToApply || "none"}:choices=${snap.coachOperatingAthleteChoices.length}`;
@@ -131,9 +154,68 @@ export function useActiveAthlete(): UseActiveAthleteResult {
             choiceCount: snap.coachOperatingAthleteChoices.length,
           });
         }
+        traceAthleteAuthoritySnapshotDev({
+          hydrationPhase: "apply",
+          snapshot: snap,
+          appliedResolvedAthleteId: idToApply,
+          previousSnapshotGeneration: prevApplied,
+          staleGenerationApply,
+          parallelHydrationDepth: fetchCtx.fetchParallelDepth,
+          repoFetchOrdinal: fetchCtx.repoFetchOrdinal,
+        });
+        logAuthorityTelemetryDev({
+          category: "hydration",
+          event: "hydration_snapshot_applied",
+          hydrationPhase: "apply_complete",
+          snapshotGeneration: incomingGen || undefined,
+          previousSnapshotGeneration: prevApplied || undefined,
+          parentSnapshotGeneration: prevApplied || undefined,
+          triggerSource: snap.meta?.sourceTrigger,
+          authorityStatus: snap.authorityBootstrapState,
+          athleteId: idToApply || null,
+          linkedKidId: linkedAfterApply,
+          role: snap.meta?.role ?? parentRole,
+          staleSuppressed: false,
+          staleGenerationApply,
+          parallelHydrationDepth: fetchCtx.fetchParallelDepth,
+          repoFetchOrdinal: fetchCtx.repoFetchOrdinal,
+        });
+        logAuthorityTelemetryDev({
+          category: "generation",
+          event: "generation_apply_committed",
+          snapshotGeneration: incomingGen || undefined,
+          previousSnapshotGeneration: prevApplied || undefined,
+          triggerSource: snap.meta?.sourceTrigger,
+          staleGenerationApply,
+          parallelHydrationDepth: fetchCtx.fetchParallelDepth,
+          repoFetchOrdinal: fetchCtx.repoFetchOrdinal,
+        });
+        if (incomingGen > 0) {
+          lastAppliedSnapshotGenerationRef.current = incomingGen;
+        }
+      }
+
+      if (__DEV__) {
+        logHydrationPipelineWatchAthletes({
+          stage: "9_active_athlete_resolution",
+          sourceSubsystem: "useActiveAthlete.applyStorageSnapshot",
+          dataOrigin: "derived",
+          kidsById: snap.loadedKids,
+          presentAthleteIds: idToApply ? new Set([idToApply]) : new Set(),
+          renderedAthleteIds: idToApply ? new Set([idToApply]) : new Set(),
+          namesById: namesByIdFromParentAthletes(snap.sorted),
+          allAthleteIdsInStage: snap.operatingAthleteRoster.map((a) => a.id),
+          stageMeta: {
+            role: parentRole,
+            authorityBootstrapState: snap.authorityBootstrapState,
+            linkedKidId: linkedAfterApply,
+            staleGenerationApply,
+          },
+        });
       }
 
       setAthletes(snap.sorted);
+      setOperatingAthleteRoster(snap.operatingAthleteRoster);
       setKidsById(snap.loadedKids);
       setAthleteIdState(idToApply);
       setAuthorityBootstrapState(snap.authorityBootstrapState);
@@ -150,120 +232,104 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     [],
   );
 
-  const buildIdentitySnapshot = useCallback(
-    async (parentRole: typeof role): Promise<IdentitySnapshot> => {
-      const refreshResult: CoachWriterSessionRefreshResult =
-        parentRole === "coach"
-          ? await refreshCoachWriterSessionsAndReconcileStores()
-          : { successfulSnapshots: [], writerLinks: [], inviteSessionAthletesByToken: {} };
-
-      const loadedKids = await getKidsById();
-
-      if (parentRole === "coach") {
-        await ensureOperatingAthletesFromCoachLinkedKids(loadedKids);
+  const fetchIdentitySnapshot = useCallback(
+    async (sourceTrigger: AuthoritySnapshotSourceTrigger): Promise<FetchSnapshotResult> => {
+      const repoFetchOrdinal = takeDevAuthorityRepoFetchOrdinal();
+      let depthAtStart = 0;
+      let gen = 0;
+      if (__DEV__) {
+        snapshotGenerationRef.current += 1;
+        gen = snapshotGenerationRef.current;
+        parallelHydrationRef.current += 1;
+        depthAtStart = parallelHydrationRef.current;
+        const parentGen = lastAppliedSnapshotGenerationRef.current;
+        logAuthorityTelemetryDev({
+          category: "hydration",
+          event: "hydration_fetch_started",
+          hydrationPhase: "fetch_start",
+          snapshotGeneration: gen,
+          parentSnapshotGeneration: parentGen,
+          triggerSource: sourceTrigger,
+          role,
+          parallelHydrationDepth: depthAtStart,
+          repoFetchOrdinal,
+        });
       }
-
-      const [list, storedRaw] = await Promise.all([
-        getAthletes(),
-        getActiveAthleteId(),
-      ]);
-
-      const sorted = [...list].sort((a, b) =>
-        a.name.localeCompare(b.name, undefined, { sensitivity: "base" }),
-      );
-
-      const storedNorm = (storedRaw ?? "").trim();
-      const linkedIdSet = coachLinkedSharedAthleteIdSet(loadedKids);
-      const linkedAthletes = sorted.filter((a) => linkedIdSet.has(a.id));
-
-      const storedInParentList = Boolean(storedNorm && sorted.some((a) => a.id === storedNorm));
-      const storedLinkedCoach =
-        parentRole === "coach" && storedNorm ? linkedIdSet.has(storedNorm) : false;
-
-      const coachSessionRefreshDegraded =
-        parentRole === "coach" &&
-        isCoachSyncConfigured() &&
-        refreshResult.writerLinks.length > 0 &&
-        refreshResult.successfulSnapshots.length === 0;
-
-      let resolvedId = "";
-      let authorityBootstrapState: AthleteAuthorityBootstrapState = "ready";
-      let coachOperatingAthleteChoices: ParentAthlete[] = [];
-
-      if (parentRole === "parent") {
-        if (storedInParentList) {
-          resolvedId = storedNorm;
-          authorityBootstrapState = "ready";
-        } else if (sorted.length === 0) {
-          resolvedId = "";
-          authorityBootstrapState = "empty";
-        } else {
-          resolvedId = "";
-          authorityBootstrapState = "ready";
+      try {
+        const snap = await buildAthleteAuthoritySnapshot({
+          parentRole: role,
+          observability: __DEV__
+            ? {
+                snapshotGeneration: gen,
+                sourceTrigger,
+                role,
+              }
+            : undefined,
+        });
+        if (__DEV__) {
+          const parentGen = lastAppliedSnapshotGenerationRef.current;
+          traceAthleteAuthoritySnapshotDev({
+            hydrationPhase: "build",
+            snapshot: snap,
+            previousSnapshotGeneration: parentGen,
+            parallelHydrationDepth: depthAtStart,
+            repoFetchOrdinal,
+          });
+          logAuthorityTelemetryDev({
+            category: "hydration",
+            event: "hydration_build_resolved",
+            hydrationPhase: "build_complete",
+            snapshotGeneration: snap.meta?.snapshotGeneration,
+            parentSnapshotGeneration: parentGen,
+            triggerSource: sourceTrigger,
+            authorityStatus: snap.authorityBootstrapState,
+            athleteId: snap.resolvedId.trim() || null,
+            role,
+            parallelHydrationDepth: depthAtStart,
+            repoFetchOrdinal,
+          });
         }
-      } else {
-        if (storedInParentList && storedLinkedCoach) {
-          resolvedId = storedNorm;
-          authorityBootstrapState = "ready";
-        } else if (storedInParentList && !storedLinkedCoach) {
-          if (__DEV__) {
-            // TEMP Phase 2 bootstrap stabilization
-            console.warn("[coach-bootstrap] stored OAI not linked on current roster; holding OAI", {
-              storedNorm,
-            });
-          }
-          resolvedId = storedNorm;
-          authorityBootstrapState = "ready";
-        } else {
-          resolvedId = "";
-
-          if (linkedAthletes.length === 0) {
-            coachOperatingAthleteChoices = [];
-            if (coachSessionRefreshDegraded) {
-              authorityBootstrapState = "coach_disconnected";
-            } else {
-              authorityBootstrapState = "empty";
-            }
-          } else if (linkedAthletes.length >= 2) {
-            authorityBootstrapState = "coach_unresolved";
-            coachOperatingAthleteChoices = linkedAthletes;
-          } else {
-            const only = linkedAthletes[0];
-            if (coachSessionRefreshDegraded) {
-              authorityBootstrapState = "coach_disconnected";
-              coachOperatingAthleteChoices = linkedAthletes;
-            } else {
-              resolvedId = only.id;
-              await setActiveAthleteId(only.id);
-              authorityBootstrapState = "ready";
-              coachOperatingAthleteChoices = [];
-            }
-          }
+        return { snap, fetchParallelDepth: depthAtStart, repoFetchOrdinal };
+      } finally {
+        if (__DEV__) {
+          parallelHydrationRef.current -= 1;
         }
       }
-
-      return {
-        sorted,
-        resolvedId,
-        loadedKids,
-        authorityBootstrapState,
-        coachOperatingAthleteChoices,
-      };
     },
-    [],
+    [role],
   );
-
-  const fetchIdentitySnapshot = useCallback(async () => {
-    return buildIdentitySnapshot(role);
-  }, [buildIdentitySnapshot, role]);
 
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
       void (async () => {
-        const snap = await fetchIdentitySnapshot();
-        if (cancelled) return;
-        applyStorageSnapshot(snap, role);
+        const { snap, fetchParallelDepth, repoFetchOrdinal } =
+          await fetchIdentitySnapshot("focus_effect");
+        if (cancelled) {
+          if (__DEV__) {
+            const g = snap.meta?.snapshotGeneration;
+            logAuthorityTelemetryDev({
+              category: "hydration",
+              event: "hydration_skipped",
+              hydrationPhase: "cancelled",
+              snapshotGeneration: g,
+              triggerSource: "focus_effect",
+              transitionReason: "snapshot_ready_but_focus_lost_before_apply",
+              authorityStatus: snap.authorityBootstrapState,
+              repoFetchOrdinal,
+            });
+            logAuthorityTelemetryDev({
+              category: "hydration",
+              event: "snapshot_ignored",
+              snapshotGeneration: g,
+              triggerSource: "focus_effect",
+              transitionReason: "focus_cleanup_race",
+              repoFetchOrdinal,
+            });
+          }
+          return;
+        }
+        applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
       })();
 
       return () => {
@@ -275,28 +341,29 @@ export function useActiveAthlete(): UseActiveAthleteResult {
   useEffect(() => {
     return subscribeActiveAthleteChanges(() => {
       void (async () => {
-        const snap = await fetchIdentitySnapshot();
-        applyStorageSnapshot(snap, role);
+        const { snap, fetchParallelDepth, repoFetchOrdinal } = await fetchIdentitySnapshot(
+          "active_athlete_store_subscription",
+        );
+        applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
       })();
     });
   }, [applyStorageSnapshot, fetchIdentitySnapshot, role]);
 
-  const resolvedAthleteId =
-    athleteId.trim() ||
-    (typeof lastKnownAthleteIdRef.current === "string"
-      ? lastKnownAthleteIdRef.current.trim()
-      : "");
+  const resolvedAthleteId = athleteId.trim();
 
-  const athlete = useMemo(
-    () => athletes.find((a) => a.id === resolvedAthleteId) ?? null,
-    [athletes, resolvedAthleteId],
-  );
+  const athlete = useMemo(() => {
+    const id = resolvedAthleteId;
+    if (!id) return null;
+    const rosterRow = operatingAthleteRoster.find((a) => a.id.trim() === id) ?? null;
+    if (!rosterRow) return null;
+    const overlayRow = athletes.find((a) => a.id.trim() === id);
+    /** Roster confirms membership; `sorted` overlays profile-only fields without admitting non-roster ids. */
+    return overlayRow ? { ...overlayRow, ...rosterRow } : rosterRow;
+  }, [resolvedAthleteId, operatingAthleteRoster, athletes]);
 
   const linkedKidId = useMemo(
     () =>
-      resolvedAthleteId
-        ? linkedKidIdForParentAthlete(kidsById, resolvedAthleteId)
-        : null,
+      resolvedAthleteId ? linkedKidIdForParentAthlete(kidsById, resolvedAthleteId) : null,
     [kidsById, resolvedAthleteId],
   );
 
@@ -306,6 +373,7 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     coachOperatingAthleteChoices: hydrationReady ? coachOperatingAthleteChoices : [],
     athleteId: resolvedAthleteId,
     athlete,
+    operatingAthleteRoster: hydrationReady ? operatingAthleteRoster : [],
     athletes,
     linkedKidId,
     kidsById,

@@ -1,5 +1,6 @@
 import {
   CommonActions,
+  StackActions,
   type NavigationProp,
   type NavigationState,
   type ParamListBase,
@@ -8,6 +9,8 @@ import { router } from "expo-router";
 
 import { store } from "expo-router/build/global-state/router-store";
 
+import { InteractionManager } from "react-native";
+
 import {
   logCompeteExitStackReset,
   logCompExitStackReset,
@@ -15,6 +18,7 @@ import {
   readFocusedTabFromRootState,
   scheduleNavStateAfterSaveLog,
 } from "./compSaveExitTelemetry";
+import { logAuthorityNavigationReplayDev } from "../../identity/authorityTelemetry";
 
 /**
  * Minimal navigation surface for tab parent walk + dispatch (compatible with Expo Router's typed `useNavigation()`).
@@ -65,6 +69,24 @@ function findValidatedTabsStateInTree(
   return null;
 }
 
+/**
+ * Key of the lane root stack (e.g. `this-week/_layout` Stack) so we can `popToTop` after save.
+ * Without this, switching to Compete leaves competition/edit on the lane stack; returning to
+ * the tab replays that screen briefly.
+ */
+function laneOuterStackKeyForPopToTop(
+  tabNavigatorState: NavigationState | undefined,
+  laneRouteName: "this-week" | "coach",
+): string | null {
+  if (!tabNavigatorState?.routes?.length) return null;
+  const laneRoute = tabNavigatorState.routes.find((r) => r.name === laneRouteName);
+  const laneState = laneRoute?.state as NavigationState | undefined;
+  if (!laneState?.key) return null;
+  if (!laneState.routes?.length || laneState.routes.length <= 1) return null;
+  if (laneState.type !== "stack") return null;
+  return laneState.key;
+}
+
 function laneStackScreenNames(
   tabNavigatorState: NavigationState | undefined,
   laneRouteName: "this-week" | "coach",
@@ -98,8 +120,9 @@ function readTabNavigatorStateForExit(
 }
 
 /**
- * After save, cancel-style back, delete, or load errors: always land on the Competition tab.
- * Athlete scope stays in existing global/store state; this only switches the focused tab.
+ * After save, cancel-style back, delete, or load errors: land on the Competition tab and
+ * pop the parent/coach lane stack to root so `competition/edit` does not survive as the
+ * active route when the user returns to that tab. Athlete scope is unchanged.
  */
 export function exitToCompeteAfterCompetitionSave(args: {
   navigation: TabSyncScreenNavigation;
@@ -109,6 +132,15 @@ export function exitToCompeteAfterCompetitionSave(args: {
   competitionId: string | null;
 }): void {
   const { navigation, actorRole, athleteId, competitionId } = args;
+  if (__DEV__) {
+    const ri = store.getRouteInfo();
+    logAuthorityNavigationReplayDev("exit_to_compete_save_begin", {
+      actorRole,
+      athleteId,
+      competitionId,
+      pathname: String(ri.pathname ?? ""),
+    });
+  }
   logCompSaveNormalized({
     actorRole,
     athleteId,
@@ -153,14 +185,24 @@ export function exitToCompeteAfterCompetitionSave(args: {
 
   const tabLayerStateBefore = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
   const activeStackBefore = laneStackScreenNames(tabLayerStateBefore, laneRouteName);
+  const laneStackKey = laneOuterStackKeyForPopToTop(tabLayerStateBefore, laneRouteName);
+
+  const popLaneToRoot = (nav: TabSyncScreenNavigation, key: string | null) => {
+    if (!key) return;
+    InteractionManager.runAfterInteractions(() => {
+      nav.dispatch({ ...StackActions.popToTop(), target: key });
+    });
+  };
 
   if (tabsNav) {
     tabsNav.dispatch(navAction);
+    popLaneToRoot(tabsNav, laneStackKey);
   } else if (tabsFallback?.key && rootNav) {
     rootNav.dispatch({
       ...navAction,
       target: tabsFallback.key,
     });
+    popLaneToRoot(rootNav as TabSyncScreenNavigation, laneStackKey);
   } else {
     logStackReset(false, activeStackBefore, laneStackScreenNames(tabLayerStateBefore, laneRouteName));
     router.replace("/compete");
@@ -174,14 +216,24 @@ export function exitToCompeteAfterCompetitionSave(args: {
     const rootAfter = rootNav?.getRootState() as NavigationState | undefined;
     const focusedTabAfterSave = readFocusedTabFromRootState(rootAfter);
 
+    if (__DEV__) {
+      logAuthorityNavigationReplayDev("exit_to_compete_save_post_dispatch", {
+        actorRole,
+        athleteId,
+        focusedTabAfterSave,
+        activeStackAfter,
+        laneStackKey: laneStackKey ?? null,
+      });
+    }
+
     logCompeteExitStackReset({
-      stackNavigatorKey: null,
+      stackNavigatorKey: laneStackKey,
       routeCountBefore: 0,
       routeCountAfter: 0,
       focusedTabAfterSave,
     });
 
-    logStackReset(false, activeStackBefore, activeStackAfter);
+    logStackReset(Boolean(laneStackKey), activeStackBefore, activeStackAfter);
     scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
   });
 }

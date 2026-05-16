@@ -1,5 +1,7 @@
 import type { CompetitionTrainingSkillFocus } from "../ai-coach/competitionTrainingSkillFocus";
 import { recommendedFocusAreaFromTrainingSkillFocus } from "../ai-coach/competitionTrainingSkillFocus";
+import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
+import { getCanonicalKidForSharedAthleteId } from "../identity/canonicalSharedAthleteOwner";
 import type { KidsById } from "../types/coachKid";
 import type {
   CoachWeeklySyncSessionResponse,
@@ -77,11 +79,8 @@ export function resolveWeeklySharedAthleteIdForParentSnapshot(
 
   let candidate: string | null = null;
 
-  const linkedKid = kidsById
-    ? Object.values(kidsById).find(
-        (k) => k && (k.sharedAthleteId ?? "").trim() === aid,
-      )
-    : undefined;
+  const linkedKid =
+    kidsById && aid ? getCanonicalKidForSharedAthleteId(kidsById, aid) : null;
 
   if (linkedKid) {
     candidate = sharedAthleteIdFromRosterForSession(
@@ -183,7 +182,26 @@ export function resolveWeeklyDoc(
           const recommendedFocusArea = recommendedFocusAreaFromTrainingSkillFocus(
             trainingSkillFocus ?? null,
           );
+          logAthleteLineageTrace({
+            operation: "hydrate",
+            source: "weekly_resolve",
+            sharedAthleteId: id,
+            route: "resolveWeeklyDoc.weeklyByAthleteId",
+            extra: {
+              weekStartYMD: athleteDoc.weekStartYMD,
+              headline: athleteDoc.headline?.slice(0, 80) ?? null,
+            },
+          });
           if (__DEV__) {
+            console.log("[AUTHORITY_CHAIN_TRACE]", {
+              stage: "5_resolve_weekly_doc",
+              selectedWeeklySource: "weeklyByAthleteId",
+              resolvedAthleteId: id,
+              headline: athleteDoc.headline?.slice(0, 120) ?? null,
+              systemKey: athleteDoc.systemKey ?? null,
+              weekStartYMD: athleteDoc.weekStartYMD ?? null,
+              fallbackReason: null,
+            });
             console.log("[SYSTEMKEY TRACE SUMMARY]", {
               traceStage: "9_resolveWeeklyDoc_result",
               headline: athleteDoc.headline?.slice(0, 120) ?? null,
@@ -206,6 +224,21 @@ export function resolveWeeklyDoc(
           return athleteDoc;
         }
         if (__DEV__) {
+          console.log("[AUTHORITY_CHAIN_TRACE]", {
+            stage: "5_resolve_weekly_doc",
+            selectedWeeklySource: null,
+            resolvedAthleteId: id,
+            headline: null,
+            systemKey: null,
+            fallbackReason: "athlete_slot_present_not_usable_no_invite",
+            slotRawHeadline:
+              athleteDoc != null &&
+              typeof athleteDoc === "object" &&
+              "headline" in athleteDoc
+                ? String((athleteDoc as { headline?: unknown }).headline ?? "").slice(0, 120)
+                : null,
+            slotPassesIsValidWeeklyDoc: athleteDoc != null && isValidWeeklyDoc(athleteDoc),
+          });
           console.log("[WEEKLY RESOLVE TRACE]", {
             selectedWeeklySource: null,
             selectedSystemKey: null,
@@ -224,6 +257,16 @@ export function resolveWeeklyDoc(
       isValidWeeklyDoc(inviteWeekly) &&
       !mapHasValidAthleteDoc
     ) {
+      logAthleteLineageTrace({
+        operation: "fallback_projection",
+        source: "weekly_resolve",
+        sharedAthleteId: id,
+        route: "resolveWeeklyDoc.invite_weekly",
+        extra: {
+          fallbackReason: "no_athlete_weekly_key_legacy_invite",
+          weekStartYMD: inviteWeekly.weekStartYMD,
+        },
+      });
       if (__DEV__) {
         console.log("[SYSTEMKEY TRACE SUMMARY]", {
           traceStage: "9_resolveWeeklyDoc_result",

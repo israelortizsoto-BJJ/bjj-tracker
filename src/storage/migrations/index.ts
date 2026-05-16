@@ -85,6 +85,22 @@ export async function ensureStorageUpToDate(): Promise<void> {
     }
   }
 
+  // v3 -> v4: repair divergent invite-token → sharedAthleteId ownership (deterministic migration).
+  if (currentVersion < 4) {
+    const { repairInviteTokenOwnershipConflicts } = await import(
+      "../../identity/repairInviteTokenOwnershipMigration"
+    );
+    await repairInviteTokenOwnershipConflicts();
+  }
+
+  // v4 -> v5: complete downstream reconciliation (OAI, parentAthletes prune, weekly session remap).
+  if (currentVersion < 5) {
+    const { repairInviteTokenOwnershipCompletion } = await import(
+      "../../identity/repairInviteTokenOwnershipMigration"
+    );
+    await repairInviteTokenOwnershipCompletion();
+  }
+
   // Always stamp latest version at end
   await AsyncStorage.setItem(StorageKeys.storageVersion, String(STORAGE_VERSION));
 }

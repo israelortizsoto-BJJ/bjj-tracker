@@ -1,6 +1,6 @@
 // src/storage/storageKeys.ts.
 /** Bump when `ensureStorageUpToDate` adds steps; v3 introduces `summaryIdentityByScope` on profile JSON. */
-export const STORAGE_VERSION = 3 as const;
+export const STORAGE_VERSION = 5 as const;
 
 export const StorageKeys = {
   storageVersion: "bjj.storage.version",

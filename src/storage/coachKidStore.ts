@@ -3,6 +3,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { dedupeActiveCoachWriterLinks } from "../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
 import { isCoachSyncConfigured } from "../config/coachSync";
+import {
+  logAthleteLineageTrace,
+  logAthleteLineageTraceFromKidsById,
+} from "../identity/athleteLineageTrace";
+import { buildCanonicalSharedAthletePrimaryRowMap } from "../identity/canonicalSharedAthleteOwner";
+import {
+  athleteIdSetFromSynced,
+  logHydrationPipelineCanonicalReconcile,
+  logHydrationPipelineWatchAthletes,
+  namesByIdFromSyncedAthletes,
+} from "../identity/hydrationPipelineTrace";
 import { normalizePublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import {
   CoachWeeklySyncApiError,
@@ -164,10 +175,23 @@ export async function clearFamilyCompetitionSelectedKidId(): Promise<void> {
 
 export async function getKidsById(): Promise<KidsById> {
   const raw = await AsyncStorage.getItem(StorageKeys.coachKidsById);
-  return safeParseOrDefault<KidsById>(raw, {});
+  const kids = safeParseOrDefault<KidsById>(raw, {});
+  logAthleteLineageTraceFromKidsById({
+    operation: "restore",
+    source: "hydration_pipeline",
+    kidsById: kids,
+    route: "coachKidStore.getKidsById",
+  });
+  return kids;
 }
 
 export async function setKidsById(kidsById: KidsById): Promise<void> {
+  logAthleteLineageTraceFromKidsById({
+    operation: "persist",
+    source: "athlete_store",
+    kidsById,
+    route: "coachKidStore.setKidsById",
+  });
   await AsyncStorage.setItem(StorageKeys.coachKidsById, JSON.stringify(kidsById));
 }
 
@@ -199,16 +223,65 @@ export async function attachSharedAthleteToKid(
   const nowIso = new Date().toISOString();
   const tokenNormRaw = sharedFromInviteTokenNorm?.trim();
   const tokenNorm = tokenNormRaw ? normalizeInviteLinkToken(tokenNormRaw) : "";
+  const sharedAthleteId = (typeof athlete.id === "string" ? athlete.id : "").trim();
+
   const next: Kid = {
     ...existing,
     name: athlete.name,
-    sharedAthleteId: athlete.id,
+    sharedAthleteId,
     updatedAt: nowIso,
     ...(existing.isParentManagedChildProfile ? { isParentManagedChildProfile: true } : {}),
     ...(tokenNorm ? { sharedFromInviteTokenNorm: tokenNorm } : {}),
   };
+  logAthleteLineageTrace({
+    operation: "attach",
+    source: "parent_attach_flow",
+    athleteName: athlete.name,
+    sharedAthleteId,
+    previousSharedAthleteId: existing.sharedAthleteId ?? null,
+    linkedKidId: kidId,
+    token: tokenNorm || null,
+    route: "coachKidStore.attachSharedAthleteToKid",
+  });
   await setKidsById({ ...kids, [kidId]: next });
   return next;
+}
+
+/**
+ * Parent-managed bind: create a `Kid` projection for the remote session athlete id (no token-level id rewrite).
+ */
+export async function createParentManagedKidWithSharedAthlete(input: {
+  localKidId: KidId;
+  athlete: SyncedSharedAthlete;
+  inviteTokenRaw: string;
+  createdAtIso?: string;
+}): Promise<Kid> {
+  const kids = await getKidsById();
+  const nowIso = input.createdAtIso ?? new Date().toISOString();
+  const tokenNorm = normalizeInviteLinkToken(input.inviteTokenRaw);
+  const sharedAthleteId = (typeof input.athlete.id === "string" ? input.athlete.id : "").trim();
+
+  const createdKid: Kid = {
+    id: input.localKidId,
+    name: input.athlete.name,
+    sharedAthleteId,
+    sharedFromInviteTokenNorm: tokenNorm,
+    isParentManagedChildProfile: true,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+  logAthleteLineageTrace({
+    operation: "create",
+    source: "parent_attach_flow",
+    athleteName: input.athlete.name,
+    sharedAthleteId,
+    linkedKidId: input.localKidId,
+    localAthleteId: input.localKidId,
+    token: tokenNorm || null,
+    route: "coachKidStore.createParentManagedKidWithSharedAthlete",
+  });
+  await setKidsById({ ...kids, [input.localKidId]: createdKid });
+  return createdKid;
 }
 
 /**
@@ -370,37 +443,44 @@ export function pickPublishedWeeklyParentFeedbackForSharedAthlete(
 }
 
 /**
- * Coach roster: merge athletes from each **successful** writer session GET, then prune stale linked rows.
- * - When every active writer session was fetched successfully, prunes any `sharedAthleteId` not in the
- *   union of remote athletes (same as legacy merge + `pruneOrphansWhenAuthoritative`).
- * - When some GETs failed, prunes only rows tagged with `sharedFromInviteTokenNorm` for a session we
- *   did fetch whose athlete list no longer contains that id — so one dead invite fetch does not block
- *   pruning another invite’s removed athletes.
+ * Applies remote roster athletes onto a draft `KidsById` map (no persistence).
+ * Upserts **each** remote athlete id independently; sibling ids sharing one invite remain distinct.
+ * When several rows claim the **same** `sharedAthleteId`, updates whichever row
+ * {@link buildCanonicalSharedAthletePrimaryRowMap} treats as primary for that reconcile pass.
  */
-export async function reconcileCoachKidRosterFromWriterSessions(opts: {
-  successfulSnapshots: WriterSessionSnapshotOk[];
-  totalActiveWriterCount: number;
-}): Promise<KidsById> {
-  const { successfulSnapshots, totalActiveWriterCount } = opts;
-  if (successfulSnapshots.length === 0) {
-    return getKidsById();
-  }
+export function mergeWriterSessionRosterIntoKidsDraft(
+  kidsDraft: KidsById,
+  successfulSnapshots: WriterSessionSnapshotOk[],
+  nowIso: string,
+): KidsById {
+  const rosterResolutionCtx = {
+    activeWriterInviteTokenNorms: new Set(successfulSnapshots.map((s) => s.linkTokenNorm)),
+    reconcileSource: "reconcileCoachKidRosterFromWriterSessions" as const,
+  };
 
-  const kids = await getKidsById();
-  const next: KidsById = { ...kids };
-  const nowIso = new Date().toISOString();
-
-  const byShared = new Map(
-    Object.values(next)
-      .filter((k) => Boolean(k.sharedAthleteId?.trim()))
-      .map((k) => [k.sharedAthleteId!.trim(), k] as const),
-  );
+  const next: KidsById = { ...kidsDraft };
+  const byShared = buildCanonicalSharedAthletePrimaryRowMap(next, rosterResolutionCtx);
 
   for (const snap of successfulSnapshots) {
     const token = snap.linkTokenNorm;
     for (const a of snap.athletes) {
-      const id = typeof a.id === "string" ? a.id.trim() : "";
-      if (!id) continue;
+      const remoteId = typeof a.id === "string" ? a.id.trim() : "";
+      if (!remoteId) continue;
+
+      const id = remoteId;
+      if (__DEV__) {
+        logHydrationPipelineCanonicalReconcile({
+          sourceSubsystem: "coachKidStore.reconcileCoachKidRosterFromWriterSessions",
+          inviteTokenNorm: token,
+          remoteAthleteId: remoteId,
+          attemptedSharedAthleteId: remoteId,
+          enforcedSharedAthleteId: id,
+          breachCorrected: false,
+          skippedRemoteRow: false,
+          kidsById: next,
+          namesById: namesByIdFromSyncedAthletes(snap.athletes),
+        });
+      }
 
       const existing = byShared.get(id);
       if (existing) {
@@ -448,9 +528,43 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
         createdAt: a.createdAt,
         updatedAt: nowIso,
       };
+      logAthleteLineageTrace({
+        operation: "reconcile_candidate",
+        source: "coach_roster_reconcile",
+        athleteName: a.name,
+        sharedAthleteId: id,
+        linkedKidId: localId,
+        token,
+        route: "coachKidStore.mergeWriterSessionRosterIntoKidsDraft",
+        extra: { remoteCreatedAt: a.createdAt },
+      });
       byShared.set(id, next[localId]);
     }
   }
+
+  return next;
+}
+
+/**
+ * Coach roster: merge athletes from each **successful** writer session GET, then prune stale linked rows.
+ * - When every active writer session was fetched successfully, prunes any `sharedAthleteId` not in the
+ *   union of remote athletes (same as legacy merge + `pruneOrphansWhenAuthoritative`).
+ * - When some GETs failed, prunes only rows tagged with `sharedFromInviteTokenNorm` for a session we
+ *   did fetch whose athlete list no longer contains that id — so one dead invite fetch does not block
+ *   pruning another invite’s removed athletes.
+ */
+export async function reconcileCoachKidRosterFromWriterSessions(opts: {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  totalActiveWriterCount: number;
+}): Promise<KidsById> {
+  const { successfulSnapshots, totalActiveWriterCount } = opts;
+  if (successfulSnapshots.length === 0) {
+    return getKidsById();
+  }
+
+  const kids = await getKidsById();
+  const nowIso = new Date().toISOString();
+  const next = mergeWriterSessionRosterIntoKidsDraft(kids, successfulSnapshots, nowIso);
 
   await setKidsById(next);
 
@@ -550,7 +664,13 @@ export async function reconcileCoachLinkedCompetitionEntriesFromWriterSessions(o
     sessionsOrdered.some((sess) => sess.athletes.some((a) => a.id.trim() === athleteId));
 
   const kids = await getKidsById();
-  for (const k of Object.values(kids)) {
+  const compResolutionCtx = {
+    activeWriterInviteTokenNorms: new Set(successfulSnapshots.map((s) => s.linkTokenNorm)),
+    reconcileSource: "reconcileCoachLinkedCompetitionEntriesFromWriterSessions" as const,
+  };
+  const primaryRosterRows = buildCanonicalSharedAthletePrimaryRowMap(kids, compResolutionCtx);
+  for (const k of primaryRosterRows.values()) {
+    if (!k?.id) continue;
     if (isKidCoachArchived(k)) continue;
     const sharedAthleteId = k.sharedAthleteId?.trim() ?? "";
     if (!sharedAthleteId) continue;
@@ -609,6 +729,18 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
     const tokenKey = normalizeInviteLinkToken(weeklySync.linkToken);
     try {
       const session = await coachSyncFetchSession(weeklySync.linkToken, weeklySync.apiBaseUrl);
+      if (__DEV__) {
+        logHydrationPipelineWatchAthletes({
+          stage: "2_weekly_sync_ingestion",
+          sourceSubsystem: "coachKidStore.refreshCoachWriterSessionsAndReconcileStores",
+          dataOrigin: "remote",
+          inviteTokenHint: tokenKey,
+          presentAthleteIds: athleteIdSetFromSynced(session.athletes),
+          namesById: namesByIdFromSyncedAthletes(session.athletes),
+          allAthleteIdsInStage: session.athletes.map((a) => a.id),
+          stageMeta: { linkTokenNorm: tokenKey },
+        });
+      }
       const nowIso = new Date().toISOString();
       await setCachedWeeklyForLinkToken(
         weeklySync.linkToken,
@@ -663,10 +795,31 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
   });
 
   if (writerLinks.length > 0 && successfulSnapshots.length > 0) {
-    await reconcileCoachKidRosterFromWriterSessions({
+    const kidsAfterRoster = await reconcileCoachKidRosterFromWriterSessions({
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });
+    if (__DEV__) {
+      logHydrationPipelineWatchAthletes({
+        stage: "10_stale_canonical_reconciliation",
+        sourceSubsystem: "coachKidStore.reconcileCoachKidRosterFromWriterSessions:post",
+        dataOrigin: "local_storage",
+        kidsById: kidsAfterRoster,
+        canonicalCtx: {
+          activeWriterInviteTokenNorms: new Set(successfulSnapshots.map((s) => s.linkTokenNorm)),
+          reconcileSource: "reconcileCoachKidRosterFromWriterSessions",
+        },
+        presentAthleteIds: new Set(
+          Object.values(kidsAfterRoster)
+            .map((k) => (k?.sharedAthleteId ?? "").trim())
+            .filter(Boolean),
+        ),
+        namesById: namesByIdFromSyncedAthletes(
+          successfulSnapshots.flatMap((s) => s.athletes),
+        ),
+        stageMeta: { successfulSnapshotCount: successfulSnapshots.length },
+      });
+    }
     await reconcileCoachLinkedCompetitionEntriesFromWriterSessions({
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
@@ -697,11 +850,9 @@ export async function mergeRemoteSharedAthletesIntoKids(
   const next: KidsById = { ...kids };
   const nowIso = new Date().toISOString();
 
-  const byShared = new Map(
-    Object.values(next)
-      .filter((k) => Boolean(k.sharedAthleteId))
-      .map((k) => [k.sharedAthleteId as string, k] as const),
-  );
+  const byShared = buildCanonicalSharedAthletePrimaryRowMap(next, {
+    reconcileSource: "mergeRemoteSharedAthletesIntoKids",
+  });
 
   for (const a of remote) {
     const existing = byShared.get(a.id);
@@ -728,6 +879,15 @@ export async function mergeRemoteSharedAthletesIntoKids(
       createdAt: a.createdAt,
       updatedAt: nowIso,
     };
+    logAthleteLineageTrace({
+      operation: "create",
+      source: "coach_roster_reconcile",
+      athleteName: a.name,
+      sharedAthleteId: a.id,
+      linkedKidId: localId,
+      route: "coachKidStore.mergeRemoteSharedAthletesIntoKids",
+      extra: { remoteCreatedAt: a.createdAt },
+    });
     byShared.set(a.id, next[localId]);
   }
 

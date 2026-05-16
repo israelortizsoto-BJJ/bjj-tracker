@@ -58,9 +58,11 @@ export function emitCompetitionChange() {
   for (const l of listeners) l();
 }
 
-export function subscribeCompetition(listener: () => void) {
+export function subscribeCompetition(listener: () => void): () => void {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function getCompetitionVersion(): number {

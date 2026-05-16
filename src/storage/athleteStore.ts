@@ -1,14 +1,29 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { buildCanonicalSharedAthletePrimaryRowMap } from "../identity/canonicalSharedAthleteOwner";
+import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
+import {
+  athleteIdSetFromParent,
+  logHydrationPipelineWatchAthletes,
+  namesByIdFromParentAthletes,
+} from "../identity/hydrationPipelineTrace";
 import { isKidCoachArchived, type KidsById } from "../types/coachKid";
 
 import { StorageKeys } from "./storageKeys";
 
 export type OnboardingVersion = "v1" | "v2";
 
+/** Explicit pre-coach operating scope; only `local_only` is recognized in LAAG Phase 1. */
+export type ParentAthleteOperatingScope = "local_only";
+
 export type ParentAthlete = {
   id: string;
   name: string;
+  /**
+   * When `"local_only"`, the athlete may appear in `operatingAthleteRoster` without a canonical
+   * linked `Kid`. Orphan rows without this flag are excluded (soft convergence; storage untouched).
+   */
+  operatingScope?: ParentAthleteOperatingScope;
   household?: string;
   /** IBJJF-style rank token (e.g. `grey_white`, `blue`) from `ATHLETE_BELT_RANK_OPTIONS`. */
   beltRank?: string;
@@ -65,6 +80,12 @@ function readOptionalOnboardingVersion(row: object): OnboardingVersion | undefin
   return undefined;
 }
 
+function readOptionalOperatingScope(row: object): ParentAthleteOperatingScope | undefined {
+  if (!("operatingScope" in row)) return undefined;
+  const v = (row as Record<string, unknown>).operatingScope;
+  return v === "local_only" ? "local_only" : undefined;
+}
+
 function safeParseAthletes(raw: string | null): ParentAthlete[] {
   if (!raw) return [];
   try {
@@ -88,9 +109,11 @@ function safeParseAthletes(raw: string | null): ParentAthlete[] {
       const competitionIntent = readOptionalTrimmedString(row, "competitionIntent");
       const declaredSkills = readOptionalStringArray(row, "declaredSkills");
       const onboardingVersion = readOptionalOnboardingVersion(row);
+      const operatingScope = readOptionalOperatingScope(row);
       const athlete: ParentAthlete = {
         id,
         name,
+        ...(operatingScope ? { operatingScope } : {}),
         ...(household ? { household } : {}),
         ...(beltRank ? { beltRank } : {}),
         ...(stripes !== undefined ? { stripes } : {}),
@@ -116,7 +139,29 @@ function newAthleteId(): string {
 export async function getAthletes(): Promise<ParentAthlete[]> {
   try {
     const raw = await AsyncStorage.getItem(StorageKeys.parentAthletes);
-    return safeParseAthletes(raw);
+    const list = safeParseAthletes(raw);
+    if (__DEV__) {
+      logHydrationPipelineWatchAthletes({
+        stage: "5_hydration_restore",
+        sourceSubsystem: "athleteStore.getAthletes",
+        dataOrigin: "local_storage",
+        presentAthleteIds: athleteIdSetFromParent(list),
+        namesById: namesByIdFromParentAthletes(list),
+        allAthleteIdsInStage: list.map((a) => a.id),
+        stageMeta: { parentAthleteCount: list.length },
+      });
+      for (const a of list) {
+        logAthleteLineageTrace({
+          operation: "restore",
+          source: "athlete_store",
+          athleteName: a.name,
+          sharedAthleteId: a.id,
+          localAthleteId: a.id,
+          route: "athleteStore.getAthletes",
+        });
+      }
+    }
+    return list;
   } catch {
     return [];
   }
@@ -138,7 +183,11 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
 
   let changed = false;
 
-  for (const k of Object.values(kidsById)) {
+  const primaryByShared = buildCanonicalSharedAthletePrimaryRowMap(kidsById, {
+    reconcileSource: "ensureOperatingAthletesFromCoachLinkedKids",
+  });
+
+  for (const k of primaryByShared.values()) {
     if (!k?.id) continue;
     if (isKidCoachArchived(k)) continue;
     const sid = (k.sharedAthleteId ?? "").trim();
@@ -155,6 +204,14 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
       }
     } else {
       byId.set(sid, { id: sid, name: displayName });
+      logAthleteLineageTrace({
+        operation: "fallback_projection",
+        source: "hydration_pipeline",
+        athleteName: displayName,
+        sharedAthleteId: sid,
+        linkedKidId: k.id,
+        route: "athleteStore.ensureOperatingAthletesFromCoachLinkedKids",
+      });
       changed = true;
     }
   }
@@ -162,8 +219,41 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
   if (!changed) return;
 
   const next = Array.from(byId.values());
+  if (__DEV__) {
+    logHydrationPipelineWatchAthletes({
+      stage: "6_parent_athletes_derivation",
+      sourceSubsystem: "athleteStore.ensureOperatingAthletesFromCoachLinkedKids",
+      dataOrigin: "derived",
+      kidsById,
+      presentAthleteIds: athleteIdSetFromParent(next),
+      namesById: namesByIdFromParentAthletes(next),
+      allAthleteIdsInStage: next.map((a) => a.id),
+      stageMeta: { wroteParentAthletes: true },
+    });
+  }
   try {
     await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+    if (__DEV__) {
+      logHydrationPipelineWatchAthletes({
+        stage: "4_storage_persistence",
+        sourceSubsystem: "athleteStore.ensureOperatingAthletesFromCoachLinkedKids",
+        dataOrigin: "local_storage",
+        kidsById,
+        presentAthleteIds: athleteIdSetFromParent(next),
+        namesById: namesByIdFromParentAthletes(next),
+        allAthleteIdsInStage: next.map((a) => a.id),
+      });
+      for (const a of next) {
+        logAthleteLineageTrace({
+          operation: "persist",
+          source: "athlete_store",
+          athleteName: a.name,
+          sharedAthleteId: a.id,
+          localAthleteId: a.id,
+          route: "athleteStore.ensureOperatingAthletesFromCoachLinkedKids",
+        });
+      }
+    }
   } catch {
     /* ignore */
   }
@@ -182,6 +272,7 @@ export async function addAthlete(input: {
   const athlete: ParentAthlete = {
     id: newAthleteId(),
     name,
+    operatingScope: "local_only",
     ...(householdRaw ? { household: householdRaw } : {}),
   };
   const existing = await getAthletes();
@@ -273,7 +364,8 @@ export function subscribeActiveAthleteChanges(listener: ActiveAthleteChangeListe
   };
 }
 
-function notifyActiveAthleteChanged(): void {
+/** After storage repair mutates OAI / roster without a selection change, force authority snapshot rebuild. */
+export function notifyActiveAthleteChanged(): void {
   for (const listener of activeAthleteChangeListeners) {
     try {
       listener();
@@ -331,6 +423,23 @@ export async function setActiveAthleteId(
   }
 
   if (prevNorm !== nextNorm) {
+    console.log("[ATHLETE TRACE][STORE UPDATE]", {
+      source: "selector_press",
+      reason: "setActiveAthleteId",
+      athleteName: null,
+      selectedAthleteId: nextNorm || null,
+      sharedAthleteId: nextNorm || null,
+      linkedKidId: null,
+      previousAthleteId: prevNorm || null,
+      nextAthleteId: nextNorm || null,
+    });
+    logAthleteLineageTrace({
+      operation: "attach",
+      source: "athlete_store",
+      sharedAthleteId: nextNorm || null,
+      previousSharedAthleteId: prevNorm || null,
+      route: "athleteStore.setActiveAthleteId",
+    });
     notifyActiveAthleteChanged();
   }
 }

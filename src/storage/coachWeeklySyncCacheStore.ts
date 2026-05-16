@@ -1,6 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
+import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
+import {
+  athleteIdSetFromSynced,
+  logHydrationPipelineWatchAthletes,
+  logHydrationPipelineWeeklyInvariantFilter,
+  namesByIdFromSyncedAthletes,
+} from "../identity/hydrationPipelineTrace";
 import type {
   CoachWeeklySyncSessionResponse,
   SyncedSharedAthlete,
@@ -142,6 +149,18 @@ function normalizeReadEntry(
   const session = normalizeStoredSession(e.session, linkToken);
   const weeklyByAthleteId = normalizeWeeklyByAthleteId(e.weeklyByAthleteId);
   if (__DEV__) {
+    console.log("[AUTHORITY_CHAIN_TRACE]", {
+      stage: "2_cache_hydrate_normalized",
+      inviteHeadline: weekly?.headline?.slice(0, 120) ?? null,
+      inviteSystemKey: weekly?.systemKey ?? null,
+      weeklyByAthleteKeys: Object.keys(weeklyByAthleteId),
+      weeklyByAthleteHeadlines: Object.fromEntries(
+        Object.entries(weeklyByAthleteId).map(([id, doc]) => [
+          id,
+          doc?.headline?.slice(0, 120) ?? null,
+        ]),
+      ),
+    });
     console.log("[SYSTEMKEY TRACE CLIENT]", {
       traceStage: "8_client_cache_hydrate",
       headline: weekly?.headline?.slice(0, 120) ?? null,
@@ -168,6 +187,30 @@ function normalizeReadEntry(
         Object.entries(weeklyByAthleteId).map(([id, doc]) => [id, doc?.systemKey ?? null]),
       ),
     });
+    const cacheAthletes = normalizeAthletes("athletes" in e ? e.athletes : []);
+    logHydrationPipelineWatchAthletes({
+      stage: "5_hydration_restore",
+      sourceSubsystem: "coachWeeklySyncCacheStore.normalizeReadEntry",
+      dataOrigin: "cache",
+      inviteTokenHint: tokenNorm,
+      presentAthleteIds: athleteIdSetFromSynced(cacheAthletes),
+      namesById: namesByIdFromSyncedAthletes(cacheAthletes),
+      allAthleteIdsInStage: cacheAthletes.map((a) => a.id),
+      stageMeta: { fetchedAt, linkTokenTail: linkToken.slice(-6) },
+    });
+    for (const a of cacheAthletes) {
+      logAthleteLineageTrace({
+        operation: "restore",
+        source: "weekly_cache",
+        athleteName: a.name,
+        sharedAthleteId: a.id,
+        token: tokenNorm,
+        route: "coachWeeklySyncCacheStore.normalizeReadEntry",
+        extra: {
+          weeklyKeyPresent: Object.prototype.hasOwnProperty.call(weeklyByAthleteId, a.id),
+        },
+      });
+    }
   }
   return {
     weekly,
@@ -238,6 +281,11 @@ export async function setCachedWeeklyForLinkToken(
         : prev?.tokenNorm && prev.tokenNorm.length > 0
           ? prev.tokenNorm
           : normalizeInviteLinkToken(linkToken);
+  const beforeInvariantAthletes = Array.isArray(athletes) ? athletes.map((a) => a.id) : [];
+  const beforeInvariantWeeklyKeys =
+    weeklyByAthleteId && typeof weeklyByAthleteId === "object"
+      ? Object.keys(weeklyByAthleteId)
+      : [];
   const {
     weeklyByAthleteId: normalizedWeeklyByAthleteId,
     athletes: normalizedAthletes,
@@ -246,6 +294,18 @@ export async function setCachedWeeklyForLinkToken(
     athletes,
     session: nextSession,
   });
+  if (__DEV__) {
+    logHydrationPipelineWeeklyInvariantFilter({
+      sourceSubsystem: "coachWeeklySyncCacheStore.setCachedWeeklyForLinkToken",
+      dataOrigin: cachedFullSession !== undefined ? "remote" : "cache",
+      inviteTokenHint: nextTokenNorm,
+      beforeAthleteIds: beforeInvariantAthletes,
+      afterAthleteIds: normalizedAthletes.map((a) => a.id),
+      beforeWeeklyKeys: beforeInvariantWeeklyKeys,
+      afterWeeklyKeys: Object.keys(normalizedWeeklyByAthleteId),
+      namesById: namesByIdFromSyncedAthletes(normalizedAthletes),
+    });
+  }
   const athleteIds = new Set(normalizedAthletes.map((a) => a.id));
   const missing = Object.keys(normalizedWeeklyByAthleteId).filter((id) => !athleteIds.has(id));
 
@@ -275,6 +335,32 @@ export async function setCachedWeeklyForLinkToken(
         ]),
       ),
     });
+    logHydrationPipelineWatchAthletes({
+      stage: "3_session_cache_write",
+      sourceSubsystem: "coachWeeklySyncCacheStore.setCachedWeeklyForLinkToken",
+      dataOrigin: cachedFullSession !== undefined ? "remote" : "cache",
+      inviteTokenHint: nextTokenNorm,
+      presentAthleteIds: athleteIdSetFromSynced(normalizedAthletes),
+      namesById: namesByIdFromSyncedAthletes(normalizedAthletes),
+      allAthleteIdsInStage: normalizedAthletes.map((a) => a.id),
+      stageMeta: { fetchedAtIso, wroteFullSession: cachedFullSession !== undefined },
+    });
+    for (const a of normalizedAthletes) {
+      logAthleteLineageTrace({
+        operation: "persist",
+        source: "weekly_cache",
+        athleteName: a.name,
+        sharedAthleteId: a.id,
+        token: nextTokenNorm,
+        route: "coachWeeklySyncCacheStore.setCachedWeeklyForLinkToken",
+        extra: {
+          weeklyKeyPresent: Object.prototype.hasOwnProperty.call(
+            normalizedWeeklyByAthleteId,
+            a.id,
+          ),
+        },
+      });
+    }
   }
   await writeMap(map);
 }
