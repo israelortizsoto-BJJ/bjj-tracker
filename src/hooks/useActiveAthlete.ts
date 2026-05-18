@@ -125,10 +125,10 @@ export function useActiveAthlete(): UseActiveAthleteResult {
       const nextAthleteIdNorm = idToApply.trim() ? idToApply.trim() : null;
       if (prevAthleteIdNorm !== nextAthleteIdNorm) {
         const { source, reason } = athleteTraceStoreSourceReason(snap.meta?.sourceTrigger);
-        const nameRow =
-          nextAthleteIdNorm &&
-          (snap.operatingAthleteRoster.find((a) => a.id.trim() === nextAthleteIdNorm) ??
-            snap.sorted.find((a) => a.id.trim() === nextAthleteIdNorm));
+        const nameRow = nextAthleteIdNorm
+          ? (snap.operatingAthleteRoster.find((a) => a.id.trim() === nextAthleteIdNorm) ??
+            snap.sorted.find((a) => a.id.trim() === nextAthleteIdNorm))
+          : undefined;
         console.log("[ATHLETE TRACE][STORE UPDATE]", {
           source,
           reason,
