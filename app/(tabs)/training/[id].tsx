@@ -25,6 +25,7 @@ import {
   recommendedFocusAreaFromTrainingSkillFocus,
 } from "../../../src/ai-coach/competitionTrainingSkillFocus";
 import { toDateKey } from "../../../src/_domain/dateKey";
+import { schedulePublishParentTrainingProof } from "../../../src/domain/training/publishParentTrainingProof";
 import { buildTechniqueIndex, getTechniqueById } from "../../../src/fundamentals/index";
 import { FUNDAMENTALS_TAXONOMY } from "../../../src/fundamentals/taxonomy";
 import {
@@ -1043,6 +1044,10 @@ const payload: Session = {
 
     await saveSessions(next);
 
+    if (deviceRole === "parent") {
+      schedulePublishParentTrainingProof(athleteId);
+    }
+
     if (isNew) {
       const pendingPlan = await getActiveSessionPlan(athleteId);
       if (pendingPlan) {
@@ -1208,7 +1213,22 @@ return; // prevents any router.replace below from firing immediately
         style: "destructive",
         onPress: async () => {
           const sessions = await loadSessions();
+          const deleted = sessions.find((s) => s.id === sessionId);
           await saveSessions(sessions.filter((s) => s.id !== sessionId));
+          if (deviceRole === "parent") {
+            let publishAthleteId = (deleted?.sharedAthleteId ?? "").trim();
+            if (!publishAthleteId && kidIdParam) {
+              const kidsById = await getKidsById();
+              publishAthleteId = kidsById[kidIdParam]?.sharedAthleteId?.trim() ?? "";
+            }
+            if (!publishAthleteId) {
+              publishAthleteId =
+                athleteIdFromParams.trim() || hookActiveAthleteId.trim() || "";
+            }
+            if (publishAthleteId) {
+              schedulePublishParentTrainingProof(publishAthleteId);
+            }
+          }
           router.replace(
             `/training?date=${encodeURIComponent(
               toDateKey(prefillDate || date || todayYMD()) || todayYMD(),

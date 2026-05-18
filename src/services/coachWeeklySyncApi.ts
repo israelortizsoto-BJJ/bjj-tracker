@@ -15,10 +15,12 @@ import type {
   CoachWeeklySyncCreateSessionResponse,
   CoachWeeklySyncPublishBody,
   CoachWeeklySyncPutCompetitionAggregateBody,
+  CoachWeeklySyncPutTrainingProofBody,
   CoachWeeklySyncRedeemParentWriterResponse,
   CoachWeeklySyncSessionResponse,
   CoachWeeklySyncUpdateCompetitionBody,
   SyncedCompetitionAggregateArtifact,
+  SyncedTrainingProofArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
@@ -142,6 +144,48 @@ function parseCompetitionAggregateByAthleteIdField(
   return out;
 }
 
+function isSyncedTrainingProofRankedItem(v: unknown): boolean {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.key === "string" &&
+    typeof o.label === "string" &&
+    typeof o.count === "number" &&
+    Number.isFinite(o.count)
+  );
+}
+
+function isSyncedTrainingProofArtifact(v: unknown): v is SyncedTrainingProofArtifact {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.sharedAthleteId === "string" &&
+    typeof o.updatedAt === "string" &&
+    typeof o.currentWeekSessionCount === "number" &&
+    typeof o.weeklyGoalMet === "boolean" &&
+    (o.lastTrainingDateYMD === null || typeof o.lastTrainingDateYMD === "string") &&
+    (o.dominantSystemKey === null || typeof o.dominantSystemKey === "string") &&
+    Array.isArray(o.topSystems) &&
+    o.topSystems.every(isSyncedTrainingProofRankedItem) &&
+    Array.isArray(o.topTechniques) &&
+    o.topTechniques.every(isSyncedTrainingProofRankedItem)
+  );
+}
+
+function parseTrainingProofByAthleteIdField(
+  raw: unknown,
+): Record<string, SyncedTrainingProofArtifact> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, SyncedTrainingProofArtifact> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim();
+    if (!id || !isSyncedTrainingProofArtifact(value)) continue;
+    if (value.sharedAthleteId.trim() !== id) continue;
+    out[id] = value;
+  }
+  return out;
+}
+
 function parseWeeklyByAthleteIdField(raw: unknown): Record<string, SyncedWeeklyMessagePayload | null> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -235,6 +279,7 @@ export async function coachSyncFetchSession(
   const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteIdField(
     p.competitionAggregateByAthleteId,
   );
+  const trainingProofByAthleteId = parseTrainingProofByAthleteIdField(p.trainingProofByAthleteId);
   if (__DEV__) {
     const inviteSk =
       p.weekly && typeof p.weekly === "object" && !Array.isArray(p.weekly)
@@ -333,7 +378,54 @@ export async function coachSyncFetchSession(
     athletes,
     competitions,
     competitionAggregateByAthleteId,
+    trainingProofByAthleteId,
   };
+}
+
+export async function coachSyncPutTrainingProof(
+  linkToken: string,
+  parentWriterSecret: string,
+  body: CoachWeeklySyncPutTrainingProofBody,
+  apiBaseUrlOverride?: string | null,
+): Promise<void> {
+  const base = resolveBase(apiBaseUrlOverride);
+  const enc = encodeURIComponent(linkToken);
+  const path = `/v1/sessions/${enc}/training-proof`;
+  const url = joinUrl(base, path);
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${parentWriterSecret}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await parseJsonOrText(res);
+  if (!res.ok) {
+    const msg =
+      typeof payload === "object" && payload && "error" in payload
+        ? String((payload as { error: unknown }).error)
+        : `HTTP ${res.status}`;
+    console.log("[TRAINING_PROOF_TRACE] put_http_failed", {
+      operation: "PUT",
+      url,
+      path,
+      apiBaseUrl: base,
+      httpStatus: res.status,
+      error: msg,
+      sharedAthleteId: body.sharedAthleteId,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+    });
+    throw new CoachWeeklySyncApiError(msg, res.status);
+  }
+  console.log("[TRAINING_PROOF_TRACE] put_http_ok", {
+    operation: "PUT",
+    url,
+    httpStatus: res.status,
+    sharedAthleteId: body.sharedAthleteId,
+    linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+  });
 }
 
 export async function coachSyncPutCompetitionAggregate(

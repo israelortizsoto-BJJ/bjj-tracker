@@ -91,6 +91,26 @@ export type SyncedCompetitionAggregateArtifact = {
 
 export type CoachWeeklySyncPutCompetitionAggregateBody = SyncedCompetitionAggregateArtifact;
 
+export type SyncedTrainingProofRankedItem = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+/** Parent-published bounded training proof for coach Summary (no Session[] transport). */
+export type SyncedTrainingProofArtifact = {
+  sharedAthleteId: string;
+  updatedAt: string;
+  currentWeekSessionCount: number;
+  lastTrainingDateYMD: string | null;
+  dominantSystemKey: string | null;
+  topSystems: SyncedTrainingProofRankedItem[];
+  topTechniques: SyncedTrainingProofRankedItem[];
+  weeklyGoalMet: boolean;
+};
+
+export type CoachWeeklySyncPutTrainingProofBody = SyncedTrainingProofArtifact;
+
 export type CoachWeeklySyncSessionResponse = {
   schemaVersion?: number;
   coach: CoachWeeklySyncCoachSummary;
@@ -101,6 +121,8 @@ export type CoachWeeklySyncSessionResponse = {
   competitions: SyncedSharedCompetition[];
   /** Per-athlete bounded competition match intelligence; parent writer only. */
   competitionAggregateByAthleteId?: Record<string, SyncedCompetitionAggregateArtifact>;
+  /** Per-athlete bounded training proof; parent writer only. */
+  trainingProofByAthleteId?: Record<string, SyncedTrainingProofArtifact>;
 };
 
 export type CoachWeeklySyncCreateSessionBody = {

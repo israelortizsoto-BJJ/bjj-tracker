@@ -13,6 +13,10 @@ import {
   overlayCompetitionAggregateSignals,
 } from "../domain/competition/overlayCompetitionAggregateSignals";
 import {
+  hasTrainingProofVisibility,
+  overlayTrainingProofSignals,
+} from "../domain/training/overlayTrainingProofSignals";
+import {
   filterSessionsLikeTrainingRefresh,
   normalizeSessionsLikeTraining,
 } from "../domain/sessionUtils";
@@ -20,7 +24,14 @@ import {
   getCoachCompetitionAggregate,
   peekCoachCompetitionAggregate,
 } from "../storage/coachCompetitionAggregateStore";
-import type { SyncedCompetitionAggregateArtifact } from "../types/coachWeeklySync";
+import {
+  getCoachTrainingProof,
+  peekCoachTrainingProof,
+} from "../storage/coachTrainingProofStore";
+import type {
+  SyncedCompetitionAggregateArtifact,
+  SyncedTrainingProofArtifact,
+} from "../types/coachWeeklySync";
 
 import { useAthleteData } from "./useAthleteData";
 
@@ -54,22 +65,35 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
         ? peekCoachCompetitionAggregate(trimmedAthlete)
         : null,
     );
+  const [coachTrainingProof, setCoachTrainingProof] =
+    useState<SyncedTrainingProofArtifact | null>(() =>
+      deviceRole === "coach" && trimmedAthlete
+        ? peekCoachTrainingProof(trimmedAthlete)
+        : null,
+    );
 
   useFocusEffect(
     useCallback(() => {
       if (deviceRole !== "coach" || !trimmedAthlete) {
         setCoachAggregate(null);
+        setCoachTrainingProof(null);
         return;
       }
 
       let mounted = true;
       const athleteId = trimmedAthlete;
-      const peeked = peekCoachCompetitionAggregate(athleteId);
-      if (peeked) setCoachAggregate(peeked);
+      const peekedAggregate = peekCoachCompetitionAggregate(athleteId);
+      if (peekedAggregate) setCoachAggregate(peekedAggregate);
+      const peekedProof = peekCoachTrainingProof(athleteId);
+      if (peekedProof) setCoachTrainingProof(peekedProof);
 
       void getCoachCompetitionAggregate(athleteId).then((artifact) => {
         if (!mounted) return;
         setCoachAggregate(artifact);
+      });
+      void getCoachTrainingProof(athleteId).then((artifact) => {
+        if (!mounted) return;
+        setCoachTrainingProof(artifact);
       });
 
       return () => {
@@ -152,6 +176,8 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       return computed;
     }
 
+    let withCoachOverlays = computed;
+
     const localMatchLineage = hasFullLocalMatchLineage(scopedCompetitions);
     if (localMatchLineage) {
       if (__DEV__) {
@@ -159,45 +185,71 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           sharedAthleteId: trimmedAthlete,
         });
       }
-      return computed;
+    } else {
+      const aggregate = coachAggregate;
+      if (!aggregate) {
+        if (__DEV__) {
+          console.log("[COMP_AGG_TRACE] overlay_missing", {
+            sharedAthleteId: trimmedAthlete,
+          });
+        }
+      } else if (!hasBoundedAggregateVisibility(aggregate, trimmedAthlete)) {
+        if (__DEV__) {
+          console.log("[COMP_AGG_TRACE] overlay_incomplete", {
+            sharedAthleteId: trimmedAthlete,
+            totalMatches: aggregate.totalMatches,
+            wins: aggregate.wins,
+            losses: aggregate.losses,
+          });
+        }
+      } else {
+        if (__DEV__) {
+          console.log("[COMP_AGG_TRACE] overlay_applied", {
+            sharedAthleteId: trimmedAthlete,
+            totalMatches: aggregate.totalMatches,
+            wins: aggregate.wins,
+            losses: aggregate.losses,
+          });
+        }
+        withCoachOverlays = overlayCompetitionAggregateSignals(withCoachOverlays, aggregate);
+      }
     }
 
-    const aggregate = coachAggregate;
-    if (!aggregate) {
+    const proof = coachTrainingProof;
+    if (!proof) {
       if (__DEV__) {
-        console.log("[COMP_AGG_TRACE] overlay_missing", {
+        console.log("[TRAINING_PROOF_OVERLAY] overlay_missing", {
           sharedAthleteId: trimmedAthlete,
         });
       }
-      return computed;
+      return withCoachOverlays;
     }
 
-    if (!hasBoundedAggregateVisibility(aggregate, trimmedAthlete)) {
+    if (!hasTrainingProofVisibility(proof, trimmedAthlete)) {
       if (__DEV__) {
-        console.log("[COMP_AGG_TRACE] overlay_incomplete", {
+        console.log("[TRAINING_PROOF_OVERLAY] overlay_hidden_visibility", {
           sharedAthleteId: trimmedAthlete,
-          totalMatches: aggregate.totalMatches,
-          wins: aggregate.wins,
-          losses: aggregate.losses,
+          currentWeekSessionCount: proof.currentWeekSessionCount,
+          lastTrainingDateYMD: proof.lastTrainingDateYMD,
         });
       }
-      return computed;
+      return withCoachOverlays;
     }
 
     if (__DEV__) {
-      console.log("[COMP_AGG_TRACE] overlay_applied", {
+      console.log("[TRAINING_PROOF_OVERLAY] overlay_applied", {
         sharedAthleteId: trimmedAthlete,
-        totalMatches: aggregate.totalMatches,
-        wins: aggregate.wins,
-        losses: aggregate.losses,
+        currentWeekSessionCount: proof.currentWeekSessionCount,
+        weeklyGoalMet: proof.weeklyGoalMet,
       });
     }
 
-    return overlayCompetitionAggregateSignals(computed, aggregate);
+    return overlayTrainingProofSignals(withCoachOverlays, proof);
   }, [
     sessions,
     competitions,
     coachAggregate,
+    coachTrainingProof,
     deviceRole,
     linkedKidTrim,
     referenceDate,

@@ -33,6 +33,12 @@ import {
   removeCoachCompetitionAggregate,
   writeCoachCompetitionAggregate,
 } from "./coachCompetitionAggregateStore";
+import {
+  isValidSyncedTrainingProofArtifact,
+  pruneCoachTrainingProof,
+  removeCoachTrainingProof,
+  writeCoachTrainingProof,
+} from "./coachTrainingProofStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { clearLastAthleteKidIdIfMatches } from "./lastAthleteIdStore";
@@ -53,6 +59,7 @@ import type {
   SyncedCompetitionAggregateArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
+  SyncedTrainingProofArtifact,
   SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
 
@@ -211,6 +218,7 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
   if (!sid) return existing;
 
   await removeCoachCompetitionAggregate(sid);
+  await removeCoachTrainingProof(sid);
 
   const nowIso = new Date().toISOString();
   const { sharedAthleteId: _omit, sharedFromInviteTokenNorm: _tok, ...rest } = existing;
@@ -465,6 +473,34 @@ export function pickRemoteCompetitionAggregateForLinkedAthlete(
   return null;
 }
 
+/**
+ * Walk writer sessions in traversal order and return the first valid training proof for the athlete.
+ * If a session lists the athlete but has no proof payload, continue scanning (avoids
+ * "first empty wins" when a newer invite session lacks parent-published proof).
+ */
+export function pickRemoteTrainingProofForLinkedAthlete(
+  sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
+  sharedAthleteId: string,
+): SyncedTrainingProofArtifact | null {
+  const sid = sharedAthleteId.trim();
+  if (!sid) return null;
+
+  for (const session of sessionsInWriterLinkTraversalOrder) {
+    const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
+    if (!athleteInSession) continue;
+
+    const candidate = session.trainingProofByAthleteId?.[sid];
+    if (
+      candidate &&
+      isValidSyncedTrainingProofArtifact(candidate) &&
+      candidate.sharedAthleteId.trim() === sid
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function pickPublishedWeeklyParentFeedbackForSharedAthlete(
   sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
   sharedAthleteId: string,
@@ -654,6 +690,11 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
     remoteUnionIds,
     allFetched,
   });
+  await pruneCoachTrainingProofAfterRosterReconcile({
+    totalActiveWriterCount,
+    remoteUnionIds,
+    allFetched,
+  });
 
   return getKidsById();
 }
@@ -666,6 +707,16 @@ async function pruneCoachCompetitionAggregatesAfterRosterReconcile(opts: {
   const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
   if (!allFetched || totalActiveWriterCount <= 0) return;
   await pruneCoachCompetitionAggregates(remoteUnionIds);
+}
+
+async function pruneCoachTrainingProofAfterRosterReconcile(opts: {
+  totalActiveWriterCount: number;
+  remoteUnionIds: Set<string>;
+  allFetched: boolean;
+}): Promise<void> {
+  const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
+  if (!allFetched || totalActiveWriterCount <= 0) return;
+  await pruneCoachTrainingProof(remoteUnionIds);
 }
 
 /**
@@ -721,6 +772,63 @@ export async function reconcileCoachCompetitionAggregatesFromWriterSessions(opts
       await writeCoachCompetitionAggregate(artifact);
     } else if (__DEV__) {
       console.log("[COMP_AGG_TRACE] hydrate_missing", {
+        sharedAthleteId,
+        rosterKidId: k.id,
+      });
+    }
+  }
+}
+
+/**
+ * Hydrates local bounded training proof artifacts from successful writer session GETs.
+ * Overwrite-only; no Session[] transport, Summary, or signals side effects.
+ */
+export async function reconcileCoachTrainingProofFromWriterSessions(opts: {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  totalActiveWriterCount: number;
+}): Promise<void> {
+  const { successfulSnapshots, totalActiveWriterCount } = opts;
+  if (totalActiveWriterCount <= 0 || successfulSnapshots.length === 0) return;
+
+  const withSession = successfulSnapshots.filter(
+    (s): s is WriterSessionSnapshotOk & { session: CoachWeeklySyncSessionResponse } =>
+      Boolean(s.session),
+  );
+  if (withSession.length === 0) return;
+
+  if (__DEV__) {
+    console.log("[TRAINING_PROOF_HYDRATE] hydrate_start", {
+      snapshotCount: withSession.length,
+    });
+  }
+
+  const sorted = sortWriterSessionSnapshotsNewestFirst(withSession);
+  const sessionsOrdered: CoachWeeklySyncSessionResponse[] = sorted
+    .map((s) => s.session)
+    .filter((s): s is CoachWeeklySyncSessionResponse => Boolean(s));
+
+  const athleteListedInFetchedSessions = (athleteId: string) =>
+    sessionsOrdered.some((sess) => sess.athletes.some((a) => a.id.trim() === athleteId));
+
+  const kids = await getKidsById();
+  const proofResolutionCtx = {
+    activeWriterInviteTokenNorms: new Set(successfulSnapshots.map((s) => s.linkTokenNorm)),
+    reconcileSource: "reconcileCoachTrainingProofFromWriterSessions" as const,
+  };
+  const primaryRosterRows = buildCanonicalSharedAthletePrimaryRowMap(kids, proofResolutionCtx);
+
+  for (const k of primaryRosterRows.values()) {
+    if (!k?.id) continue;
+    if (isKidCoachArchived(k)) continue;
+    const sharedAthleteId = k.sharedAthleteId?.trim() ?? "";
+    if (!sharedAthleteId) continue;
+    if (!athleteListedInFetchedSessions(sharedAthleteId)) continue;
+
+    const artifact = pickRemoteTrainingProofForLinkedAthlete(sessionsOrdered, sharedAthleteId);
+    if (artifact) {
+      await writeCoachTrainingProof(artifact);
+    } else if (__DEV__) {
+      console.log("[TRAINING_PROOF_HYDRATE] hydrate_missing", {
         sharedAthleteId,
         rosterKidId: k.id,
       });
@@ -941,6 +1049,10 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });
+    await reconcileCoachTrainingProofFromWriterSessions({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
   } else if (writerLinks.length > 0) {
     console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
       skipReconcile: "writerLinksButNoSuccessfulSessionFetches",
@@ -1141,6 +1253,7 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   const sharedAthleteId = existing.sharedAthleteId?.trim();
   if (sharedAthleteId) {
     await removeCoachCompetitionAggregate(sharedAthleteId);
+    await removeCoachTrainingProof(sharedAthleteId);
   }
 
   const familyCompPick = await getFamilyCompetitionSelectedKidId();

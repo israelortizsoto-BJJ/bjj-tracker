@@ -66,6 +66,23 @@ type CompetitionAggregateArtifact = {
   latestCompetitionDate?: string;
 };
 
+type TrainingProofRankedItem = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+type TrainingProofArtifact = {
+  sharedAthleteId: string;
+  updatedAt: string;
+  currentWeekSessionCount: number;
+  lastTrainingDateYMD: string | null;
+  dominantSystemKey: string | null;
+  topSystems: TrainingProofRankedItem[];
+  topTechniques: TrainingProofRankedItem[];
+  weeklyGoalMet: boolean;
+};
+
 /** Stored shape; legacy rows omit schemaVersion / athletes / parentWriterSecret / weeklyByAthleteId until migrated. */
 type SessionRecord = {
   schemaVersion: number;
@@ -79,6 +96,8 @@ type SessionRecord = {
   weeklyByAthleteId: Record<string, WeeklyDoc>;
   /** Per-athlete bounded competition match intelligence; parent writer only. */
   competitionAggregateByAthleteId: Record<string, CompetitionAggregateArtifact>;
+  /** Per-athlete bounded training proof; parent writer only. */
+  trainingProofByAthleteId: Record<string, TrainingProofArtifact>;
   createdAt: string;
   athletes: SharedAthlete[];
   competitions: SharedCompetition[];
@@ -682,6 +701,95 @@ function parseCompetitionAggregateByAthleteId(
   return out;
 }
 
+function parseTrainingProofRankedItem(raw: unknown): TrainingProofRankedItem | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const key = typeof o.key === "string" ? o.key.trim().slice(0, 120) : "";
+  const label = typeof o.label === "string" ? o.label.trim().slice(0, 120) : "";
+  const count =
+    typeof o.count === "number" && Number.isFinite(o.count)
+      ? Math.max(0, Math.round(o.count))
+      : null;
+  if (!key || !label || count === null) return null;
+  return { key, label, count };
+}
+
+function parseTrainingProofRankedList(raw: unknown, maxItems: number): TrainingProofRankedItem[] {
+  if (!Array.isArray(raw)) return [];
+  const out: TrainingProofRankedItem[] = [];
+  for (const item of raw) {
+    const parsed = parseTrainingProofRankedItem(item);
+    if (!parsed) continue;
+    out.push(parsed);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+function parseTrainingProofArtifact(raw: unknown): TrainingProofArtifact | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const sharedAthleteId = typeof o.sharedAthleteId === "string" ? o.sharedAthleteId.trim() : "";
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  if (!sharedAthleteId || !updatedAt) return null;
+
+  const currentWeekSessionCount =
+    typeof o.currentWeekSessionCount === "number" && Number.isFinite(o.currentWeekSessionCount)
+      ? Math.max(0, Math.round(o.currentWeekSessionCount))
+      : null;
+  if (currentWeekSessionCount === null) return null;
+
+  const lastTrainingRaw =
+    o.lastTrainingDateYMD === null
+      ? null
+      : typeof o.lastTrainingDateYMD === "string"
+        ? o.lastTrainingDateYMD.trim()
+        : null;
+  const lastTrainingDateYMD =
+    lastTrainingRaw === null
+      ? null
+      : /^\d{4}-\d{2}-\d{2}$/.test(lastTrainingRaw)
+        ? lastTrainingRaw
+        : null;
+
+  const dominantRaw =
+    o.dominantSystemKey === null
+      ? null
+      : typeof o.dominantSystemKey === "string"
+        ? o.dominantSystemKey.trim().slice(0, 120)
+        : null;
+  const dominantSystemKey = dominantRaw && dominantRaw.length > 0 ? dominantRaw : null;
+
+  const weeklyGoalMet = typeof o.weeklyGoalMet === "boolean" ? o.weeklyGoalMet : null;
+  if (weeklyGoalMet === null) return null;
+
+  return {
+    sharedAthleteId,
+    updatedAt,
+    currentWeekSessionCount,
+    lastTrainingDateYMD,
+    dominantSystemKey,
+    topSystems: parseTrainingProofRankedList(o.topSystems, 3),
+    topTechniques: parseTrainingProofRankedList(o.topTechniques, 3),
+    weeklyGoalMet,
+  };
+}
+
+function parseTrainingProofByAthleteId(
+  raw: unknown,
+): Record<string, TrainingProofArtifact> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, TrainingProofArtifact> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const id = k.trim();
+    if (!id || id.length > 64) continue;
+    const artifact = parseTrainingProofArtifact(v);
+    if (!artifact || artifact.sharedAthleteId !== id) continue;
+    out[id] = artifact;
+  }
+  return out;
+}
+
 /** Entries keyed only by athletes still on the session; bounded for KV size. */
 function weeklyByAthleteIdForStorageAndApi(rec: SessionRecord): Record<string, WeeklyDoc> {
   const athleteIds = new Set(rec.athletes.map((a) => a.id));
@@ -725,6 +833,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
   const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteId(
     r.competitionAggregateByAthleteId,
   );
+  const trainingProofByAthleteId = parseTrainingProofByAthleteId(r.trainingProofByAthleteId);
 
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
@@ -735,6 +844,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
     weekly,
     weeklyByAthleteId,
     competitionAggregateByAthleteId,
+    trainingProofByAthleteId,
     createdAt,
     athletes,
     competitions,
@@ -944,6 +1054,7 @@ export default {
           weekly: null,
           weeklyByAthleteId: {},
           competitionAggregateByAthleteId: {},
+          trainingProofByAthleteId: {},
           createdAt: now,
           athletes: [],
           competitions: [],
@@ -1004,6 +1115,7 @@ export default {
           athletes: rec.athletes,
           competitions: rec.competitions,
           competitionAggregateByAthleteId: rec.competitionAggregateByAthleteId,
+          trainingProofByAthleteId: rec.trainingProofByAthleteId,
         };
         const cf = (request as Request & { cf?: { colo?: string } }).cf;
         console.log("[SYSTEMKEY TRACE WORKER]", {
@@ -1191,12 +1303,15 @@ export default {
         const { [athleteId]: _removedWeekly, ...restWeeklyByAthlete } = rec.weeklyByAthleteId;
         const { [athleteId]: _removedAggregate, ...restCompetitionAggregateByAthlete } =
           rec.competitionAggregateByAthleteId;
+        const { [athleteId]: _removedProof, ...restTrainingProofByAthlete } =
+          rec.trainingProofByAthleteId;
         const next: SessionRecord = {
           ...rec,
           athletes: rec.athletes.filter((a) => a.id !== athleteId),
           competitions: rec.competitions.filter((c) => c.sharedAthleteId !== athleteId),
           weeklyByAthleteId: restWeeklyByAthlete,
           competitionAggregateByAthleteId: restCompetitionAggregateByAthlete,
+          trainingProofByAthleteId: restTrainingProofByAthlete,
         };
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
@@ -1695,6 +1810,61 @@ export default {
 
       if (path.endsWith("/competition-aggregate") && request.method === "PUT") {
         console.log("[COMP_AGG_TRACE] worker_route_miss_competition_aggregate", {
+          path,
+          method: request.method,
+        });
+      }
+
+      const trainingProofPut = path.match(/^\/v1\/sessions\/([^/]+)\/training-proof$/);
+      if (trainingProofPut && request.method === "PUT") {
+        const token = decodeURIComponent(trainingProofPut[1] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token)) {
+          return error("Invalid token", 400);
+        }
+        const auth = request.headers.get("Authorization") ?? "";
+        const m = /^Bearer\s+(.+)$/.exec(auth.trim());
+        const secret = m?.[1]?.trim() ?? "";
+        if (!secret) return error("Unauthorized", 401);
+
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return error("Invalid JSON", 400);
+        }
+
+        const artifact = parseTrainingProofArtifact(body);
+        if (!artifact) {
+          return error("Invalid training proof artifact", 400);
+        }
+
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec || rec.parentWriterSecret !== secret) {
+          return error("Unauthorized", 401);
+        }
+        if (!rec.athletes.some((a) => a.id.trim() === artifact.sharedAthleteId)) {
+          return error("sharedAthleteId is not linked to this session", 400);
+        }
+
+        const next: SessionRecord = {
+          ...rec,
+          trainingProofByAthleteId: {
+            ...(rec.trainingProofByAthleteId || {}),
+            [artifact.sharedAthleteId]: artifact,
+          },
+        };
+        console.log("[TRAINING_PROOF_TRACE] worker_put_training_proof", {
+          tokenSuffix: token.slice(-8),
+          kvKey: `s:${token}`,
+          sharedAthleteId: artifact.sharedAthleteId,
+          currentWeekSessionCount: artifact.currentWeekSessionCount,
+        });
+        await writeSession(env.SESSIONS, token, next);
+        return json({ ok: true }, 200);
+      }
+
+      if (path.endsWith("/training-proof") && request.method === "PUT") {
+        console.log("[TRAINING_PROOF_TRACE] worker_route_miss_training_proof", {
           path,
           method: request.method,
         });
