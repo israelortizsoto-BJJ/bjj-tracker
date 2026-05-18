@@ -4,6 +4,7 @@ import {
   coachSyncFetchSession,
 } from "../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../storage/coachShareStore";
+import { schedulePublishParentCompetitionAggregate } from "../domain/competition/publishParentCompetitionAggregate";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
@@ -380,5 +381,8 @@ export async function deleteParentKidCompetitionEntry(
   }
 
   await deleteKidCompetitionEntry(entryId);
+  if (athleteForRemote) {
+    schedulePublishParentCompetitionAggregate(athleteForRemote);
+  }
   return { ok: true };
 }

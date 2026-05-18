@@ -27,6 +27,12 @@ import {
   upsertSharedCompetitionsForKid,
 } from "./kidCompetitionStore";
 import { getCoachLinks } from "./coachShareStore";
+import {
+  isValidSyncedCompetitionAggregateArtifact,
+  pruneCoachCompetitionAggregates,
+  removeCoachCompetitionAggregate,
+  writeCoachCompetitionAggregate,
+} from "./coachCompetitionAggregateStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { clearLastAthleteKidIdIfMatches } from "./lastAthleteIdStore";
@@ -44,6 +50,7 @@ import {
 } from "../types/coachKid";
 import type {
   CoachWeeklySyncSessionResponse,
+  SyncedCompetitionAggregateArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
@@ -202,6 +209,8 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
   if (!existing) return null;
   const sid = existing.sharedAthleteId?.trim();
   if (!sid) return existing;
+
+  await removeCoachCompetitionAggregate(sid);
 
   const nowIso = new Date().toISOString();
   const { sharedAthleteId: _omit, sharedFromInviteTokenNorm: _tok, ...rest } = existing;
@@ -428,6 +437,34 @@ export function pickRemoteSharedCompetitionsForLinkedAthlete(
   return [];
 }
 
+/**
+ * Walk writer sessions in traversal order and return the first valid aggregate for the athlete.
+ * If a session lists the athlete but has no aggregate payload, continue scanning (avoids
+ * "first empty wins" when a newer invite session lacks parent-published aggregates).
+ */
+export function pickRemoteCompetitionAggregateForLinkedAthlete(
+  sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
+  sharedAthleteId: string,
+): SyncedCompetitionAggregateArtifact | null {
+  const sid = sharedAthleteId.trim();
+  if (!sid) return null;
+
+  for (const session of sessionsInWriterLinkTraversalOrder) {
+    const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
+    if (!athleteInSession) continue;
+
+    const candidate = session.competitionAggregateByAthleteId?.[sid];
+    if (
+      candidate &&
+      isValidSyncedCompetitionAggregateArtifact(candidate) &&
+      candidate.sharedAthleteId.trim() === sid
+    ) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function pickPublishedWeeklyParentFeedbackForSharedAthlete(
   sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
   sharedAthleteId: string,
@@ -612,7 +649,83 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
     await deleteKidPilot(oid);
   }
 
+  await pruneCoachCompetitionAggregatesAfterRosterReconcile({
+    totalActiveWriterCount,
+    remoteUnionIds,
+    allFetched,
+  });
+
   return getKidsById();
+}
+
+async function pruneCoachCompetitionAggregatesAfterRosterReconcile(opts: {
+  totalActiveWriterCount: number;
+  remoteUnionIds: Set<string>;
+  allFetched: boolean;
+}): Promise<void> {
+  const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
+  if (!allFetched || totalActiveWriterCount <= 0) return;
+  await pruneCoachCompetitionAggregates(remoteUnionIds);
+}
+
+/**
+ * Hydrates local bounded competition aggregate artifacts from successful writer session GETs.
+ * Overwrite-only; no competition rows, Summary, or signals side effects.
+ */
+export async function reconcileCoachCompetitionAggregatesFromWriterSessions(opts: {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  totalActiveWriterCount: number;
+}): Promise<void> {
+  const { successfulSnapshots, totalActiveWriterCount } = opts;
+  if (totalActiveWriterCount <= 0 || successfulSnapshots.length === 0) return;
+
+  const withSession = successfulSnapshots.filter(
+    (s): s is WriterSessionSnapshotOk & { session: CoachWeeklySyncSessionResponse } =>
+      Boolean(s.session),
+  );
+  if (withSession.length === 0) return;
+
+  if (__DEV__) {
+    console.log("[COMP_AGG_TRACE] hydrate_start", {
+      snapshotCount: withSession.length,
+    });
+  }
+
+  const sorted = sortWriterSessionSnapshotsNewestFirst(withSession);
+  const sessionsOrdered: CoachWeeklySyncSessionResponse[] = sorted
+    .map((s) => s.session)
+    .filter((s): s is CoachWeeklySyncSessionResponse => Boolean(s));
+
+  const athleteListedInFetchedSessions = (athleteId: string) =>
+    sessionsOrdered.some((sess) => sess.athletes.some((a) => a.id.trim() === athleteId));
+
+  const kids = await getKidsById();
+  const aggregateResolutionCtx = {
+    activeWriterInviteTokenNorms: new Set(successfulSnapshots.map((s) => s.linkTokenNorm)),
+    reconcileSource: "reconcileCoachCompetitionAggregatesFromWriterSessions" as const,
+  };
+  const primaryRosterRows = buildCanonicalSharedAthletePrimaryRowMap(kids, aggregateResolutionCtx);
+
+  for (const k of primaryRosterRows.values()) {
+    if (!k?.id) continue;
+    if (isKidCoachArchived(k)) continue;
+    const sharedAthleteId = k.sharedAthleteId?.trim() ?? "";
+    if (!sharedAthleteId) continue;
+    if (!athleteListedInFetchedSessions(sharedAthleteId)) continue;
+
+    const artifact = pickRemoteCompetitionAggregateForLinkedAthlete(
+      sessionsOrdered,
+      sharedAthleteId,
+    );
+    if (artifact) {
+      await writeCoachCompetitionAggregate(artifact);
+    } else if (__DEV__) {
+      console.log("[COMP_AGG_TRACE] hydrate_missing", {
+        sharedAthleteId,
+        rosterKidId: k.id,
+      });
+    }
+  }
 }
 
 /**
@@ -824,6 +937,10 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });
+    await reconcileCoachCompetitionAggregatesFromWriterSessions({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
   } else if (writerLinks.length > 0) {
     console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
       skipReconcile: "writerLinksButNoSuccessfulSessionFetches",
@@ -1018,7 +1135,13 @@ async function deleteKidTrainingSessionsForKid(kidId: KidId): Promise<void> {
  */
 export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   const kids = await getKidsById();
-  if (!kids[kidId]) return false;
+  const existing = kids[kidId];
+  if (!existing) return false;
+
+  const sharedAthleteId = existing.sharedAthleteId?.trim();
+  if (sharedAthleteId) {
+    await removeCoachCompetitionAggregate(sharedAthleteId);
+  }
 
   const familyCompPick = await getFamilyCompetitionSelectedKidId();
   if (familyCompPick === kidId) {

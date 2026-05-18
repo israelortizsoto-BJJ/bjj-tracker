@@ -50,6 +50,22 @@ type SharedCompetition = {
   updatedAt: string;
 };
 
+type CompetitionAggregateArtifact = {
+  sharedAthleteId: string;
+  updatedAt: string;
+  totalCompetitions: number;
+  totalMatches: number;
+  wins: number;
+  losses: number;
+  winRate: number | null;
+  submissionRate: number | null;
+  fastestSubmissionSeconds: number | null;
+  averageMatchSeconds: number | null;
+  dominantWinStyle: "submission-heavy" | "points-heavy" | "mixed" | null;
+  latestCompetitionName?: string;
+  latestCompetitionDate?: string;
+};
+
 /** Stored shape; legacy rows omit schemaVersion / athletes / parentWriterSecret / weeklyByAthleteId until migrated. */
 type SessionRecord = {
   schemaVersion: number;
@@ -61,6 +77,8 @@ type SessionRecord = {
   weekly: WeeklyDoc | null;
   /** Per shared-athlete weekly docs; keys must match `athletes[].id`. */
   weeklyByAthleteId: Record<string, WeeklyDoc>;
+  /** Per-athlete bounded competition match intelligence; parent writer only. */
+  competitionAggregateByAthleteId: Record<string, CompetitionAggregateArtifact>;
   createdAt: string;
   athletes: SharedAthlete[];
   competitions: SharedCompetition[];
@@ -568,6 +586,102 @@ function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
   return out;
 }
 
+const WIN_STYLE_SET = new Set(["submission-heavy", "points-heavy", "mixed"]);
+
+function parseOptionalPercent(v: unknown): number | null {
+  if (v === null) return null;
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.round(v);
+  if (n < 0 || n > 100) return null;
+  return n;
+}
+
+function parseOptionalNonNegativeInt(v: unknown): number | null {
+  if (v === null) return null;
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const n = Math.round(v);
+  if (n < 0) return null;
+  return n;
+}
+
+function parseCompetitionAggregateArtifact(raw: unknown): CompetitionAggregateArtifact | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const sharedAthleteId = typeof o.sharedAthleteId === "string" ? o.sharedAthleteId.trim() : "";
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  if (!sharedAthleteId || !updatedAt) return null;
+
+  const totalCompetitions =
+    typeof o.totalCompetitions === "number" && Number.isFinite(o.totalCompetitions)
+      ? Math.max(0, Math.round(o.totalCompetitions))
+      : null;
+  const totalMatches =
+    typeof o.totalMatches === "number" && Number.isFinite(o.totalMatches)
+      ? Math.max(0, Math.round(o.totalMatches))
+      : null;
+  const wins =
+    typeof o.wins === "number" && Number.isFinite(o.wins) ? Math.max(0, Math.round(o.wins)) : null;
+  const losses =
+    typeof o.losses === "number" && Number.isFinite(o.losses)
+      ? Math.max(0, Math.round(o.losses))
+      : null;
+  if (
+    totalCompetitions === null ||
+    totalMatches === null ||
+    wins === null ||
+    losses === null
+  ) {
+    return null;
+  }
+
+  const dominantRaw =
+    typeof o.dominantWinStyle === "string" ? o.dominantWinStyle.trim() : null;
+  const dominantWinStyle =
+    dominantRaw && WIN_STYLE_SET.has(dominantRaw)
+      ? (dominantRaw as CompetitionAggregateArtifact["dominantWinStyle"])
+      : null;
+
+  const latestCompetitionName =
+    typeof o.latestCompetitionName === "string" && o.latestCompetitionName.trim()
+      ? o.latestCompetitionName.trim().slice(0, 160)
+      : undefined;
+  const latestCompetitionDate =
+    typeof o.latestCompetitionDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(o.latestCompetitionDate.trim())
+      ? o.latestCompetitionDate.trim()
+      : undefined;
+
+  return {
+    sharedAthleteId,
+    updatedAt,
+    totalCompetitions,
+    totalMatches,
+    wins,
+    losses,
+    winRate: parseOptionalPercent(o.winRate),
+    submissionRate: parseOptionalPercent(o.submissionRate),
+    fastestSubmissionSeconds: parseOptionalNonNegativeInt(o.fastestSubmissionSeconds),
+    averageMatchSeconds: parseOptionalNonNegativeInt(o.averageMatchSeconds),
+    dominantWinStyle,
+    ...(latestCompetitionName ? { latestCompetitionName } : {}),
+    ...(latestCompetitionDate ? { latestCompetitionDate } : {}),
+  };
+}
+
+function parseCompetitionAggregateByAthleteId(
+  raw: unknown,
+): Record<string, CompetitionAggregateArtifact> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, CompetitionAggregateArtifact> = {};
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const id = k.trim();
+    if (!id || id.length > 64) continue;
+    const artifact = parseCompetitionAggregateArtifact(v);
+    if (!artifact || artifact.sharedAthleteId !== id) continue;
+    out[id] = artifact;
+  }
+  return out;
+}
+
 /** Entries keyed only by athletes still on the session; bounded for KV size. */
 function weeklyByAthleteIdForStorageAndApi(rec: SessionRecord): Record<string, WeeklyDoc> {
   const athleteIds = new Set(rec.athletes.map((a) => a.id));
@@ -608,6 +722,9 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
       : undefined;
 
   const weeklyByAthleteId = parseWeeklyByAthleteId(r.weeklyByAthleteId);
+  const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteId(
+    r.competitionAggregateByAthleteId,
+  );
 
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
@@ -617,6 +734,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
     academyName,
     weekly,
     weeklyByAthleteId,
+    competitionAggregateByAthleteId,
     createdAt,
     athletes,
     competitions,
@@ -825,6 +943,7 @@ export default {
           academyName,
           weekly: null,
           weeklyByAthleteId: {},
+          competitionAggregateByAthleteId: {},
           createdAt: now,
           athletes: [],
           competitions: [],
@@ -884,6 +1003,7 @@ export default {
           weeklyByAthleteId: apiWeekly,
           athletes: rec.athletes,
           competitions: rec.competitions,
+          competitionAggregateByAthleteId: rec.competitionAggregateByAthleteId,
         };
         const cf = (request as Request & { cf?: { colo?: string } }).cf;
         console.log("[SYSTEMKEY TRACE WORKER]", {
@@ -1069,11 +1189,14 @@ export default {
         }
 
         const { [athleteId]: _removedWeekly, ...restWeeklyByAthlete } = rec.weeklyByAthleteId;
+        const { [athleteId]: _removedAggregate, ...restCompetitionAggregateByAthlete } =
+          rec.competitionAggregateByAthleteId;
         const next: SessionRecord = {
           ...rec,
           athletes: rec.athletes.filter((a) => a.id !== athleteId),
           competitions: rec.competitions.filter((c) => c.sharedAthleteId !== athleteId),
           weeklyByAthleteId: restWeeklyByAthlete,
+          competitionAggregateByAthleteId: restCompetitionAggregateByAthlete,
         };
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
@@ -1518,6 +1641,63 @@ export default {
         };
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
+      }
+
+      const competitionAggregatePut = path.match(
+        /^\/v1\/sessions\/([^/]+)\/competition-aggregate$/,
+      );
+      if (competitionAggregatePut && request.method === "PUT") {
+        const token = decodeURIComponent(competitionAggregatePut[1] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token)) {
+          return error("Invalid token", 400);
+        }
+        const auth = request.headers.get("Authorization") ?? "";
+        const m = /^Bearer\s+(.+)$/.exec(auth.trim());
+        const secret = m?.[1]?.trim() ?? "";
+        if (!secret) return error("Unauthorized", 401);
+
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return error("Invalid JSON", 400);
+        }
+
+        const artifact = parseCompetitionAggregateArtifact(body);
+        if (!artifact) {
+          return error("Invalid competition aggregate artifact", 400);
+        }
+
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec || rec.parentWriterSecret !== secret) {
+          return error("Unauthorized", 401);
+        }
+        if (!rec.athletes.some((a) => a.id.trim() === artifact.sharedAthleteId)) {
+          return error("sharedAthleteId is not linked to this session", 400);
+        }
+
+        const next: SessionRecord = {
+          ...rec,
+          competitionAggregateByAthleteId: {
+            ...(rec.competitionAggregateByAthleteId || {}),
+            [artifact.sharedAthleteId]: artifact,
+          },
+        };
+        console.log("[COMP_AGG_TRACE] worker_put_competition_aggregate", {
+          tokenSuffix: token.slice(-8),
+          kvKey: `s:${token}`,
+          sharedAthleteId: artifact.sharedAthleteId,
+          totalMatches: artifact.totalMatches,
+        });
+        await writeSession(env.SESSIONS, token, next);
+        return json({ ok: true }, 200);
+      }
+
+      if (path.endsWith("/competition-aggregate") && request.method === "PUT") {
+        console.log("[COMP_AGG_TRACE] worker_route_miss_competition_aggregate", {
+          path,
+          method: request.method,
+        });
       }
 
       return error("Not found", 404);

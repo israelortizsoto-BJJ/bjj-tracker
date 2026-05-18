@@ -1,4 +1,5 @@
-import { useMemo, useRef } from "react";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
   computeSignals,
@@ -7,9 +8,19 @@ import {
 } from "../lib/signals/computeSignals";
 import { useDeviceRole } from "../deviceRole/DeviceRoleProvider";
 import {
+  hasBoundedAggregateVisibility,
+  hasFullLocalMatchLineage,
+  overlayCompetitionAggregateSignals,
+} from "../domain/competition/overlayCompetitionAggregateSignals";
+import {
   filterSessionsLikeTrainingRefresh,
   normalizeSessionsLikeTraining,
 } from "../domain/sessionUtils";
+import {
+  getCoachCompetitionAggregate,
+  peekCoachCompetitionAggregate,
+} from "../storage/coachCompetitionAggregateStore";
+import type { SyncedCompetitionAggregateArtifact } from "../types/coachWeeklySync";
 
 import { useAthleteData } from "./useAthleteData";
 
@@ -37,6 +48,35 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
   );
 
   const lastSignalsAthleteScopeRef = useRef<string | null>(null);
+  const [coachAggregate, setCoachAggregate] =
+    useState<SyncedCompetitionAggregateArtifact | null>(() =>
+      deviceRole === "coach" && trimmedAthlete
+        ? peekCoachCompetitionAggregate(trimmedAthlete)
+        : null,
+    );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (deviceRole !== "coach" || !trimmedAthlete) {
+        setCoachAggregate(null);
+        return;
+      }
+
+      let mounted = true;
+      const athleteId = trimmedAthlete;
+      const peeked = peekCoachCompetitionAggregate(athleteId);
+      if (peeked) setCoachAggregate(peeked);
+
+      void getCoachCompetitionAggregate(athleteId).then((artifact) => {
+        if (!mounted) return;
+        setCoachAggregate(artifact);
+      });
+
+      return () => {
+        mounted = false;
+      };
+    }, [deviceRole, trimmedAthlete]),
+  );
 
   return useMemo(() => {
     const hasAthlete = trimmedAthlete.length > 0;
@@ -108,10 +148,56 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       kidId: hasAthlete ? kidId : null,
     });
 
-    return computed;
+    if (deviceRole !== "coach" || !hasAthlete) {
+      return computed;
+    }
+
+    const localMatchLineage = hasFullLocalMatchLineage(scopedCompetitions);
+    if (localMatchLineage) {
+      if (__DEV__) {
+        console.log("[COMP_AGG_TRACE] overlay_skipped_local_matches", {
+          sharedAthleteId: trimmedAthlete,
+        });
+      }
+      return computed;
+    }
+
+    const aggregate = coachAggregate;
+    if (!aggregate) {
+      if (__DEV__) {
+        console.log("[COMP_AGG_TRACE] overlay_missing", {
+          sharedAthleteId: trimmedAthlete,
+        });
+      }
+      return computed;
+    }
+
+    if (!hasBoundedAggregateVisibility(aggregate, trimmedAthlete)) {
+      if (__DEV__) {
+        console.log("[COMP_AGG_TRACE] overlay_incomplete", {
+          sharedAthleteId: trimmedAthlete,
+          totalMatches: aggregate.totalMatches,
+          wins: aggregate.wins,
+          losses: aggregate.losses,
+        });
+      }
+      return computed;
+    }
+
+    if (__DEV__) {
+      console.log("[COMP_AGG_TRACE] overlay_applied", {
+        sharedAthleteId: trimmedAthlete,
+        totalMatches: aggregate.totalMatches,
+        wins: aggregate.wins,
+        losses: aggregate.losses,
+      });
+    }
+
+    return overlayCompetitionAggregateSignals(computed, aggregate);
   }, [
     sessions,
     competitions,
+    coachAggregate,
     deviceRole,
     linkedKidTrim,
     referenceDate,

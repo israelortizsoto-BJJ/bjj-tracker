@@ -14,9 +14,11 @@ import type {
   CoachWeeklySyncCreateSessionBody,
   CoachWeeklySyncCreateSessionResponse,
   CoachWeeklySyncPublishBody,
+  CoachWeeklySyncPutCompetitionAggregateBody,
   CoachWeeklySyncRedeemParentWriterResponse,
   CoachWeeklySyncSessionResponse,
   CoachWeeklySyncUpdateCompetitionBody,
+  SyncedCompetitionAggregateArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
@@ -113,6 +115,33 @@ function isSyncedWeeklyMessagePayloadShape(v: unknown): v is SyncedWeeklyMessage
  * Parses `weeklyByAthleteId` from session GET JSON.
  * Non-object → `{}`. Invalid values are dropped (resolver will fall back to `weekly`).
  */
+function isSyncedCompetitionAggregateArtifact(v: unknown): v is SyncedCompetitionAggregateArtifact {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.sharedAthleteId === "string" &&
+    typeof o.updatedAt === "string" &&
+    typeof o.totalCompetitions === "number" &&
+    typeof o.totalMatches === "number" &&
+    typeof o.wins === "number" &&
+    typeof o.losses === "number"
+  );
+}
+
+function parseCompetitionAggregateByAthleteIdField(
+  raw: unknown,
+): Record<string, SyncedCompetitionAggregateArtifact> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, SyncedCompetitionAggregateArtifact> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim();
+    if (!id || !isSyncedCompetitionAggregateArtifact(value)) continue;
+    if (value.sharedAthleteId.trim() !== id) continue;
+    out[id] = value;
+  }
+  return out;
+}
+
 function parseWeeklyByAthleteIdField(raw: unknown): Record<string, SyncedWeeklyMessagePayload | null> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -203,6 +232,9 @@ export async function coachSyncFetchSession(
     );
   }
   const weeklyByAthleteId = parseWeeklyByAthleteIdField(p.weeklyByAthleteId);
+  const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteIdField(
+    p.competitionAggregateByAthleteId,
+  );
   if (__DEV__) {
     const inviteSk =
       p.weekly && typeof p.weekly === "object" && !Array.isArray(p.weekly)
@@ -300,7 +332,54 @@ export async function coachSyncFetchSession(
     weeklyByAthleteId,
     athletes,
     competitions,
+    competitionAggregateByAthleteId,
   };
+}
+
+export async function coachSyncPutCompetitionAggregate(
+  linkToken: string,
+  parentWriterSecret: string,
+  body: CoachWeeklySyncPutCompetitionAggregateBody,
+  apiBaseUrlOverride?: string | null,
+): Promise<void> {
+  const base = resolveBase(apiBaseUrlOverride);
+  const enc = encodeURIComponent(linkToken);
+  const path = `/v1/sessions/${enc}/competition-aggregate`;
+  const url = joinUrl(base, path);
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${parentWriterSecret}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await parseJsonOrText(res);
+  if (!res.ok) {
+    const msg =
+      typeof payload === "object" && payload && "error" in payload
+        ? String((payload as { error: unknown }).error)
+        : `HTTP ${res.status}`;
+    console.log("[COMP_AGG_TRACE] put_http_failed", {
+      operation: "PUT",
+      url,
+      path,
+      apiBaseUrl: base,
+      httpStatus: res.status,
+      error: msg,
+      sharedAthleteId: body.sharedAthleteId,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+    });
+    throw new CoachWeeklySyncApiError(msg, res.status);
+  }
+  console.log("[COMP_AGG_TRACE] put_http_ok", {
+    operation: "PUT",
+    url,
+    httpStatus: res.status,
+    sharedAthleteId: body.sharedAthleteId,
+    linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+  });
 }
 
 export async function coachSyncRedeemParentWriter(

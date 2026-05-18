@@ -16,6 +16,7 @@ import {
   getKidCompetitionEntryById,
   updateKidCompetitionEntry,
 } from "../../storage/kidCompetitionStore";
+import { schedulePublishParentCompetitionAggregate } from "./publishParentCompetitionAggregate";
 import { athleteIdForFamilyRemoteUpdate, rosterSharedAthleteId, workerCompetitionIdForEntry } from "./CompetitionSelectors";
 import {
   competitionFamilySaveTrace,
@@ -199,6 +200,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         organizationOrPromoter: promoterDraft.trim() ? promoterDraft.trim() : undefined,
         format: formatDraft,
       });
+      schedulePublishParentCompetitionAggregate(linkedAthleteId);
       return { ok: true, savedCompetitionId: createdRow.id };
     } catch (e) {
       setFamilyPhase("post_coachSyncCreateSessionCompetition_caught");
@@ -305,6 +307,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
       });
       await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
+      schedulePublishParentCompetitionAggregate(trimmedResolved);
       console.log("[COMPETITION_SAVE]", {
         competitionId: created.id,
         sharedAthleteId: trimmedResolved ?? null,
@@ -331,6 +334,9 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
     ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
   });
   await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
+  if (trimmedResolved) {
+    schedulePublishParentCompetitionAggregate(trimmedResolved);
+  }
   console.log("[COMPETITION_SAVE]", {
     competitionId: created.id,
     sharedAthleteId: trimmedResolved ?? null,
@@ -421,6 +427,9 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
     organizationOrPromoter: promoterDraft.trim() ? promoterDraft.trim() : undefined,
     format: formatDraft,
   });
+  if (athleteForRemote) {
+    schedulePublishParentCompetitionAggregate(athleteForRemote);
+  }
   return { ok: true, savedCompetitionId: entryId };
 }
 
@@ -497,6 +506,10 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
     competitionVideos,
   });
   await setCompetitionDetailForEntryId(entryId, { matches: matchSnapshots });
+  const publishAthleteId = (trimmedResolved || athleteForRemote || "").trim();
+  if (publishAthleteId) {
+    schedulePublishParentCompetitionAggregate(publishAthleteId);
+  }
   console.log("[COMPETITION_SAVE]", {
     competitionId: entryId,
     sharedAthleteId: trimmedResolved ?? null,

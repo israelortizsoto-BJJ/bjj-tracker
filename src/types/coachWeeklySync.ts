@@ -66,6 +66,31 @@ export type SyncedSharedCompetition = {
   updatedAt: string;
 };
 
+/** Parent-published bounded match intelligence for coach Summary (no raw match lineage). */
+export type SyncedCompetitionAggregateArtifact = {
+  sharedAthleteId: string;
+  updatedAt: string;
+
+  totalCompetitions: number;
+  totalMatches: number;
+
+  wins: number;
+  losses: number;
+
+  winRate: number | null;
+  submissionRate: number | null;
+
+  fastestSubmissionSeconds: number | null;
+  averageMatchSeconds: number | null;
+
+  dominantWinStyle: "submission-heavy" | "points-heavy" | "mixed" | null;
+
+  latestCompetitionName?: string;
+  latestCompetitionDate?: string;
+};
+
+export type CoachWeeklySyncPutCompetitionAggregateBody = SyncedCompetitionAggregateArtifact;
+
 export type CoachWeeklySyncSessionResponse = {
   schemaVersion?: number;
   coach: CoachWeeklySyncCoachSummary;
@@ -74,6 +99,8 @@ export type CoachWeeklySyncSessionResponse = {
   weeklyByAthleteId?: Record<string, SyncedWeeklyMessagePayload | null>;
   athletes: SyncedSharedAthlete[];
   competitions: SyncedSharedCompetition[];
+  /** Per-athlete bounded competition match intelligence; parent writer only. */
+  competitionAggregateByAthleteId?: Record<string, SyncedCompetitionAggregateArtifact>;
 };
 
 export type CoachWeeklySyncCreateSessionBody = {

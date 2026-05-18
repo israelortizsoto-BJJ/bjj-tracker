@@ -34,6 +34,9 @@ export const StorageKeys = {
   /** Last fetched weekly sync payload per link token (parent read cache). */
   coachWeeklySyncCacheByToken: "mm:v1:coachWeeklySyncCacheByToken",
 
+  /** Coach lane: parent-published competition aggregate artifacts keyed by `sharedAthleteId`. */
+  coachCompetitionAggregatesByAthleteId: "mm:v1:coachCompetitionAggregatesByAthleteId",
+
   /** Dev lane: parent last-seen `weekly.updatedAt` per invite token (local only). */
   parentWeeklyLastSeenByToken: "mm:v1:parentWeeklyLastSeenByToken",
 

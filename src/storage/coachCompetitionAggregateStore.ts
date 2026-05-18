@@ -1,0 +1,172 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import type { SyncedCompetitionAggregateArtifact } from "../types/coachWeeklySync";
+import { StorageKeys } from "./storageKeys";
+
+type AggregateByAthleteId = Record<string, SyncedCompetitionAggregateArtifact>;
+
+/** In-process mirror of the last disk read/write for synchronous coach Summary overlay reads. */
+let aggregatesMemory: AggregateByAthleteId | null = null;
+
+function syncAggregatesMemory(map: AggregateByAthleteId): void {
+  aggregatesMemory = map;
+}
+
+/** Read-only sync peek (memory only; returns null until store has been read or written). */
+export function peekCoachCompetitionAggregate(
+  sharedAthleteId: string,
+): SyncedCompetitionAggregateArtifact | null {
+  const athleteId = sharedAthleteId.trim();
+  if (!athleteId || !aggregatesMemory) return null;
+  const artifact = aggregatesMemory[athleteId] ?? null;
+  if (!artifact || artifact.sharedAthleteId.trim() !== athleteId) return null;
+  return artifact;
+}
+
+function safeParseStore(raw: string | null): AggregateByAthleteId {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return {};
+    }
+    return normalizeAggregateMap(parsed);
+  } catch {
+    return {};
+  }
+}
+
+export function isValidSyncedCompetitionAggregateArtifact(
+  v: unknown,
+): v is SyncedCompetitionAggregateArtifact {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    typeof o.sharedAthleteId === "string" &&
+    typeof o.updatedAt === "string" &&
+    typeof o.totalCompetitions === "number" &&
+    typeof o.totalMatches === "number" &&
+    typeof o.wins === "number" &&
+    typeof o.losses === "number"
+  );
+}
+
+function normalizeAggregateMap(raw: unknown): AggregateByAthleteId {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: AggregateByAthleteId = {};
+  for (const [athleteId, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = athleteId.trim();
+    if (!id || !isValidSyncedCompetitionAggregateArtifact(value)) continue;
+    if (value.sharedAthleteId.trim() !== id) continue;
+    out[id] = value;
+  }
+  return out;
+}
+
+async function readStore(): Promise<AggregateByAthleteId> {
+  const map = safeParseStore(
+    await AsyncStorage.getItem(StorageKeys.coachCompetitionAggregatesByAthleteId),
+  );
+  syncAggregatesMemory(map);
+  return map;
+}
+
+async function writeStore(map: AggregateByAthleteId): Promise<void> {
+  syncAggregatesMemory(map);
+  await AsyncStorage.setItem(
+    StorageKeys.coachCompetitionAggregatesByAthleteId,
+    JSON.stringify(map),
+  );
+}
+
+/** Read-only coach projection: newest bounded aggregate for `sharedAthleteId`. */
+export async function getCoachCompetitionAggregate(
+  sharedAthleteId: string,
+): Promise<SyncedCompetitionAggregateArtifact | null> {
+  const athleteId = sharedAthleteId.trim();
+  if (!athleteId) return null;
+  const map = await readStore();
+  return map[athleteId] ?? null;
+}
+
+/** Overwrite-only: replaces any prior artifact for this athlete id. */
+export async function writeCoachCompetitionAggregate(
+  artifact: SyncedCompetitionAggregateArtifact,
+): Promise<void> {
+  const athleteId = artifact.sharedAthleteId.trim();
+  if (!athleteId || !isValidSyncedCompetitionAggregateArtifact(artifact)) {
+    if (__DEV__) {
+      console.log("[COMP_AGG_TRACE] hydrate_skip_invalid", {
+        sharedAthleteId: athleteId || null,
+      });
+    }
+    return;
+  }
+  if (artifact.sharedAthleteId.trim() !== athleteId) {
+    if (__DEV__) {
+      console.log("[COMP_AGG_TRACE] hydrate_skip_invalid", {
+        sharedAthleteId: athleteId,
+        reason: "sharedAthleteIdKeyMismatch",
+      });
+    }
+    return;
+  }
+
+  const map = await readStore();
+  map[athleteId] = artifact;
+  await writeStore(map);
+
+  if (__DEV__) {
+    console.log("[COMP_AGG_TRACE] hydrate_write", {
+      sharedAthleteId: athleteId,
+      updatedAt: artifact.updatedAt,
+    });
+  }
+}
+
+export async function removeCoachCompetitionAggregate(
+  sharedAthleteId: string,
+): Promise<void> {
+  const athleteId = sharedAthleteId.trim();
+  if (!athleteId) return;
+
+  const map = await readStore();
+  if (!(athleteId in map)) return;
+  delete map[athleteId];
+  await writeStore(map);
+
+  if (__DEV__) {
+    console.log("[COMP_AGG_TRACE] hydrate_prune", {
+      sharedAthleteId: athleteId,
+      reason: "remove",
+    });
+  }
+}
+
+/**
+ * Drop artifacts whose `sharedAthleteId` is not in `allowedAthleteIds`.
+ * Overwrite-only store hygiene after roster/session reconcile.
+ */
+export async function pruneCoachCompetitionAggregates(
+  allowedAthleteIds: ReadonlySet<string>,
+): Promise<void> {
+  const allowed = new Set(
+    [...allowedAthleteIds].map((id) => id.trim()).filter(Boolean),
+  );
+  const map = await readStore();
+  const removed: string[] = [];
+  for (const id of Object.keys(map)) {
+    if (!allowed.has(id)) {
+      delete map[id];
+      removed.push(id);
+    }
+  }
+  if (removed.length === 0) return;
+  await writeStore(map);
+  if (__DEV__) {
+    console.log("[COMP_AGG_TRACE] hydrate_prune", {
+      removedAthleteIds: removed,
+      allowedCount: allowed.size,
+    });
+  }
+}
