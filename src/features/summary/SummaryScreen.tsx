@@ -9,6 +9,7 @@ import {
   LayoutAnimation,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -125,6 +126,21 @@ import {
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
 const DISMISS_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
+type SummaryRefreshType = "soft_refresh" | "parent_weekly_soft_refresh";
+
+function logSummaryRefreshDev(
+  event: "refresh_start" | "refresh_complete" | "refresh_error",
+  payload: {
+    role: string;
+    athleteId: string;
+    refreshType: SummaryRefreshType;
+    message?: string;
+  },
+): void {
+  if (!__DEV__) return;
+  console.log("[SUMMARY_REFRESH]", { event, ...payload });
+}
+
 function recentSubmissionTypesSummaryLine(
   competitions: readonly KidCompetitionEntryWithMatchDetail[],
 ): string | null {
@@ -235,6 +251,7 @@ export default function SummaryScreen() {
     athlete,
     operatingAthleteRoster,
     kidsById,
+    refreshActiveAthleteAuthority,
   } = useActiveAthlete();
   const { role: deviceRole } = useDeviceRole();
 
@@ -262,6 +279,7 @@ export default function SummaryScreen() {
   const [coachLinkRowsForTrustUi, setCoachLinkRowsForTrustUi] = useState<CoachLink[]>([]);
   /** Session-only: Recognized Skills starts collapsed for a calmer first paint. */
   const [recognizedSkillsExpanded, setRecognizedSkillsExpanded] = useState(false);
+  const [summaryRefreshing, setSummaryRefreshing] = useState(false);
   const weeklySessionSourceRef = useRef<"cache" | "network" | "none">("none");
   const previousValidationRef = useRef<IdentityValidationResult | null>(null);
   const previousTrendRef = useRef<SummaryTrend | null>(null);
@@ -345,125 +363,171 @@ export default function SummaryScreen() {
     summarySwitcherAthletes,
   ]);
 
+  const refreshParentWeeklySessionSnapshot = useCallback(
+    async (isCancelled?: () => boolean): Promise<void> => {
+      const links = await getCoachLinks();
+      if (isCancelled?.()) return;
+      setCoachLinkRowsForTrustUi(links);
+
+      const weeklyLink = parentStrictWeeklyLinkedCoachLinksForUi(links)[0];
+      const weeklySync = weeklyLink?.weeklySync;
+      if (!weeklySync?.linkToken?.trim()) {
+        if (isCancelled?.()) return;
+        weeklySessionSourceRef.current = "none";
+        setWeeklySessionSnapshot(null);
+        return;
+      }
+
+      const token = weeklySync.linkToken;
+      const tokenNorm = normalizeInviteLinkToken(token);
+      const tokenTail = inviteLinkTokenTail(token);
+
+      const applySnapshot = (
+        source: "cache" | "network" | "none",
+        snapshot: ParentWeeklySessionSnapshot | null,
+      ) => {
+        if (isCancelled?.()) return;
+        weeklySessionSourceRef.current = source;
+        if (__DEV__) {
+          const weeklyKeys = Object.keys(snapshot?.weeklyByAthleteId ?? {});
+          devLogAuthorityChainStage("3_summary_session_hydrate", {
+            dataPlane: source,
+            tokenTail,
+            athleteId: activeAthleteId,
+            linkedKidId: summaryLinkedKidId,
+            weeklyKeysAvailable: weeklyKeys,
+            inviteHeadline: snapshot?.weekly?.headline?.slice(0, 120) ?? null,
+            inviteSystemKey: snapshot?.weekly?.systemKey ?? null,
+          });
+          console.log("[SUMMARY WEEKLY TRACE] hydration.applySnapshot", {
+            sourcePath:
+              "SummaryScreen.refreshParentWeeklySessionSnapshot → getCachedWeeklyForLinkToken | coachSyncFetchSession",
+            dataPlane: source,
+            tokenTail,
+            athleteId: activeAthleteId,
+            linkedKidId: summaryLinkedKidId,
+            weeklyKeysAvailable: weeklyKeys,
+            inviteHeadline: snapshot?.weekly?.headline?.slice(0, 120) ?? null,
+            inviteUpdatedAt: snapshot?.weekly?.updatedAt ?? null,
+            inviteSystemKey: snapshot?.weekly?.systemKey ?? null,
+            firstAthleteKey: weeklyKeys[0] ?? null,
+            firstAthleteHeadline: weeklyKeys[0]
+              ? snapshot?.weeklyByAthleteId?.[weeklyKeys[0]]?.headline?.slice(0, 120) ?? null
+              : null,
+            firstAthleteSystemKey: weeklyKeys[0]
+              ? snapshot?.weeklyByAthleteId?.[weeklyKeys[0]]?.systemKey ?? null
+              : null,
+            at: new Date().toISOString(),
+          });
+          logHydrationPipelineWatchAthletes({
+            stage: source === "cache" ? "5_hydration_restore" : "2_weekly_sync_ingestion",
+            sourceSubsystem: "SummaryScreen.weeklySessionSnapshot.applySnapshot",
+            dataOrigin: source === "cache" ? "cache" : source === "network" ? "remote" : "unknown",
+            inviteTokenHint: tokenNorm,
+            kidsById,
+            presentAthleteIds: athleteIdSetFromSynced(snapshot?.athletes),
+            namesById: namesByIdFromSyncedAthletes(snapshot?.athletes),
+            allAthleteIdsInStage: snapshot?.athletes?.map((a) => a.id) ?? [],
+            stageMeta: { tokenTail, weeklyKeysAvailable: weeklyKeys },
+          });
+        }
+        setWeeklySessionSnapshot(snapshot);
+      };
+
+      const cached = await getCachedWeeklyForLinkToken(token);
+      if (isCancelled?.()) return;
+      if (cached) {
+        applySnapshot("cache", {
+          weekly: cached.weekly,
+          weeklyByAthleteId: cached.weeklyByAthleteId,
+          athletes: cached.athletes,
+        });
+      }
+
+      try {
+        const session = await coachSyncFetchSession(token, weeklySync.apiBaseUrl);
+        if (isCancelled?.()) return;
+        const nowIso = new Date().toISOString();
+        await setCachedWeeklyForLinkToken(
+          token,
+          session.weekly,
+          nowIso,
+          session.weeklyByAthleteId ?? {},
+          session.athletes,
+          session,
+          tokenNorm,
+        );
+        applySnapshot("network", {
+          weekly: session.weekly,
+          weeklyByAthleteId: session.weeklyByAthleteId ?? {},
+          athletes: session.athletes,
+        });
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("[SUMMARY WEEKLY TRACE] hydration.networkError", {
+            athleteId: activeAthleteId,
+            tokenNorm,
+            tokenTail,
+            message: error instanceof Error ? error.message : String(error),
+            keptCacheSnapshot: Boolean(cached),
+          });
+        }
+        if (!cached) applySnapshot("none", null);
+      }
+    },
+    [activeAthleteId, kidsById, summaryLinkedKidId],
+  );
+
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
-
-      void (async () => {
-        const links = await getCoachLinks();
-        if (!cancelled) {
-          setCoachLinkRowsForTrustUi(links);
-        }
-        const weeklyLink = parentStrictWeeklyLinkedCoachLinksForUi(links)[0];
-        const weeklySync = weeklyLink?.weeklySync;
-        if (!weeklySync?.linkToken?.trim()) {
-          if (!cancelled) {
-            weeklySessionSourceRef.current = "none";
-            setWeeklySessionSnapshot(null);
-          }
-          return;
-        }
-
-        const token = weeklySync.linkToken;
-        const tokenNorm = normalizeInviteLinkToken(token);
-        const tokenTail = inviteLinkTokenTail(token);
-
-        const applySnapshot = (
-          source: "cache" | "network" | "none",
-          snapshot: ParentWeeklySessionSnapshot | null,
-        ) => {
-          if (cancelled) return;
-          weeklySessionSourceRef.current = source;
-          if (__DEV__) {
-            const weeklyKeys = Object.keys(snapshot?.weeklyByAthleteId ?? {});
-            devLogAuthorityChainStage("3_summary_session_hydrate", {
-              dataPlane: source,
-              tokenTail,
-              athleteId: activeAthleteId,
-              linkedKidId: summaryLinkedKidId,
-              weeklyKeysAvailable: weeklyKeys,
-              inviteHeadline: snapshot?.weekly?.headline?.slice(0, 120) ?? null,
-              inviteSystemKey: snapshot?.weekly?.systemKey ?? null,
-            });
-            console.log("[SUMMARY WEEKLY TRACE] hydration.applySnapshot", {
-              sourcePath: "SummaryScreen.useFocusEffect → getCachedWeeklyForLinkToken | coachSyncFetchSession",
-              dataPlane: source,
-              tokenTail,
-              athleteId: activeAthleteId,
-              linkedKidId: summaryLinkedKidId,
-              weeklyKeysAvailable: weeklyKeys,
-              inviteHeadline: snapshot?.weekly?.headline?.slice(0, 120) ?? null,
-              inviteUpdatedAt: snapshot?.weekly?.updatedAt ?? null,
-              inviteSystemKey: snapshot?.weekly?.systemKey ?? null,
-              firstAthleteKey: weeklyKeys[0] ?? null,
-              firstAthleteHeadline: weeklyKeys[0]
-                ? snapshot?.weeklyByAthleteId?.[weeklyKeys[0]]?.headline?.slice(0, 120) ?? null
-                : null,
-              firstAthleteSystemKey: weeklyKeys[0]
-                ? snapshot?.weeklyByAthleteId?.[weeklyKeys[0]]?.systemKey ?? null
-                : null,
-              at: new Date().toISOString(),
-            });
-            logHydrationPipelineWatchAthletes({
-              stage: source === "cache" ? "5_hydration_restore" : "2_weekly_sync_ingestion",
-              sourceSubsystem: "SummaryScreen.weeklySessionSnapshot.applySnapshot",
-              dataOrigin: source === "cache" ? "cache" : source === "network" ? "remote" : "unknown",
-              inviteTokenHint: tokenNorm,
-              kidsById,
-              presentAthleteIds: athleteIdSetFromSynced(snapshot?.athletes),
-              namesById: namesByIdFromSyncedAthletes(snapshot?.athletes),
-              allAthleteIdsInStage: snapshot?.athletes?.map((a) => a.id) ?? [],
-              stageMeta: { tokenTail, weeklyKeysAvailable: weeklyKeys },
-            });
-          }
-          setWeeklySessionSnapshot(snapshot);
-        };
-
-        const cached = await getCachedWeeklyForLinkToken(token);
-        if (cached) {
-          applySnapshot("cache", {
-            weekly: cached.weekly,
-            weeklyByAthleteId: cached.weeklyByAthleteId,
-            athletes: cached.athletes,
-          });
-        }
-
-        try {
-          const session = await coachSyncFetchSession(token, weeklySync.apiBaseUrl);
-          const nowIso = new Date().toISOString();
-          await setCachedWeeklyForLinkToken(
-            token,
-            session.weekly,
-            nowIso,
-            session.weeklyByAthleteId ?? {},
-            session.athletes,
-            session,
-            tokenNorm,
-          );
-          applySnapshot("network", {
-            weekly: session.weekly,
-            weeklyByAthleteId: session.weeklyByAthleteId ?? {},
-            athletes: session.athletes,
-          });
-        } catch (error) {
-          if (__DEV__) {
-            console.warn("[SUMMARY WEEKLY TRACE] hydration.networkError", {
-              athleteId: activeAthleteId,
-              tokenNorm,
-              tokenTail,
-              message: error instanceof Error ? error.message : String(error),
-              keptCacheSnapshot: Boolean(cached),
-            });
-          }
-          if (!cached) applySnapshot("none", null);
-        }
-      })();
-
+      void refreshParentWeeklySessionSnapshot(() => cancelled);
       return () => {
         cancelled = true;
       };
-    }, [activeAthleteId, summaryLinkedKidId]),
+    }, [refreshParentWeeklySessionSnapshot]),
   );
+
+  const onSummaryRefresh = useCallback(async () => {
+    const athleteIdNorm = activeAthleteId.trim();
+    const refreshType: SummaryRefreshType =
+      deviceRole === "parent" ? "parent_weekly_soft_refresh" : "soft_refresh";
+
+    logSummaryRefreshDev("refresh_start", {
+      role: deviceRole ?? "unknown",
+      athleteId: athleteIdNorm,
+      refreshType,
+    });
+
+    setSummaryRefreshing(true);
+    try {
+      if (deviceRole === "parent") {
+        await refreshParentWeeklySessionSnapshot();
+        await refreshActiveAthleteAuthority();
+      } else if (deviceRole === "coach") {
+        await refreshActiveAthleteAuthority();
+      }
+      logSummaryRefreshDev("refresh_complete", {
+        role: deviceRole ?? "unknown",
+        athleteId: athleteIdNorm,
+        refreshType,
+      });
+    } catch (error) {
+      logSummaryRefreshDev("refresh_error", {
+        role: deviceRole ?? "unknown",
+        athleteId: athleteIdNorm,
+        refreshType,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setSummaryRefreshing(false);
+    }
+  }, [
+    activeAthleteId,
+    deviceRole,
+    refreshActiveAthleteAuthority,
+    refreshParentWeeklySessionSnapshot,
+  ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -693,6 +757,52 @@ export default function SummaryScreen() {
     sessions: sessionsRaw,
     competitions,
   });
+  const weeklySessionCountForSummary = signals.frequency.weeklySessionCount;
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    if (!activeAthleteId.trim()) return;
+    const proofCount =
+      deviceRole === "coach" ? signals.frequency.weeklySessionCount : null;
+    const localSessionCount = sessions.length;
+    const localCurrentWeekSessionCount = signals.frequency.weeklySessionCount;
+    const finalSessionCount = signals.frequency.weeklySessionCount;
+    const source =
+      deviceRole === "coach"
+        ? finalSessionCount !== localSessionCount
+          ? "summary_signals_proof_or_overlay"
+          : "summary_signals_local"
+        : "summary_parent_local";
+    console.log("[SUMMARY_PROOF_CONSUME]", {
+      athleteId: activeAthleteId.trim(),
+      proofCount: deviceRole === "coach" ? proofCount : null,
+      localSessionCount,
+      finalSessionCount,
+      source,
+      vmSessionCount: sessions.length,
+      consistencyWeekCount: signals.consistency.currentWeekCount,
+    });
+    console.log("[SUMMARY_SIGNALS_INPUT]", {
+      athleteId: activeAthleteId.trim(),
+      sessionCount: signals.frequency.weeklySessionCount,
+      localScopedSessionCount: sessions.length,
+      localCurrentWeekSessionCount,
+      dominantSystems: {
+        dominantObservedSystem: signals.dominantObservedSystem,
+        systemsTopSystem: signals.systems.topSystem,
+        patternsTopSystem: signals.patterns.topSystem,
+      },
+    });
+  }, [
+    activeAthleteId,
+    deviceRole,
+    sessions.length,
+    signals.consistency.currentWeekCount,
+    signals.frequency.weeklySessionCount,
+    signals.dominantObservedSystem,
+    signals.systems.topSystem,
+    signals.patterns.topSystem,
+  ]);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -1379,7 +1489,7 @@ export default function SummaryScreen() {
     console.log("[SUMMARY_RECOMPUTE]", {
       athleteId: activeAthleteId,
       competitionCount: competitions?.length ?? 0,
-      sessionCount: sessions?.length ?? 0,
+      sessionCount: weeklySessionCountForSummary,
       identityScore: identityScore.score,
     });
     const vm = buildSummaryViewModel({
@@ -1389,7 +1499,7 @@ export default function SummaryScreen() {
       identityFocus: identityFocusForVm,
       coachWeekly: coachWeeklyForSummary,
       lastAction: lastAction,
-      sessionCount: sessions?.length ?? 0,
+      sessionCount: weeklySessionCountForSummary,
       competitionCount: competitions?.length ?? 0,
       devSummaryFlowTraceRole: summaryFlowTraceRole,
       devOperatorAthleteId: activeAthleteId,
@@ -1416,6 +1526,7 @@ export default function SummaryScreen() {
     identityScore.score,
     lastAction,
     sessions,
+    weeklySessionCountForSummary,
     summaryFlowTraceRole,
     summaryLinkedKidId,
     weeklySessionSnapshot,
@@ -1643,6 +1754,14 @@ export default function SummaryScreen() {
       style={styles.screenInner}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={summaryRefreshing}
+          onRefresh={onSummaryRefresh}
+          tintColor="#c7f36b"
+          colors={["#c7f36b"]}
+        />
+      }
     >
       <OperatingHeader
         mode="athlete"
@@ -1743,7 +1862,7 @@ export default function SummaryScreen() {
           signals={hybridConfidence}
           lastAction={lastAction}
           coachWeekly={coachWeeklyForSummary}
-          sessionCount={sessions?.length ?? 0}
+          sessionCount={weeklySessionCountForSummary}
           competitionCount={competitions?.length ?? 0}
           devDualVmAudit={
             __DEV__

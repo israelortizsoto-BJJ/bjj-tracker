@@ -126,10 +126,36 @@ export async function writeCoachTrainingProof(
   }
 
   const map = await readStore();
+  const existing = map[athleteId] ?? null;
+  const existingCount = existing?.currentWeekSessionCount ?? null;
+  const existingUpdatedAt = existing?.updatedAt ?? null;
+  const incomingCount = artifact.currentWeekSessionCount;
+  const incomingUpdatedAt = artifact.updatedAt;
+
+  let overwriteReason: string;
+  if (!existing) {
+    overwriteReason = "no_existing";
+  } else if (incomingUpdatedAt.localeCompare(existingUpdatedAt) > 0) {
+    overwriteReason = "incoming_newer";
+  } else if (incomingUpdatedAt.localeCompare(existingUpdatedAt) < 0) {
+    overwriteReason = "incoming_older_unconditional_replace";
+  } else {
+    overwriteReason = "same_updatedAt_replace";
+  }
+
   map[athleteId] = artifact;
   await writeStore(map);
 
   if (__DEV__) {
+    console.log("[TRAINING_PROOF_COACH_RECEIVE]", {
+      athleteId,
+      incomingCount,
+      incomingUpdatedAt,
+      existingCount,
+      existingUpdatedAt,
+      overwriteApplied: true,
+      overwriteReason,
+    });
     console.log("[TRAINING_PROOF_HYDRATE] hydrate_write", {
       sharedAthleteId: athleteId,
       updatedAt: artifact.updatedAt,

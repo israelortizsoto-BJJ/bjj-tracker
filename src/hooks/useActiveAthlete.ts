@@ -45,6 +45,12 @@ export type UseActiveAthleteResult = {
   athletes: ParentAthlete[];
   linkedKidId: string | null;
   kidsById: KidsById;
+  /**
+   * User-triggered hydration refresh (e.g. Summary pull-to-refresh).
+   * Runs `buildAthleteAuthoritySnapshot` with `soft_refresh` trigger — coach reconcile
+   * stays inside authority build; parent path does not reconcile coach writer sessions.
+   */
+  refreshActiveAthleteAuthority: () => Promise<void>;
 };
 
 type FetchSnapshotResult = {
@@ -367,6 +373,12 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     [kidsById, resolvedAthleteId],
   );
 
+  const refreshActiveAthleteAuthority = useCallback(async () => {
+    const { snap, fetchParallelDepth, repoFetchOrdinal } =
+      await fetchIdentitySnapshot("soft_refresh");
+    applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
+  }, [applyStorageSnapshot, fetchIdentitySnapshot, role]);
+
   return {
     hydrationReady,
     authorityBootstrapState: hydrationReady ? authorityBootstrapState : undefined,
@@ -377,5 +389,6 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     athletes,
     linkedKidId,
     kidsById,
+    refreshActiveAthleteAuthority,
   };
 }

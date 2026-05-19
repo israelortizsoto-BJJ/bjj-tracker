@@ -26,6 +26,15 @@ export function schedulePublishParentTrainingProof(sharedAthleteId: string): voi
 
       const sessions = await getSessions();
       const artifact = buildTrainingProofArtifact(trimmed, sessions);
+      if (__DEV__) {
+        console.log("[TRAINING_PROOF_PARENT]", {
+          athleteId: trimmed,
+          sessionCount: artifact.currentWeekSessionCount,
+          topSystems: artifact.topSystems,
+          lastTrainingAt: artifact.lastTrainingDateYMD,
+          updatedAt: artifact.updatedAt,
+        });
+      }
       const putPath = `/v1/sessions/${encodeURIComponent(target.linkToken)}/training-proof`;
       const kvKey = `s:${target.linkToken.trim().toLowerCase()}`;
       console.log("[TRAINING_PROOF_TRACE] publish_attempt", {

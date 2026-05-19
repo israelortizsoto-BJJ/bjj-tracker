@@ -7,6 +7,7 @@ import {
 } from "@/src/features/summary/competitionSummaryAggregationTrace";
 import { loadCanonicalAthleteCompetitionSlice } from "@/src/features/competition/canonicalCompetitionSource";
 import type { KidCompetitionEntryWithMatchDetail } from "@/src/storage/competitionStore";
+import { useCoachSyncHydrationVersion } from "../storage/coachSyncHydrationStore";
 import { getSessions } from "../storage/sessionsStore";
 import type { Session } from "../types";
 
@@ -49,11 +50,25 @@ export function useAthleteData(
   const [loading, setLoading] = useState(false);
   const prevHydratedScopeRef = useRef<string | undefined>(undefined);
   const loadGenerationRef = useRef(0);
+  const hydrationVersion = useCoachSyncHydrationVersion();
+  const prevHydrationVersionRef = useRef(hydrationVersion);
 
   useFocusEffect(
     useCallback(() => {
-      let mounted = true;
       const athleteId = activeAthleteId.trim();
+      const isHydrationInvalidation =
+        prevHydrationVersionRef.current !== hydrationVersion;
+      prevHydrationVersionRef.current = hydrationVersion;
+
+      if (__DEV__ && isHydrationInvalidation) {
+        console.log("[COACH_SYNC_HYDRATION] useAthleteData_invalidation", {
+          hydrationVersion,
+          athleteId,
+          deviceRole: summaryFlowTraceRole,
+        });
+      }
+
+      let mounted = true;
       const linkedKidTrim = (linkedKidId ?? "").trim();
       const scopeKey = `${athleteId}\u0001${linkedKidTrim}`;
 
@@ -228,7 +243,13 @@ export function useAthleteData(
       return () => {
         mounted = false;
       };
-    }, [activeAthleteId, linkedKidId, summaryFlowTraceRole, devHookConsumer]),
+    }, [
+      activeAthleteId,
+      linkedKidId,
+      summaryFlowTraceRole,
+      devHookConsumer,
+      hydrationVersion,
+    ]),
   );
 
   return useMemo(

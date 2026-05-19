@@ -1,6 +1,865 @@
 # BJJ Tracker - Dev Handoff Notes
 
 
+## 2026-05-17 → 2026-05-18-- DEV HANDOFF
+## RC Stabilization + Distributed Sync Recovery Phase
+
+---
+
+# Executive Summary
+
+This was one of the most important stabilization windows in the project so far.
+
+The repo moved from:
+- unstable distributed sync behavior
+- fragmented ownership semantics
+- stale coach-side data
+- hydration inconsistencies
+- dual-writer risks
+- GAAL/authority instability
+
+into:
+- bounded parent-authority mirrors
+- stable worker-backed sync transport
+- coach-side intelligence overlays
+- stable multi-athlete persistence
+- real distributed-device synchronization
+- production-like distributed QA validation
+
+By end of 5/18:
+- competition metrics successfully mirror to coach Summary
+- training proof successfully mirrors to coach Summary
+- competition events sync correctly across devices
+- weekly updates sync correctly across devices
+- athlete isolation survives rapid switching + cold relaunch
+- no catastrophic GAAL regressions observed
+- Build 30 successfully deployed through TestFlight
+
+This is the first truly coherent multi-actor sync architecture the repo has had.
+
+---
+
+# RC Checkpoint + Build State
+
+## Current Repo Recovery Anchor
+
+Primary stabilization checkpoint:
+
+```txt
+278b4a0 — RC stabilization checkpoint after distributed sync QA
+```
+
+Key preceding sync architecture commits:
+
+```txt
+288e105 — Mirror parent competition and training proof into coach summary
+293c749 — Sync bounded competition aggregates to coach summary
+949cca3 — Restore runtime-safe telemetry recovery stubs after cleanup
+97911bb — Stabilize athlete identity lineage and prevent duplicate shared athlete creation
+```
+
+Branch:
+
+```txt
+summary-rebuild-v2
+```
+
+Remote:
+
+```txt
+origin/summary-rebuild-v2
+```
+
+---
+
+# TestFlight / Release Candidate State
+
+## Current Build
+
+```txt
+Build 30
+```
+
+Build 30 successfully:
+- built through EAS production profile
+- submitted to TestFlight
+- installed across distributed real-device environment
+
+Validated devices:
+- Parent iPhone
+- Coach laptop/dev client
+- Wife iPhone (fresh install)
+- Multi-athlete distributed topology
+
+---
+
+# Build 30 Runtime Validation Results
+
+## PASS
+- Weekly sync
+- Competition event sync
+- Competition Summary metrics
+- Training proof Summary metrics
+- Cross-device persistence
+- Worker-backed hydrate recovery
+- Multi-athlete isolation
+- Rapid athlete switching
+- Hard-close persistence
+- Cold-launch recovery
+- Distributed parent → coach mirror flow
+
+## Important Runtime Discovery
+
+Current known issue:
+
+```txt
+foreground refresh orchestration is incomplete
+```
+
+Symptoms:
+- newly published data sometimes requires:
+  - hard close
+  - reopen
+  - rebuild/relaunch
+to force hydrate refresh
+
+Important:
+this is NOT data corruption.
+
+Underlying persistence + authority architecture appears stable.
+
+Likely affected areas:
+- focus-triggered refresh
+- overlay invalidation
+- pull-to-refresh orchestration
+- writer-session refresh cadence
+- foreground hydrate timing
+
+This is now considered:
+
+```txt
+RC stabilization work
+```
+
+NOT:
+
+```txt
+architecture failure
+```
+
+---
+
+# Core Architectural Breakthrough
+
+The major conceptual breakthrough was finalizing the correct ownership philosophy:
+
+| Data Plane | Canonical Owner | Coach Role |
+|---|---|---|
+| Weekly direction | Coach | Publisher |
+| Competition truth | Parent / athlete | Read-only intelligence consumer |
+| Training truth | Parent / athlete | Read-only intelligence consumer |
+| Coach training tab | Coach local-only | Operational planning |
+| Summary intelligence | Derived bounded mirrors | Consumption only |
+
+This eliminated the prior “multiple owners of truth” failure mode.
+
+The system now uses:
+- bounded aggregate artifacts
+- worker KV persistence
+- coach hydrate stores
+- overlay-only Summary consumption
+
+Instead of:
+- raw match sync
+- raw session sync
+- shared operational journals
+- dual-writer state
+
+This was the critical stabilization move.
+
+---
+
+# 5/17 — Competition Sync Recovery + Authority Stabilization
+
+## Initial State
+
+Beginning of 5/17:
+- parent competition entries saved locally
+- coach side received shell competition rows
+- Summary metrics did NOT hydrate
+- coach-side competition data diverged from parent truth
+- stale local coach rows suppressed remote aggregate overlays
+- runtime debugging became polluted with speculative theories instead of logs
+
+Additional symptoms:
+- coach editing competition created local shadow state
+- match results diverged from parent
+- Summary followed coach-local state instead of parent truth
+- athlete duplication concerns emerged
+- route replay / authority instrumentation partially removed during cleanup
+
+---
+
+# Major Realization
+
+Critical discovery:
+the competition aggregate worker route did NOT exist in deployed production worker.
+
+Parent app correctly attempted:
+
+```txt
+PUT /v1/sessions/:token/competition-aggregate
+```
+
+but production worker returned:
+
+```txt
+404 Not found
+```
+
+This meant:
+- architecture was mostly correct
+- transport layer was missing
+- hydrate never received aggregate
+- overlays never applied
+
+This was NOT:
+- Firestore corruption
+- Summary VM failure
+- GAAL collapse
+- athlete ownership corruption
+
+This realization redirected the entire debugging effort.
+
+---
+
+# Competition Aggregate Architecture Built
+
+## Parent Canonical Flow
+
+Implemented bounded aggregate architecture:
+
+```txt
+Parent competitions
+    ↓
+buildCompetitionAggregateArtifact
+    ↓
+publishParentCompetitionAggregate
+    ↓
+coach-sync-worker KV
+    ↓
+coachCompetitionAggregateStore
+    ↓
+overlayCompetitionAggregateSignals
+    ↓
+Coach Summary
+```
+
+---
+
+# Key Rules Locked
+
+## Parent owns canonical competition truth
+
+Coach:
+- CANNOT mutate results
+- CANNOT mutate timing
+- CANNOT mutate wins/losses
+- CANNOT mutate submissions
+
+Coach only consumes bounded intelligence.
+
+---
+
+# Coach Competition Review Refactor
+
+Coach competition editing converted into:
+
+```txt
+review mode only
+```
+
+Coach can:
+- review competition
+- see match data
+- eventually annotate
+
+Coach cannot:
+- create canonical competitions
+- overwrite canonical matches
+- delete competitions
+- mutate parent-owned metrics
+
+This eliminated dual-owner collision risk.
+
+---
+
+# Worker Deploy Recovery
+
+Deployed:
+
+```txt
+PUT /competition-aggregate
+```
+
+Confirmed:
+- route parity
+- worker persistence
+- session KV writes
+- hydrate retrieval
+- overlay application
+
+Logs confirmed:
+
+```txt
+publish_ok
+hydrate_write
+overlay_applied
+```
+
+This restored:
+- win rate
+- submission rate
+- fastest sub
+- average match time
+- dominant win style
+- competition totals
+
+on coach Summary.
+
+---
+
+# Runtime QA Successes
+
+Validated:
+- rapid athlete switching
+- cold launches
+- Xcode rebuild persistence
+- hard close reopen
+- multi-athlete isolation
+- no athlete bleed
+- no duplicate athlete recreation
+
+---
+
+# 5/18 — Training Proof Mirror Implementation
+
+## Major Discovery
+
+Audit proved:
+training proof DID NOT actually exist in repo.
+
+Only architecture stubs existed.
+
+This clarified:
+- no hidden regression existed
+- training proof was simply unimplemented
+- clean bounded architecture could now be built correctly
+
+---
+
+# Training Proof Philosophy Locked
+
+Critical ownership model:
+
+| Plane | Owner |
+|---|---|
+| Parent training truth | Parent / athlete |
+| Coach Training tab | Coach-local operational only |
+| Coach Summary | Read-only mirrored proof |
+
+Important rule:
+
+```txt
+parent proof > empty
+```
+
+NOT:
+
+```txt
+coach local > parent proof
+```
+
+Coach-local sessions NEVER override parent proof.
+
+This was intentionally DIFFERENT from competition precedence.
+
+---
+
+# Training Proof Architecture
+
+Implemented:
+
+```txt
+Parent sessions
+    ↓
+buildTrainingProofArtifact
+    ↓
+publishParentTrainingProof
+    ↓
+worker KV
+    ↓
+coachTrainingProofStore
+    ↓
+overlayTrainingProofSignals
+    ↓
+Coach Summary
+```
+
+---
+
+# Mirrored Training Intelligence
+
+Coach Summary now mirrors:
+- current week session count
+- dominant system
+- top systems
+- top techniques
+- last training date
+- weekly goal status
+
+WITHOUT syncing:
+- Session[]
+- journals
+- media
+- timelines
+- raw training history
+
+Again:
+bounded intelligence only.
+
+---
+
+# Critical Technical Success
+
+Training proof correctly:
+- excludes coach-local sessions
+- scopes strictly by sharedAthleteId
+- uses Monday-start current week semantics
+- uses 14-day rolling top techniques
+- avoids competition-adjusted dominance heuristics
+
+This preserved clean ownership semantics.
+
+---
+
+# Distributed Device QA (Build 30)
+
+## Devices Validated
+
+- Parent phone
+- Coach laptop/dev client
+- Wife phone (fresh install)
+- Multi-athlete distributed environment
+
+---
+
+# Major Runtime Discoveries
+
+## Sync Persistence PASS
+
+Validated:
+- competition sync
+- training proof sync
+- weekly update sync
+- aggregate hydration
+- athlete isolation
+- hard close persistence
+- reinstall persistence
+- cross-device consistency
+
+---
+
+# Key Remaining Runtime Issue
+
+The system currently requires:
+
+```txt
+hard close / reopen
+```
+
+to reliably force:
+- foreground refresh
+- overlay invalidation
+- writer-session reconcile
+- aggregate refresh
+
+Important:
+this is NOT data corruption.
+
+The underlying persistence architecture is functioning correctly.
+
+The likely issue is:
+
+```txt
+foreground hydration orchestration
+```
+
+Areas suspected:
+- focus listeners
+- pull-to-refresh wiring
+- stale cache invalidation
+- foreground refresh cadence
+- overlay refresh timing
+
+This is now considered:
+- RC stabilization work
+NOT
+- architecture failure
+
+Huge improvement from prior state.
+
+---
+
+# Important Commits
+
+## `293c749`
+
+```txt
+Sync bounded competition aggregates to coach summary
+```
+
+## `288e105`
+
+```txt
+Mirror parent competition and training proof into coach summary
+```
+
+## `278b4a0`
+
+```txt
+RC stabilization checkpoint after distributed sync QA
+```
+
+These commits now represent the stabilized RC sync foundation.
+
+---
+
+# Current System Status
+
+| System | Status |
+|---|---|
+| Weekly publish | Stable |
+| Competition event sync | Stable |
+| Competition Summary metrics | Stable |
+| Training proof Summary metrics | Stable |
+| Athlete isolation | Stable |
+| Rapid switching | Stable |
+| Cold relaunch persistence | Stable |
+| Worker persistence | Stable |
+| Parent authority | Stable |
+| Coach bounded mirrors | Stable |
+| GAAL catastrophic regressions | Not observed |
+| Duplicate athlete explosions | Not observed in current QA |
+| Foreground refresh orchestration | NEEDS WORK |
+
+---
+
+# Immediate Next Steps (5/19)
+
+## Priority 1 — Foreground Refresh Stabilization
+
+Investigate:
+- app foreground refresh
+- focus-triggered hydrate
+- pull-to-refresh orchestration
+- writer-session invalidation
+- overlay refresh timing
+- stale aggregate eviction
+
+Goal:
+remove need for hard-close/reopen.
+
+---
+
+## Priority 2 — Structured Regression Matrix
+
+Run:
+- multi-device
+- multi-household
+- third-athlete
+- slow network
+- reconnect
+- overnight persistence
+- repeated publish/edit/delete
+
+---
+
+## Priority 3 — Duplicate Athlete Cleanup
+
+Now that authority is stabilized:
+- remove orphan athletes
+- clean old link states
+- preserve only active linked athletes
+
+---
+
+## Priority 4 — UX Polish Only
+
+NO major architecture work.
+
+Only:
+- refresh UX
+- loading states
+- overlay timing
+- hydration smoothness
+- Summary polish
+
+---
+
+# Final Assessment
+
+The repo crossed a major threshold during 5/17–5/18.
+
+The architecture evolved from:
+
+```txt
+fragile multi-owner sync
+```
+
+into:
+
+```txt
+bounded parent-authority mirrors with coach intelligence consumption
+```
+
+This is the strongest and most production-shaped sync foundation the project has had so far.
+
+
+
+
+## EOD Handoff — 2026-05-14 → 2026-05-15 stabilization milestone
+
+MOST IMPORTANT RECENT TRUTH
+We discovered the real destabilizer was NOT primarily:
+
+navigation corruption
+selector architecture collapse
+tab divergence architecture
+replay corruption
+
+The real issue was:
+DUPLICATE SHARED ATHLETE CREATION
+
+Symptoms that came from that:
+
+ghost athletes
+duplicate athletes
+Summary and This Week resolving different athletes
+weekly sync disappearing on parent side
+coach roster duplication/staleness
+unstable hydration after restart
+active athlete identity drift
+weekly ownership mismatches
+
+Observed example:
+
+active athlete store could point to one shared_ath_*
+weekly owner could point to another shared_ath_*
+both represented the same athlete name
+2. Containment fix implemented
+
+File:
+coach-sync-worker/src/index.ts
+
+Behavior change:
+POST /v1/sessions/:token/athletes
+
+Now:
+
+normalize athlete name
+search existing session athletes
+reuse existing shared athlete if normalized name matches
+prevent minting duplicate shared-athlete identities on fresh forward flows
+
+This is containment-first.
+Historical reconciliation has NOT been done yet.
+
+Key checkpoint:
+97911bb
+Meaning:
+FIRST STABLE FORWARD ATHLETE LINEAGE BUILD
+
+3. What is currently stable
+
+For NEW / clean lineage flows:
+
+fresh invite flows
+fresh athlete creation
+parent linkage
+weekly publish
+competition propagation
+cold hydration
+athlete switching
+weekly isolation
+parent ↔ coach sync
+
+Confidence:
+moderately high for fresh forward-created sessions
+
+4. What is still historical debt
+
+Old corrupted sessions may still contain:
+
+duplicate historical athletes
+polluted coach roster
+stale shared athlete ids
+unreconciled weekly ownership
+stale weeklyByAthleteId mappings
+
+Important:
+Historical corruption is NO LONGER actively destabilizing fresh runtime flows.
+But it has NOT been reconciled.
+
+OTHER IMPORTANT RECENT ARCHITECTURE TRUTH
+5. Coach-side Summary issue was reclassified correctly
+
+The remaining coach-side Summary issue is NOT primarily:
+
+Summary rendering bug
+Summary VM bug
+progression engine bug
+alignment engine bug
+
+It is a DATA-PLANE / ATHLETE-INTELLIGENCE GAP.
+
+Reason:
+Coach currently does NOT receive replicated parent training proof.
+
+Coach can receive:
+
+weeklyByAthleteId
+competitions
+coach-local sessions
+
+Coach does NOT receive:
+
+parent-created training sessions
+parent training proof
+parent-derived signal lineage
+
+So coach Summary showing low/no proof is currently expected under present architecture.
+
+6. Chosen future direction
+
+Recommendation A — Canonical Training Proof Architecture
+
+Do NOT:
+
+sync raw parent session rows directly
+fake session rows
+inject synthetic counts
+patch Summary with hacks
+keep layering fallbacks
+
+Instead:
+Parent remains source of truth for:
+
+full sessions
+journals
+notes
+media
+detailed logs
+
+Remote replicated lane should eventually contain bounded aggregates such as:
+
+rolling session counts
+proof windows
+signal dominance
+top systems
+timestamps
+alignment-relevant aggregates
+
+This is future work. It is NOT implemented yet.
+
+ANOTHER RECENT FIX TO REMEMBER
+7. Weekly systemKey persistence bug fixed
+
+File:
+src/features/kid/KidDetailScreen.tsx
+
+Problem:
+systemKey was being lost when coach check-ins appended new weekly rows, causing downstream alignment drift and headline fallback misuse.
+
+Fix:
+appended check-in rows now inherit:
+systemKey: currentWeekEntry.systemKey
+
+Applies to:
+
+template flows
+custom flows
+
+Validated:
+
+coach publish → parent sync works
+weekly direction persists correctly
+no observed weekly-flow regression
+IMPORTANT PRODUCT / EXECUTION LESSON
+
+A major mistake during the prior cycle was drifting into:
+
+governance doctrine
+observability architecture
+witness systems
+registry systems
+survivability governance
+canonical authority graph theory
+
+before runtime corruption was resolved.
+
+That was stopped intentionally.
+
+Correct move was:
+return to
+
+real logs
+real device QA
+identity tracing
+hydration validation
+production stabilization discipline
+
+This must remain the operating rule.
+
+NON-NEGOTIABLES FOR THIS THREAD
+No fake session rows
+No synthetic counts
+No Summary hacks
+No random fallback layering
+No broad architecture rewrites under fatigue
+No casual historical migration work
+No blind commit of mixed experimental files
+Repo truth > guessing
+Stabilization first, theory second
+RECOMMENDED NEXT PHASE
+
+Runtime QA Hardening
+
+Focus:
+
+training session ownership validation
+unlink/relink stability
+overwrite weekly behavior
+cache invalidation edge cases
+stale hydration edge cases
+coach restart persistence
+multi-athlete overwrite behavior
+long-session durability
+
+Do NOT:
+
+start large reconciliation migrations casually
+redesign runtime architecture under fatigue
+introduce authority rewrite systems prematurely
+
+Historical reconciliation deserves:
+
+dedicated session
+rollback planning
+migration strategy
+isolated QA environment
+
+
 # EOD Handoff — 2026-05-13
 
 ## Branch

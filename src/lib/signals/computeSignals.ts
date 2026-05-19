@@ -736,6 +736,21 @@ function collectWeeklySessionCounts(sessions: readonly Session[]): Record<string
   return weekCounts;
 }
 
+/** Calendar week (Mon–Sun) containing `referenceYMD` — matches training proof `currentWeekSessionCount`. */
+function filterSessionsInCurrentWeek(
+  sessions: readonly Session[],
+  referenceYMD: string,
+): Session[] {
+  const weekStart = startOfWeekMondayYMD(referenceYMD);
+  if (!weekStart) return [];
+  const weekEnd = addDaysYMD(weekStart, 6);
+  if (!weekEnd) return [];
+  return sessions.filter((session) => {
+    const dateKey = toDateKey(session.date);
+    return Boolean(dateKey && dateKey >= weekStart && dateKey <= weekEnd);
+  });
+}
+
 function computeCompletedWeeklyStreak(
   weekCounts: Record<string, number>,
   currentWeekStart: string,
@@ -953,8 +968,9 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
 
   const referenceDate = resolveReferenceDate(input.referenceDate);
   const weekStart = startOfWeekMondayYMD(referenceDate);
-  const weeklySessionCount = sessions.length;
   const weeklySessionCounts = collectWeeklySessionCounts(sessions);
+  const weeklySessionCount = weekStart ? (weeklySessionCounts[weekStart] ?? 0) : 0;
+  const currentWeekSessions = filterSessionsInCurrentWeek(sessions, referenceDate);
   const weekTotals4w = Array.from({ length: 4 }, (_, index) => {
     const weekKey = addDaysYMD(weekStart, -7 * index);
     return weekKey ? (weeklySessionCounts[weekKey] ?? 0) : 0;
@@ -963,11 +979,11 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const streak =
     sessions.length === 0 ? null : computeCompletedWeeklyStreak(weeklySessionCounts, weekStart);
 
-  const techniqueFrequency = collectTechniqueFrequency(sessions);
+  const techniqueFrequency = collectTechniqueFrequency(currentWeekSessions);
   const topTechniques = rankFrequency(techniqueFrequency).slice(0, 3);
 
-  const systemFrequency = collectSystemFrequency(sessions);
-  const systemDistribution = collectSystemDistribution(sessions);
+  const systemFrequency = collectSystemFrequency(currentWeekSessions);
+  const systemDistribution = collectSystemDistribution(currentWeekSessions);
   const rankedSystems = rankFrequency(systemDistribution);
   const totalSystemScore = rankedSystems.reduce((sum, item) => sum + item.count, 0);
   const systemBreakdown = rankedSystems.map((item) => ({
@@ -1083,7 +1099,7 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   });
 
   const topTechnique = topTechniques.length > 0 ? topTechniques[0].label : null;
-  const gear = computeGearSignal(sessions);
+  const gear = computeGearSignal(currentWeekSessions);
 
   const matches = collectMatches(competitions);
   const normalizedMatches = matches.map((match) => ({

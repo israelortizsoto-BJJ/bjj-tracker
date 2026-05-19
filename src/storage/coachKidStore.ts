@@ -35,10 +35,12 @@ import {
 } from "./coachCompetitionAggregateStore";
 import {
   isValidSyncedTrainingProofArtifact,
+  peekCoachTrainingProof,
   pruneCoachTrainingProof,
   removeCoachTrainingProof,
   writeCoachTrainingProof,
 } from "./coachTrainingProofStore";
+import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { clearLastAthleteKidIdIfMatches } from "./lastAthleteIdStore";
@@ -446,9 +448,8 @@ export function pickRemoteSharedCompetitionsForLinkedAthlete(
 }
 
 /**
- * Walk writer sessions in traversal order and return the first valid aggregate for the athlete.
- * If a session lists the athlete but has no aggregate payload, continue scanning (avoids
- * "first empty wins" when a newer invite session lacks parent-published aggregates).
+ * Walk writer sessions in traversal order, collect all valid aggregates for the athlete,
+ * and return the one with the newest `updatedAt` (traversal order breaks ties).
  */
 export function pickRemoteCompetitionAggregateForLinkedAthlete(
   sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
@@ -457,9 +458,15 @@ export function pickRemoteCompetitionAggregateForLinkedAthlete(
   const sid = sharedAthleteId.trim();
   if (!sid) return null;
 
+  const candidates: SyncedCompetitionAggregateArtifact[] = [];
+  const traversalOrderUpdatedAts: string[] = [];
+  let athleteListedInAnySession = false;
+
   for (const session of sessionsInWriterLinkTraversalOrder) {
     const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
     if (!athleteInSession) continue;
+
+    athleteListedInAnySession = true;
 
     const candidate = session.competitionAggregateByAthleteId?.[sid];
     if (
@@ -467,16 +474,43 @@ export function pickRemoteCompetitionAggregateForLinkedAthlete(
       isValidSyncedCompetitionAggregateArtifact(candidate) &&
       candidate.sharedAthleteId.trim() === sid
     ) {
-      return candidate;
+      candidates.push(candidate);
+      traversalOrderUpdatedAts.push(candidate.updatedAt);
     }
   }
-  return null;
+
+  if (candidates.length === 0) {
+    if (__DEV__ && athleteListedInAnySession) {
+      console.log("[COMP_AGG_TRACE] stale_local_proof_possible", {
+        athleteId: sid,
+      });
+    }
+    return null;
+  }
+
+  let selected = candidates[0];
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (c.updatedAt.localeCompare(selected.updatedAt) > 0) {
+      selected = c;
+    }
+  }
+
+  if (__DEV__) {
+    console.log("[COMP_AGG_TRACE] selected_candidate", {
+      athleteId: sid,
+      selectedUpdatedAt: selected.updatedAt,
+      candidateCount: candidates.length,
+      traversalOrderUpdatedAts,
+    });
+  }
+
+  return selected;
 }
 
 /**
- * Walk writer sessions in traversal order and return the first valid training proof for the athlete.
- * If a session lists the athlete but has no proof payload, continue scanning (avoids
- * "first empty wins" when a newer invite session lacks parent-published proof).
+ * Walk writer sessions in traversal order, collect all valid training proofs for the athlete,
+ * and return the one with the newest `updatedAt` (traversal order breaks ties).
  */
 export function pickRemoteTrainingProofForLinkedAthlete(
   sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
@@ -485,9 +519,15 @@ export function pickRemoteTrainingProofForLinkedAthlete(
   const sid = sharedAthleteId.trim();
   if (!sid) return null;
 
+  const candidates: SyncedTrainingProofArtifact[] = [];
+  const traversalOrderUpdatedAts: string[] = [];
+  let athleteListedInAnySession = false;
+
   for (const session of sessionsInWriterLinkTraversalOrder) {
     const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
     if (!athleteInSession) continue;
+
+    athleteListedInAnySession = true;
 
     const candidate = session.trainingProofByAthleteId?.[sid];
     if (
@@ -495,10 +535,38 @@ export function pickRemoteTrainingProofForLinkedAthlete(
       isValidSyncedTrainingProofArtifact(candidate) &&
       candidate.sharedAthleteId.trim() === sid
     ) {
-      return candidate;
+      candidates.push(candidate);
+      traversalOrderUpdatedAts.push(candidate.updatedAt);
     }
   }
-  return null;
+
+  if (candidates.length === 0) {
+    if (__DEV__ && athleteListedInAnySession) {
+      console.log("[TRAINING_PROOF_HYDRATE] stale_local_proof_possible", {
+        athleteId: sid,
+      });
+    }
+    return null;
+  }
+
+  let selected = candidates[0];
+  for (let i = 1; i < candidates.length; i++) {
+    const c = candidates[i];
+    if (c.updatedAt.localeCompare(selected.updatedAt) > 0) {
+      selected = c;
+    }
+  }
+
+  if (__DEV__) {
+    console.log("[TRAINING_PROOF_HYDRATE] selected_candidate", {
+      athleteId: sid,
+      selectedUpdatedAt: selected.updatedAt,
+      candidateCount: candidates.length,
+      traversalOrderUpdatedAts,
+    });
+  }
+
+  return selected;
 }
 
 export function pickPublishedWeeklyParentFeedbackForSharedAthlete(
@@ -826,6 +894,18 @@ export async function reconcileCoachTrainingProofFromWriterSessions(opts: {
 
     const artifact = pickRemoteTrainingProofForLinkedAthlete(sessionsOrdered, sharedAthleteId);
     if (artifact) {
+      if (__DEV__) {
+        const existing = peekCoachTrainingProof(sharedAthleteId);
+        console.log("[TRAINING_PROOF_COACH_RECEIVE]", {
+          athleteId: sharedAthleteId,
+          incomingCount: artifact.currentWeekSessionCount,
+          incomingUpdatedAt: artifact.updatedAt,
+          existingCount: existing?.currentWeekSessionCount ?? null,
+          existingUpdatedAt: existing?.updatedAt ?? null,
+          overwriteApplied: null,
+          overwriteReason: "reconcile_before_writeCoachTrainingProof",
+        });
+      }
       await writeCoachTrainingProof(artifact);
     } else if (__DEV__) {
       console.log("[TRAINING_PROOF_HYDRATE] hydrate_missing", {
@@ -1053,6 +1133,14 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });
+    if (__DEV__) {
+      console.log("[COACH_SYNC_HYDRATION] reconcile_complete_before_bump", {
+        successfulSnapshotCount: successfulSnapshots.length,
+        writerLinkCount: writerLinks.length,
+        athleteIdsUnion,
+      });
+    }
+    bumpCoachSyncHydrationVersion();
   } else if (writerLinks.length > 0) {
     console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
       skipReconcile: "writerLinksButNoSuccessfulSessionFetches",

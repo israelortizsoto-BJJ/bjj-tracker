@@ -1,5 +1,4 @@
-import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   computeSignals,
@@ -28,6 +27,7 @@ import {
   getCoachTrainingProof,
   peekCoachTrainingProof,
 } from "../storage/coachTrainingProofStore";
+import { useCoachSyncHydrationVersion } from "../storage/coachSyncHydrationStore";
 import type {
   SyncedCompetitionAggregateArtifact,
   SyncedTrainingProofArtifact,
@@ -72,35 +72,50 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
         : null,
     );
 
-  useFocusEffect(
-    useCallback(() => {
-      if (deviceRole !== "coach" || !trimmedAthlete) {
-        setCoachAggregate(null);
-        setCoachTrainingProof(null);
-        return;
-      }
+  const hydrationVersion = useCoachSyncHydrationVersion();
+  const prevHydrationVersionRef = useRef(hydrationVersion);
 
-      let mounted = true;
-      const athleteId = trimmedAthlete;
-      const peekedAggregate = peekCoachCompetitionAggregate(athleteId);
-      if (peekedAggregate) setCoachAggregate(peekedAggregate);
-      const peekedProof = peekCoachTrainingProof(athleteId);
-      if (peekedProof) setCoachTrainingProof(peekedProof);
+  useEffect(() => {
+    if (deviceRole !== "coach" || !trimmedAthlete) {
+      setCoachAggregate(null);
+      setCoachTrainingProof(null);
+      prevHydrationVersionRef.current = hydrationVersion;
+      return;
+    }
 
-      void getCoachCompetitionAggregate(athleteId).then((artifact) => {
-        if (!mounted) return;
-        setCoachAggregate(artifact);
+    const triggeredByHydrationInvalidation =
+      prevHydrationVersionRef.current !== hydrationVersion;
+
+    if (__DEV__ && triggeredByHydrationInvalidation) {
+      console.log("[COACH_SYNC_HYDRATION] useSignals_overlay_reload", {
+        hydrationVersion,
+        athleteId: trimmedAthlete,
+        deviceRole,
       });
-      void getCoachTrainingProof(athleteId).then((artifact) => {
-        if (!mounted) return;
-        setCoachTrainingProof(artifact);
-      });
+    }
 
-      return () => {
-        mounted = false;
-      };
-    }, [deviceRole, trimmedAthlete]),
-  );
+    prevHydrationVersionRef.current = hydrationVersion;
+
+    let mounted = true;
+    const athleteId = trimmedAthlete;
+    const peekedAggregate = peekCoachCompetitionAggregate(athleteId);
+    if (peekedAggregate) setCoachAggregate(peekedAggregate);
+    const peekedProof = peekCoachTrainingProof(athleteId);
+    if (peekedProof) setCoachTrainingProof(peekedProof);
+
+    void getCoachCompetitionAggregate(athleteId).then((artifact) => {
+      if (!mounted) return;
+      setCoachAggregate(artifact);
+    });
+    void getCoachTrainingProof(athleteId).then((artifact) => {
+      if (!mounted) return;
+      setCoachTrainingProof(artifact);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [hydrationVersion, deviceRole, trimmedAthlete]);
 
   return useMemo(() => {
     const hasAthlete = trimmedAthlete.length > 0;
@@ -172,11 +187,43 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       kidId: hasAthlete ? kidId : null,
     });
 
+    const localSessionCount = scopedSessions.length;
+
     if (deviceRole !== "coach" || !hasAthlete) {
+      if (__DEV__ && hasAthlete) {
+        console.log("[SUMMARY_PROOF_CONSUME]", {
+          athleteId: trimmedAthlete,
+          proofCount: null,
+          localSessionCount,
+          finalSessionCount: computed.frequency.weeklySessionCount,
+          source: deviceRole !== "coach" ? "parent_local_signals" : "no_athlete",
+        });
+        console.log("[TRAINING_PROOF_OVERLAY]", {
+          athleteId: trimmedAthlete,
+          role: deviceRole,
+          localSessionCount,
+          proofSessionCount: null,
+          overlayApplied: false,
+          overlayReason: deviceRole !== "coach" ? "not_coach" : "no_athlete",
+          finalSessionCount: computed.frequency.weeklySessionCount,
+          dominantSystems: {
+            local: computed.dominantObservedSystem,
+            proof: null,
+            final: computed.dominantObservedSystem,
+          },
+        });
+      }
       return computed;
     }
 
     let withCoachOverlays = computed;
+    let overlayApplied = false;
+    let overlayReason:
+      | "overlay_missing"
+      | "overlay_hidden_visibility"
+      | "overlay_applied" = "overlay_missing";
+    const proof = coachTrainingProof;
+    const proofSessionCount = proof?.currentWeekSessionCount ?? null;
 
     const localMatchLineage = hasFullLocalMatchLineage(scopedCompetitions);
     if (localMatchLineage) {
@@ -215,36 +262,98 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       }
     }
 
-    const proof = coachTrainingProof;
     if (!proof) {
+      overlayReason = "overlay_missing";
       if (__DEV__) {
-        console.log("[TRAINING_PROOF_OVERLAY] overlay_missing", {
-          sharedAthleteId: trimmedAthlete,
+        console.log("[SUMMARY_PROOF_CONSUME]", {
+          athleteId: trimmedAthlete,
+          proofCount: null,
+          localSessionCount,
+          finalSessionCount: withCoachOverlays.frequency.weeklySessionCount,
+          source: "coach_local_signals_no_proof",
+        });
+        console.log("[TRAINING_PROOF_OVERLAY]", {
+          athleteId: trimmedAthlete,
+          role: deviceRole,
+          localSessionCount,
+          proofSessionCount: null,
+          overlayApplied,
+          overlayReason,
+          finalSessionCount: withCoachOverlays.frequency.weeklySessionCount,
+          dominantSystems: {
+            local: computed.dominantObservedSystem,
+            proof: null,
+            final: withCoachOverlays.dominantObservedSystem,
+          },
         });
       }
       return withCoachOverlays;
     }
 
     if (!hasTrainingProofVisibility(proof, trimmedAthlete)) {
+      overlayReason = "overlay_hidden_visibility";
       if (__DEV__) {
-        console.log("[TRAINING_PROOF_OVERLAY] overlay_hidden_visibility", {
-          sharedAthleteId: trimmedAthlete,
-          currentWeekSessionCount: proof.currentWeekSessionCount,
-          lastTrainingDateYMD: proof.lastTrainingDateYMD,
+        console.log("[SUMMARY_PROOF_CONSUME]", {
+          athleteId: trimmedAthlete,
+          proofCount: proofSessionCount,
+          localSessionCount,
+          finalSessionCount: withCoachOverlays.frequency.weeklySessionCount,
+          source: "coach_proof_hidden_visibility",
+        });
+        console.log("[TRAINING_PROOF_OVERLAY]", {
+          athleteId: trimmedAthlete,
+          role: deviceRole,
+          localSessionCount,
+          proofSessionCount,
+          overlayApplied,
+          overlayReason,
+          finalSessionCount: withCoachOverlays.frequency.weeklySessionCount,
+          dominantSystems: {
+            local: computed.dominantObservedSystem,
+            proof: proof.dominantSystemKey,
+            final: withCoachOverlays.dominantObservedSystem,
+          },
+          proofVisibility: {
+            currentWeekSessionCount: proof.currentWeekSessionCount,
+            lastTrainingDateYMD: proof.lastTrainingDateYMD,
+            topSystemsLen: proof.topSystems.length,
+            topTechniquesLen: proof.topTechniques.length,
+          },
         });
       }
       return withCoachOverlays;
     }
 
+    overlayApplied = true;
+    overlayReason = "overlay_applied";
+    const withTrainingProof = overlayTrainingProofSignals(withCoachOverlays, proof);
+
     if (__DEV__) {
-      console.log("[TRAINING_PROOF_OVERLAY] overlay_applied", {
-        sharedAthleteId: trimmedAthlete,
-        currentWeekSessionCount: proof.currentWeekSessionCount,
+      console.log("[SUMMARY_PROOF_CONSUME]", {
+        athleteId: trimmedAthlete,
+        proofCount: proofSessionCount,
+        localSessionCount,
+        finalSessionCount: withTrainingProof.frequency.weeklySessionCount,
+        source: "coach_proof_overlay_applied",
+      });
+      console.log("[TRAINING_PROOF_OVERLAY]", {
+        athleteId: trimmedAthlete,
+        role: deviceRole,
+        localSessionCount,
+        proofSessionCount,
+        overlayApplied,
+        overlayReason,
+        finalSessionCount: withTrainingProof.frequency.weeklySessionCount,
+        dominantSystems: {
+          local: computed.dominantObservedSystem,
+          proof: proof.dominantSystemKey,
+          final: withTrainingProof.dominantObservedSystem,
+        },
         weeklyGoalMet: proof.weeklyGoalMet,
       });
     }
 
-    return overlayTrainingProofSignals(withCoachOverlays, proof);
+    return withTrainingProof;
   }, [
     sessions,
     competitions,
