@@ -162,6 +162,11 @@ export type CoachWeeklySyncRedeemParentWriterResponse = {
 
 export type CoachWeeklySyncCreateAthleteBody = {
   name: string;
+  /**
+   * When set, worker re-attaches this canonical `shared_ath_*` to the invite roster instead of minting.
+   * Client must resolve lineage locally before POST (Build 33.3).
+   */
+  bindSharedAthleteId?: string;
 };
 
 export type CoachWeeklySyncCreateAthleteResponse = {

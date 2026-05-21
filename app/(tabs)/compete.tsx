@@ -1,6 +1,8 @@
 import { router, type Href } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useRef, useState } from "react";
+
+import { useCoachSyncHydrationVersion } from "@/src/storage/coachSyncHydrationStore";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -13,7 +15,9 @@ import {
   getKidCompetitionEntriesWithMatchDetailForSharedAthlete,
 } from "@/src/storage/competitionStore";
 import { kidIdForUnlinkedParentAthleteCompetitions } from "@/src/storage/kidCompetitionStore";
+import { logCoachHydrationResolveTrace } from "@/src/identity/coachHydrationResolveTrace";
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
+import { useDeviceRole } from "@/src/deviceRole/DeviceRoleProvider";
 import OperatingHeader from "@/src/components/operating/OperatingHeader";
 
 const FEED = {
@@ -79,6 +83,18 @@ function initialsFromName(name: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
+/** Avoid `setEntries` when async load returns the same row ids (stops focus-effect churn). */
+function competeEntriesSameIds(
+  prev: readonly CompeteKidEntryMerged[],
+  next: readonly CompeteKidEntryMerged[],
+): boolean {
+  if (prev.length !== next.length) return false;
+  for (let i = 0; i < prev.length; i += 1) {
+    if (prev[i]?.id !== next[i]?.id) return false;
+  }
+  return true;
+}
+
 function buildPastMonthGroups(entries: CompeteKidEntryMerged[]): MonthGroup[] {
   const byMonth = new Map<string, CompeteKidEntryMerged[]>();
 
@@ -99,22 +115,46 @@ function buildPastMonthGroups(entries: CompeteKidEntryMerged[]): MonthGroup[] {
 }
 
 export default function CompetitionTab() {
+  const { role: deviceRole } = useDeviceRole();
   const {
     athleteId,
     linkedKidId,
     hydrationReady,
     athlete,
     authorityBootstrapState,
+    operatingAthleteRoster,
   } = useActiveAthlete();
   const [entries, setEntries] = useState<CompeteKidEntryMerged[]>([]);
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
+  const coachSyncHydrationVersion = useCoachSyncHydrationVersion();
+  const devTraceRef = useRef({
+    deviceRole,
+    authorityBootstrapState,
+    operatingAthleteRoster,
+  });
+  devTraceRef.current = {
+    deviceRole,
+    authorityBootstrapState,
+    operatingAthleteRoster,
+  };
 
   const loadCompetitions = useCallback(async () => {
     const gen = ++loadGenerationRef.current;
+    if (__DEV__) {
+      console.log("[COMPETE_RENDER_LOOP_TRACE] loadCompetitions_entered", {
+        gen,
+        athleteId: athleteId.trim() || null,
+        linkedKidId: linkedKidId ?? null,
+        coachSyncHydrationVersion,
+      });
+    }
     const trimmedAthleteId = athleteId.trim();
     if (!trimmedAthleteId) {
-      setEntries([]);
+      if (__DEV__) {
+        console.log("[COMPETE_RENDER_LOOP_TRACE] setEntries_skip_empty_athlete", { gen });
+      }
+      setEntries((prev) => (prev.length === 0 ? prev : []));
       return;
     }
     const lk = linkedKidId;
@@ -126,14 +166,66 @@ export default function CompetitionTab() {
       athleteId: trimmedAthleteId,
       entriesLoaded: merged.length,
     });
+    if (__DEV__ && devTraceRef.current.deviceRole === "coach") {
+      const trace = devTraceRef.current;
+      logCoachHydrationResolveTrace("competition_resolve", {
+        sharedAthleteId: trimmedAthleteId || null,
+        resolvedAthleteId: trimmedAthleteId || null,
+        linkedKidId: lk ?? null,
+        authorityBootstrapState: trace.authorityBootstrapState ?? null,
+        projectionExists: trace.operatingAthleteRoster.some(
+          (a) => a.id.trim() === trimmedAthleteId,
+        ),
+        coachProjectionExists: trace.operatingAthleteRoster.length > 0,
+        nullReturnReason: !trimmedAthleteId
+          ? "no_operating_athlete_id"
+          : merged.length === 0
+            ? "competition_store_empty_for_scope"
+            : null,
+        extra: { entriesLoaded: merged.length, loadPath: lk ? "by_kid" : "by_shared_athlete" },
+      });
+    }
     if (gen !== loadGenerationRef.current) return;
-    setEntries(merged);
-  }, [athleteId, linkedKidId]);
+    setEntries((prev) => {
+      if (competeEntriesSameIds(prev, merged)) {
+        if (__DEV__) {
+          console.log("[COMPETE_RENDER_LOOP_TRACE] setEntries_unchanged", {
+            gen,
+            count: merged.length,
+          });
+        }
+        return prev;
+      }
+      if (__DEV__) {
+        console.log("[COMPETE_RENDER_LOOP_TRACE] setEntries_apply", {
+          gen,
+          prevCount: prev.length,
+          nextCount: merged.length,
+        });
+      }
+      return merged;
+    });
+  }, [athleteId, linkedKidId, coachSyncHydrationVersion]);
+
+  const loadCompetitionsRef = useRef(loadCompetitions);
+  loadCompetitionsRef.current = loadCompetitions;
 
   useFocusEffect(
     useCallback(() => {
-      void loadCompetitions();
-    }, [loadCompetitions]),
+      if (__DEV__) {
+        console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_entered", {
+          athleteId: athleteId.trim() || null,
+          linkedKidId: linkedKidId ?? null,
+          coachSyncHydrationVersion,
+        });
+      }
+      void loadCompetitionsRef.current();
+      return () => {
+        if (__DEV__) {
+          console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_cleanup");
+        }
+      };
+    }, [athleteId, linkedKidId, coachSyncHydrationVersion]),
   );
 
   const noAthleteSelected = hydrationReady && !athleteId.trim();

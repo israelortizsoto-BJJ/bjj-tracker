@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
@@ -14,6 +14,10 @@ import {
 import { addAthlete, setActiveAthleteId } from "@/src/storage/athleteStore";
 
 export default function AddAthleteScreen() {
+  const { coachLinkId } = useLocalSearchParams<{ coachLinkId?: string }>();
+  const preferredCoachLinkId =
+    typeof coachLinkId === "string" && coachLinkId.trim() ? coachLinkId.trim() : undefined;
+
   const [name, setName] = useState("");
   const [household, setHousehold] = useState("");
   const [busy, setBusy] = useState(false);
@@ -27,13 +31,14 @@ export default function AddAthleteScreen() {
       const athlete = await addAthlete({
         name: name.trim(),
         household: household.trim() || undefined,
+        preferredCoachLinkId,
       });
       await setActiveAthleteId(athlete.id);
       router.replace("/summary/onboarding");
     } finally {
       setBusy(false);
     }
-  }, [canSave, busy, name, household]);
+  }, [canSave, busy, name, household, preferredCoachLinkId]);
 
   return (
     <KeyboardAvoidingView

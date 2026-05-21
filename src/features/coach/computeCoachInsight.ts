@@ -95,11 +95,13 @@ function hasNegativeCompetitionOutcome(competitions: any[]): boolean {
 export function computeCoachInsight(params: {
   athleteId: string;
   sessions: any[];
+  /** Proof-aware current-week count; falls back to `sessions.length` when omitted. */
+  sessionsThisWeek?: number;
   competitions: any[];
   weeklyFocus: any | null;
   outcome: string | null;
 }): CoachInsight {
-  const sessionsThisWeek = params.sessions.length;
+  const sessionsThisWeek = params.sessionsThisWeek ?? params.sessions.length;
   const clamp01 = (score: number) => Math.min(Math.max(score, 0), 1);
 
   const executionScore = clamp01(

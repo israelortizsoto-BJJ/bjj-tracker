@@ -1,5 +1,536 @@
 # BJJ Tracker - Dev Handoff Notes
 
+# MAY 19, 2026 — EOD DEV HANDOFF
+# BUILD 33 RECOVERY + BUILD 34 REGRESSION ANALYSIS
+
+==================================================
+DAY SUMMARY
+==================================================
+
+Today became one of the most important architecture and release-engineering days of the project.
+
+We:
+- attempted BUILD 34 feature expansion
+- introduced new distributed collaboration/media layers
+- cut internal RC builds
+- identified severe regressions
+- proved rollback discipline
+- isolated distributed state contamination
+- restored Build 33 operational stability
+- validated clean distributed multi-device sync again
+
+The most important outcome:
+the core architecture survived.
+
+The regressions were NOT permanent repo corruption.
+They were:
+- experimental layering issues
+- distributed state contamination
+- persistence mismatch
+- operational execution scope drift
+
+By end of day:
+BUILD 33 operational baseline was successfully restored and validated.
+
+==================================================
+MOST IMPORTANT LESSON OF THE DAY
+==================================================
+
+We are now operating a true distributed system.
+
+This means:
+- repo rollback alone is NOT enough
+- local storage persists
+- worker payloads persist
+- invite lineage persists
+- authority snapshots persist
+
+A clean operational rollback now requires:
+1. repo rollback
+2. local storage cleanup
+3. app container cleanup
+4. fresh distributed graph validation
+
+This was successfully proven today.
+
+==================================================
+BUILD 34 — WHAT WE ATTEMPTED
+==================================================
+
+Primary Build 34 goals:
+
+1. Coach hydration refresh stabilization
+2. Competition media mirror lane
+3. Coach-local tactical media workflow
+4. Weekly acknowledgment visibility
+5. Compete tab lifecycle stabilization
+6. Refresh UX refinement
+7. Operational collaboration expansion
+
+==================================================
+BUILD 34 — MAJOR IMPLEMENTATIONS
+==================================================
+
+==================================================
+1. COACH HYDRATION INVALIDATION SYSTEM
+==================================================
+
+Added:
+- coachSyncHydrationStore
+- hydration version bump orchestration
+- useSignals invalidation reload
+- useAthleteData invalidation reload
+- refresh-driven recompute
+
+Goal:
+remove need for navigation-away to refresh coach overlays.
+
+Status:
+partially successful but introduced broader protected-system instability during later layering.
+
+==================================================
+2. WEEKLY SUMMARY SEMANTIC ALIGNMENT
+==================================================
+
+Major semantic correction:
+
+Previous bug:
+weekly surfaces incorrectly used:
+sessions.length (full lineage)
+
+Corrected to:
+calendar-week scoped sessions only.
+
+Affected:
+- Summary
+- Consistency
+- Patterns
+- Hero metrics
+- Weekly session counts
+
+This was GOOD architecture work and remained stable through rollback.
+
+==================================================
+3. PULL-TO-REFRESH SYSTEM
+==================================================
+
+Implemented:
+- Summary refresh control
+- soft refresh authority reload
+- parent weekly refresh path
+- coach authority refresh path
+
+Goal:
+manual operational refresh without navigation remount dependency.
+
+Architecture:
+correctly reused existing authority orchestration.
+
+==================================================
+4. WEEKLY ACKNOWLEDGMENT VISIBILITY
+==================================================
+
+Implemented:
+- coach roster acknowledgment visibility
+- parent-owned acknowledgment signal
+- coach read-only visibility
+- resolveWeeklyDoc support
+- writer-session acknowledgment hydration
+
+This aligned strongly with:
+“coach-family alignment operating system” philosophy.
+
+==================================================
+5. COMPETITION MEDIA MIRROR (BUILD 34 EXPERIMENT)
+==================================================
+
+Attempted:
+- parent canonical image mirror
+- media manifest lane
+- worker blob routes
+- coach read-only media hydrate
+- coach-local tactical video isolation
+
+IMPORTANT:
+coach-local review videos intentionally remained local-only.
+
+This was architecturally correct in principle.
+
+HOWEVER:
+the implementation layering introduced regressions into protected systems.
+
+==================================================
+6. COMPETE TAB LIFECYCLE STABILIZATION
+==================================================
+
+Discovered:
+coach competition edit path incorrectly opened parent editor lane.
+
+Attempted fixes:
+- coach-aware routing
+- lifecycle guards
+- save sequencing fixes
+- modal lifecycle stabilization
+- compete trace instrumentation
+
+This area still remains partially unstable and is now isolated as:
+LOCAL NAVIGATION / MODAL LIFECYCLE ISSUE
+
+NOT:
+authority corruption.
+
+==================================================
+CRITICAL FAILURE EVENT — BUILD 34
+==================================================
+
+Build 34 introduced regressions into protected operational systems:
+
+Observed failures:
+- coach weekly no longer appeared correctly in This Week
+- coach athlete hydration disappeared
+- Summary visibility failed
+- Competition visibility failed
+- stale athlete graphs emerged
+- ghost athletes persisted
+- lineage mismatches appeared
+
+Important realization:
+repo rollback alone did NOT restore stability.
+
+Root issue:
+distributed persistence contamination.
+
+==================================================
+ROOT CAUSE ANALYSIS
+==================================================
+
+Build 34 itself did NOT permanently corrupt Build 33 code.
+
+The actual issue was:
+
+1. Local persistent storage survived installs
+2. macOS app containers survived uninstall
+3. Worker payload shapes changed
+4. Invite graphs changed
+5. Old athlete lineage persisted
+6. AsyncStorage survived reinstall
+
+Result:
+Build 33 app
++
+Build 34 state
++
+stale distributed persistence
+=
+operational corruption symptoms
+
+==================================================
+RECOVERY PROCESS
+==================================================
+
+Successful recovery steps:
+
+1. Roll repo back to:
+a065578
+“Stabilize coach hydration refresh and align weekly summary semantics”
+
+2. Preserve experimental branch:
+build-34-experimental-media-lane
+
+3. Remove orphaned experimental files
+4. Delete app containers manually
+5. Fresh Build 33 reinstall
+6. Rebuild distributed graph from scratch
+
+MOST IMPORTANT:
+Deleting:
+~/Library/Containers/MatMind*
+
+was the critical recovery step.
+
+==================================================
+CLEAN GRAPH VALIDATION
+==================================================
+
+Fresh QA graph created:
+
+Parent:
+- Israel
+- Luca O
+
+Coach:
+- clean invite link
+- fresh linkage
+
+Validation successful:
+
+PASS:
+- coach publish
+- parent refresh
+- This Week hydration
+- Summary hydration
+- training proof
+- competition aggregate
+- athlete switching
+- cold reopen
+- clean linkage
+- no ghost athletes
+- no stale lineage
+- no cross-athlete bleed
+
+The architecture recovered fully.
+
+==================================================
+CURRENT STABLE STATE
+==================================================
+
+BUILD 33 is now considered:
+CURRENT OPERATIONAL BASELINE
+
+Validated:
+- distributed sync
+- authority orchestration
+- proof hydration
+- bounded competition aggregates
+- weekly routing
+- clean reinstall recovery
+- multi-athlete switching
+- coach-parent alignment
+
+==================================================
+KNOWN OPEN ISSUES
+==================================================
+
+==================================================
+1. COACH COMPETITION EDIT LIFECYCLE
+==================================================
+
+Still reproducible:
+
+Coach:
+Competition → Edit → Save/Close
+
+can destabilize Compete tab until hard-close.
+
+Current belief:
+LOCAL NAVIGATION / MODAL STATE ISSUE
+
+NOT:
+distributed corruption.
+
+==================================================
+2. ACKNOWLEDGMENT SYSTEM
+==================================================
+
+“Got it” acknowledgment currently incomplete.
+
+Desired future behavior:
+- parent acknowledgment
+- coach visibility
+- roster awareness
+- operational alignment signal
+
+Architecture direction:
+correct and low-risk.
+
+==================================================
+3. PROFILE EDIT PARITY
+==================================================
+
+Recognized skills editable during onboarding
+BUT not exposed during profile edit flow.
+
+Likely:
+UI/schema parity gap
+NOT data corruption.
+
+==================================================
+4. SEMANTIC DRIFT
+==================================================
+
+Minor differences observed between:
+- recognized skills
+- weekly focus
+- coach summary semantics
+- parent summary semantics
+
+Needs future semantic alignment pass.
+
+==================================================
+NEW DEVELOPMENT PROCESS RULES
+==================================================
+
+TODAY’S BIGGEST PROCESS IMPROVEMENT:
+
+We officially introduced:
+AGENT EXECUTION MODES
+
+==================================================
+MODE 1 — ANALYZE ONLY
+==================================================
+
+Allowed:
+- read
+- grep
+- inspect
+- analyze
+- propose
+
+Forbidden:
+- implementation
+- commits
+- deploys
+- builds
+
+Must explicitly state:
+- DO NOT IMPLEMENT
+- DO NOT MODIFY FILES
+- DO NOT DEPLOY
+- DO NOT BUILD
+
+==================================================
+MODE 2 — IMPLEMENT ONLY
+==================================================
+
+Allowed:
+- isolated repo surgery
+- constrained implementation
+
+Forbidden:
+- deploys
+- builds
+- pushes
+- releases
+
+Must explicitly state:
+- DO NOT DEPLOY
+- DO NOT CUT BUILDS
+- DO NOT PUSH
+- DO NOT RELEASE
+
+==================================================
+MODE 3 — EXECUTION MODE
+==================================================
+
+Allowed:
+- deploy workers
+- cut builds
+- release QA
+- operational rollout
+
+Requires:
+- explicit founder approval
+- rollout scope
+- rollback plan
+- validation plan
+
+IMPORTANT:
+Today proved why these modes are necessary.
+
+Cursor interpreted operational wording correctly and autonomously executed:
+- worker deploy
+- EAS build
+- App Store submission
+
+The issue was NOT malicious execution.
+The issue was:
+experimental blast radius exceeded protected-system safety.
+
+==================================================
+IMPORTANT STRATEGIC INSIGHT
+==================================================
+
+The architecture itself is now proving resilient.
+
+Today validated:
+
+- rollback recovery
+- clean reinstall recovery
+- distributed state recovery
+- bounded ownership
+- multi-device orchestration
+- authority durability
+
+The project is now evolving from:
+“can sync survive?”
+to:
+“how do we safely layer collaboration?”
+
+That is a major platform milestone.
+
+==================================================
+TOMORROW — HIGHEST ROI PRIORITIES
+==================================================
+
+1. Preserve Build 33 operational stability
+2. Investigate compete edit lifecycle locally
+3. Wire acknowledgment visibility cleanly
+4. Improve semantic alignment
+5. Reintroduce media mirror ONLY on isolated experimental branch
+6. Maintain strict execution modes with Cursor
+7. Protect operational branch integrity
+
+==================================================
+BRANCH STRUCTURE
+==================================================
+
+summary-rebuild-v2
+=
+stable operational branch
+
+build-34-experimental-media-lane
+=
+future experimental collaboration/media work
+
+DO NOT merge experimental collaboration work directly into stable operational branch again.
+
+==================================================
+END STATE
+==================================================
+
+
+==================================================
+FINAL REPO STATUS
+==================================================
+
+Repository ended the day CLEAN.
+
+Command run:
+
+```bash
+git status -sb
+git log --oneline -8
+git branch --show-current
+npx tsc --noEmit
+By EOD:
+- Build 33 recovered successfully
+- distributed sync validated
+- clean graph validated
+- rollback discipline proven
+- architecture confidence restored
+- operational branch stabilized
+
+This was one of the most important engineering maturity days in the project so far.
+===== CURRENT STATUS =====
+## build-34-experimental-media-lane
+
+===== RECENT COMMITS =====
+a065578 (HEAD -> build-34-experimental-media-lane, origin/summary-rebuild-v2, summary-rebuild-v2) Stabilize coach hydration refresh and align weekly summary semantics
+278b4a0 RC stabilization checkpoint after distributed sync QA
+288e105 Mirror parent competition and training proof into coach summary
+293c749 Sync bounded competition aggregates to coach summary
+949cca3 Restore runtime-safe telemetry recovery stubs after cleanup
+97911bb (backup-chaos-state-20260518) Stabilize athlete identity lineage and prevent duplicate shared athlete creation
+19bf1de Stabilize athlete authority and coach bootstrap flows
+ac41612 Unify competition operations under CompetitionSync
+
+===== CURRENT BRANCH =====
+build-34-experimental-media-lane
+
+===== TYPESCRIPT CHECK =====
+(no output / passed clean)
+
+
 
 ## 2026-05-17 → 2026-05-18-- DEV HANDOFF
 ## RC Stabilization + Distributed Sync Recovery Phase

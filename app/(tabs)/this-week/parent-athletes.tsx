@@ -1,4 +1,3 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -15,18 +14,20 @@ import {
   inviteLinkTokenTail,
   normalizeInviteLinkToken,
 } from "../../../src/coachShare/inviteLinkToken";
+import { logIdentityMintTrace } from "../../../src/identity/identityMintTrace";
 import { isCoachSyncConfigured } from "../../../src/config/coachSync";
 import { resolveLinkedTargetForParentWriter } from "../../../src/family/parentKidCompetitionDelete";
+import { IdentityDuplicateRiskBlockedError } from "../../../src/identity/canonicalBindResolution";
 import {
   CoachWeeklySyncApiError,
-  coachSyncCreateSessionAthlete,
+  coachSyncBindOrCreateSessionAthlete,
   coachSyncFetchSession,
   coachSyncRedeemParentWriter,
 } from "../../../src/services/coachWeeklySyncApi";
 import {
-  getActiveAthleteId,
   getAthletes,
-  setActiveAthleteId,
+  projectParentCanonicalAthleteForLinkedKid,
+  rewriteParentAthleteIdToSharedAthleteId,
   type ParentAthlete,
 } from "../../../src/storage/athleteStore";
 import { getCoachLinks, setCoachLinks } from "../../../src/storage/coachShareStore";
@@ -39,7 +40,6 @@ import {
   unlinkParentAthleteFromCoachSession,
 } from "../../../src/storage/coachKidStore";
 import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
-import { StorageKeys } from "../../../src/storage/storageKeys";
 import type { CoachLink } from "../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
@@ -67,39 +67,6 @@ function patchLinkParentSecret(links: CoachLink[], linkId: string, secret: strin
         }
       : l,
   );
-}
-
-/**
- * Identity-merge bind: rewrite a `ParentAthlete` row's id (parent-side truth) to the server-issued
- * `sharedAthleteId` so `linkedKidIdForParentAthlete(kidsById, activeAthleteId)` resolves the projected
- * `Kid` for downstream This Week / activeKidId hydration. ParentAthlete remains parent-side truth (we
- * preserve name/household/etc.); only the id is reissued to align with the coach/share projection layer.
- * If the active athlete pointed at the old id, it is moved to the new id.
- */
-async function rewriteParentAthleteIdToSharedAthleteId(
-  parentAthleteOldId: string,
-  newSharedAthleteId: string,
-): Promise<{ rewrote: boolean; wasActive: boolean }> {
-  const oldId = parentAthleteOldId.trim();
-  const newId = newSharedAthleteId.trim();
-  if (!oldId || !newId || oldId === newId) {
-    return { rewrote: false, wasActive: false };
-  }
-  const all = await getAthletes();
-  const target = all.find((a) => a.id === oldId);
-  if (!target) {
-    return { rewrote: false, wasActive: false };
-  }
-  const next = all
-    .filter((a) => a.id !== oldId && a.id !== newId)
-    .concat({ ...target, id: newId });
-  await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
-  const active = await getActiveAthleteId();
-  const wasActive = (active ?? "").trim() === oldId;
-  if (wasActive) {
-    await setActiveAthleteId(newId);
-  }
-  return { rewrote: true, wasActive };
 }
 
 /** After POST /athletes: GET session, confirm roster includes the new id, persist verified snapshot to cache. */
@@ -404,13 +371,21 @@ export default function ParentLinkedAthletesScreen() {
       }
       setLinkingKidId(kid.id);
       setError(null);
+      const previousSharedAthleteId = (kid.sharedAthleteId ?? "").trim() || null;
       try {
-        const { athlete } = await coachSyncCreateSessionAthlete(
-          link.weeklySync.linkToken,
-          link.weeklySync.parentWriterSecret,
-          { name },
-          link.weeklySync.apiBaseUrl,
-        );
+        const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
+        const { athlete, bindDecision } = await coachSyncBindOrCreateSessionAthlete({
+          linkToken: link.weeklySync.linkToken,
+          parentWriterSecret: link.weeklySync.parentWriterSecret,
+          athleteName: name,
+          apiBaseUrlOverride: link.weeklySync.apiBaseUrl,
+          sessionAthletes,
+          parentAthletes,
+          kidsById,
+          inviteTokenNorm: tokenNorm,
+          flowSource: "parent_relink_kid",
+          linkedKidId: kid.id,
+        });
 
         const verifiedAthletes = await verifyRemoteRosterAfterAthletePost(
           link.weeklySync.linkToken,
@@ -418,8 +393,20 @@ export default function ParentLinkedAthletesScreen() {
           athlete.id,
         );
 
+        logIdentityMintTrace("relink", {
+          sourceFlow: "parent_relink_existing_kid_ui",
+          callerFunction: "ParentLinkedAthletesScreen.onRelinkExistingKid",
+          athleteName: name,
+          existingSharedId: kid.sharedAthleteId ?? null,
+          newlyMintedSharedId:
+            kid.sharedAthleteId?.trim() === athlete.id.trim() ? null : athlete.id,
+          inviteToken: tokenNorm,
+          linkedKidId: kid.id,
+          idKind: "shared_ath",
+          extra: { bindDecision },
+        });
+
         if (__DEV__) {
-          const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
           console.log("[bjj-sync-debug] parent-athletes relink existing kid", {
             kidLocalId: kid.id,
             kidName: name,
@@ -441,21 +428,44 @@ export default function ParentLinkedAthletesScreen() {
           return;
         }
 
+        await projectParentCanonicalAthleteForLinkedKid({
+          updatedKid: updated,
+          previousSharedAthleteId,
+          flowSource: "parent_relink_existing_kid_ui",
+          relinkSource: "ParentLinkedAthletesScreen.onRelinkExistingKid",
+          projectionReason: "parent_relink_existing_kid_canonical_bind",
+        });
+
+        const refreshedParentAthletes = await getAthletes();
+
+        if (__DEV__) {
+          console.log("[mm:identity-merge] parent_relink_canonical_projection_complete", {
+            kidLocalId: kid.id,
+            kidName: name,
+            previousSharedAthleteId,
+            linkedAthleteId: athlete.id,
+            tokenTail: inviteLinkTokenTail(tokenNorm),
+          });
+        }
+
         setKidsByIdState((prev) => ({ ...prev, [kid.id]: updated }));
+        setParentAthletes(refreshedParentAthletes);
         setSessionAthletes(verifiedAthletes);
       } catch (e) {
         const msg =
-          e instanceof CoachWeeklySyncApiError
+          e instanceof IdentityDuplicateRiskBlockedError
             ? e.message
-            : e instanceof Error
+            : e instanceof CoachWeeklySyncApiError
               ? e.message
-              : "Could not link athlete.";
+              : e instanceof Error
+                ? e.message
+                : "Could not link athlete.";
         setError(msg);
       } finally {
         setLinkingKidId(null);
       }
     },
-    [link],
+    [kidsById, link, parentAthletes, sessionAthletes],
   );
 
   /**
@@ -476,12 +486,19 @@ export default function ParentLinkedAthletesScreen() {
       setLinkingParentAthleteId(pa.id);
       setError(null);
       try {
-        const { athlete } = await coachSyncCreateSessionAthlete(
-          link.weeklySync.linkToken,
-          link.weeklySync.parentWriterSecret,
-          { name },
-          link.weeklySync.apiBaseUrl,
-        );
+        const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
+        const { athlete, bindDecision } = await coachSyncBindOrCreateSessionAthlete({
+          linkToken: link.weeklySync.linkToken,
+          parentWriterSecret: link.weeklySync.parentWriterSecret,
+          athleteName: name,
+          apiBaseUrlOverride: link.weeklySync.apiBaseUrl,
+          sessionAthletes,
+          parentAthletes,
+          kidsById,
+          inviteTokenNorm: tokenNorm,
+          flowSource: "parent_bind_parent_athlete",
+          parentAthleteId: pa.id,
+        });
 
         const verifiedAthletes = await verifyRemoteRosterAfterAthletePost(
           link.weeklySync.linkToken,
@@ -489,9 +506,24 @@ export default function ParentLinkedAthletesScreen() {
           athlete.id,
         );
 
+        logIdentityMintTrace(
+          bindDecision === "mint_new" && pa.id.trim() !== athlete.id.trim() ? "mint" : "bind_existing",
+          {
+            sourceFlow: "parent_link_existing_parent_athlete",
+            callerFunction: "ParentLinkedAthletesScreen.onLinkExistingParentAthlete",
+            athleteName: name,
+            existingSharedId: pa.id,
+            newlyMintedSharedId:
+              bindDecision === "mint_new" ? athlete.id : null,
+            inviteToken: tokenNorm,
+            localAthleteId: pa.id,
+            idKind: "shared_ath",
+            extra: { bindDecision },
+          },
+        );
+
         const nowIso = new Date().toISOString();
         const localKidId = `kid_${Date.now()}`;
-        const tokenNorm = normalizeInviteLinkToken(link.weeklySync.linkToken);
         const existing = await getKidsById();
         const createdKid: Kid = {
           id: localKidId,
@@ -505,7 +537,12 @@ export default function ParentLinkedAthletesScreen() {
         const nextKids: KidsById = { ...existing, [localKidId]: createdKid };
         await setKidsById(nextKids);
 
-        const bind = await rewriteParentAthleteIdToSharedAthleteId(pa.id, athlete.id);
+        const bind = await rewriteParentAthleteIdToSharedAthleteId(pa.id, athlete.id, {
+          flowSource: "parent_link_existing_parent_athlete",
+          relinkSource: "ParentLinkedAthletesScreen.onLinkExistingParentAthlete",
+          projectionReason: "parent_bind_parent_athlete_canonical_projection",
+          linkedKidId: localKidId,
+        });
 
         const refreshedParentAthletes = await getAthletes();
 
@@ -528,17 +565,19 @@ export default function ParentLinkedAthletesScreen() {
         setSessionAthletes(verifiedAthletes);
       } catch (e) {
         const msg =
-          e instanceof CoachWeeklySyncApiError
+          e instanceof IdentityDuplicateRiskBlockedError
             ? e.message
-            : e instanceof Error
+            : e instanceof CoachWeeklySyncApiError
               ? e.message
-              : "Could not link athlete.";
+              : e instanceof Error
+                ? e.message
+                : "Could not link athlete.";
         setError(msg);
       } finally {
         setLinkingParentAthleteId(null);
       }
     },
-    [link],
+    [kidsById, link, parentAthletes, sessionAthletes],
   );
 
   const requestRemoveAthleteFromCoach = useCallback(
@@ -853,7 +892,12 @@ export default function ParentLinkedAthletesScreen() {
               </Text>
               <Pressable
                 disabled={linkingKidId !== null || linkingParentAthleteId !== null || unlinkingKidId !== null}
-                onPress={() => router.push("/summary/add-athlete")}
+                onPress={() =>
+                  router.push({
+                    pathname: "/summary/add-athlete",
+                    params: link?.id ? { coachLinkId: link.id } : undefined,
+                  })
+                }
                 style={({ pressed }) => ({
                   paddingVertical: 14,
                   borderRadius: CARD_RADIUS,

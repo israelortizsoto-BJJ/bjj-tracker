@@ -7,6 +7,7 @@ import {
   logAthleteLineageTrace,
   logAthleteLineageTraceFromKidsById,
 } from "../identity/athleteLineageTrace";
+import { logIdentityMintTrace } from "../identity/identityMintTrace";
 import { buildCanonicalSharedAthletePrimaryRowMap } from "../identity/canonicalSharedAthleteOwner";
 import {
   athleteIdSetFromSynced,
@@ -252,6 +253,21 @@ export async function attachSharedAthleteToKid(
     ...(existing.isParentManagedChildProfile ? { isParentManagedChildProfile: true } : {}),
     ...(tokenNorm ? { sharedFromInviteTokenNorm: tokenNorm } : {}),
   };
+  logIdentityMintTrace(
+    existing.sharedAthleteId?.trim() && existing.sharedAthleteId.trim() !== sharedAthleteId
+      ? "relink"
+      : "bind_existing",
+    {
+      sourceFlow: "parent_relink_existing_kid",
+      callerFunction: "coachKidStore.attachSharedAthleteToKid",
+      athleteName: athlete.name,
+      existingSharedId: existing.sharedAthleteId ?? null,
+      newlyMintedSharedId: sharedAthleteId,
+      inviteToken: tokenNorm || null,
+      linkedKidId: kidId,
+      idKind: "shared_ath",
+    },
+  );
   logAthleteLineageTrace({
     operation: "attach",
     source: "parent_attach_flow",
@@ -289,6 +305,18 @@ export async function createParentManagedKidWithSharedAthlete(input: {
     createdAt: nowIso,
     updatedAt: nowIso,
   };
+  logIdentityMintTrace("bind_existing", {
+    sourceFlow: "parent_bind_new_kid_projection",
+    callerFunction: "coachKidStore.createParentManagedKidWithSharedAthlete",
+    athleteName: input.athlete.name,
+    existingSharedId: null,
+    newlyMintedSharedId: sharedAthleteId,
+    inviteToken: tokenNorm || null,
+    linkedKidId: input.localKidId,
+    localAthleteId: input.localKidId,
+    idKind: "shared_ath",
+    extra: { kidRowMinted: input.localKidId },
+  });
   logAthleteLineageTrace({
     operation: "create",
     source: "parent_attach_flow",
@@ -669,6 +697,17 @@ export function mergeWriterSessionRosterIntoKidsDraft(
         createdAt: a.createdAt,
         updatedAt: nowIso,
       };
+      logIdentityMintTrace("fallback_create", {
+        sourceFlow: "coach_writer_session_reconcile",
+        callerFunction: "coachKidStore.mergeWriterSessionRosterIntoKidsDraft",
+        athleteName: a.name,
+        existingSharedId: null,
+        newlyMintedSharedId: id,
+        inviteToken: token,
+        linkedKidId: localId,
+        idKind: "shared_ath",
+        extra: { kidRowId: localId, remoteCreatedAt: a.createdAt },
+      });
       logAthleteLineageTrace({
         operation: "reconcile_candidate",
         source: "coach_roster_reconcile",
@@ -1196,6 +1235,16 @@ export async function mergeRemoteSharedAthletesIntoKids(
       createdAt: a.createdAt,
       updatedAt: nowIso,
     };
+    logIdentityMintTrace("fallback_create", {
+      sourceFlow: "coach_merge_remote_roster",
+      callerFunction: "coachKidStore.mergeRemoteSharedAthletesIntoKids",
+      athleteName: a.name,
+      newlyMintedSharedId: a.id,
+      linkedKidId: localId,
+      inviteToken: null,
+      idKind: "shared_ath",
+      extra: { remoteCreatedAt: a.createdAt },
+    });
     logAthleteLineageTrace({
       operation: "create",
       source: "coach_roster_reconcile",

@@ -106,7 +106,10 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../storage/coachKidStore";
-import { duplicateSharedIdsByAthleteName } from "../../identity/athleteLineageTrace";
+import { duplicateSharedIdsByAthleteName, setLineageIntegrityTraceContext } from "../../identity/athleteLineageTrace";
+import { LineageIntegrityDevHint } from "../../identity/LineageIntegrityDevHint";
+import { runLineageIntegrityScan } from "../../identity/lineageIntegrityDetection";
+import { logCoachHydrationResolveTrace } from "../../identity/coachHydrationResolveTrace";
 import {
   athleteIdSetFromParent,
   athleteIdSetFromSynced,
@@ -361,6 +364,44 @@ export default function SummaryScreen() {
     hydrationReady,
     kidsById,
     summarySwitcherAthletes,
+  ]);
+
+  useEffect(() => {
+    if (!__DEV__ || !hydrationReady) return;
+    const weeklyAthletes = weeklySessionSnapshot?.athletes;
+    const writerSessions =
+      weeklyAthletes && weeklyAthletes.length > 0
+        ? [
+            {
+              linkTokenNorm: "summary_weekly_snapshot",
+              athletes: weeklyAthletes,
+            },
+          ]
+        : undefined;
+    setLineageIntegrityTraceContext({
+      role: deviceRole,
+      activeOperatingAthleteId: activeAthleteId.trim() || null,
+      parentAthletes: operatingAthleteRoster,
+      operatingAthleteRoster,
+      kidsById,
+      writerSessions,
+    });
+    runLineageIntegrityScan({
+      route: "SummaryScreen",
+      role: deviceRole,
+      activeOperatingAthleteId: activeAthleteId.trim() || null,
+      parentAthletes: operatingAthleteRoster,
+      operatingAthleteRoster,
+      kidsById,
+      writerSessions,
+    });
+  }, [
+    activeAthleteId,
+    deviceRole,
+    hydrationReady,
+    kidsById,
+    operatingAthleteRoster,
+    weeklySessionSnapshot?.athletes,
   ]);
 
   const refreshParentWeeklySessionSnapshot = useCallback(
@@ -1595,6 +1636,25 @@ export default function SummaryScreen() {
     );
   }
 
+  if (__DEV__ && deviceRole === "coach") {
+    const kid = summaryLinkedKidId ? kidsById[summaryLinkedKidId] : undefined;
+    logCoachHydrationResolveTrace("summary_hydration", {
+      sharedAthleteId: activeAthleteId.trim() || null,
+      resolvedAthleteId: activeAthleteId.trim() || null,
+      authorityBootstrapState: authorityBootstrapState ?? null,
+      linkedKidId: summaryLinkedKidId,
+      inviteId: kid?.sharedFromInviteTokenNorm?.trim() || null,
+      projectionExists: operatingAthleteRoster.some((a) => a.id.trim() === activeAthleteId.trim()),
+      coachProjectionExists: operatingAthleteRoster.length > 0,
+      nullReturnReason: !activeAthleteId.trim()
+        ? authorityBootstrapState === "ready"
+          ? "ready_bootstrap_but_empty_oai"
+          : `bootstrap_${authorityBootstrapState ?? "unknown"}`
+        : null,
+      extra: { rosterLen: operatingAthleteRoster.length },
+    });
+  }
+
   if (
     deviceRole === "coach" &&
     (authorityBootstrapState === "coach_unresolved" ||
@@ -1798,6 +1858,8 @@ export default function SummaryScreen() {
           },
         ]}
       />
+
+      <LineageIntegrityDevHint />
 
       <View style={styles.identityScoreRow}>
         <Text style={styles.identityScoreText}>

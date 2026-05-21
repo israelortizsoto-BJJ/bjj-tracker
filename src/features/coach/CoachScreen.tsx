@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import CoachHeader from "../../components/coach/CoachHeader";
+import { LineageIntegrityDevHint } from "../../identity/LineageIntegrityDevHint";
 import CoachRoster from "./CoachRoster";
 
 export default function CoachScreen() {
@@ -14,6 +15,8 @@ export default function CoachScreen() {
         showsVerticalScrollIndicator={false}
       >
         <CoachHeader />
+
+        <LineageIntegrityDevHint />
 
         <Pressable
           onPress={() => router.push("/coach/kids")}

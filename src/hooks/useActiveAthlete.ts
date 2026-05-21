@@ -8,6 +8,9 @@ import {
   traceAthleteAuthoritySnapshotDev,
 } from "../identity/buildAthleteAuthoritySnapshot";
 import { logAuthorityTelemetryDev, takeDevAuthorityRepoFetchOrdinal } from "../identity/authorityTelemetry";
+import { setLineageIntegrityTraceContext } from "../identity/athleteLineageTrace";
+import { runLineageIntegrityScan } from "../identity/lineageIntegrityDetection";
+import { logCoachHydrationResolveTrace } from "../identity/coachHydrationResolveTrace";
 import { logHydrationPipelineWatchAthletes, namesByIdFromParentAthletes } from "../identity/hydrationPipelineTrace";
 import type {
   AthleteAuthorityBootstrapState,
@@ -106,15 +109,28 @@ export function useActiveAthlete(): UseActiveAthleteResult {
       fetchCtx: { fetchParallelDepth: number; repoFetchOrdinal: number },
     ) => {
       let idToApply = typeof snap.resolvedId === "string" ? snap.resolvedId.trim() : "";
-      if (
-        idToApply &&
-        !snap.operatingAthleteRoster.some((a) => a.id.trim() === idToApply)
-      ) {
+      const rosterRejectsResolved =
+        Boolean(idToApply) &&
+        !snap.operatingAthleteRoster.some((a) => a.id.trim() === idToApply);
+      if (rosterRejectsResolved) {
         if (__DEV__) {
           console.warn(
             "[authority] snapshot resolvedId absent from operatingAthleteRoster — rejecting OAI",
             { idToApply, rosterIds: snap.operatingAthleteRoster.map((a) => a.id) },
           );
+          logCoachHydrationResolveTrace("active_athlete_apply", {
+            sharedAthleteId: idToApply,
+            resolvedAthleteId: snap.resolvedId.trim() || null,
+            authorityBootstrapState: snap.authorityBootstrapState,
+            authorityWinner: "rejected_by_operating_roster_guard",
+            projectionExists: snap.sorted.some((a) => a.id.trim() === idToApply),
+            coachProjectionExists: snap.operatingAthleteRoster.length > 0,
+            hydrateRejectionReason: "resolvedId_not_in_operatingAthleteRoster",
+            nullReturnReason: "cleared_active_operating_athlete_id",
+            athleteSourceMap: Object.fromEntries(
+              snap.operatingAthleteRoster.map((a) => [a.id.trim(), "operating_roster"]),
+            ),
+          });
         }
         idToApply = "";
       }
@@ -124,6 +140,34 @@ export function useActiveAthlete(): UseActiveAthleteResult {
       const staleGenerationApply =
         __DEV__ && incomingGen > 0 && prevApplied > 0 && incomingGen < prevApplied;
       const linkedAfterApply = linkedKidIdForParentAthlete(snap.loadedKids, idToApply);
+      if (__DEV__ && parentRole === "coach") {
+        const kid =
+          idToApply != null && idToApply !== ""
+            ? Object.values(snap.loadedKids).find(
+                (k) => (k?.sharedAthleteId ?? "").trim() === idToApply,
+              )
+            : undefined;
+        logCoachHydrationResolveTrace("coach_athlete_lookup", {
+          sharedAthleteId: idToApply || null,
+          resolvedAthleteId: snap.resolvedId.trim() || null,
+          storedActiveAthleteId: idToApply || null,
+          authorityBootstrapState: snap.authorityBootstrapState,
+          linkedKidId: linkedAfterApply,
+          inviteId: kid?.sharedFromInviteTokenNorm?.trim() || null,
+          projectionExists: Boolean(
+            idToApply && snap.sorted.some((a) => a.id.trim() === idToApply),
+          ),
+          coachProjectionExists: snap.operatingAthleteRoster.length > 0,
+          sessionAthleteId: idToApply || null,
+        });
+        logCoachHydrationResolveTrace("summary_resolve", {
+          sharedAthleteId: idToApply || null,
+          resolvedAthleteId: snap.resolvedId.trim() || null,
+          authorityBootstrapState: snap.authorityBootstrapState,
+          linkedKidId: linkedAfterApply,
+          nullReturnReason: idToApply ? null : "empty_operating_athlete_after_apply",
+        });
+      }
 
       const prevTraceId = storeTracePrevAthleteIdRef.current;
       const prevAthleteIdNorm =
@@ -202,6 +246,21 @@ export function useActiveAthlete(): UseActiveAthleteResult {
       }
 
       if (__DEV__) {
+        setLineageIntegrityTraceContext({
+          role: parentRole,
+          activeOperatingAthleteId: idToApply || null,
+          parentAthletes: snap.sorted,
+          operatingAthleteRoster: snap.operatingAthleteRoster,
+          kidsById: snap.loadedKids,
+        });
+        runLineageIntegrityScan({
+          route: "useActiveAthlete.applyStorageSnapshot",
+          role: parentRole,
+          activeOperatingAthleteId: idToApply || null,
+          parentAthletes: snap.sorted,
+          operatingAthleteRoster: snap.operatingAthleteRoster,
+          kidsById: snap.loadedKids,
+        });
         logHydrationPipelineWatchAthletes({
           stage: "9_active_athlete_resolution",
           sourceSubsystem: "useActiveAthlete.applyStorageSnapshot",

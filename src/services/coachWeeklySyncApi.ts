@@ -1,5 +1,14 @@
 import { getCoachSyncApiBaseUrl } from "../config/coachSync";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
+import {
+  IdentityDuplicateRiskBlockedError,
+  resolveCanonicalBindBeforeSessionAthletePost,
+  type CanonicalBindDecision,
+  type CanonicalBindFlowSource,
+} from "../identity/canonicalBindResolution";
+import { logIdentityMintTrace } from "../identity/identityMintTrace";
+import type { ParentAthlete } from "../storage/athleteStore";
+import type { KidsById } from "../types/coachKid";
 import { isPublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import {
   athleteIdSetFromSynced,
@@ -518,6 +527,202 @@ export async function coachSyncRedeemParentWriter(
   return payload as CoachWeeklySyncRedeemParentWriterResponse;
 }
 
+export type CoachSyncBindOrCreateSessionAthleteInput = {
+  linkToken: string;
+  parentWriterSecret: string;
+  athleteName: string;
+  apiBaseUrlOverride?: string | null;
+  sessionAthletes: readonly SyncedSharedAthlete[];
+  parentAthletes: readonly ParentAthlete[];
+  kidsById: KidsById;
+  inviteTokenNorm: string;
+  flowSource: CanonicalBindFlowSource;
+  linkedKidId?: string | null;
+  parentAthleteId?: string | null;
+};
+
+export type CoachSyncBindOrCreateSessionAthleteResult = CoachWeeklySyncCreateAthleteResponse & {
+  bindDecision: CanonicalBindDecision;
+};
+
+/**
+ * Bind-first session athlete attach (Build 33.3). Resolves local canonical lineage before POST;
+ * passes `bindSharedAthleteId` when re-attaching an existing `shared_ath_*` to the invite roster.
+ */
+export async function coachSyncBindOrCreateSessionAthlete(
+  input: CoachSyncBindOrCreateSessionAthleteInput,
+): Promise<CoachSyncBindOrCreateSessionAthleteResult> {
+  const athleteName = input.athleteName.trim();
+  const inviteToken = input.inviteTokenNorm.trim() || input.linkToken.trim().toLowerCase();
+  const resolution = resolveCanonicalBindBeforeSessionAthletePost({
+    athleteName,
+    inviteTokenNorm: inviteToken,
+    sessionAthletes: input.sessionAthletes,
+    parentAthletes: input.parentAthletes,
+    kidsById: input.kidsById,
+    flowSource: input.flowSource,
+    linkedKidId: input.linkedKidId,
+    parentAthleteId: input.parentAthleteId,
+  });
+
+  if (__DEV__ && resolution.softNameDuplicateSharedIds.length > 0) {
+    logIdentityMintTrace("duplicate_risk", {
+      sourceFlow: input.flowSource,
+      callerFunction: "coachSyncBindOrCreateSessionAthlete",
+      athleteName,
+      existingSharedId: resolution.softNameDuplicateSharedIds.join(","),
+      newlyMintedSharedId: resolution.canonicalSharedAthleteId,
+      inviteToken,
+      extra: {
+        reason: "soft_name_duplicate_warning",
+        bindSource: resolution.bindSource,
+        decision: resolution.decision,
+        nameOnly: !resolution.canonicalSharedAthleteId,
+      },
+    });
+  }
+
+  if (resolution.decision === "bind_existing_session" && resolution.sessionAthlete) {
+    const athlete = resolution.sessionAthlete;
+    logIdentityMintTrace("bind_existing", {
+      sourceFlow: input.flowSource,
+      callerFunction: "coachSyncBindOrCreateSessionAthlete",
+      athleteName,
+      existingSharedId: athlete.id,
+      newlyMintedSharedId: null,
+      inviteToken,
+      linkedKidId: input.linkedKidId ?? null,
+      localAthleteId: input.parentAthleteId ?? null,
+      idKind: "shared_ath",
+      extra: {
+        bindSource: resolution.bindSource,
+        skippedPost: true,
+      },
+    });
+    logAthleteLineageTrace({
+      operation: "attach",
+      source: "weekly_sync",
+      athleteName: athlete.name,
+      sharedAthleteId: athlete.id,
+      token: inviteToken,
+      route: "coachSyncBindOrCreateSessionAthlete",
+      extra: { bindDecision: resolution.decision, bindSource: resolution.bindSource },
+    });
+    return { athlete, bindDecision: resolution.decision };
+  }
+
+  const postBody: CoachWeeklySyncCreateAthleteBody = { name: athleteName };
+  if (
+    resolution.decision === "bind_existing_canonical" &&
+    resolution.canonicalSharedAthleteId
+  ) {
+    postBody.bindSharedAthleteId = resolution.canonicalSharedAthleteId;
+  }
+
+  if (
+    __DEV__ &&
+    resolution.canonicalSharedAthleteId &&
+    !postBody.bindSharedAthleteId &&
+    resolution.decision !== "mint_new"
+  ) {
+    logIdentityMintTrace("duplicate_risk_blocked", {
+      sourceFlow: input.flowSource,
+      callerFunction: "coachSyncBindOrCreateSessionAthlete",
+      athleteName,
+      existingSharedId: resolution.canonicalSharedAthleteId,
+      newlyMintedSharedId: null,
+      inviteToken,
+      extra: { bindSource: resolution.bindSource, reason: "canonical_without_bind_post_body" },
+    });
+    throw new IdentityDuplicateRiskBlockedError(
+      "This athlete already has coach history on this phone. Linking was blocked to avoid creating a duplicate identity. (DEV)",
+      {
+        canonicalSharedAthleteId: resolution.canonicalSharedAthleteId,
+        flowSource: input.flowSource,
+      },
+    );
+  }
+
+  const priorSessionAthleteIds = input.sessionAthletes
+    .map((a) => (typeof a.id === "string" ? a.id.trim() : ""))
+    .filter(Boolean);
+
+  const created = await coachSyncCreateSessionAthlete(
+    input.linkToken,
+    input.parentWriterSecret,
+    postBody,
+    input.apiBaseUrlOverride,
+    priorSessionAthleteIds,
+    {
+      expectedCanonicalSharedAthleteId: resolution.canonicalSharedAthleteId,
+      bindSource: resolution.bindSource,
+      flowSource: input.flowSource,
+      bindDecision: resolution.decision,
+    },
+  );
+
+  const returnedId = created.athlete.id.trim();
+  if (
+    resolution.canonicalSharedAthleteId &&
+    returnedId !== resolution.canonicalSharedAthleteId
+  ) {
+    if (__DEV__) {
+      logIdentityMintTrace("duplicate_risk_blocked", {
+        sourceFlow: input.flowSource,
+        callerFunction: "coachSyncBindOrCreateSessionAthlete",
+        athleteName,
+        existingSharedId: resolution.canonicalSharedAthleteId,
+        newlyMintedSharedId: returnedId,
+        inviteToken,
+        extra: {
+          bindSource: resolution.bindSource,
+          reason: "server_returned_different_shared_ath",
+        },
+      });
+      throw new IdentityDuplicateRiskBlockedError(
+        "Coach session returned a new athlete id instead of reusing your existing lineage. (DEV)",
+        {
+          canonicalSharedAthleteId: resolution.canonicalSharedAthleteId,
+          flowSource: input.flowSource,
+        },
+      );
+    }
+    logIdentityMintTrace("duplicate_risk", {
+      sourceFlow: input.flowSource,
+      callerFunction: "coachSyncBindOrCreateSessionAthlete",
+      athleteName,
+      existingSharedId: resolution.canonicalSharedAthleteId,
+      newlyMintedSharedId: returnedId,
+      inviteToken,
+      extra: { bindSource: resolution.bindSource, reason: "server_returned_different_shared_ath" },
+    });
+  }
+
+  if (resolution.decision === "bind_existing_canonical" || returnedId === resolution.canonicalSharedAthleteId) {
+    logIdentityMintTrace("bind_existing", {
+      sourceFlow: input.flowSource,
+      callerFunction: "coachSyncBindOrCreateSessionAthlete",
+      athleteName,
+      existingSharedId: resolution.canonicalSharedAthleteId ?? returnedId,
+      newlyMintedSharedId: null,
+      inviteToken,
+      linkedKidId: input.linkedKidId ?? null,
+      localAthleteId: input.parentAthleteId ?? null,
+      idKind: "shared_ath",
+      extra: { bindSource: resolution.bindSource, bindSharedAthleteId: postBody.bindSharedAthleteId ?? null },
+    });
+  }
+
+  return { ...created, bindDecision: resolution.decision };
+}
+
+type CoachSyncCreateSessionAthleteTrace = {
+  expectedCanonicalSharedAthleteId?: string | null;
+  bindSource?: string | null;
+  flowSource?: CanonicalBindFlowSource;
+  bindDecision?: CanonicalBindDecision;
+};
+
 export async function coachSyncCreateSessionAthlete(
   linkToken: string,
   parentWriterSecret: string,
@@ -525,6 +730,7 @@ export async function coachSyncCreateSessionAthlete(
   apiBaseUrlOverride?: string | null,
   /** When set, client can prove POST /athletes reused an existing roster id (containment QA). */
   priorSessionAthleteIds?: readonly string[],
+  trace?: CoachSyncCreateSessionAthleteTrace,
 ): Promise<CoachWeeklySyncCreateAthleteResponse> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
@@ -557,22 +763,78 @@ export async function coachSyncCreateSessionAthlete(
   const created = payload as CoachWeeklySyncCreateAthleteResponse;
   const returnedId = created.athlete.id.trim();
   const priorIds = priorSessionAthleteIds?.map((id) => id.trim()).filter(Boolean);
+  const expectedCanonical = (trace?.expectedCanonicalSharedAthleteId ?? "").trim();
+  const boundCanonical =
+    Boolean(expectedCanonical) && returnedId === expectedCanonical;
   const reused =
-    priorIds != null && priorIds.length > 0 && priorIds.includes(returnedId);
+    boundCanonical ||
+    Boolean(body.bindSharedAthleteId?.trim() && returnedId === body.bindSharedAthleteId.trim()) ||
+    (priorIds != null && priorIds.length > 0 && priorIds.includes(returnedId));
   const normalizedName = created.athlete.name.trim().toLowerCase();
+  const mintedNew =
+    !reused && !body.bindSharedAthleteId?.trim() && trace?.bindDecision === "mint_new";
   if (__DEV__) {
     console.log("[ATHLETE DEDUPE]", {
       operation: "post_athletes_client",
       athleteName: created.athlete.name,
       normalizedName,
       sharedAthleteId: returnedId,
-      existingSharedAthleteId: reused ? returnedId : null,
+      existingSharedAthleteId: reused ? returnedId : expectedCanonical || null,
       reused,
       preventedDuplicate: reused,
       newIdMinted: !reused,
       priorRosterKnown: priorIds != null,
+      bindSharedAthleteId: body.bindSharedAthleteId?.trim() || null,
+      bindSource: trace?.bindSource ?? null,
+      bindDecision: trace?.bindDecision ?? null,
       token: linkToken.trim().toLowerCase(),
     });
+    logIdentityMintTrace(reused ? "bind_existing" : "mint", {
+      sourceFlow: trace?.flowSource ?? "parent_post_session_athletes",
+      callerFunction: "coachSyncCreateSessionAthlete",
+      athleteName: created.athlete.name,
+      existingSharedId: reused
+        ? expectedCanonical || returnedId
+        : expectedCanonical || (priorIds?.[0] ?? null),
+      newlyMintedSharedId: reused ? null : returnedId,
+      inviteToken: linkToken.trim().toLowerCase(),
+      idKind: "shared_ath",
+      extra: {
+        reused,
+        priorRosterKnown: priorIds != null,
+        normalizedName,
+        bindSharedAthleteId: body.bindSharedAthleteId?.trim() || null,
+        bindSource: trace?.bindSource ?? null,
+        bindDecision: trace?.bindDecision ?? null,
+        mintedNew,
+      },
+    });
+    if (
+      expectedCanonical &&
+      returnedId !== expectedCanonical &&
+      body.bindSharedAthleteId?.trim()
+    ) {
+      logIdentityMintTrace("duplicate_risk", {
+        sourceFlow: trace?.flowSource ?? "parent_post_session_athletes",
+        callerFunction: "coachSyncCreateSessionAthlete",
+        athleteName: created.athlete.name,
+        existingSharedId: expectedCanonical,
+        newlyMintedSharedId: returnedId,
+        inviteToken: linkToken.trim().toLowerCase(),
+        extra: { reason: "bind_post_returned_unexpected_id", bindSource: trace?.bindSource },
+      });
+    }
+    if (!reused && priorIds != null && priorIds.length > 0 && !expectedCanonical) {
+      logIdentityMintTrace("duplicate_risk", {
+        sourceFlow: trace?.flowSource ?? "parent_post_session_athletes",
+        callerFunction: "coachSyncCreateSessionAthlete",
+        athleteName: created.athlete.name,
+        existingSharedId: priorIds.join(","),
+        newlyMintedSharedId: returnedId,
+        inviteToken: linkToken.trim().toLowerCase(),
+        extra: { reason: "new_id_despite_prior_roster_snapshot", priorCount: priorIds.length },
+      });
+    }
   }
   logAthleteLineageTrace({
     operation: reused ? "attach" : "create",
@@ -581,7 +843,13 @@ export async function coachSyncCreateSessionAthlete(
     sharedAthleteId: returnedId,
     token: linkToken.trim().toLowerCase(),
     route: "coachSyncCreateSessionAthlete",
-    extra: { createdAt: created.athlete.createdAt, reused, preventedDuplicate: reused },
+    extra: {
+      createdAt: created.athlete.createdAt,
+      reused,
+      preventedDuplicate: reused,
+      bindSharedAthleteId: body.bindSharedAthleteId?.trim() || null,
+      bindSource: trace?.bindSource ?? null,
+    },
   });
   return created;
 }

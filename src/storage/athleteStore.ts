@@ -2,13 +2,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { buildCanonicalSharedAthletePrimaryRowMap } from "../identity/canonicalSharedAthleteOwner";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
+import { logIdentityBindInterceptTrace } from "../identity/identityBindInterceptTrace";
+import { classifySharedIdKind, logIdentityMintTrace } from "../identity/identityMintTrace";
+import { resolveCanonicalBindBeforeLocalAthletePost } from "../identity/parentLocalAthleteCanonicalIntercept";
 import {
   athleteIdSetFromParent,
   logHydrationPipelineWatchAthletes,
   namesByIdFromParentAthletes,
 } from "../identity/hydrationPipelineTrace";
-import { isKidCoachArchived, type KidsById } from "../types/coachKid";
+import { runLineageIntegrityScan } from "../identity/lineageIntegrityDetection";
+import { isKidCoachArchived, type Kid, type KidsById } from "../types/coachKid";
 
+import { getKidsById } from "./coachKidStore";
 import { StorageKeys } from "./storageKeys";
 
 export type OnboardingVersion = "v1" | "v2";
@@ -136,6 +141,181 @@ function newAthleteId(): string {
   return `pa_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 11)}`;
 }
 
+export type CanonicalProjectionTracePayload = {
+  athleteName?: string | null;
+  paId?: string | null;
+  sharedAthleteId?: string | null;
+  flowSource: string;
+  relinkSource?: string | null;
+  projectionReason: string;
+  linkedKidId?: string | null;
+  extra?: Record<string, unknown>;
+};
+
+function logCanonicalProjectionTrace(
+  tag: "[CANONICAL_PROJECTION]" | "[CANONICAL_PARENT_UPSERT]" | "[CANONICAL_PARENT_REWRITE]",
+  payload: CanonicalProjectionTracePayload,
+): void {
+  if (!__DEV__) return;
+  console.log(tag, {
+    ...payload,
+    at: new Date().toISOString(),
+  });
+}
+
+/**
+ * Identity-merge bind: rewrite a `ParentAthlete` row's id to the canonical `sharedAthleteId` so
+ * `linkedKidIdForParentAthlete` and Summary / Compete operating planes converge. Preserves metadata.
+ */
+export async function rewriteParentAthleteIdToSharedAthleteId(
+  parentAthleteOldId: string,
+  newSharedAthleteId: string,
+  trace?: Pick<CanonicalProjectionTracePayload, "flowSource" | "relinkSource" | "projectionReason" | "linkedKidId">,
+): Promise<{ rewrote: boolean; wasActive: boolean }> {
+  const oldId = parentAthleteOldId.trim();
+  const newId = newSharedAthleteId.trim();
+  if (!oldId || !newId || oldId === newId) {
+    return { rewrote: false, wasActive: false };
+  }
+  const all = await getAthletes();
+  const target = all.find((a) => a.id === oldId);
+  if (!target) {
+    return { rewrote: false, wasActive: false };
+  }
+  const next = all
+    .filter((a) => a.id !== oldId && a.id !== newId)
+    .concat({ ...target, id: newId });
+  await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+  const active = await getActiveAthleteId();
+  const wasActive = (active ?? "").trim() === oldId;
+  if (wasActive) {
+    await setActiveAthleteId(newId);
+  }
+  logCanonicalProjectionTrace("[CANONICAL_PARENT_REWRITE]", {
+    athleteName: target.name,
+    paId: oldId,
+    sharedAthleteId: newId,
+    flowSource: trace?.flowSource ?? "canonical_parent_rewrite",
+    relinkSource: trace?.relinkSource ?? null,
+    projectionReason: trace?.projectionReason ?? "parent_athlete_id_reissue_to_shared",
+    linkedKidId: trace?.linkedKidId ?? null,
+    extra: { wasActiveOai: wasActive },
+  });
+  logIdentityMintTrace("bind_existing", {
+    sourceFlow: trace?.flowSource ?? "parent_athlete_id_reissue_to_shared",
+    callerFunction: "athleteStore.rewriteParentAthleteIdToSharedAthleteId",
+    athleteName: target.name,
+    existingSharedId: oldId,
+    newlyMintedSharedId: newId,
+    localAthleteId: oldId,
+    linkedKidId: trace?.linkedKidId ?? null,
+    idKind: "shared_ath",
+    extra: { wasActiveOai: wasActive, projectionReason: trace?.projectionReason },
+  });
+  return { rewrote: true, wasActive };
+}
+
+async function validateCanonicalProjectionIntegrityDev(route: string): Promise<void> {
+  if (!__DEV__) return;
+  const [parentAthletes, kidsById, activeOperatingAthleteId] = await Promise.all([
+    getAthletes(),
+    getKidsById(),
+    getActiveAthleteId(),
+  ]);
+  const linkedIdSet = new Set<string>();
+  for (const k of Object.values(kidsById)) {
+    if (!k?.id) continue;
+    if (isKidCoachArchived(k)) continue;
+    const sid = (k.sharedAthleteId ?? "").trim();
+    if (sid) linkedIdSet.add(sid);
+  }
+  const operatingAthleteRoster = parentAthletes.filter((a) => {
+    const id = a.id.trim();
+    if (linkedIdSet.has(id)) return true;
+    return a.operatingScope === "local_only";
+  });
+  runLineageIntegrityScan({
+    route,
+    activeOperatingAthleteId: (activeOperatingAthleteId ?? "").trim() || null,
+    parentAthletes,
+    operatingAthleteRoster,
+    kidsById,
+  });
+}
+
+/**
+ * After a canonical kid bind/relink, project the same `sharedAthleteId` into `parentAthletes`.
+ * Safe upsert/rewrite only — no duplicate-human merge or unrelated row mutation.
+ */
+export async function projectParentCanonicalAthleteForLinkedKid(input: {
+  updatedKid: Kid;
+  previousSharedAthleteId?: string | null;
+  flowSource: string;
+  relinkSource?: string;
+  projectionReason?: string;
+}): Promise<{ rewroteParentId: boolean; upsertedCanonicalRow: boolean }> {
+  const newSid = (input.updatedKid.sharedAthleteId ?? "").trim();
+  const prevSid = (input.previousSharedAthleteId ?? "").trim();
+  const kidName = (input.updatedKid.name ?? "").trim();
+  const projectionReason =
+    input.projectionReason ?? "linked_kid_canonical_bind_projection";
+
+  logCanonicalProjectionTrace("[CANONICAL_PROJECTION]", {
+    athleteName: kidName || null,
+    paId: prevSid || null,
+    sharedAthleteId: newSid || null,
+    flowSource: input.flowSource,
+    relinkSource: input.relinkSource ?? null,
+    projectionReason,
+    linkedKidId: input.updatedKid.id,
+    extra: { previousSharedAthleteId: prevSid || null },
+  });
+
+  if (!newSid) {
+    return { rewroteParentId: false, upsertedCanonicalRow: false };
+  }
+
+  let rewroteParentId = false;
+  if (prevSid && prevSid !== newSid) {
+    const existing = await getAthletes();
+    if (existing.some((a) => a.id.trim() === prevSid)) {
+      const rewrite = await rewriteParentAthleteIdToSharedAthleteId(prevSid, newSid, {
+        flowSource: input.flowSource,
+        relinkSource: input.relinkSource,
+        projectionReason,
+        linkedKidId: input.updatedKid.id,
+      });
+      rewroteParentId = rewrite.rewrote;
+    }
+  }
+
+  const kidsById = await getKidsById();
+  const before = await getAthletes();
+  const hadCanonicalRow = before.some((a) => a.id.trim() === newSid);
+  await ensureOperatingAthletesFromCoachLinkedKids(kidsById);
+  const after = await getAthletes();
+  const upsertedCanonicalRow = !hadCanonicalRow && after.some((a) => a.id.trim() === newSid);
+
+  if (upsertedCanonicalRow) {
+    const row = after.find((a) => a.id.trim() === newSid);
+    logCanonicalProjectionTrace("[CANONICAL_PARENT_UPSERT]", {
+      athleteName: row?.name ?? kidName ?? null,
+      paId: prevSid || null,
+      sharedAthleteId: newSid,
+      flowSource: input.flowSource,
+      relinkSource: input.relinkSource ?? null,
+      projectionReason,
+      linkedKidId: input.updatedKid.id,
+    });
+  }
+
+  await validateCanonicalProjectionIntegrityDev(
+    `athleteStore.projectParentCanonicalAthleteForLinkedKid:${input.flowSource}`,
+  );
+
+  return { rewroteParentId, upsertedCanonicalRow };
+}
+
 export async function getAthletes(): Promise<ParentAthlete[]> {
   try {
     const raw = await AsyncStorage.getItem(StorageKeys.parentAthletes);
@@ -204,6 +384,24 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
       }
     } else {
       byId.set(sid, { id: sid, name: displayName });
+      logCanonicalProjectionTrace("[CANONICAL_PARENT_UPSERT]", {
+        athleteName: displayName,
+        paId: null,
+        sharedAthleteId: sid,
+        flowSource: "coach_hydration_projection",
+        projectionReason: "ensure_operating_athletes_from_linked_kids",
+        linkedKidId: k.id,
+        extra: { reconcileSource: "ensureOperatingAthletesFromCoachLinkedKids" },
+      });
+      logIdentityMintTrace("fallback_create", {
+        sourceFlow: "coach_hydration_projection",
+        callerFunction: "athleteStore.ensureOperatingAthletesFromCoachLinkedKids",
+        athleteName: displayName,
+        existingSharedId: null,
+        newlyMintedSharedId: sid,
+        linkedKidId: k.id,
+        idKind: classifySharedIdKind(sid),
+      });
       logAthleteLineageTrace({
         operation: "fallback_projection",
         source: "hydration_pipeline",
@@ -262,6 +460,8 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
 export async function addAthlete(input: {
   name: string;
   household?: string;
+  /** Prefer this coach link when resolving canonical bind during invite onboarding. */
+  preferredCoachLinkId?: string | null;
 }): Promise<ParentAthlete> {
   const name = typeof input.name === "string" ? input.name.trim() : "";
   if (!name) {
@@ -269,13 +469,103 @@ export async function addAthlete(input: {
   }
   const householdRaw =
     typeof input.household === "string" ? input.household.trim() : "";
+
+  const [existing, kidsById] = await Promise.all([getAthletes(), getKidsById()]);
+  const intercept = await resolveCanonicalBindBeforeLocalAthletePost({
+    athleteName: name,
+    parentAthletes: existing,
+    kidsById,
+    preferredCoachLinkId: input.preferredCoachLinkId,
+  });
+
+  if (intercept.intercepted && intercept.canonicalSharedAthleteId) {
+    const canonicalId = intercept.canonicalSharedAthleteId;
+    const prev = existing.find((a) => a.id.trim() === canonicalId);
+    let athlete: ParentAthlete;
+    if (prev) {
+      const { operatingScope: _localOnly, ...rest } = prev;
+      athlete = {
+        ...rest,
+        id: canonicalId,
+        name,
+        ...(householdRaw ? { household: householdRaw } : {}),
+      };
+    } else {
+      athlete = {
+        id: canonicalId,
+        name,
+        ...(householdRaw ? { household: householdRaw } : {}),
+      };
+    }
+
+    logIdentityBindInterceptTrace("projection_created", {
+      sourceFlow: "parent_add_athlete",
+      callerFunction: "athleteStore.addAthlete",
+      athleteName: name,
+      inviteToken: intercept.inviteTokenNorm,
+      coachLinkId: intercept.coachLinkId,
+      canonicalSharedAthleteId: canonicalId,
+      bindDecision: intercept.bindDecision,
+      bindSource: intercept.bindSource,
+      extra: { upsertedExistingRow: Boolean(prev) },
+    });
+    logIdentityMintTrace("bind_existing", {
+      sourceFlow: "parent_add_athlete_canonical_projection",
+      callerFunction: "athleteStore.addAthlete",
+      athleteName: name,
+      existingSharedId: canonicalId,
+      newlyMintedSharedId: null,
+      inviteToken: intercept.inviteTokenNorm,
+      idKind: "shared_ath",
+      extra: {
+        bindDecision: intercept.bindDecision,
+        bindSource: intercept.bindSource,
+        preMintIntercept: true,
+      },
+    });
+
+    const next = prev
+      ? existing.map((a) => (a.id.trim() === canonicalId ? athlete : a))
+      : [...existing, athlete];
+    try {
+      await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+    } catch {
+      /* ignore */
+    }
+    return athlete;
+  }
+
+  const mintedId = newAthleteId();
   const athlete: ParentAthlete = {
-    id: newAthleteId(),
+    id: mintedId,
     name,
     operatingScope: "local_only",
     ...(householdRaw ? { household: householdRaw } : {}),
   };
-  const existing = await getAthletes();
+  if (intercept.inviteTokenNorm) {
+    logIdentityBindInterceptTrace("fallback_mint_allowed", {
+      sourceFlow: "parent_add_athlete",
+      callerFunction: "athleteStore.addAthlete",
+      athleteName: name,
+      inviteToken: intercept.inviteTokenNorm,
+      coachLinkId: intercept.coachLinkId,
+      bindDecision: intercept.bindDecision ?? "mint_new",
+      extra: { localPaId: mintedId },
+    });
+  }
+  logIdentityMintTrace("mint", {
+    sourceFlow: "parent_local_athlete_create",
+    callerFunction: "athleteStore.addAthlete",
+    athleteName: name,
+    newlyMintedSharedId: mintedId,
+    inviteToken: intercept.inviteTokenNorm,
+    idKind: "pa_",
+    extra: {
+      operatingScope: "local_only",
+      inviteActive: Boolean(intercept.inviteTokenNorm),
+      canonicalInterceptAttempted: intercept.resolution != null,
+    },
+  });
   const next = [...existing, athlete];
   try {
     await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));

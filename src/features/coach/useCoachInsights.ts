@@ -17,6 +17,12 @@ import {
   type BucketOutcomeTrend,
 } from "../../lib/signals/competitionBucketHistory";
 import type { CompetitionPlacementTrend } from "../../lib/signals/computeSignals";
+import { toDateKey } from "../../_domain/dateKey";
+import { hasTrainingProofVisibility } from "../../domain/training/overlayTrainingProofSignals";
+import {
+  filterSessionsLikeTrainingRefresh,
+  normalizeSessionsLikeTraining,
+} from "../../domain/sessionUtils";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
@@ -24,6 +30,10 @@ import {
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../storage/coachKidStore";
+import {
+  getCoachTrainingProof,
+  peekCoachTrainingProof,
+} from "../../storage/coachTrainingProofStore";
 import { getKidCompetitionEntriesWithMatchDetailForKid } from "../../storage/competitionStore";
 import { StorageKeys } from "../../storage/storageKeys";
 import type { Session } from "../../types";
@@ -97,6 +107,52 @@ function parseSessions(raw: string | null): any[] {
   }
 }
 
+function addDaysYMDLocal(ymd: string, delta: number): string {
+  const [year, month, dayOfMonth] = ymd.split("-").map(Number);
+  if (!year || !month || !dayOfMonth) return "";
+
+  const date = new Date(year, month - 1, dayOfMonth);
+  date.setDate(date.getDate() + delta);
+
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function countSessionsInCurrentWeek(
+  sessions: readonly Session[],
+  referenceYMD: string,
+): number {
+  const weekStart = startOfWeekMondayYMD(referenceYMD);
+  if (!weekStart) return 0;
+
+  const weekEnd = addDaysYMDLocal(weekStart, 6);
+  if (!weekEnd) return 0;
+
+  let count = 0;
+  for (const session of sessions) {
+    const dateKey = toDateKey(session.date);
+    if (dateKey && dateKey >= weekStart && dateKey <= weekEnd) count += 1;
+  }
+  return count;
+}
+
+function resolveOperationalSessionsThisWeek(
+  scopedSessions: readonly Session[],
+  referenceYMD: string,
+  operatingAthleteId: string,
+): number {
+  const localCount = countSessionsInCurrentWeek(scopedSessions, referenceYMD);
+  if (!operatingAthleteId) return localCount;
+
+  const proof = peekCoachTrainingProof(operatingAthleteId);
+  if (proof && hasTrainingProofVisibility(proof, operatingAthleteId)) {
+    return proof.currentWeekSessionCount;
+  }
+  return localCount;
+}
+
 function sessionsForAthlete(allSessions: any[], athlete: Kid): any[] {
   const athleteId = athlete.id.trim();
   const sharedAthleteId = athlete.sharedAthleteId?.trim() ?? "";
@@ -140,7 +196,19 @@ export function useCoachInsights(): {
             AsyncStorage.getItem(StorageKeys.sessions),
           ]);
           const allSessions = parseSessions(rawSessions);
-          const weekStart = startOfWeekMondayYMD(todayYMD());
+          const referenceYMD = todayYMD();
+          const weekStart = startOfWeekMondayYMD(referenceYMD);
+          const normalizedSessions = normalizeSessionsLikeTraining(
+            allSessions as Session[],
+          );
+          const operatingAthleteIds = new Set(
+            Object.values(kidsById)
+              .map((kid) => kid.sharedAthleteId?.trim() ?? "")
+              .filter(Boolean),
+          );
+          await Promise.all(
+            [...operatingAthleteIds].map((id) => getCoachTrainingProof(id)),
+          );
           const nextInsights: CoachInsightRow[] = [];
           const nextTeamFocusRows: CoachTeamFocusAthleteRow[] = [];
 
@@ -153,9 +221,22 @@ export function useCoachInsights(): {
               getKidCompetitionEntriesWithMatchDetailForKid(athleteId),
               getLatestKidWeeklyFocusForWeek(athleteId, weekStart),
             ]);
+            const operatingAthleteId = athlete.sharedAthleteId?.trim() ?? "";
+            const scopedSessions = filterSessionsLikeTrainingRefresh(
+              normalizedSessions,
+              {
+                deviceRole: "coach",
+                athleteId: operatingAthleteId,
+                linkedKidId: athleteId,
+              },
+            );
             const sessionsFiltered = sessionsForAthlete(allSessions, athlete);
             const recentCompetitionCount = competitions.length;
-            const sessionsThisWeek = sessionsFiltered.length;
+            const sessionsThisWeek = resolveOperationalSessionsThisWeek(
+              scopedSessions,
+              referenceYMD,
+              operatingAthleteId,
+            );
             const appliedInSparring: CoachAppliedInSparring =
               weeklyFocus?.sparringApplication ?? "no_data";
             const derivedOutcome = deriveOutcomeFromSparring(appliedInSparring);
@@ -173,6 +254,7 @@ export function useCoachInsights(): {
             const insight = computeCoachInsight({
               athleteId,
               sessions: sessionsFiltered,
+              sessionsThisWeek,
               competitions,
               weeklyFocus,
               outcome,

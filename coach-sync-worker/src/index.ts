@@ -1222,10 +1222,84 @@ export default {
         if (!name) {
           return error("name required (max 120 chars)", 400);
         }
+        const bindSharedAthleteIdRaw =
+          typeof b.bindSharedAthleteId === "string" ? b.bindSharedAthleteId.trim() : "";
 
         const rec = await readSession(env.SESSIONS, token);
         if (!rec || rec.parentWriterSecret !== secret) {
           return error("Unauthorized", 401);
+        }
+
+        if (bindSharedAthleteIdRaw) {
+          if (
+            bindSharedAthleteIdRaw.length > 64 ||
+            !bindSharedAthleteIdRaw.startsWith("shared_ath_")
+          ) {
+            return error("bindSharedAthleteId invalid", 400);
+          }
+          const onRoster = rec.athletes.find((a) => a.id === bindSharedAthleteIdRaw);
+          if (onRoster) {
+            console.log("[ATHLETE DEDUPE]", {
+              operation: "post_athletes",
+              athleteName: name,
+              normalizedName: normalizeAthleteNameForDedupe(name),
+              existingSharedAthleteId: onRoster.id,
+              sharedAthleteId: onRoster.id,
+              reused: true,
+              preventedDuplicate: true,
+              newIdMinted: false,
+              bindSharedAthleteId: bindSharedAthleteIdRaw,
+              sessionAthleteCount: rec.athletes.length,
+              token,
+            });
+            console.log("[IDENTITY_BIND_EXISTING]", {
+              sourceFlow: "worker_post_session_athletes_bind_existing_id",
+              callerFunction: "POST /v1/sessions/:token/athletes",
+              athleteName: name,
+              existingSharedId: onRoster.id,
+              newlyMintedSharedId: null,
+              inviteToken: token,
+              extra: { bindSharedAthleteId: bindSharedAthleteIdRaw, alreadyOnRoster: true },
+            });
+            return json({ athlete: onRoster }, 201);
+          }
+          if (rec.athletes.length >= MAX_ATHLETES_PER_SESSION) {
+            return error("Athlete limit reached for this invite", 400);
+          }
+          const nowBind = new Date().toISOString();
+          const rebound: SharedAthlete = {
+            id: bindSharedAthleteIdRaw,
+            name,
+            createdAt: nowBind,
+          };
+          const nextBind: SessionRecord = {
+            ...rec,
+            athletes: [...rec.athletes, rebound],
+          };
+          await writeSession(env.SESSIONS, token, nextBind);
+          console.log("[ATHLETE DEDUPE]", {
+            operation: "post_athletes",
+            athleteName: name,
+            normalizedName: normalizeAthleteNameForDedupe(name),
+            existingSharedAthleteId: bindSharedAthleteIdRaw,
+            sharedAthleteId: rebound.id,
+            reused: true,
+            preventedDuplicate: true,
+            newIdMinted: false,
+            bindSharedAthleteId: bindSharedAthleteIdRaw,
+            sessionAthleteCount: rec.athletes.length + 1,
+            token,
+          });
+          console.log("[IDENTITY_BIND_EXISTING]", {
+            sourceFlow: "worker_post_session_athletes_rebind_canonical",
+            callerFunction: "POST /v1/sessions/:token/athletes",
+            athleteName: name,
+            existingSharedId: bindSharedAthleteIdRaw,
+            newlyMintedSharedId: null,
+            inviteToken: token,
+            extra: { reboundToRoster: true },
+          });
+          return json({ athlete: rebound }, 201);
         }
 
         const normalizedName = normalizeAthleteNameForDedupe(name);
@@ -1244,6 +1318,15 @@ export default {
             newIdMinted: false,
             sessionAthleteCount: rec.athletes.length,
             token,
+          });
+          console.log("[IDENTITY_BIND_EXISTING]", {
+            sourceFlow: "worker_post_session_athletes_dedupe",
+            callerFunction: "POST /v1/sessions/:token/athletes",
+            athleteName: name,
+            existingSharedId: existingAthlete.id,
+            newlyMintedSharedId: null,
+            inviteToken: token,
+            extra: { normalizedName, preventedDuplicate: true },
           });
           return json({ athlete: existingAthlete }, 201);
         }
@@ -1272,6 +1355,15 @@ export default {
           newIdMinted: true,
           sessionAthleteCount: rec.athletes.length + 1,
           token,
+        });
+        console.log("[IDENTITY_MINT]", {
+          sourceFlow: "worker_post_session_athletes",
+          callerFunction: "POST /v1/sessions/:token/athletes",
+          athleteName: name,
+          existingSharedId: null,
+          newlyMintedSharedId: athlete.id,
+          inviteToken: token,
+          extra: { normalizedName, sessionAthleteCountAfter: rec.athletes.length + 1 },
         });
 
         return json({ athlete }, 201);
