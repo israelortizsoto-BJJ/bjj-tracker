@@ -65,6 +65,15 @@ import type {
   SyncedTrainingProofArtifact,
   SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
+import {
+  applySharedAthleteToKidRow,
+  findUniqueLocalOnlyKidForRemoteAthlete,
+} from "./coachKidRosterMergePure";
+
+export {
+  applySharedAthleteToKidRow,
+  normalizeKidRosterName,
+} from "./coachKidRosterMergePure";
 
 type KidWeeklyFocusAppendInput =
   | (KidWeeklyFocusEntryTemplate & {
@@ -240,19 +249,11 @@ export async function attachSharedAthleteToKid(
   const existing = kids[kidId];
   if (!existing) return null;
 
-  const nowIso = new Date().toISOString();
   const tokenNormRaw = sharedFromInviteTokenNorm?.trim();
   const tokenNorm = tokenNormRaw ? normalizeInviteLinkToken(tokenNormRaw) : "";
   const sharedAthleteId = (typeof athlete.id === "string" ? athlete.id : "").trim();
 
-  const next: Kid = {
-    ...existing,
-    name: athlete.name,
-    sharedAthleteId,
-    updatedAt: nowIso,
-    ...(existing.isParentManagedChildProfile ? { isParentManagedChildProfile: true } : {}),
-    ...(tokenNorm ? { sharedFromInviteTokenNorm: tokenNorm } : {}),
-  };
+  const next = applySharedAthleteToKidRow(existing, athlete, sharedFromInviteTokenNorm);
   logIdentityMintTrace(
     existing.sharedAthleteId?.trim() && existing.sharedAthleteId.trim() !== sharedAthleteId
       ? "relink"
@@ -671,6 +672,21 @@ export function mergeWriterSessionRosterIntoKidsDraft(
         continue;
       }
 
+      const collapseTarget = findUniqueLocalOnlyKidForRemoteAthlete(next, a.name);
+      if (collapseTarget) {
+        const updated = applySharedAthleteToKidRow(collapseTarget, a, token, nowIso);
+        next[collapseTarget.id] = updated;
+        byShared.set(id, updated);
+        if (__DEV__) {
+          console.log("[bjj-coach-kid-roster] reconcile attach collapse", {
+            existingKidId: collapseTarget.id,
+            sharedAthleteId: id,
+            remoteName: a.name,
+          });
+        }
+        continue;
+      }
+
       const localId = `kid_shared_${id}` as KidId;
       const rowAtId = next[localId];
       if (rowAtId) {
@@ -719,6 +735,13 @@ export function mergeWriterSessionRosterIntoKidsDraft(
         extra: { remoteCreatedAt: a.createdAt },
       });
       byShared.set(id, next[localId]);
+      if (__DEV__) {
+        console.log("[bjj-coach-kid-roster] reconcile kid_shared insert", {
+          localId,
+          sharedAthleteId: id,
+          remoteName: a.name,
+        });
+      }
     }
   }
 
