@@ -13,6 +13,7 @@ export type AuthoritySnapshotSourceTrigger =
   | "focus_effect"
   | "active_athlete_store_subscription"
   | "soft_refresh"
+  | "coach_sync_hydration"
   | string;
 
 export type AthleteAuthoritySnapshotMeta = {
