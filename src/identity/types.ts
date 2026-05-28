@@ -35,4 +35,9 @@ export type AthleteAuthoritySnapshot = {
 export type BuildAthleteAuthoritySnapshotOptions = {
   parentRole: DeviceRole | null;
   observability?: AthleteAuthoritySnapshotMeta;
+  /**
+   * When true, read authority from local storage only. Used when coach sync reconcile
+   * already ran (e.g. `bumpCoachSyncHydrationVersion`) to avoid refresh→bump loops.
+   */
+  skipCoachWriterSessionRefresh?: boolean;
 };

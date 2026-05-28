@@ -71,9 +71,10 @@ function deriveOperatingAthleteRoster(
 async function buildSnapshotCore(
   parentRole: DeviceRole | null,
   observability?: BuildAthleteAuthoritySnapshotOptions["observability"],
+  skipCoachWriterSessionRefresh = false,
 ): Promise<AthleteAuthoritySnapshot> {
   const refreshResult: CoachWriterSessionRefreshResult =
-    parentRole === "coach"
+    parentRole === "coach" && !skipCoachWriterSessionRefresh
       ? await refreshCoachWriterSessionsAndReconcileStores()
       : { successfulSnapshots: [], writerLinks: [], inviteSessionAthletesByToken: {} };
 
@@ -292,5 +293,9 @@ async function buildSnapshotCore(
 export async function buildAthleteAuthoritySnapshot(
   options: BuildAthleteAuthoritySnapshotOptions,
 ): Promise<AthleteAuthoritySnapshot> {
-  return buildSnapshotCore(options.parentRole, options.observability);
+  return buildSnapshotCore(
+    options.parentRole,
+    options.observability,
+    options.skipCoachWriterSessionRefresh === true,
+  );
 }

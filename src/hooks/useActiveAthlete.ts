@@ -64,6 +64,37 @@ type FetchSnapshotResult = {
   repoFetchOrdinal: number;
 };
 
+type FetchIdentitySnapshotOptions = {
+  skipCoachWriterSessionRefresh?: boolean;
+};
+
+/** Coalesce reactive rebuilds across multiple `useActiveAthlete` hook instances. */
+let reactiveSnapshotFetchInFlight: Promise<FetchSnapshotResult> | null = null;
+
+/** Last coach sync version applied module-wide (reconcile already ran before the bump). */
+let coachSyncHydrationVersionHandled = 0;
+
+function authoritySnapshotApplyDigest(
+  snap: AthleteAuthoritySnapshot,
+  idToApply: string,
+): string {
+  const kidSig = Object.keys(snap.loadedKids)
+    .sort()
+    .map((kidId) => {
+      const k = snap.loadedKids[kidId];
+      return `${kidId}:${(k?.sharedAthleteId ?? "").trim()}`;
+    })
+    .join("|");
+  return [
+    snap.authorityBootstrapState,
+    idToApply.trim(),
+    snap.sorted.map((a) => a.id.trim()).join(","),
+    snap.operatingAthleteRoster.map((a) => a.id.trim()).join(","),
+    snap.coachOperatingAthleteChoices.map((a) => a.id.trim()).join(","),
+    kidSig,
+  ].join(";");
+}
+
 function athleteTraceStoreSourceReason(
   trigger: AuthoritySnapshotSourceTrigger | undefined,
 ): { source: string; reason: string } {
@@ -109,6 +140,9 @@ export function useActiveAthlete(): UseActiveAthleteResult {
   const roleLoadingRef = useRef(roleLoading);
   roleLoadingRef.current = roleLoading;
   const prevCoachSyncHydrationVersionRef = useRef(coachSyncHydrationVersion);
+  const lastAppliedDigestRef = useRef("");
+  const roleRef = useRef(role);
+  roleRef.current = role;
 
   const applyStorageSnapshot = useCallback(
     (
@@ -177,7 +211,38 @@ export function useActiveAthlete(): UseActiveAthleteResult {
       const incomingGen = snap.meta?.snapshotGeneration ?? 0;
       const prevApplied = lastAppliedSnapshotGenerationRef.current;
       const staleGenerationApply =
-        __DEV__ && incomingGen > 0 && prevApplied > 0 && incomingGen < prevApplied;
+        incomingGen > 0 && prevApplied > 0 && incomingGen < prevApplied;
+      if (staleGenerationApply) {
+        if (__DEV__) {
+          logAuthorityTelemetryDev({
+            category: "hydration",
+            event: "hydration_skipped",
+            hydrationPhase: "apply_suppressed",
+            snapshotGeneration: incomingGen,
+            previousSnapshotGeneration: prevApplied,
+            triggerSource: snap.meta?.sourceTrigger,
+            transitionReason: "stale_snapshot_generation",
+          });
+        }
+        setHydrationReady(true);
+        return;
+      }
+
+      const applyDigest = authoritySnapshotApplyDigest(snap, idToApply);
+      if (applyDigest === lastAppliedDigestRef.current) {
+        if (__DEV__) {
+          logAuthorityTelemetryDev({
+            category: "hydration",
+            event: "hydration_skipped",
+            hydrationPhase: "apply_suppressed",
+            snapshotGeneration: incomingGen || undefined,
+            triggerSource: snap.meta?.sourceTrigger,
+            transitionReason: "snapshot_digest_unchanged",
+          });
+        }
+        setHydrationReady(true);
+        return;
+      }
       const linkedAfterApply = linkedKidIdForParentAthlete(snap.loadedKids, idToApply);
       if (__DEV__ && parentRole === "coach") {
         const kid =
@@ -318,6 +383,8 @@ export function useActiveAthlete(): UseActiveAthleteResult {
         });
       }
 
+      lastAppliedDigestRef.current = applyDigest;
+
       setAthletes(snap.sorted);
       setOperatingAthleteRoster(snap.operatingAthleteRoster);
       setKidsById(snap.loadedKids);
@@ -337,75 +404,101 @@ export function useActiveAthlete(): UseActiveAthleteResult {
   );
 
   const fetchIdentitySnapshot = useCallback(
-    async (sourceTrigger: AuthoritySnapshotSourceTrigger): Promise<FetchSnapshotResult> => {
-      const repoFetchOrdinal = takeDevAuthorityRepoFetchOrdinal();
-      let depthAtStart = 0;
-      let gen = 0;
-      if (__DEV__) {
-        snapshotGenerationRef.current += 1;
-        gen = snapshotGenerationRef.current;
-        parallelHydrationRef.current += 1;
-        depthAtStart = parallelHydrationRef.current;
-        const parentGen = lastAppliedSnapshotGenerationRef.current;
-        logAuthorityTelemetryDev({
-          category: "hydration",
-          event: "hydration_fetch_started",
-          hydrationPhase: "fetch_start",
-          snapshotGeneration: gen,
-          parentSnapshotGeneration: parentGen,
-          triggerSource: sourceTrigger,
-          role,
-          parallelHydrationDepth: depthAtStart,
-          repoFetchOrdinal,
-        });
-      }
-      try {
-        const snap = await buildAthleteAuthoritySnapshot({
-          parentRole: role,
-          observability: __DEV__
-            ? {
-                snapshotGeneration: gen,
-                sourceTrigger,
-                role,
-              }
-            : undefined,
-        });
+    async (
+      sourceTrigger: AuthoritySnapshotSourceTrigger,
+      fetchOpts?: FetchIdentitySnapshotOptions,
+    ): Promise<FetchSnapshotResult> => {
+      const skipCoachWriterSessionRefresh = fetchOpts?.skipCoachWriterSessionRefresh === true;
+      const runFetch = async (): Promise<FetchSnapshotResult> => {
+        const repoFetchOrdinal = takeDevAuthorityRepoFetchOrdinal();
+        let depthAtStart = 0;
+        let gen = 0;
         if (__DEV__) {
+          snapshotGenerationRef.current += 1;
+          gen = snapshotGenerationRef.current;
+          parallelHydrationRef.current += 1;
+          depthAtStart = parallelHydrationRef.current;
           const parentGen = lastAppliedSnapshotGenerationRef.current;
-          traceAthleteAuthoritySnapshotDev({
-            hydrationPhase: "build",
-            snapshot: snap,
-            previousSnapshotGeneration: parentGen,
-            parallelHydrationDepth: depthAtStart,
-            repoFetchOrdinal,
-          });
           logAuthorityTelemetryDev({
             category: "hydration",
-            event: "hydration_build_resolved",
-            hydrationPhase: "build_complete",
-            snapshotGeneration: snap.meta?.snapshotGeneration,
+            event: "hydration_fetch_started",
+            hydrationPhase: "fetch_start",
+            snapshotGeneration: gen,
             parentSnapshotGeneration: parentGen,
             triggerSource: sourceTrigger,
-            authorityStatus: snap.authorityBootstrapState,
-            athleteId: snap.resolvedId.trim() || null,
             role,
             parallelHydrationDepth: depthAtStart,
             repoFetchOrdinal,
+            skipCoachWriterSessionRefresh,
           });
         }
-        return { snap, fetchParallelDepth: depthAtStart, repoFetchOrdinal };
-      } finally {
-        if (__DEV__) {
-          parallelHydrationRef.current -= 1;
+        try {
+          const snap = await buildAthleteAuthoritySnapshot({
+            parentRole: role,
+            skipCoachWriterSessionRefresh,
+            observability: __DEV__
+              ? {
+                  snapshotGeneration: gen,
+                  sourceTrigger,
+                  role,
+                }
+              : undefined,
+          });
+          if (__DEV__) {
+            const parentGen = lastAppliedSnapshotGenerationRef.current;
+            traceAthleteAuthoritySnapshotDev({
+              hydrationPhase: "build",
+              snapshot: snap,
+              previousSnapshotGeneration: parentGen,
+              parallelHydrationDepth: depthAtStart,
+              repoFetchOrdinal,
+            });
+            logAuthorityTelemetryDev({
+              category: "hydration",
+              event: "hydration_build_resolved",
+              hydrationPhase: "build_complete",
+              snapshotGeneration: snap.meta?.snapshotGeneration,
+              parentSnapshotGeneration: parentGen,
+              triggerSource: sourceTrigger,
+              authorityStatus: snap.authorityBootstrapState,
+              athleteId: snap.resolvedId.trim() || null,
+              role,
+              parallelHydrationDepth: depthAtStart,
+              repoFetchOrdinal,
+              skipCoachWriterSessionRefresh,
+            });
+          }
+          return { snap, fetchParallelDepth: depthAtStart, repoFetchOrdinal };
+        } finally {
+          if (__DEV__) {
+            parallelHydrationRef.current -= 1;
+          }
+        }
+      };
+
+      if (skipCoachWriterSessionRefresh) {
+        if (reactiveSnapshotFetchInFlight) {
+          return reactiveSnapshotFetchInFlight;
+        }
+        const promise = runFetch();
+        reactiveSnapshotFetchInFlight = promise;
+        try {
+          return await promise;
+        } finally {
+          if (reactiveSnapshotFetchInFlight === promise) {
+            reactiveSnapshotFetchInFlight = null;
+          }
         }
       }
+
+      return runFetch();
     },
     [role],
   );
 
   useFocusEffect(
     useCallback(() => {
-      if (roleLoading) {
+      if (roleLoadingRef.current) {
         return;
       }
 
@@ -437,13 +530,13 @@ export function useActiveAthlete(): UseActiveAthleteResult {
           }
           return;
         }
-        applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
+        applyStorageSnapshot(snap, roleRef.current, { fetchParallelDepth, repoFetchOrdinal });
       })();
 
       return () => {
         cancelled = true;
       };
-    }, [applyStorageSnapshot, fetchIdentitySnapshot, role, roleLoading]),
+    }, [applyStorageSnapshot, fetchIdentitySnapshot]),
   );
 
   useEffect(() => {
@@ -460,15 +553,22 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     if (prevCoachSyncHydrationVersionRef.current === coachSyncHydrationVersion) {
       return;
     }
+    if (coachSyncHydrationVersionHandled === coachSyncHydrationVersion) {
+      prevCoachSyncHydrationVersionRef.current = coachSyncHydrationVersion;
+      return;
+    }
     prevCoachSyncHydrationVersionRef.current = coachSyncHydrationVersion;
 
     let cancelled = false;
     void (async () => {
+      const targetVersion = coachSyncHydrationVersion;
       const { snap, fetchParallelDepth, repoFetchOrdinal } = await fetchIdentitySnapshot(
         "coach_sync_hydration",
+        { skipCoachWriterSessionRefresh: true },
       );
       if (cancelled || roleLoadingRef.current) return;
-      applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
+      applyStorageSnapshot(snap, roleRef.current, { fetchParallelDepth, repoFetchOrdinal });
+      coachSyncHydrationVersionHandled = targetVersion;
     })();
 
     return () => {
@@ -488,9 +588,10 @@ export function useActiveAthlete(): UseActiveAthleteResult {
       void (async () => {
         const { snap, fetchParallelDepth, repoFetchOrdinal } = await fetchIdentitySnapshot(
           "active_athlete_store_subscription",
+          { skipCoachWriterSessionRefresh: true },
         );
         if (roleLoadingRef.current) return;
-        applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
+        applyStorageSnapshot(snap, roleRef.current, { fetchParallelDepth, repoFetchOrdinal });
       })();
     });
   }, [applyStorageSnapshot, fetchIdentitySnapshot, role]);
@@ -518,8 +619,8 @@ export function useActiveAthlete(): UseActiveAthleteResult {
     const { snap, fetchParallelDepth, repoFetchOrdinal } =
       await fetchIdentitySnapshot("soft_refresh");
     if (roleLoadingRef.current) return;
-    applyStorageSnapshot(snap, role, { fetchParallelDepth, repoFetchOrdinal });
-  }, [applyStorageSnapshot, fetchIdentitySnapshot, role]);
+    applyStorageSnapshot(snap, roleRef.current, { fetchParallelDepth, repoFetchOrdinal });
+  }, [applyStorageSnapshot, fetchIdentitySnapshot]);
 
   const consumerHydrationReady = hydrationReady && !roleLoading;
 
