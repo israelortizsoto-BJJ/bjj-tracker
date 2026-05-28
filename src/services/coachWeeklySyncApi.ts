@@ -23,6 +23,7 @@ import type {
   CoachWeeklySyncCreateSessionBody,
   CoachWeeklySyncCreateSessionResponse,
   CoachWeeklySyncPublishBody,
+  CoachWeeklySyncWeeklyPutBody,
   CoachWeeklySyncPutCompetitionAggregateBody,
   CoachWeeklySyncPutTrainingProofBody,
   CoachWeeklySyncRedeemParentWriterResponse,
@@ -886,7 +887,7 @@ export async function coachSyncDeleteSessionAthlete(
 export async function coachSyncPublishWeekly(
   linkToken: string,
   writerSecret: string,
-  body: CoachWeeklySyncPublishBody,
+  body: CoachWeeklySyncWeeklyPutBody,
   apiBaseUrlOverride?: string | null,
 ): Promise<void> {
   const tokenTail = linkToken.trim().slice(-6);
@@ -917,24 +918,35 @@ export async function coachSyncPublishWeekly(
       body: wireJson,
     });
     if (__DEV__) {
+      const coachBody = "weekStartYMD" in body ? body : null;
       console.log("[SYSTEMKEY TRACE CLIENT]", {
         traceStage: "2_publish_request_body_wire_JSON",
-        headline: typeof body.headline === "string" ? body.headline.slice(0, 120) : null,
-        systemKey: body.systemKey ?? null,
+        headline:
+          coachBody && typeof coachBody.headline === "string"
+            ? coachBody.headline.slice(0, 120)
+            : null,
+        systemKey: coachBody?.systemKey ?? null,
         athleteId: body.sharedAthleteId?.trim() || null,
-        weekStartYMD: body.weekStartYMD,
-        keyExistsOnObject: Object.prototype.hasOwnProperty.call(body, "systemKey"),
+        weekStartYMD: coachBody?.weekStartYMD ?? null,
+        keyExistsOnObject: coachBody
+          ? Object.prototype.hasOwnProperty.call(coachBody, "systemKey")
+          : false,
         wireJsonIncludesSystemKeyKey: wireJson.includes('"systemKey"'),
-        keyValidAfterClientNormalize: isPublishableSystemKey(body.systemKey),
+        keyValidAfterClientNormalize: coachBody
+          ? isPublishableSystemKey(coachBody.systemKey)
+          : null,
         clientPublishNormalizerRemovedKey: null,
         workerParserRemoved: null,
         source: "coachSyncPublishWeekly_before_fetch",
+        parentFeedbackOverlay: "parentFeedback" in body,
       });
-      console.log("[bjj-weekly-publish-api body systemKey]", {
-        systemKey: body.systemKey ?? null,
-        hasSystemKeyKey: Object.prototype.hasOwnProperty.call(body, "systemKey"),
-        sharedAthleteId: body.sharedAthleteId?.trim() || null,
-      });
+      if (coachBody) {
+        console.log("[bjj-weekly-publish-api body systemKey]", {
+          systemKey: coachBody.systemKey ?? null,
+          hasSystemKeyKey: Object.prototype.hasOwnProperty.call(coachBody, "systemKey"),
+          sharedAthleteId: body.sharedAthleteId?.trim() || null,
+        });
+      }
     }
   } catch (error) {
     console.error("[PUBLISH \u2192 API ERROR]", error);

@@ -156,6 +156,16 @@ export type CoachWeeklySyncPublishBody = {
   sharedAthleteId?: string;
 };
 
+/** Parent overlay publish on the existing `PUT …/weekly` lane (parent writer only). */
+export type CoachWeeklySyncParentWeeklyOverlayBody = {
+  parentFeedback: SyncedWeeklyParentFeedback;
+  sharedAthleteId?: string;
+};
+
+export type CoachWeeklySyncWeeklyPutBody =
+  | CoachWeeklySyncPublishBody
+  | CoachWeeklySyncParentWeeklyOverlayBody;
+
 export type CoachWeeklySyncRedeemParentWriterResponse = {
   parentWriterSecret: string;
 };

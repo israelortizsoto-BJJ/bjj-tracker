@@ -129,6 +129,7 @@ import { deriveCompetitionTrainingSkillFocus } from "../../../src/ai-coach/compe
 import { tokens } from "../../../src/theme/tokens";
 import { buildReadTogetherStoryCards } from "../../../src/family/readTogetherStoryCards";
 import { ReadTogetherStoryModal } from "../../../src/family/ReadTogetherStoryModal";
+import { schedulePublishParentWeeklyFeedback } from "../../../src/domain/weekly/publishParentWeeklyFeedback";
 import {
   markWeeklyAcknowledged,
   markWeeklyViewed,
@@ -1282,6 +1283,13 @@ function ParentThisWeekScreen() {
         cachedSession,
         cached?.tokenNorm,
       );
+
+      if (nextDoc.parentFeedback) {
+        const publishAthleteId = updatesAthleteDoc
+          ? selectedSharedAthleteId
+          : resolvedWeeklySharedAthleteId?.trim() || null;
+        schedulePublishParentWeeklyFeedback(publishAthleteId, nextDoc.parentFeedback);
+      }
     },
     [
       weeklySessionSnapshot,
@@ -2082,6 +2090,12 @@ function ParentThisWeekScreen() {
             }}
             onFinished={closeWeeklyStory}
             onOpenPublishedUrl={(url) => void openPublishedWebUrl(url)}
+            weeklyAcknowledged={weeklyAcknowledged}
+            onAcknowledgeWeekly={
+              useWeeklySyncHero && weeklySyncDoc && !weeklyAcknowledged
+                ? handleAcknowledgeWeekly
+                : undefined
+            }
             primaryFill={UI.primaryFill}
             primaryFillPressed={UI.primaryFillPressed}
             accentBorder={UI.addCompetitionBorder}
@@ -2457,7 +2471,7 @@ function ParentThisWeekScreen() {
                     })}
                   >
                     <Text style={[tokens.type.title, { color: FEED.text }]}>
-                      Got it 👍
+                      You got it
                     </Text>
                   </Pressable>
                 )

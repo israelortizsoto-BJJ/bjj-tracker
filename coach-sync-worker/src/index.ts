@@ -8,6 +8,11 @@ export interface Env {
   SESSIONS: KVNamespace;
 }
 
+type WeeklyParentFeedback = {
+  viewedAt?: string;
+  acknowledgedAt?: string;
+};
+
 type WeeklyDoc = {
   weekStartYMD: string;
   headline: string;
@@ -22,6 +27,7 @@ type WeeklyDoc = {
   familyResourceLabel?: string | null;
   familyCoachRecapNote?: string;
   coachOutcome?: CoachOutcome;
+  parentFeedback?: WeeklyParentFeedback;
   updatedAt: string;
 };
 
@@ -419,6 +425,22 @@ function readFamilyUrlFromWeeklyPutBody(
 }
 
 /** Same key precedence as PUT (`familyResourceUrl` then `study`). */
+function parseWeeklyParentFeedback(raw: unknown): WeeklyParentFeedback | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const viewedAt =
+    typeof o.viewedAt === "string" && o.viewedAt.trim() ? o.viewedAt.trim() : undefined;
+  const acknowledgedAt =
+    typeof o.acknowledgedAt === "string" && o.acknowledgedAt.trim()
+      ? o.acknowledgedAt.trim()
+      : undefined;
+  if (!viewedAt && !acknowledgedAt) return null;
+  return {
+    ...(viewedAt ? { viewedAt } : {}),
+    ...(acknowledgedAt ? { acknowledgedAt } : {}),
+  };
+}
+
 function readFamilyFromStoredWeeklyDoc(o: Record<string, unknown>): { raw: string; hasKey: boolean } {
   if ("familyResourceUrl" in o) {
     const v = o.familyResourceUrl;
@@ -496,6 +518,7 @@ function parseWeeklyDoc(raw: unknown, traceContext?: { athleteId?: string; sourc
       source: "parseWeeklyDoc",
     });
   }
+  const parentFeedback = parseWeeklyParentFeedback(o.parentFeedback);
   const weekly: WeeklyDoc = {
     weekStartYMD,
     headline,
@@ -505,6 +528,7 @@ function parseWeeklyDoc(raw: unknown, traceContext?: { athleteId?: string; sourc
     ...(programLine ? { programLine } : {}),
     ...(familyCoachRecapNote ? { familyCoachRecapNote } : {}),
     ...(coachOutcome ? { coachOutcome } : {}),
+    ...(parentFeedback ? { parentFeedback } : {}),
     updatedAt,
   };
   const missionRaw =
@@ -1449,6 +1473,74 @@ export default {
         });
         const sharedAthleteIdRaw =
           typeof b.sharedAthleteId === "string" ? b.sharedAthleteId.trim() : "";
+
+        const recEarly = await readSession(env.SESSIONS, token);
+        if (!recEarly) {
+          return error("Unauthorized", 401);
+        }
+        const isCoachWriterEarly = recEarly.writerSecret === secret;
+        const isParentWriterEarly = Boolean(
+          recEarly.parentWriterSecret && recEarly.parentWriterSecret === secret,
+        );
+        if (!isCoachWriterEarly && !isParentWriterEarly) {
+          return error("Unauthorized", 401);
+        }
+
+        if (isParentWriterEarly && !isCoachWriterEarly) {
+          const hasParentFeedbackKey = Object.prototype.hasOwnProperty.call(b, "parentFeedback");
+          if (!hasParentFeedbackKey) {
+            return error("parentFeedback required for parent weekly overlay", 400);
+          }
+          const parentFeedback = parseWeeklyParentFeedback(b.parentFeedback);
+          if (!parentFeedback) {
+            return error("parentFeedback invalid", 400);
+          }
+          const now = new Date().toISOString();
+          if (sharedAthleteIdRaw) {
+            if (sharedAthleteIdRaw.length > 64) {
+              return error("sharedAthleteId invalid", 400);
+            }
+            if (!recEarly.athletes.some((a) => a.id === sharedAthleteIdRaw)) {
+              return error("sharedAthleteId is not linked to this session", 400);
+            }
+            const existing = recEarly.weeklyByAthleteId[sharedAthleteIdRaw];
+            if (!existing) {
+              return error("No weekly doc for this athlete", 404);
+            }
+            const merged: WeeklyDoc = {
+              ...existing,
+              parentFeedback: {
+                ...(existing.parentFeedback ?? {}),
+                ...parentFeedback,
+              },
+              updatedAt: now,
+            };
+            const next: SessionRecord = {
+              ...recEarly,
+              weeklyByAthleteId: {
+                ...(recEarly.weeklyByAthleteId || {}),
+                [sharedAthleteIdRaw]: merged,
+              },
+            };
+            await writeSession(env.SESSIONS, token, next);
+            return json({ ok: true }, 200);
+          }
+          if (!recEarly.weekly) {
+            return error("No invite weekly doc", 404);
+          }
+          const mergedInvite: WeeklyDoc = {
+            ...recEarly.weekly,
+            parentFeedback: {
+              ...(recEarly.weekly.parentFeedback ?? {}),
+              ...parentFeedback,
+            },
+            updatedAt: now,
+          };
+          const nextInvite: SessionRecord = { ...recEarly, weekly: mergedInvite };
+          await writeSession(env.SESSIONS, token, nextInvite);
+          return json({ ok: true }, 200);
+        }
+
         const weekStartYMD = typeof b.weekStartYMD === "string" ? b.weekStartYMD.trim() : "";
         const headline = typeof b.headline === "string" ? b.headline.trim() : "";
         const bodyText = typeof b.body === "string" ? b.body.trim() : "";
@@ -1500,8 +1592,8 @@ export default {
           return error("coachOutcome invalid", 400);
         }
 
-        const rec = await readSession(env.SESSIONS, token);
-        if (!rec || rec.writerSecret !== secret) {
+        const rec = recEarly;
+        if (!isCoachWriterEarly) {
           return error("Unauthorized", 401);
         }
 

@@ -18,6 +18,8 @@ type ReadTogetherStoryModalProps = {
   onStepNext: () => void;
   onFinished: () => void;
   onOpenPublishedUrl: (rawUrl: string) => void;
+  weeklyAcknowledged?: boolean;
+  onAcknowledgeWeekly?: () => void;
   primaryFill?: string;
   primaryFillPressed?: string;
   accentBorder?: string;
@@ -36,6 +38,8 @@ export function ReadTogetherStoryModal({
   onStepNext,
   onFinished,
   onOpenPublishedUrl,
+  weeklyAcknowledged = false,
+  onAcknowledgeWeekly,
   primaryFill = "#4f46e5",
   primaryFillPressed = "#4338ca",
   accentBorder = "#c4b5fd",
@@ -226,6 +230,40 @@ export function ReadTogetherStoryModal({
             </>
           ) : null}
         </ScrollView>
+
+        {safeIndex >= total - 1 && onAcknowledgeWeekly ? (
+          weeklyAcknowledged ? (
+            <Text
+              style={{
+                marginTop: 12,
+                fontSize: 14,
+                fontWeight: "700",
+                color: textSecondary,
+                textAlign: "center",
+              }}
+            >
+              Acknowledged
+            </Text>
+          ) : (
+            <Pressable
+              onPress={onAcknowledgeWeekly}
+              accessibilityRole="button"
+              accessibilityLabel="Acknowledge this weekly note"
+              style={({ pressed }) => ({
+                marginTop: 12,
+                paddingVertical: 14,
+                paddingHorizontal: 16,
+                borderRadius: CARD_RADIUS,
+                borderWidth: 1,
+                borderColor: accentBorder,
+                backgroundColor: pressed ? accentBgPressed : accentBg,
+                alignItems: "center",
+              })}
+            >
+              <Text style={{ fontSize: 16, fontWeight: "800", color: primaryFill }}>You got it</Text>
+            </Pressable>
+          )
+        ) : null}
 
         <View style={{ flexDirection: "row", gap: 12, marginTop: 8 }}>
           {safeIndex > 0 ? (
