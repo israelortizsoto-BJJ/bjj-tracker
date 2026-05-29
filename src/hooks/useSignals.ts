@@ -75,6 +75,17 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
   const hydrationVersion = useCoachSyncHydrationVersion();
   const prevHydrationVersionRef = useRef(hydrationVersion);
 
+  const coachAggregatePeek =
+    deviceRole === "coach" && trimmedAthlete
+      ? peekCoachCompetitionAggregate(trimmedAthlete)
+      : null;
+  const coachTrainingProofPeek =
+    deviceRole === "coach" && trimmedAthlete
+      ? peekCoachTrainingProof(trimmedAthlete)
+      : null;
+  const effectiveCoachAggregate = coachAggregate ?? coachAggregatePeek;
+  const effectiveCoachTrainingProof = coachTrainingProof ?? coachTrainingProofPeek;
+
   useEffect(() => {
     if (deviceRole !== "coach" || !trimmedAthlete) {
       setCoachAggregate(null);
@@ -99,9 +110,9 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     let mounted = true;
     const athleteId = trimmedAthlete;
     const peekedAggregate = peekCoachCompetitionAggregate(athleteId);
-    if (peekedAggregate) setCoachAggregate(peekedAggregate);
+    setCoachAggregate(peekedAggregate);
     const peekedProof = peekCoachTrainingProof(athleteId);
-    if (peekedProof) setCoachTrainingProof(peekedProof);
+    setCoachTrainingProof(peekedProof);
 
     void getCoachCompetitionAggregate(athleteId).then((artifact) => {
       if (!mounted) return;
@@ -222,7 +233,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       | "overlay_missing"
       | "overlay_hidden_visibility"
       | "overlay_applied" = "overlay_missing";
-    const proof = coachTrainingProof;
+    const proof = effectiveCoachTrainingProof;
     const proofSessionCount = proof?.currentWeekSessionCount ?? null;
 
     const localMatchLineage = hasFullLocalMatchLineage(scopedCompetitions);
@@ -233,7 +244,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
         });
       }
     } else {
-      const aggregate = coachAggregate;
+      const aggregate = effectiveCoachAggregate;
       if (!aggregate) {
         if (__DEV__) {
           console.log("[COMP_AGG_TRACE] overlay_missing", {
@@ -359,6 +370,8 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     competitions,
     coachAggregate,
     coachTrainingProof,
+    coachAggregatePeek,
+    coachTrainingProofPeek,
     deviceRole,
     linkedKidTrim,
     referenceDate,
@@ -367,5 +380,6 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     connectionState,
     trimmedAthlete,
     kidId,
+    hydrationVersion,
   ]);
 }

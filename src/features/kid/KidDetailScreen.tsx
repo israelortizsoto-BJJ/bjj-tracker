@@ -1691,6 +1691,19 @@ export default function KidDetailScreen() {
         ...(payload.coachOutcome ? { coachOutcome: payload.coachOutcome } : {}),
         parentFeedback: {},
       };
+      if (__DEV__) {
+        console.log("[KID_DETAIL_ACK_GATE]", {
+          weeklyAcknowledged: false,
+          acknowledgedAt: null,
+          updatedAt: publishedAt,
+          headlineSlice: payload.headline?.slice(0, 120) ?? null,
+          systemKey: payload.systemKey ?? null,
+          weekStartYMD: payload.weekStartYMD,
+          hadPriorFeedback: Boolean(
+            publishedWeeklyFeedback?.acknowledgedAt || publishedWeeklyFeedback?.viewedAt,
+          ),
+        });
+      }
       try {
         const cached = await getCachedWeeklyForLinkToken(ws.linkToken);
         const nextWeeklyByAthleteId = { ...(cached?.weeklyByAthleteId ?? {}) };

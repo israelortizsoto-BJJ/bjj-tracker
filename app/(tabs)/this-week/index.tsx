@@ -1313,6 +1313,28 @@ function ParentThisWeekScreen() {
 
   const weeklyParentFeedback = weeklySyncDoc?.parentFeedback;
   const weeklyAcknowledged = Boolean(weeklyParentFeedback?.acknowledgedAt);
+
+  useEffect(() => {
+    if (!__DEV__ || role !== "parent" || !useWeeklySyncHero) return;
+    console.log("[THIS_WEEK_ACK_GATE]", {
+      weeklyAcknowledged,
+      acknowledgedAt: weeklyParentFeedback?.acknowledgedAt ?? null,
+      updatedAt: weeklySyncDoc?.updatedAt ?? null,
+      headlineSlice: weeklySyncDoc?.headline?.slice(0, 120) ?? null,
+      systemKey: weeklySyncDoc?.systemKey ?? null,
+      weekStartYMD: weeklySyncDoc?.weekStartYMD ?? null,
+    });
+  }, [
+    role,
+    useWeeklySyncHero,
+    weeklyAcknowledged,
+    weeklyParentFeedback?.acknowledgedAt,
+    weeklySyncDoc?.updatedAt,
+    weeklySyncDoc?.headline,
+    weeklySyncDoc?.systemKey,
+    weeklySyncDoc?.weekStartYMD,
+  ]);
+
   const handleAcknowledgeWeekly = useCallback(() => {
     if (!weeklySyncDoc || weeklyAcknowledged) return;
     void updateWeeklyFeedback(markWeeklyAcknowledged);

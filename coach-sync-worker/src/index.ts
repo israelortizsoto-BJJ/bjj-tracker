@@ -309,6 +309,44 @@ function error(message: string, status: number, cors = true): Response {
   return json({ error: message }, status, cors);
 }
 
+type WeeklyMaterialSnapshot = {
+  headline: string;
+  body: string;
+  weekStartYMD: string;
+  systemKey?: string;
+};
+
+function trimWeeklyMaterialField(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** Returns material field names that differ between stored weekly and coach PUT snapshot. */
+function weeklyMaterialFieldsChanged(
+  existing: Partial<WeeklyDoc> | WeeklyDoc | null | undefined,
+  incoming: WeeklyMaterialSnapshot,
+  opts?: { systemKeyInPut?: boolean },
+): string[] {
+  if (!existing) return [];
+  const changed: string[] = [];
+  if (trimWeeklyMaterialField(existing.headline) !== trimWeeklyMaterialField(incoming.headline)) {
+    changed.push("headline");
+  }
+  if (trimWeeklyMaterialField(existing.body) !== trimWeeklyMaterialField(incoming.body)) {
+    changed.push("body");
+  }
+  if (
+    trimWeeklyMaterialField(existing.weekStartYMD) !== trimWeeklyMaterialField(incoming.weekStartYMD)
+  ) {
+    changed.push("weekStartYMD");
+  }
+  if (opts?.systemKeyInPut) {
+    const existingSk = trimWeeklyMaterialField(existing.systemKey);
+    const incomingSk = trimWeeklyMaterialField(incoming.systemKey);
+    if (existingSk !== incomingSk) changed.push("systemKey");
+  }
+  return changed;
+}
+
 /** Prevents `{ ...existing, ...next }` from overwriting with `undefined` (which would drop stored link fields on merge). */
 function omitUndefinedShallow<T extends Record<string, unknown>>(obj: T): Partial<T> {
   const out: Record<string, unknown> = {};
@@ -316,6 +354,15 @@ function omitUndefinedShallow<T extends Record<string, unknown>>(obj: T): Partia
     if (v !== undefined) out[k] = v;
   }
   return out as Partial<T>;
+}
+
+/** Coach weekly PUT must not inherit parent overlay from shallow `{ ...existing, ...incoming }` merge. */
+function existingWeeklySansParentFeedback(
+  existing: Partial<WeeklyDoc> | WeeklyDoc | null | undefined,
+): Partial<WeeklyDoc> {
+  if (!existing || typeof existing !== "object") return {};
+  const { parentFeedback: _drop, ...rest } = existing;
+  return rest;
 }
 
 function normalizeAthleteNameForDedupe(name: string): string {
@@ -1664,10 +1711,44 @@ export default {
           sharedAthleteIdRaw
             ? (rec.weeklyByAthleteId[sharedAthleteIdRaw] ?? null)
             : (rec.weekly ?? null);
+
+        const hasSystemKeyKey = Object.prototype.hasOwnProperty.call(b, "systemKey");
+        const projectedMergedSystemKey = hasSystemKeyKey
+          ? parseOptionalSystemKey(b.systemKey)
+          : existingWeeklyForMerge?.systemKey;
+        const ackResetChangedFieldsPreMerge = weeklyMaterialFieldsChanged(
+          existingWeeklyForMerge,
+          {
+            headline: weeklyFromPut.headline,
+            body: weeklyFromPut.body,
+            weekStartYMD: weeklyFromPut.weekStartYMD,
+            systemKey: projectedMergedSystemKey,
+          },
+          { systemKeyInPut: hasSystemKeyKey },
+        );
+        console.log("[WEEKLY_ACK_COMPARE]", {
+          existingHeadline: existingWeeklyForMerge?.headline,
+          incomingHeadline: weeklyFromPut.headline,
+          mergedHeadline: weeklyFromPut.headline,
+
+          existingBody: existingWeeklyForMerge?.body,
+          incomingBody: weeklyFromPut.body,
+
+          existingSystemKey: existingWeeklyForMerge?.systemKey,
+          incomingSystemKey: hasSystemKeyKey ? parseOptionalSystemKey(b.systemKey) : undefined,
+
+          existingUpdatedAt: existingWeeklyForMerge?.updatedAt,
+          incomingUpdatedAt: weeklyFromPut.updatedAt,
+
+          hasParentFeedback: Boolean(existingWeeklyForMerge?.parentFeedback),
+
+          existingParentFeedback: existingWeeklyForMerge?.parentFeedback,
+
+          changedFields: ackResetChangedFieldsPreMerge,
+        });
+
         const mergedWeekly: WeeklyDoc = {
-          ...(existingWeeklyForMerge && typeof existingWeeklyForMerge === "object"
-            ? { ...existingWeeklyForMerge }
-            : {}),
+          ...existingWeeklySansParentFeedback(existingWeeklyForMerge),
           ...omitUndefinedShallow(weeklyFromPut as Record<string, unknown>),
           updatedAt: now,
         };
@@ -1686,7 +1767,6 @@ export default {
           delete mergedWeekly.coachOutcome;
         }
 
-        const hasSystemKeyKey = Object.prototype.hasOwnProperty.call(b, "systemKey");
         if (hasSystemKeyKey) {
           const sk = parseOptionalSystemKey(b.systemKey);
           if (sk) {
@@ -1717,6 +1797,29 @@ export default {
             ? parseOptionalSystemKey(b.systemKey) ?? null
             : null,
           source: "weekly_PUT_mergedWeekly",
+        });
+
+        const ackResetChangedFields = weeklyMaterialFieldsChanged(
+          existingWeeklyForMerge,
+          {
+            headline: weeklyFromPut.headline,
+            body: weeklyFromPut.body,
+            weekStartYMD: weeklyFromPut.weekStartYMD,
+            systemKey: mergedWeekly.systemKey,
+          },
+          { systemKeyInPut: hasSystemKeyKey },
+        );
+        const hadParentFeedbackOnExisting = Boolean(existingWeeklyForMerge?.parentFeedback);
+        delete mergedWeekly.parentFeedback;
+        console.log("[WEEKLY_ACK_RESET]", {
+          sharedAthleteId: sharedAthleteIdRaw || null,
+          changedFields: ackResetChangedFields,
+          hadParentFeedbackOnExisting,
+          resolvedParentFeedback: mergedWeekly.parentFeedback ?? null,
+          resolvedHasParentFeedbackKey: Object.prototype.hasOwnProperty.call(
+            mergedWeekly,
+            "parentFeedback",
+          ),
         });
 
         console.log("[WORKER FINAL WRITE]", mergedWeekly);

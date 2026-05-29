@@ -23,6 +23,7 @@ import type {
   CoachTeamFocusAthleteRow,
 } from "./useCoachInsights";
 import { useCoachInsights } from "./useCoachInsights";
+import type { SyncedWeeklyParentFeedback } from "../../types/coachWeeklySync";
 import OperatingHeader from "../../components/operating/OperatingHeader";
 
 const UI = {
@@ -77,6 +78,26 @@ function appliedInSparringLabel(
   if (appliedInSparring === "sometimes") return "Sometimes";
   if (appliedInSparring === "no_data") return "No Data";
   return "No Data";
+}
+
+function formatParentFeedbackTime(iso: string): string | null {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+function parentFeedbackAckLabel(
+  parentFeedback: SyncedWeeklyParentFeedback | null | undefined,
+): string {
+  if (parentFeedback?.acknowledgedAt) {
+    const time = formatParentFeedbackTime(parentFeedback.acknowledgedAt);
+    return time ? `✓ Acknowledged at ${time}` : "✓ Acknowledged";
+  }
+  if (parentFeedback?.viewedAt) {
+    const time = formatParentFeedbackTime(parentFeedback.viewedAt);
+    return time ? `✓ Viewed at ${time}` : "✓ Viewed";
+  }
+  return "• Not viewed yet";
 }
 
 function attentionLabel(level: AttentionLevel): string {
@@ -186,8 +207,9 @@ function Group({
 }
 
 function AthleteCard({ row }: { row: CoachInsightRow }) {
-  const { athlete, insight } = row;
+  const { athlete, insight, parentFeedback } = row;
   const level = insight.attentionLevel;
+  const showParentFeedbackAck = Boolean(athlete.sharedAthleteId?.trim());
 
   return (
     <Pressable
@@ -222,6 +244,11 @@ function AthleteCard({ row }: { row: CoachInsightRow }) {
             <Text style={styles.metricLine}>
               Outcome: {outcomeLabel(insight.derivedOutcome)}
             </Text>
+            {showParentFeedbackAck ? (
+              <Text style={styles.metricLine}>
+                {parentFeedbackAckLabel(parentFeedback)}
+              </Text>
+            ) : null}
           </View>
         </View>
 

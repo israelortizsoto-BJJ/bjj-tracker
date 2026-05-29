@@ -26,10 +26,12 @@ import {
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
+  pickPublishedWeeklyParentFeedbackForSharedAthlete,
   refreshCoachWriterSessionsAndReconcileStores,
   startOfWeekMondayYMD,
   todayYMD,
 } from "../../storage/coachKidStore";
+import type { SyncedWeeklyParentFeedback } from "../../types/coachWeeklySync";
 import {
   getCoachTrainingProof,
   peekCoachTrainingProof,
@@ -51,6 +53,7 @@ export type CoachInsightRow = {
     appliedInSparring?: CoachAppliedInSparring;
     derivedOutcome?: CoachDerivedOutcome;
   };
+  parentFeedback?: SyncedWeeklyParentFeedback | null;
 };
 
 /** Per-athlete training focus bucket for roster-wide aggregation (shared load with insights). */
@@ -190,7 +193,10 @@ export function useCoachInsights(): {
         setLoading(true);
 
         try {
-          await refreshCoachWriterSessionsAndReconcileStores();
+          const { successfulSnapshots } = await refreshCoachWriterSessionsAndReconcileStores();
+          const sessionsInWriterLinkTraversalOrder = successfulSnapshots.flatMap((snap) =>
+            snap.session ? [snap.session] : [],
+          );
           const [kidsById, rawSessions] = await Promise.all([
             getKidsById(),
             AsyncStorage.getItem(StorageKeys.sessions),
@@ -269,6 +275,27 @@ export function useCoachInsights(): {
               });
             }
 
+            let parentFeedback: SyncedWeeklyParentFeedback | null | undefined;
+            if (operatingAthleteId) {
+              parentFeedback = pickPublishedWeeklyParentFeedbackForSharedAthlete(
+                sessionsInWriterLinkTraversalOrder,
+                operatingAthleteId,
+              );
+              if (__DEV__) {
+                const feedbackStatus = parentFeedback?.acknowledgedAt
+                  ? "acknowledged"
+                  : parentFeedback?.viewedAt
+                    ? "viewed"
+                    : "not_viewed";
+                console.log("[COACH_ACK_RENDER]", {
+                  athleteId,
+                  feedbackStatus,
+                  acknowledgedAt: parentFeedback?.acknowledgedAt ?? null,
+                  viewedAt: parentFeedback?.viewedAt ?? null,
+                });
+              }
+            }
+
             nextInsights.push({
               athlete,
               insight: {
@@ -276,6 +303,7 @@ export function useCoachInsights(): {
                 appliedInSparring,
                 derivedOutcome,
               },
+              ...(operatingAthleteId ? { parentFeedback: parentFeedback ?? null } : {}),
             });
 
             const tf = deriveCompetitionTrainingSkillFocus({
