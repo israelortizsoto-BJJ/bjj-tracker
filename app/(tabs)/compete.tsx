@@ -212,6 +212,11 @@ export default function CompetitionTab() {
 
   useFocusEffect(
     useCallback(() => {
+      console.log("[COMP_FOCUS_RELOAD]", {
+        ts: Date.now(),
+        linkedKidId: linkedKidId ?? null,
+        athleteId: athleteId.trim() || null,
+      });
       if (__DEV__) {
         console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_entered", {
           athleteId: athleteId.trim() || null,
@@ -268,6 +273,17 @@ export default function CompetitionTab() {
   const toggleMonth = useCallback((monthKey: string) => {
     setExpandedMonthKey((prev) => (prev === monthKey ? null : monthKey));
   }, []);
+
+  const openCompetitionEntry = useCallback(
+    (entry: CompeteKidEntryMerged) => {
+      if (deviceRole !== "parent" && deviceRole !== "coach") return;
+      const lane = deviceRole === "coach" ? "coach" : "this-week";
+      router.push(
+        `/${lane}/kid/${encodeURIComponent(entry.kidId)}/competition/edit?entryId=${encodeURIComponent(entry.id)}` as Href,
+      );
+    },
+    [deviceRole],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -343,7 +359,7 @@ export default function CompetitionTab() {
           </View>
         ) : (
           <>
-            <MedalCollection entries={visibleEntries} />
+            <MedalCollection entries={visibleEntries} onOpenEntry={openCompetitionEntry} />
 
             <View style={styles.listSection}>
               <View style={styles.sectionRow}>
@@ -354,7 +370,7 @@ export default function CompetitionTab() {
                 <Text style={styles.emptyLine}>No upcoming competitions.</Text>
               ) : (
                 upcomingEntries.map((entry) => (
-                  <CompetitionCard key={entry.id} entry={entry} />
+                  <CompetitionCard key={entry.id} entry={entry} onOpenEntry={openCompetitionEntry} />
                 ))
               )}
             </View>
@@ -389,7 +405,11 @@ export default function CompetitionTab() {
                       {expanded ? (
                         <View style={styles.monthBody}>
                           {group.entries.map((entry) => (
-                            <CompetitionCard key={entry.id} entry={entry} />
+                            <CompetitionCard
+                              key={entry.id}
+                              entry={entry}
+                              onOpenEntry={openCompetitionEntry}
+                            />
                           ))}
                         </View>
                       ) : null}

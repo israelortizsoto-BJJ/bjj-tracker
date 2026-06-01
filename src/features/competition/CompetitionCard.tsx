@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { isCompetitionMatchUiAvailableForEventDate } from "../../_domain/dateKey";
@@ -22,7 +21,13 @@ function cardBorderColor(medal: KidCompetitionMedalTier): string {
   return FEED.line;
 }
 
-export function CompetitionCard({ entry }: { entry: CompeteKidEntryMerged }) {
+export function CompetitionCard({
+  entry,
+  onOpenEntry,
+}: {
+  entry: CompeteKidEntryMerged;
+  onOpenEntry: (entry: CompeteKidEntryMerged) => void;
+}) {
   const tier = competeMedalTierFromKidEntry(entry);
   const isPastCompetition = isCompetitionMatchUiAvailableForEventDate(entry.eventDate);
 
@@ -30,7 +35,7 @@ export function CompetitionCard({ entry }: { entry: CompeteKidEntryMerged }) {
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Open ${entry.tournamentName}`}
-      onPress={() => router.push(`/competition/${encodeURIComponent(entry.id)}`)}
+      onPress={() => onOpenEntry(entry)}
       style={({ pressed }) => [
         styles.card,
         { borderColor: cardBorderColor(tier), opacity: pressed ? 0.92 : 1 },

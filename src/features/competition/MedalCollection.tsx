@@ -1,4 +1,3 @@
-import { router } from "expo-router";
 import { useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -91,7 +90,13 @@ function buildMedalYearGroups(entries: CompeteKidEntryMerged[]): MedalYearGroup[
     }));
 }
 
-export function MedalCollection({ entries }: { entries: CompeteKidEntryMerged[] }) {
+export function MedalCollection({
+  entries,
+  onOpenEntry,
+}: {
+  entries: CompeteKidEntryMerged[];
+  onOpenEntry: (entry: CompeteKidEntryMerged) => void;
+}) {
   const yearGroups = useMemo(() => buildMedalYearGroups(entries), [entries]);
   const podiumCount = useMemo(
     () => yearGroups.reduce((n, g) => n + g.entries.length, 0),
@@ -132,7 +137,7 @@ export function MedalCollection({ entries }: { entries: CompeteKidEntryMerged[] 
                       key={entry.id}
                       accessibilityRole="button"
                       accessibilityLabel={`Open ${entry.tournamentName}`}
-                      onPress={() => router.push(`/competition/${encodeURIComponent(entry.id)}`)}
+                      onPress={() => onOpenEntry(entry)}
                       style={({ pressed }) => [
                         styles.medalTile,
                         pressed ? styles.medalTilePressed : styles.medalTileIdle,
