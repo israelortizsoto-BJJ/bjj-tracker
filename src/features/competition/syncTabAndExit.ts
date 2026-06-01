@@ -1,6 +1,5 @@
 import {
   CommonActions,
-  StackActions,
   type NavigationProp,
   type NavigationState,
   type ParamListBase,
@@ -8,8 +7,6 @@ import {
 import { router } from "expo-router";
 
 import { store } from "expo-router/build/global-state/router-store";
-
-import { InteractionManager } from "react-native";
 
 import {
   logCompeteExitStackReset,
@@ -69,22 +66,56 @@ function findValidatedTabsStateInTree(
   return null;
 }
 
+function serializeNavigationStateTree(state: NavigationState | undefined): string[] {
+  const lines: string[] = [];
+
+  const visit = (current: NavigationState | undefined, indent: string) => {
+    if (!current) {
+      lines.push(`${indent}<no state>`);
+      return;
+    }
+
+    lines.push(
+      `${indent}${current.type ?? "<unknown navigator>"} key=${current.key ?? "<no key>"} index=${String(current.index ?? "<no index>")}`,
+    );
+    current.routes.forEach((route, routeIndex) => {
+      const active = routeIndex === current.index ? "*" : "-";
+      lines.push(`${indent}  ${active} ${route.name} key=${route.key}`);
+      if (route.state) {
+        visit(route.state as NavigationState, `${indent}    `);
+      }
+    });
+  };
+
+  visit(state, "");
+  return lines;
+}
+
 /**
- * Key of the lane root stack (e.g. `this-week/_layout` Stack) so we can `popToTop` after save.
- * Without this, switching to Compete leaves competition/edit on the lane stack; returning to
- * the tab replays that screen briefly.
+ * Stack owned by the originating lane (e.g. `this-week/_layout` Stack).
+ * Competition exit normalizes this stack before focusing Compete so a retained tab cannot
+ * restore `competition/edit`.
  */
-function laneOuterStackKeyForPopToTop(
+function laneOuterStackForNormalization(
   tabNavigatorState: NavigationState | undefined,
   laneRouteName: "this-week" | "coach",
-): string | null {
+): NavigationState | null {
   if (!tabNavigatorState?.routes?.length) return null;
   const laneRoute = tabNavigatorState.routes.find((r) => r.name === laneRouteName);
   const laneState = laneRoute?.state as NavigationState | undefined;
   if (!laneState?.key) return null;
-  if (!laneState.routes?.length || laneState.routes.length <= 1) return null;
+  if (!laneState.routes?.length) return null;
   if (laneState.type !== "stack") return null;
-  return laneState.key;
+  return laneState;
+}
+
+function isLaneNormalizedToRoot(laneState: NavigationState | null): boolean {
+  return (
+    laneState?.type === "stack" &&
+    laneState.index === 0 &&
+    laneState.routes.length === 1 &&
+    laneState.routes[0]?.name === "index"
+  );
 }
 
 function laneStackScreenNames(
@@ -121,7 +152,7 @@ function readTabNavigatorStateForExit(
 
 /**
  * After save, cancel-style back, delete, or load errors: land on the Competition tab and
- * pop the parent/coach lane stack to root so `competition/edit` does not survive as the
+ * normalize the parent/coach lane stack to root so `competition/edit` does not survive as the
  * active route when the user returns to that tab. Athlete scope is unchanged.
  */
 export function exitToCompeteAfterCompetitionSave(args: {
@@ -132,6 +163,14 @@ export function exitToCompeteAfterCompetitionSave(args: {
   competitionId: string | null;
 }): void {
   const { navigation, actorRole, athleteId, competitionId } = args;
+  const riBegin = store.getRouteInfo();
+  console.log("[COMP_EXIT_BEGIN]", {
+    ts: Date.now(),
+    pathname: String(riBegin.pathname ?? ""),
+    kidId: athleteId,
+    actorRole,
+    competitionId,
+  });
   if (__DEV__) {
     const ri = store.getRouteInfo();
     logAuthorityNavigationReplayDev("exit_to_compete_save_begin", {
@@ -185,24 +224,178 @@ export function exitToCompeteAfterCompetitionSave(args: {
 
   const tabLayerStateBefore = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
   const activeStackBefore = laneStackScreenNames(tabLayerStateBefore, laneRouteName);
-  const laneStackKey = laneOuterStackKeyForPopToTop(tabLayerStateBefore, laneRouteName);
+  const laneStackBefore = laneOuterStackForNormalization(tabLayerStateBefore, laneRouteName);
+  const laneStackKey = laneStackBefore?.key ?? null;
 
-  const popLaneToRoot = (nav: TabSyncScreenNavigation, key: string | null) => {
-    if (!key) return;
-    InteractionManager.runAfterInteractions(() => {
-      nav.dispatch({ ...StackActions.popToTop(), target: key });
+  const schedulePostDispatchTelemetry = () => {
+    queueMicrotask(() => {
+      const tabLayerAfter = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
+      const activeStackAfter = laneStackScreenNames(tabLayerAfter, laneRouteName);
+      const rootAfter = rootNav?.getRootState() as NavigationState | undefined;
+      const focusedTabAfterSave = readFocusedTabFromRootState(rootAfter);
+      const laneStackAfter = laneOuterStackForNormalization(tabLayerAfter, laneRouteName);
+      const laneNormalized = isLaneNormalizedToRoot(laneStackAfter);
+
+      if (!laneNormalized) {
+        console.warn("[COMP_LANE_NORMALIZE_FAIL]", {
+          ts: Date.now(),
+          pathname: currentRoute,
+          kidId: athleteId,
+          actorRole,
+          laneRouteName,
+          reason: "postcondition_not_met",
+          activeStackAfter,
+        });
+      }
+
+      if (__DEV__) {
+        logAuthorityNavigationReplayDev("exit_to_compete_save_post_dispatch", {
+          actorRole,
+          athleteId,
+          focusedTabAfterSave,
+          activeStackAfter,
+          laneStackKey: laneStackKey ?? null,
+        });
+      }
+
+      logCompeteExitStackReset({
+        stackNavigatorKey: laneStackKey,
+        routeCountBefore: laneStackBefore?.routes.length ?? 0,
+        routeCountAfter: laneStackAfter?.routes.length ?? 0,
+        focusedTabAfterSave,
+      });
+
+      logStackReset(laneNormalized, activeStackBefore, activeStackAfter);
+      scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
     });
   };
 
-  if (tabsNav) {
-    tabsNav.dispatch(navAction);
-    popLaneToRoot(tabsNav, laneStackKey);
-  } else if (tabsFallback?.key && rootNav) {
-    rootNav.dispatch({
-      ...navAction,
-      target: tabsFallback.key,
+  const focusCompete = () => {
+    console.log("[COMP_NAVIGATE_COMPETE]", {
+      ts: Date.now(),
+      pathname: currentRoute,
+      kidId: athleteId,
     });
-    popLaneToRoot(rootNav as TabSyncScreenNavigation, laneStackKey);
+    if (tabsNav) {
+      tabsNav.dispatch(navAction);
+      schedulePostDispatchTelemetry();
+      return;
+    }
+    if (tabsFallback?.key && rootNav) {
+      rootNav.dispatch({
+        ...navAction,
+        target: tabsFallback.key,
+      });
+      schedulePostDispatchTelemetry();
+    }
+  };
+
+  const normalizeLaneToRoot = (nav: TabSyncScreenNavigation): boolean => {
+    if (!laneStackBefore?.key) {
+      console.log("[COMP_ROOT_STATE_SNAPSHOT]", {
+        tree: serializeNavigationStateTree(
+          rootNav?.getRootState() as NavigationState | undefined,
+        ),
+      });
+      console.warn("[COMP_LANE_NORMALIZE_FAIL]", {
+        ts: Date.now(),
+        pathname: currentRoute,
+        kidId: athleteId,
+        actorRole,
+        laneRouteName,
+        reason: "lane_stack_not_found",
+      });
+      return false;
+    }
+    if (isLaneNormalizedToRoot(laneStackBefore)) {
+      console.log("[COMP_LANE_ALREADY_CLEAN]", {
+        ts: Date.now(),
+        pathname: currentRoute,
+        kidId: athleteId,
+        actorRole,
+        laneRouteName,
+        laneStackKey: laneStackBefore.key,
+      });
+      return true;
+    }
+    console.log("[COMP_LANE_NORMALIZE_BEGIN]", {
+      ts: Date.now(),
+      pathname: currentRoute,
+      kidId: athleteId,
+      actorRole,
+      laneRouteName,
+      laneStackKey: laneStackBefore.key,
+      activeStackBefore,
+    });
+    nav.dispatch({
+      ...CommonActions.reset({
+        index: 0,
+        routes: [{ name: "index" }],
+      }),
+      target: laneStackBefore.key,
+    });
+    const tabLayerStateAfterReset = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
+    const laneStackAfterReset = laneOuterStackForNormalization(
+      tabLayerStateAfterReset,
+      laneRouteName,
+    );
+    if (!isLaneNormalizedToRoot(laneStackAfterReset)) {
+      console.log("[COMP_LANE_VERIFY_RETRY]", {
+        ts: Date.now(),
+        pathname: currentRoute,
+        kidId: athleteId,
+        actorRole,
+        laneRouteName,
+        activeStackAfter: laneStackScreenNames(tabLayerStateAfterReset, laneRouteName),
+      });
+      queueMicrotask(() => {
+        const tabLayerStateAfterRetry = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
+        const laneStackAfterRetry = laneOuterStackForNormalization(
+          tabLayerStateAfterRetry,
+          laneRouteName,
+        );
+        if (!laneStackAfterRetry || !isLaneNormalizedToRoot(laneStackAfterRetry)) {
+          console.warn("[COMP_LANE_VERIFY_ABORT]", {
+            ts: Date.now(),
+            pathname: currentRoute,
+            kidId: athleteId,
+            actorRole,
+            laneRouteName,
+            reason: "bounded_postcondition_not_met",
+            activeStackAfter: laneStackScreenNames(tabLayerStateAfterRetry, laneRouteName),
+          });
+          return;
+        }
+        console.log("[COMP_LANE_VERIFY_RECOVERED]", {
+          ts: Date.now(),
+          pathname: currentRoute,
+          kidId: athleteId,
+          actorRole,
+          laneRouteName,
+          laneStackKey: laneStackAfterRetry.key,
+        });
+        focusCompete();
+      });
+      return false;
+    }
+    console.log("[COMP_LANE_NORMALIZE_SUCCESS]", {
+      ts: Date.now(),
+      pathname: currentRoute,
+      kidId: athleteId,
+      actorRole,
+      laneRouteName,
+      laneStackKey: laneStackBefore.key,
+      expectedStackAfter: ["index"],
+    });
+    return true;
+  };
+
+  if (tabsNav) {
+    if (!normalizeLaneToRoot(tabsNav)) return;
+    focusCompete();
+  } else if (tabsFallback?.key && rootNav) {
+    if (!normalizeLaneToRoot(rootNav as TabSyncScreenNavigation)) return;
+    focusCompete();
   } else {
     logStackReset(false, activeStackBefore, laneStackScreenNames(tabLayerStateBefore, laneRouteName));
     router.replace("/compete");
@@ -210,30 +403,4 @@ export function exitToCompeteAfterCompetitionSave(args: {
     return;
   }
 
-  queueMicrotask(() => {
-    const tabLayerAfter = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
-    const activeStackAfter = laneStackScreenNames(tabLayerAfter, laneRouteName);
-    const rootAfter = rootNav?.getRootState() as NavigationState | undefined;
-    const focusedTabAfterSave = readFocusedTabFromRootState(rootAfter);
-
-    if (__DEV__) {
-      logAuthorityNavigationReplayDev("exit_to_compete_save_post_dispatch", {
-        actorRole,
-        athleteId,
-        focusedTabAfterSave,
-        activeStackAfter,
-        laneStackKey: laneStackKey ?? null,
-      });
-    }
-
-    logCompeteExitStackReset({
-      stackNavigatorKey: laneStackKey,
-      routeCountBefore: 0,
-      routeCountAfter: 0,
-      focusedTabAfterSave,
-    });
-
-    logStackReset(Boolean(laneStackKey), activeStackBefore, activeStackAfter);
-    scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
-  });
 }
