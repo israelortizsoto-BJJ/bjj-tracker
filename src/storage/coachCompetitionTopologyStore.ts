@@ -8,6 +8,9 @@ import { StorageKeys } from "./storageKeys";
 
 type TopologyByAthleteId = Record<string, SyncedCompetitionTopologyArtifact>;
 
+/** In-process mirror for synchronous render-only projection reads. */
+let topologyMemory: TopologyByAthleteId | null = null;
+
 export type CoachCompetitionTopologyWriteResult =
   | "hydrate_store_overwrite"
   | "hydrate_skipped_stale"
@@ -126,16 +129,28 @@ function safeParseStore(raw: string | null): TopologyByAthleteId {
 }
 
 async function readStore(): Promise<TopologyByAthleteId> {
-  return safeParseStore(
+  const map = safeParseStore(
     await AsyncStorage.getItem(StorageKeys.coachCompetitionTopologyByAthleteId),
   );
+  topologyMemory = map;
+  return map;
 }
 
 async function writeStore(map: TopologyByAthleteId): Promise<void> {
+  topologyMemory = map;
   await AsyncStorage.setItem(
     StorageKeys.coachCompetitionTopologyByAthleteId,
     JSON.stringify(map),
   );
+}
+
+/** Read-only sync peek for render-only projection. Null until hydration has read or written cache. */
+export function peekCoachCompetitionTopology(
+  sharedAthleteId: string,
+): SyncedCompetitionTopologyArtifact | null {
+  const athleteId = sharedAthleteId.trim();
+  if (!athleteId || !topologyMemory) return null;
+  return topologyMemory[athleteId] ?? null;
 }
 
 /** Read-only canonical topology cache for one shared athlete. */

@@ -1,6 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { isCompetitionMatchUiAvailableForEventDate } from "../../_domain/dateKey";
+import { useDeviceRole } from "../../deviceRole/DeviceRoleProvider";
+import { projectCompetitionCompeteView } from "../../domain/competition/projectCompetitionCompeteView";
+import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
 import { competeMedalTierFromKidEntry, type KidCompetitionMedalTier } from "../../types/coachKid";
 import { CompetitionMedalMark, type CompeteKidEntryMerged } from "./MedalGallery";
 import { MatchCard } from "./MatchCard";
@@ -28,6 +31,19 @@ export function CompetitionCard({
   entry: CompeteKidEntryMerged;
   onOpenEntry: (entry: CompeteKidEntryMerged) => void;
 }) {
+  const { role: deviceRole } = useDeviceRole();
+  const projectedEntry =
+    deviceRole === "coach"
+      ? projectCompetitionCompeteView({
+          shell: entry,
+          topologyArtifact: peekCoachCompetitionTopology(entry.sharedAthleteId ?? ""),
+          overlayAnnotations: entry.matches.map((match) => ({
+            matchLineageKey: match.id,
+            coachNote: match.coachNote,
+          })),
+          fallbackMatches: entry.matches,
+        })
+      : entry;
   const tier = competeMedalTierFromKidEntry(entry);
   const isPastCompetition = isCompetitionMatchUiAvailableForEventDate(entry.eventDate);
 
@@ -72,7 +88,7 @@ export function CompetitionCard({
 
       {isPastCompetition ? (
         <View style={styles.matchList}>
-          {entry.matches.map((match, index) => (
+          {projectedEntry.matches.map((match, index) => (
             <MatchCard key={match.id} snapshot={match} index={index} />
           ))}
         </View>
