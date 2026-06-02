@@ -86,6 +86,8 @@ import {
 import { deleteSessionById } from "../../storage/sessionsStore";
 import { getKidStandingGuidance } from "../../storage/kidStandingGuidanceStore";
 import { StorageKeys } from "../../storage/storageKeys";
+import { logCompDelete } from "../../dev/competitionMutationDevLog";
+import { deleteCompetition } from "../../domain/competition/CompetitionSync";
 import {
   mergeCompetitionMatchDetailIntoEntries,
   pickLastCompetitionWeeklyContext,
@@ -1472,21 +1474,48 @@ export default function KidDetailScreen() {
   );
 
   const requestDeleteCompetition = useCallback(
-    (entryId: string, tournamentName: string) => {
-      const label = tournamentName.trim() || "this entry";
+    (row: KidCompetitionEntry) => {
+      const label = row.tournamentName.trim() || "this entry";
       Alert.alert("Delete competition?", `Delete “${label}”? This cannot be undone.`, [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            await deleteKidCompetitionEntry(entryId);
+            if (row.sharedCompetitionId || row.sharedAthleteId) {
+              const outcome = await deleteCompetition({
+                entryId: row.id,
+                kidId,
+              });
+              if (!outcome.ok) {
+                Alert.alert(outcome.alertTitle, outcome.alertMessage);
+                return;
+              }
+              await load();
+              return;
+            }
+            logCompDelete("BEGIN", {
+              competitionId: row.id,
+              athleteId: kidId,
+              operationKind: "optimistic",
+              surface: "KidDetailScreen.requestDeleteCompetition",
+              phaseDetail: "legacy_local_only_no_deleteCompetition_sync",
+              localStoreAffected: "kidCompetitionStore",
+            });
+            await deleteKidCompetitionEntry(row.id);
+            logCompDelete("COMPLETE", {
+              competitionId: row.id,
+              athleteId: kidId,
+              operationKind: "local",
+              surface: "KidDetailScreen.requestDeleteCompetition",
+              phaseDetail: "legacy_local_only_no_remote_publish",
+            });
             await load();
           },
         },
       ]);
     },
-    [load],
+    [kidId, load],
   );
 
   const openCoachCompetitionVideos = useCallback((row: KidCompetitionEntry) => {
@@ -2952,7 +2981,7 @@ export default function KidDetailScreen() {
                             enabled={!isSyncedRow}
                             renderRightActions={() => (
                               <Pressable
-                                onPress={() => requestDeleteCompetition(row.id, row.tournamentName)}
+                                onPress={() => requestDeleteCompetition(row)}
                                 accessibilityLabel="Delete competition entry"
                                 style={({ pressed }) => ({
                                   justifyContent: "center",

@@ -51,8 +51,14 @@ import {
 } from "@/src/features/competition/competitionMatchEditor";
 import { logCompSaveRouteState } from "@/src/features/competition/compSaveExitTelemetry";
 import { exitToCompeteAfterCompetitionSave } from "@/src/features/competition/syncTabAndExit";
+import { deleteCompetition } from "@/src/domain/competition/CompetitionSync";
 import { projectCompetitionEditorView } from "@/src/domain/competition/projectCompetitionEditorView";
 import { readMatchBreakdownOverlay } from "@/src/domain/competition/readMatchBreakdownOverlay";
+import {
+  logCompDelete,
+  logCompPublishGuard,
+  logCompSave,
+} from "@/src/dev/competitionMutationDevLog";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
 import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
 import type { CoachMatchBreakdownOverlay } from "@/src/types/coachMatchBreakdownOverlay";
@@ -156,6 +162,7 @@ export default function KidCompetitionEditScreen() {
     sharedAthleteId: string;
     sharedCompetitionId: string;
   } | null>(null);
+  const [linkedCompetition, setLinkedCompetition] = useState(false);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -195,6 +202,8 @@ export default function KidCompetitionEditScreen() {
       const fallbackMatches = deriveInitialMatches(found, detail, reactId);
       const sharedAthleteId = found.sharedAthleteId?.trim() ?? "";
       const sharedCompetitionId = found.sharedCompetitionId?.trim() ?? "";
+      const isLinkedCompetition = Boolean(sharedAthleteId || sharedCompetitionId);
+      setLinkedCompetition(isLinkedCompetition);
       const topologyArtifact = sharedAthleteId
         ? await getCoachCompetitionTopology(sharedAthleteId)
         : null;
@@ -202,7 +211,7 @@ export default function KidCompetitionEditScreen() {
         (competition) => competition.sharedCompetitionId === sharedCompetitionId,
       );
       if (!sharedAthleteId || !sharedCompetitionId || !topology) {
-        setCanonicalReadOnly(false);
+        setCanonicalReadOnly(isLinkedCompetition);
         setOverlayScope(null);
         setMatches(fallbackMatches);
         if (__DEV__) {
@@ -276,6 +285,7 @@ export default function KidCompetitionEditScreen() {
     setMatches([createEmptyMatch(`new-${Date.now()}`)]);
     setCanonicalReadOnly(false);
     setOverlayScope(null);
+    setLinkedCompetition(false);
     setLoading(false);
   }, [isNew, openNonce]);
 
@@ -311,6 +321,7 @@ export default function KidCompetitionEditScreen() {
           setMatches([createEmptyMatch(`new-${Date.now()}`)]);
           setCanonicalReadOnly(false);
           setOverlayScope(null);
+          setLinkedCompetition(false);
         }
         setLoading(false);
         return;
@@ -517,11 +528,30 @@ export default function KidCompetitionEditScreen() {
 
   async function onSave() {
     if ((!canonicalReadOnly && !canSave) || !kidId) return;
+    if (canonicalReadOnly && !overlayScope) {
+      logCompPublishGuard({
+        competitionId: entryId,
+        athleteId: kidId,
+        operationKind: "canonical",
+        surface: "coachCompetitionEdit.canonical_overlay_only",
+        phaseDetail: "missing_topology_blocks_legacy_canonical_write",
+      });
+      Alert.alert(
+        "Still syncing",
+        "Canonical match details are not available yet. Refresh and reopen this competition before saving coach notes.",
+      );
+      return;
+    }
     if (canonicalReadOnly && overlayScope) {
-      console.log("[COMP_SAVE_BEGIN]", {
-        ts: Date.now(),
-        pathname: String(pathname ?? ""),
-        kidId,
+      logCompSave("BEGIN", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: overlayScope.sharedAthleteId,
+        canonicalPayloadIds: [overlayScope.sharedCompetitionId],
+        overlayCount: matches.length,
+        operationKind: "canonical",
+        surface: "coachCompetitionEdit.canonical_overlay_only",
+        lineageKey: matches[0]?.id ?? null,
       });
       setSaving(true);
       try {
@@ -544,11 +574,14 @@ export default function KidCompetitionEditScreen() {
             overlayCount: matches.length,
           });
         }
-        console.log("[COMP_SAVE_COMPLETE]", {
-          ts: Date.now(),
-          pathname: String(pathname ?? ""),
-          kidId,
+        logCompSave("COMPLETE", {
           competitionId: entryId,
+          athleteId: kidId,
+          sharedAthleteId: overlayScope.sharedAthleteId,
+          canonicalPayloadIds: [overlayScope.sharedCompetitionId],
+          overlayCount: matches.length,
+          operationKind: "canonical",
+          surface: "coachCompetitionEdit.canonical_overlay_only",
         });
         exitToCompeteAfterCompetitionSave({
           navigation,
@@ -558,6 +591,14 @@ export default function KidCompetitionEditScreen() {
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        logCompSave("ERROR", {
+          competitionId: entryId,
+          athleteId: kidId,
+          sharedAthleteId: overlayScope.sharedAthleteId,
+          operationKind: "canonical",
+          surface: "coachCompetitionEdit.canonical_overlay_only",
+          error: msg,
+        });
         Alert.alert("Could not save", msg || "Coach notes could not be saved.");
       } finally {
         console.log("[COMP_EDITOR_FINALLY]", {
@@ -579,10 +620,12 @@ export default function KidCompetitionEditScreen() {
     const snapshots = matches.map((m) => snapshotFromLocal(m));
     const competitionVideos = competitionVideoRefsFromMatches(snapshots);
 
-    console.log("[COMP_SAVE_BEGIN]", {
-      ts: Date.now(),
-      pathname: String(pathname ?? ""),
-      kidId,
+    logCompSave("BEGIN", {
+      competitionId: isNew ? null : entryId,
+      athleteId: kidId,
+      operationKind: "optimistic",
+      surface: "coachCompetitionEdit.local_shell",
+      overlayCount: snapshots.length,
     });
 
     setSaving(true);
@@ -590,12 +633,26 @@ export default function KidCompetitionEditScreen() {
       const kidsByIdForShared = await getKidsById();
       const resolvedSharedAthleteId =
         (kidsByIdForShared[kidId]?.sharedAthleteId ?? "").trim() || undefined;
+      if (linkedCompetition || (isNew && resolvedSharedAthleteId)) {
+        logCompPublishGuard({
+          competitionId: isNew ? null : entryId,
+          athleteId: kidId,
+          sharedAthleteId: resolvedSharedAthleteId ?? null,
+          operationKind: "canonical",
+          surface: "coachCompetitionEdit.local_shell",
+          phaseDetail: "linked_competition_blocks_legacy_canonical_write",
+        });
+        Alert.alert(
+          "Coach review only",
+          "Linked competition facts are managed by the parent. Refresh and reopen the competition to add coach notes.",
+        );
+        return;
+      }
 
       let savedCompetitionId = entryId;
       if (isNew) {
         const created = await createKidCompetitionEntry({
           kidId,
-          ...(resolvedSharedAthleteId ? { sharedAthleteId: resolvedSharedAthleteId } : {}),
           tournamentName: name,
           eventDate,
           result: resultDraft,
@@ -614,7 +671,6 @@ export default function KidCompetitionEditScreen() {
         savedCompetitionId = created.id;
       } else {
         await updateKidCompetitionEntry(entryId, {
-          ...(resolvedSharedAthleteId ? { sharedAthleteId: resolvedSharedAthleteId } : {}),
           tournamentName: name,
           eventDate,
           result: resultDraft,
@@ -636,11 +692,14 @@ export default function KidCompetitionEditScreen() {
         sharedAthleteId: resolvedSharedAthleteId ?? null,
         actorRole: "coach",
       });
-      console.log("[COMP_SAVE_COMPLETE]", {
-        ts: Date.now(),
-        pathname: String(pathname ?? ""),
-        kidId,
+      logCompSave("COMPLETE", {
         competitionId: savedCompetitionId,
+        athleteId: kidId,
+        sharedAthleteId: resolvedSharedAthleteId ?? null,
+        operationKind: "local",
+        surface: "coachCompetitionEdit.local_shell",
+        overlayCount: snapshots.length,
+        localStoreAffected: "kidCompetitionStore+competitionDetailStore",
       });
       exitToCompeteAfterCompetitionSave({
         navigation,
@@ -650,6 +709,13 @@ export default function KidCompetitionEditScreen() {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      logCompSave("ERROR", {
+        competitionId: entryId,
+        athleteId: kidId,
+        operationKind: "local",
+        surface: "coachCompetitionEdit.local_shell",
+        error: msg,
+      });
       Alert.alert(
         "Could not save",
         msg ||
@@ -666,10 +732,6 @@ export default function KidCompetitionEditScreen() {
   }
 
   function onDelete() {
-    if (canonicalReadOnly) {
-      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "competition_delete" });
-      return;
-    }
     if (isNew) {
       exitToCompeteAfterCompetitionSave({
         navigation,
@@ -685,7 +747,36 @@ export default function KidCompetitionEditScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
+          if (linkedCompetition) {
+            const outcome = await deleteCompetition({ entryId, kidId });
+            if (!outcome.ok) {
+              Alert.alert(outcome.alertTitle, outcome.alertMessage);
+              return;
+            }
+            exitToCompeteAfterCompetitionSave({
+              navigation,
+              actorRole: "coach",
+              athleteId: kidId,
+              competitionId: entryId,
+            });
+            return;
+          }
+          logCompDelete("BEGIN", {
+            competitionId: entryId,
+            athleteId: kidId,
+            operationKind: "optimistic",
+            surface: "coachCompetitionEdit.onDelete",
+            phaseDetail: "local_only_no_remote_delete",
+            localStoreAffected: "kidCompetitionStore",
+          });
           await deleteKidCompetitionEntry(entryId);
+          logCompDelete("COMPLETE", {
+            competitionId: entryId,
+            athleteId: kidId,
+            operationKind: "local",
+            surface: "coachCompetitionEdit.onDelete",
+            phaseDetail: "local_only_no_remote_delete",
+          });
           exitToCompeteAfterCompetitionSave({
             navigation,
             actorRole: "coach",
