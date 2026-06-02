@@ -215,6 +215,16 @@ export default function KidCompetitionEditScreen() {
     setLoading(false);
   }, [isNew, openNonce]);
 
+  useEffect(() => {
+    return () => {
+      console.log("[COMP_EDITOR_UNMOUNT]", {
+        ts: Date.now(),
+        pathname: String(pathname ?? ""),
+        kidId,
+      });
+    };
+  }, [pathname, kidId]);
+
   useFocusEffect(
     useCallback(() => {
       logCompSaveRouteState({
@@ -423,6 +433,12 @@ export default function KidCompetitionEditScreen() {
     const snapshots = matches.map((m) => snapshotFromLocal(m));
     const competitionVideos = competitionVideoRefsFromMatches(snapshots);
 
+    console.log("[COMP_SAVE_BEGIN]", {
+      ts: Date.now(),
+      pathname: String(pathname ?? ""),
+      kidId,
+    });
+
     setSaving(true);
     try {
       const kidsByIdForShared = await getKidsById();
@@ -474,6 +490,12 @@ export default function KidCompetitionEditScreen() {
         sharedAthleteId: resolvedSharedAthleteId ?? null,
         actorRole: "coach",
       });
+      console.log("[COMP_SAVE_COMPLETE]", {
+        ts: Date.now(),
+        pathname: String(pathname ?? ""),
+        kidId,
+        competitionId: savedCompetitionId,
+      });
       exitToCompeteAfterCompetitionSave({
         navigation,
         actorRole: "coach",
@@ -488,6 +510,11 @@ export default function KidCompetitionEditScreen() {
           "Competition data could not be saved. If this keeps happening, try shorter notes or remove the video(s) and save again.",
       );
     } finally {
+      console.log("[COMP_EDITOR_FINALLY]", {
+        ts: Date.now(),
+        pathname: String(pathname ?? ""),
+        kidId,
+      });
       setSaving(false);
     }
   }

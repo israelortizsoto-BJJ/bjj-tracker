@@ -14,6 +14,25 @@ Edit these each session
 
 ⸻
 
+ACTIVE PHASE:
+Phase 0 — local freeze race proof
+
+GOVERNING DOCS:
+- competition-overlay-architecture-v2.md
+- competition-overlay-migration-plan.md
+
+PROTECTED SYSTEMS:
+- canonical authority
+- hydration
+- training proof
+- ACK systems
+- athlete isolation
+
+CURRENT OBJECTIVE:
+prove save/close lifecycle collision
+WITHOUT architecture mutation
+
+
 Operating Note
 
 Use terminal-first updates for:

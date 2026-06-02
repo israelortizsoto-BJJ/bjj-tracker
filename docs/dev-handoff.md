@@ -1,5 +1,940 @@
 # BJJ Tracker - Dev Handoff Notes
 
+
+
+# DATE: 2026-05-29
+
+# PHASE: Runtime Recovery + Overlay Architecture Reassessment
+
+==================================================
+DAY SUMMARY
+===========
+
+Today became a major operational correction and architectural reality-check day.
+
+The repo temporarily drifted back into the same failure pattern previously seen during:
+
+* Build 34 experimental layering
+* authority overreach
+* distributed instrumentation expansion
+* patch-storm debugging
+
+The most important outcome of the day:
+
+THE CORE SYSTEM WAS NOT ACTUALLY CORRUPTED.
+
+Instead:
+a local runtime/navigation/modal lifecycle freeze was repeatedly misclassified as distributed sync corruption.
+
+That distinction matters enormously going forward.
+
+By EOD:
+
+* repo returned to clean rollback floor
+* dictation functionality recovered
+* distributed sync floor restored
+* canonical authority remained intact
+* no evidence of catastrophic GAAL collapse
+* no evidence of athlete authority corruption
+* no evidence of training-proof corruption
+* no evidence of weekly sync corruption
+
+The runtime freeze still exists after save/close on competition edit flows,
+BUT the system is back on a stable operational floor.
+
+==================================================
+CRITICAL EVENT OF THE DAY
+=========================
+
+We drifted into old debugging behavior again.
+
+Specifically:
+
+* widening scope too early
+* adding instrumentation before proving the problem layer
+* assuming authority corruption before runtime proof existed
+* patching speculative systems instead of validating repo/runtime truth
+
+This recreated the exact dangerous conditions from previous collapse cycles.
+
+The repo began drifting toward:
+
+* overlay lineage experimentation
+* authority instrumentation expansion
+* competition topology tracing
+* hydration speculation
+* distributed-state theories
+
+Result:
+dictation broke again.
+
+This was a MAJOR WARNING SIGN.
+
+==================================================
+MOST IMPORTANT LESSON RECONFIRMED
+=================================
+
+DO NOT TOUCH PROTECTED SYSTEMS
+UNLESS RUNTIME PROOF DEMANDS IT.
+
+Protected systems include:
+
+* athlete authority
+* weekly sync
+* training proof
+* hydration orchestration
+* overlay stores
+* lineage reconciliation
+* distributed persistence
+
+Today proved again:
+
+A LOCAL MODAL/NAVIGATION FREEZE
+can LOOK like distributed corruption
+if debugging discipline collapses.
+
+==================================================
+WHAT ACTUALLY RECOVERED THE SYSTEM
+==================================
+
+Recovery came from:
+
+1. STOPPING PATCH EXPANSION
+2. RESTORING REPO TRUTH
+3. HARD RESETTING TO CLEAN FLOOR
+4. REMOVING SPECULATIVE TRACE FILES
+5. RETURNING TO LAST KNOWN STABLE RUNTIME
+
+Commands executed:
+
+```bash
+git restore .
+
+rm -f docs/competition-runtime-phase-0-observations.md
+
+rm -f src/domain/competition/compEditLifecycleDevTrace.ts
+
+rm -f src/domain/competition/competitionNavigationLifecycleTrace.ts
+
+rm -f src/domain/competition/competitionTopologyRuntimeTrace.ts
+```
+
+Result:
+
+* repo clean
+* dictation restored
+* coach app functional again
+* runtime floor stabilized
+
+==================================================
+IMPORTANT DISCOVERY
+===================
+
+The current bug pattern strongly indicates:
+
+LOCAL NAVIGATION / MODAL LIFECYCLE COLLISION
+
+NOT:
+
+* distributed sync corruption
+* athlete authority corruption
+* weekly corruption
+* overlay corruption
+* worker corruption
+
+Evidence:
+
+PASS:
+
+* dictation begins correctly
+* transcription completes
+* coach overlay editing works
+* saves initiate correctly
+* authority survives
+* athlete switching survives
+* sync remains intact
+
+FAIL:
+
+* app freezes AFTER save/close
+* compete tab destabilizes until hard close
+* modal lifecycle appears stuck
+* navigation recovery requires relaunch
+
+This matches historical observations from:
+Build 34 regression analysis.
+
+==================================================
+MOST IMPORTANT STRATEGIC INSIGHT
+================================
+
+WE KEEP MISCLASSIFYING THE BUG LAYER.
+
+The actual issue class appears to be:
+
+```txt
+save → modal teardown → navigation transition collision
+```
+
+NOT:
+distributed system instability.
+
+This explains why:
+
+* hard close recovers
+* repo rollback recovers
+* dictation recovers
+* sync survives
+* authority survives
+
+==================================================
+WHAT DID NOT WORK (BOTH ATTEMPTS)
+=================================
+
+The following approaches repeatedly pushed the repo back into instability
+and MUST NOT become default workflow again.
+
+---
+
+1. AUTHORITY EXPANSION DURING RUNTIME INSTABILITY
+
+---
+
+Failed pattern:
+
+* adding lineage tracing
+* authority instrumentation
+* topology runtime tracing
+* hydration tracing
+* overlay graph speculation
+
+Why it failed:
+The freeze was likely local runtime lifecycle behavior,
+not distributed corruption.
+
+Result:
+
+* repo noise
+* dictation regression
+* protected system contamination
+* debugging confusion
+
+---
+
+2. PATCH-STORM DEBUGGING
+
+---
+
+Failed pattern:
+
+* multiple speculative Cursor patches
+* broad file touch surface
+* runtime assumptions without proof
+* layering fixes before isolation
+
+Why it failed:
+The true bug layer was never isolated first.
+
+Result:
+
+* unstable runtime
+* harder rollback reasoning
+* accidental regressions
+
+---
+
+3. OVERLAY-LINEAGE EXPERIMENTATION INSIDE STABLE BRANCH
+
+---
+
+Failed pattern:
+
+* trying to attach overlays through lineage-level experimentation
+* runtime slot tracing
+* topology tracing
+* attachment experimentation directly on stable floor
+
+Why it failed:
+Overlay architecture boundaries were not yet isolated enough.
+
+Result:
+
+* regression risk expanded immediately
+
+---
+
+4. ASSUMING SAVE FREEZE = AUTHORITY FAILURE
+
+---
+
+Failed assumption:
+save freeze implied:
+
+* sync corruption
+* overlay corruption
+* athlete corruption
+
+Evidence now suggests:
+save freeze is likely:
+
+* modal close race
+* router transition issue
+* stale mounted screen
+* async teardown collision
+
+==================================================
+IMPORTANT PRODUCT / ARCHITECTURE DIRECTION
+==========================================
+
+Tomorrow must NOT begin with:
+
+* more overlay layering
+* more distributed tracing
+* more authority expansion
+
+Instead:
+
+The overlay problem needs a NEW mental model.
+
+==================================================
+NEW THINKING DIRECTION — COACH OVERLAY SYSTEM
+=============================================
+
+Current realization:
+
+Coach annotations are NOT canonical competition truth.
+
+They are:
+READ-ONLY ANALYSIS OVERLAYS
+attached to parent-owned competition truth.
+
+This means:
+we should STOP thinking in terms of:
+
+* ownership mutation
+* lineage rewriting
+* competition replacement
+* distributed graph manipulation
+
+And instead think in terms of:
+
+```txt
+stable parent truth
++
+bounded coach overlay attachment
+```
+
+The likely future-safe architecture direction is:
+
+PARENT OWNS:
+
+* matches
+* outcomes
+* timestamps
+* results
+* placements
+* competition structure
+
+COACH OWNS:
+
+* annotations
+* tactical notes
+* strategic observations
+* breakdown overlays
+* local/media review artifacts
+
+Coach overlays should behave more like:
+
+* annotations
+* comments
+* review layers
+
+NOT:
+
+* canonical competition rewrites
+
+==================================================
+TOMORROW'S PRIORITY
+===================
+
+PHASE 1:
+ANALYZE ONLY
+
+NO IMPLEMENTATION.
+
+Audit ONLY:
+
+* competition save flow
+* modal teardown
+* navigation transitions
+* router.replace usage
+* syncTabAndExit behavior
+* save callbacks
+* async teardown after dictation
+
+Primary files to inspect:
+
+* competitionMatchEditor.tsx
+* syncTabAndExit.ts
+* app/competition/[id].tsx
+* competition/edit.tsx
+
+Goal:
+ISOLATE THE LOCAL LIFECYCLE COLLISION
+WITHOUT TOUCHING PROTECTED SYSTEMS.
+
+==================================================
+NON-NEGOTIABLE RULES GOING FORWARD
+==================================
+
+1. Repo truth > assumptions
+2. Runtime proof before architecture edits
+3. Protected systems require evidence before modification
+4. No patch storms
+5. No broad instrumentation under fatigue
+6. No speculative overlay expansion on stable branch
+7. Local runtime issues must be isolated locally FIRST
+8. Overlay architecture must remain bounded and additive
+
+==================================================
+CURRENT RECOVERY FLOOR
+======================
+
+Current known stable floor:
+
+```txt
+1ddc30f
+Stabilize bounded athlete authority and cross-device sync
+```
+
+Branch:
+
+```txt
+rollback-pre-lineage-regression
+```
+
+Tags:
+
+```txt
+rc-authority-floor-v1
+overlay-architecture-floor-v1
+```
+
+==================================================
+END STATE
+=========
+
+The most important thing proven today:
+
+THE SYSTEM DID NOT COLLAPSE.
+
+The debugging process drifted.
+
+That distinction protects the project going forward.
+
+The correct next move is:
+surgical runtime isolation,
+NOT another distributed architecture spiral.
+
+
+
+Authority Stabilization + Overlay Architecture Recovery
+May 25 → May 28, 2026
+
+Executive Summary
+This stabilization arc resolved the largest systemic architecture problem in the current MatMind platform:
+Multiple unstable owners of athlete state causing cross-athlete corruption, stale hydration replay, overlay contamination, and authority collapse.
+The platform has now transitioned from:
+* mutable multi-owner replay systems
+to:
+* canonical athlete authority
+* bounded overlays
+* deterministic hydration
+* isolated projections
+The resulting stabilization floor is now tagged:
+rc-authority-floor-v1
+This is currently the strongest known-good rollback floor in the repository.
+
+Core Problem We Were Solving
+The visible bugs were symptoms:
+* wrong athlete appearing after restart
+* “Create Athlete” flashes
+* coach hydration loops
+* stale overlays replaying
+* ACK state crossing athletes
+* training proof crossing athletes
+* competition aggregates crossing athletes
+* empty summaries after refresh
+* ghost local coach athletes
+* laggy coach app
+* recursive sync storms
+The actual root problem was:
+ROOT CAUSE
+The system had drifted into:
+multiple mutable owners of athlete state
+instead of:
+single canonical authority + bounded overlays
+This caused:
+* replay corruption
+* stale hydration restores
+* lineage ambiguity
+* cache overwrite races
+* athlete contamination
+
+MOST IMPORTANT ENGINEERING RULE ESTABLISHED
+FACTS BEFORE TOUCHING REPO
+This became the most important operational lesson of the stabilization cycle.
+We repeatedly saw:
+* speculative fixes
+* assumption-driven patches
+* touching core systems before evidence
+* widening ownership accidentally
+This caused further instability.
+The correct workflow is now LOCKED:
+1. Observe exact runtime behavior
+2. Capture logs
+3. Trace exact render/ownership chain
+4. Identify exact failure point
+5. Verify bounded insertion point
+6. ONLY THEN modify code
+NEVER:
+guess → patch → regress
+This rule must remain permanent for:
+* authority systems
+* overlays
+* sync
+* hydration
+* lineage
+* reconciliation
+* future AI layers
+
+Major Architecture Shift
+OLD (Broken)
+multiple mutable owners
+        ↓
+shared replay state
+        ↓
+cross-device overwrites
+        ↓
+cross-athlete contamination
+NEW (Stabilized)
+canonical authority
+        ↓
+bounded overlays
+        ↓
+projection-only consumers
+        ↓
+safe hydration
+This is the foundational architecture now.
+
+Major Systems Stabilized
+1. Athlete Authority Stabilization (GAAL Recovery)
+Symptoms
+* wrong athlete restores
+* empty roster on Summary
+* coach hydration divergence
+* stale OAI replay
+* duplicate coach athletes
+* athlete crossover
+Root Cause
+Authority snapshots were rebuilding from unstable hydration timing and recursive refresh loops.
+Key Fixes
+* canonical authority rebuild
+* sole-operating-athlete repair
+* stale snapshot suppression
+* snapshot digest suppression
+* coach hydration re-evaluation
+* reactive cache-only refresh
+* hydration gating until role resolved
+* lineage-aware reconciliation
+* loop suppression via:
+    * skipCoachWriterSessionRefresh
+    * handled-version dedupe
+    * stale generation suppression
+Outcome
+Passed:
+* hard switching
+* cold restart
+* multi-athlete restore
+* coach reconnect
+* roster rebuild
+* Summary hydration
+
+2. Weekly Overlay Recovery
+Symptoms
+* stale ACK surviving republish
+* wrong weekly on coach
+* ACK crossover
+* viewed/acknowledged replay corruption
+Root Cause
+Weekly overlay semantics were behaving like mutable shared state instead of per-athlete overlays tied to publication generations.
+Major Fixes
+* weeklyByAthleteId
+* parentFeedback
+* publish invalidation semantics
+* bounded overlay projection
+* parent overlay publish lane
+* deterministic ACK reset
+* cache-only rehydration
+* athlete-keyed overlay resolution
+Outcome
+Working:
+publish
+→ viewed
+→ acknowledged
+→ republish
+→ viewed
+→ acknowledged
+with:
+* no crossover
+* no stale replay
+* cold persistence stability
+
+3. Training Proof Stabilization
+Symptoms
+* proof disappearing
+* wrong dominant systems
+* coach/local ambiguity
+* proof crossover
+Root Cause
+Training proof ownership was unclear between coach-local and parent-derived state.
+Key Decisions
+Parent owns training proof. Coach consumes bounded aggregates only.
+Final Model
+Parent:
+- raw sessions
+- media
+- journals
+
+Coach:
+- bounded proof overlay
+  - counts
+  - dominant systems
+  - timestamps
+Outcome
+Multi-athlete proof isolation passed.
+
+4. Competition Overlay Stabilization
+Symptoms
+* wrong aggregates
+* stale match overlays
+* coach breakdown corruption
+* stat replay after restart
+Root Cause
+Competition overlays were attaching too broadly and not respecting lineage boundaries.
+Key Fixes
+* slot/ordinal attachment
+* bounded overlays
+* lineage-aware merge
+* isolated competition aggregates
+* projection-only overlays
+Outcome
+Competition:
+* survived cold restart
+* survived hard switching
+* remained athlete isolated
+
+5. Coach Dashboard ACK Projection
+Important Discovery
+The issue was NOT:
+* sync
+* hydration
+* authority
+* overlay persistence
+The issue was:
+coach dashboard never consumed ACK metadata
+Critical Audit Result
+ACK existed in:
+resolvedWeeklyDoc.parentFeedback
+But was intentionally stripped before Summary VM projection.
+This was GOOD architecture.
+Correct Fix
+ACK was added:
+useCoachInsights
+→ CoachInsightRow
+→ AthleteCard render layer
+NOT:
+computeCoachInsight
+This preserved:
+* performance intelligence purity
+* overlay separation
+* bounded projections
+Result
+Coach dashboard now correctly shows:
+* Viewed
+* Acknowledged
+* Not viewed yet
+per athlete.
+
+Overlay Architecture Doctrine (Critical)
+This is now codified in:
+docs/overlay-architecture-v1.md
+This is one of the most important files in the repository.
+Core Principle
+Canonical authority owns:
+* athlete identity
+* competitions
+* results
+* sessions
+* roster membership
+Overlays may ONLY:
+* augment
+* annotate
+* project
+They may NEVER:
+* become owners
+* mutate lineage
+* mutate canonical records
+* replay cross-athlete state
+
+Current Architecture Status
+System    Status
+Athlete authority    RC-level strong
+Weekly overlays    RC-level strong
+ACK lifecycle    RC-level strong
+Training proof    strong
+Competition overlays    strong
+Multi-athlete isolation    strong
+Cross-device convergence    strong
+Cold hydration    strong
+Overlay architecture    fundamentally corrected
+Remaining Risks
+These are now the remaining realistic risks:
+Risk    Severity
+delayed async overwrite races    medium
+offline reconnect ordering    medium
+transient fetch failures    medium
+large-scale roster stress    unknown
+future ownership drift    HIGH if discipline breaks
+IMPORTANT FUTURE DEVELOPMENT RULES
+NEVER AGAIN:
+* multiple mutable owners
+* overlay-owned authority
+* cross-athlete replay logic
+* global mutable sync state
+* speculative hydration writes
+ALWAYS:
+* canonical authority
+* athlete-keyed overlays
+* projection-only consumers
+* deterministic invalidation
+* evidence-first debugging
+
+HOW THIS ENABLES MATCH BREAKDOWN ARCHITECTURE
+This stabilization work directly unlocks the future coach MatchBreakdown system safely.
+
+FUTURE MATCH BREAKDOWN ARCHITECTURE
+Parent Owns (Canonical)
+Parents remain the canonical owners of:
+* competitions
+* matches
+* results
+* placements
+* timestamps
+* medals
+* media references
+This means:
+competition history remains parent authoritative
+Coach NEVER owns:
+* match existence
+* result truth
+* athlete timeline
+This is CRITICAL.
+
+Coach Owns (Overlay Only)
+Coach owns:
+* match breakdown notes
+* tactical analysis
+* dictation
+* voice reflections
+* local video review references
+* coaching overlays
+This means:
+coach annotations are overlays
+NOT competition ownership
+Exactly the same stabilized pattern used successfully for:
+* ACK overlays
+* training proof overlays
+
+SAFE FUTURE MATCH BREAKDOWN MODEL
+Parent Canonical Layer
+Competition
+└── Matches
+    ├── Result
+    ├── Score
+    ├── Placement
+    └── Timeline
+Coach Overlay Layer
+MatchBreakdownOverlay
+├── sharedAthleteId
+├── competitionId
+├── matchOrdinal
+├── slotKey
+├── tacticalNotes
+├── dictatedReflection
+├── localVideoRefs
+├── voiceNoteRefs
+└── coachMetadata
+This is EXACTLY why:
+* slot/ordinal attachment
+* bounded overlays
+* lineage-aware merge
+* projection-only semantics
+were so important this week.
+
+WHY THIS IS NOW SAFE
+Previously:
+coach overlays risked becoming mutable competition owners
+That would have recreated the exact authority collapse that caused the stabilization crisis.
+NOW:
+coach overlays are bounded augmentations only
+This means:
+* parent truth remains canonical
+* coach commentary remains additive
+* no overwrite wars
+* no duplicate match owners
+* no cross-athlete replay
+
+FUTURE VOICE NOTE ARCHITECTURE
+Voice notes should follow SAME overlay doctrine.
+Coach Device
+Stores:
+* local recordings
+* upload refs
+* overlay metadata
+Overlay Projection
+Hydrates:
+* transcript
+* summary
+* playback ref
+But NEVER:
+* owns competition truth
+* mutates canonical results
+* mutates athlete authority
+
+MOST IMPORTANT LONG-TERM RULE
+Features must attach TO authority
+NOT compete WITH authority.
+That single principle is what solved this stabilization crisis.
+
+Current Protected Floors
+Git Tag
+rc-authority-floor-v1
+Architecture Doc
+docs/overlay-architecture-v1.md
+Safe Branch
+rollback-pre-lineage-regression
+These should be treated as foundational recovery points.
+
+FINAL STATUS
+As of May 28, 2026:
+The platform now appears to have:
+* deterministic athlete authority
+* bounded overlay systems
+* stable multi-athlete family behavior
+* stable coach/parent synchronization
+* stable hydration restore
+* isolated overlay projections
+This is the first time during the rebuild cycle that the architecture has behaved like a coherent platform instead of competing mutable state systems.
+The next phase should be:
+RC hardening + operational polish
+NOT:
+infrastructure rewrites
+
+==================================================
+FINAL REPO STATUS — END OF DAY
+==============================
+
+Repo status at close:
+
+```bash
+git status -sb
+```
+
+Output:
+
+```txt
+## rollback-pre-lineage-regression
+ M docs/dev-handoff.md
+```
+
+Meaning:
+ALL experimental runtime mutations were successfully removed before EOD.
+
+No unstable lifecycle experiments remain in working tree.
+
+==================================================
+CONFIRMED CLEAN RUNTIME FLOOR
+=============================
+
+HEAD:
+
+```txt
+1ddc30f
+Stabilize bounded athlete authority and cross-device sync
+```
+
+Branch:
+
+```txt
+rollback-pre-lineage-regression
+```
+
+Tag:
+
+```txt
+rc-authority-floor-v1
+```
+
+This is now the official recovery floor.
+
+==================================================
+FINAL VERIFIED RUNTIME STATE
+============================
+
+PASS:
+
+* dictation restored
+* weekly stable
+* ACK stable
+* Summary stable
+* training stable
+* athlete isolation stable
+* parent/coach communication stable
+* repo clean
+* authority floor preserved
+
+KNOWN ISSUE STILL PRESENT:
+
+* competition save/close freeze after coach overlay save
+* compete tab lifecycle destabilization until hard close
+
+IMPORTANT:
+This issue is now classified as:
+LOCAL RUNTIME / MODAL / NAVIGATION LIFECYCLE
+
+NOT:
+distributed authority corruption.
+
+==================================================
+MOST IMPORTANT LESSON OF 5/29/26
+================================
+
+The repo itself was healthier than the debugging process.
+
+The actual danger today was:
+debugging drift,
+NOT architecture collapse.
+
+Future rule:
+
+DO NOT ESCALATE BUG CLASSIFICATION
+WITHOUT REPO EVIDENCE.
+
+
+
+
+
 # MAY 19, 2026 — EOD DEV HANDOFF
 # BUILD 33 RECOVERY + BUILD 34 REGRESSION ANALYSIS
 
