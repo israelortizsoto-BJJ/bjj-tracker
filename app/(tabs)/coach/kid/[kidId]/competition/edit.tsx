@@ -42,6 +42,7 @@ import {
   createEmptyMatch,
   deriveInitialMatches,
   HOW_ENDED_OPTIONS,
+  localMatchFromSnapshot,
   MatchBlock,
   MATCH_RESULT_OPTIONS,
   normalizeSubmissionTimeInput,
@@ -50,6 +51,11 @@ import {
 } from "@/src/features/competition/competitionMatchEditor";
 import { logCompSaveRouteState } from "@/src/features/competition/compSaveExitTelemetry";
 import { exitToCompeteAfterCompetitionSave } from "@/src/features/competition/syncTabAndExit";
+import { projectCompetitionEditorView } from "@/src/domain/competition/projectCompetitionEditorView";
+import { readMatchBreakdownOverlay } from "@/src/domain/competition/readMatchBreakdownOverlay";
+import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
+import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
+import type { CoachMatchBreakdownOverlay } from "@/src/types/coachMatchBreakdownOverlay";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -145,6 +151,11 @@ export default function KidCompetitionEditScreen() {
   const [notesDraft, setNotesDraft] = useState("");
   const [medalImageDraft, setMedalImageDraft] = useState<string | undefined>();
   const [matches, setMatches] = useState<LocalMatch[]>([]);
+  const [canonicalReadOnly, setCanonicalReadOnly] = useState(false);
+  const [overlayScope, setOverlayScope] = useState<{
+    sharedAthleteId: string;
+    sharedCompetitionId: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -181,7 +192,58 @@ export default function KidCompetitionEditScreen() {
       setNotesDraft(found.coachNotes ?? "");
       setMedalImageDraft(found.medalImageUri);
       const detail = await getCompetitionDetailByEntryId(found.id);
-      setMatches(deriveInitialMatches(found, detail, reactId));
+      const fallbackMatches = deriveInitialMatches(found, detail, reactId);
+      const sharedAthleteId = found.sharedAthleteId?.trim() ?? "";
+      const sharedCompetitionId = found.sharedCompetitionId?.trim() ?? "";
+      const topologyArtifact = sharedAthleteId
+        ? await getCoachCompetitionTopology(sharedAthleteId)
+        : null;
+      const topology = topologyArtifact?.competitions.find(
+        (competition) => competition.sharedCompetitionId === sharedCompetitionId,
+      );
+      if (!sharedAthleteId || !sharedCompetitionId || !topology) {
+        setCanonicalReadOnly(false);
+        setOverlayScope(null);
+        setMatches(fallbackMatches);
+        if (__DEV__) {
+          console.log("[COMP_EDITOR_TRACE] editor_missing_topology", {
+            sharedAthleteId: sharedAthleteId || null,
+            sharedCompetitionId: sharedCompetitionId || null,
+          });
+          console.log("[COMP_EDITOR_TRACE] editor_fallback_used", {
+            entryId: found.id,
+            fallbackMatchCount: fallbackMatches.length,
+          });
+        }
+        return;
+      }
+
+      const canonicalMatchLineageKeys = new Set(
+        topology.matches.map((match) => match.matchLineageKey),
+      );
+      const overlays = (
+        await Promise.all(
+          topology.matches.map((match) =>
+            readMatchBreakdownOverlay(
+              {
+                sharedAthleteId,
+                sharedCompetitionId,
+                matchLineageKey: match.matchLineageKey,
+              },
+              { canonicalMatchLineageKeys },
+            ),
+          ),
+        )
+      ).filter((overlay): overlay is CoachMatchBreakdownOverlay => Boolean(overlay));
+      const projected = projectCompetitionEditorView({
+        shell: found,
+        topologyArtifact,
+        overlayAnnotations: overlays,
+        fallbackMatches: fallbackMatches.map((match) => snapshotFromLocal(match)),
+      });
+      setCanonicalReadOnly(projected.source === "canonical_topology");
+      setOverlayScope({ sharedAthleteId, sharedCompetitionId });
+      setMatches(projected.matches.map((match) => localMatchFromSnapshot(match)));
     } finally {
       setLoading(false);
     }
@@ -212,6 +274,8 @@ export default function KidCompetitionEditScreen() {
     setNotesDraft("");
     setMedalImageDraft(undefined);
     setMatches([createEmptyMatch(`new-${Date.now()}`)]);
+    setCanonicalReadOnly(false);
+    setOverlayScope(null);
     setLoading(false);
   }, [isNew, openNonce]);
 
@@ -245,6 +309,8 @@ export default function KidCompetitionEditScreen() {
           setNotesDraft("");
           setMedalImageDraft(undefined);
           setMatches([createEmptyMatch(`new-${Date.now()}`)]);
+          setCanonicalReadOnly(false);
+          setOverlayScope(null);
         }
         setLoading(false);
         return;
@@ -269,6 +335,10 @@ export default function KidCompetitionEditScreen() {
   }, [canSave, nameDraft, dateDraft]);
 
   const setMatchOutcome = useCallback((matchIndex: number, label: (typeof HOW_ENDED_OPTIONS)[number]) => {
+    if (canonicalReadOnly) {
+      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "finish_type" });
+      return;
+    }
     setMatches((prev) =>
       prev.map((m, i) => {
         if (i !== matchIndex) return m;
@@ -281,23 +351,35 @@ export default function KidCompetitionEditScreen() {
         };
       }),
     );
-  }, []);
+  }, [canonicalReadOnly]);
 
   const setMatchResult = useCallback((matchIndex: number, v: (typeof MATCH_RESULT_OPTIONS)[number]["value"]) => {
+    if (canonicalReadOnly) {
+      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "match_result" });
+      return;
+    }
     setMatches((prev) =>
       prev.map((m, i) => (i === matchIndex ? { ...m, matchResult: m.matchResult === v ? null : v } : m)),
     );
-  }, []);
+  }, [canonicalReadOnly]);
 
   const setMatchSubmissionTime = useCallback((matchIndex: number, text: string) => {
+    if (canonicalReadOnly) {
+      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "duration" });
+      return;
+    }
     setMatches((prev) =>
       prev.map((m, i) => (i === matchIndex ? { ...m, submissionTime: normalizeSubmissionTimeInput(text) } : m)),
     );
-  }, []);
+  }, [canonicalReadOnly]);
 
   const setMatchSubmissionType = useCallback((matchIndex: number, key: string | null) => {
+    if (canonicalReadOnly) {
+      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "submission_type" });
+      return;
+    }
     setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, submissionType: key } : m)));
-  }, []);
+  }, [canonicalReadOnly]);
 
   const setMatchCoachNote = useCallback((matchIndex: number, text: string) => {
     setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, coachNote: text } : m)));
@@ -305,14 +387,22 @@ export default function KidCompetitionEditScreen() {
 
   const updateMatchMedia = useCallback(
     (matchIndex: number, patch: Partial<Pick<LocalMatch, "imageUri" | "videoUri" | "imageAssetId" | "videoAssetId">>) => {
+      if (canonicalReadOnly) {
+        if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "match_media" });
+        return;
+      }
       setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, ...patch } : m)));
     },
-    [],
+    [canonicalReadOnly],
   );
 
   const addMatch = useCallback(() => {
+    if (canonicalReadOnly) {
+      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "match_create" });
+      return;
+    }
     setMatches((prev) => [...prev, createEmptyMatch(`${Date.now()}`)]);
-  }, []);
+  }, [canonicalReadOnly]);
 
   const pickMedalImage = useCallback(() => {
     const runLibrary = async () => {
@@ -360,6 +450,10 @@ export default function KidCompetitionEditScreen() {
 
   const handleDeleteMatch = useCallback(
     (matchId: string) => {
+      if (canonicalReadOnly) {
+        if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "match_delete" });
+        return;
+      }
       if (matches.length === 1) {
         Alert.alert("Clear match?", "This will reset this match.", [
           { text: "Cancel", style: "cancel" },
@@ -398,7 +492,7 @@ export default function KidCompetitionEditScreen() {
         },
       ]);
     },
-    [matches.length],
+    [canonicalReadOnly, matches.length],
   );
 
   const renderDeleteAction = useCallback(
@@ -422,7 +516,59 @@ export default function KidCompetitionEditScreen() {
   );
 
   async function onSave() {
-    if (!canSave || !kidId) return;
+    if ((!canonicalReadOnly && !canSave) || !kidId) return;
+    if (canonicalReadOnly && overlayScope) {
+      console.log("[COMP_SAVE_BEGIN]", {
+        ts: Date.now(),
+        pathname: String(pathname ?? ""),
+        kidId,
+      });
+      setSaving(true);
+      try {
+        await Promise.all(
+          matches.map((match) =>
+            upsertMatchBreakdownOverlay({
+              identity: {
+                ...overlayScope,
+                matchLineageKey: match.id,
+              },
+              patch: {
+                coachNote: match.coachNote?.trim() || null,
+              },
+            }),
+          ),
+        );
+        if (__DEV__) {
+          console.log("[COMP_EDITOR_TRACE] editor_overlay_saved", {
+            ...overlayScope,
+            overlayCount: matches.length,
+          });
+        }
+        console.log("[COMP_SAVE_COMPLETE]", {
+          ts: Date.now(),
+          pathname: String(pathname ?? ""),
+          kidId,
+          competitionId: entryId,
+        });
+        exitToCompeteAfterCompetitionSave({
+          navigation,
+          actorRole: "coach",
+          athleteId: kidId,
+          competitionId: entryId,
+        });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        Alert.alert("Could not save", msg || "Coach notes could not be saved.");
+      } finally {
+        console.log("[COMP_EDITOR_FINALLY]", {
+          ts: Date.now(),
+          pathname: String(pathname ?? ""),
+          kidId,
+        });
+        setSaving(false);
+      }
+      return;
+    }
     const name = nameDraft.trim();
     const eventDate = dateDraft.trim();
     if (!isValidYMD(eventDate)) {
@@ -520,6 +666,10 @@ export default function KidCompetitionEditScreen() {
   }
 
   function onDelete() {
+    if (canonicalReadOnly) {
+      if (__DEV__) console.log("[COMP_EDITOR_TRACE] editor_canonical_edit_blocked", { field: "competition_delete" });
+      return;
+    }
     if (isNew) {
       exitToCompeteAfterCompetitionSave({
         navigation,
@@ -597,6 +747,15 @@ export default function KidCompetitionEditScreen() {
           <Text style={{ fontSize: 14, color: UI.textSecondary }}>Loading…</Text>
         ) : (
           <>
+            {canonicalReadOnly ? (
+              <Text style={{ marginBottom: 12, fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
+                Canonical competition facts are parent-owned. Add coach notes to the matches below.
+              </Text>
+            ) : null}
+            <View
+              pointerEvents={canonicalReadOnly ? "none" : "auto"}
+              style={canonicalReadOnly ? { opacity: 0.6 } : undefined}
+            >
             <Text style={{ fontSize: 12, letterSpacing: 0.6, fontWeight: "700", color: UI.textSecondary }}>
               TOURNAMENT NAME
             </Text>
@@ -615,7 +774,6 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textPrimary,
               }}
             />
-
             <Text
               style={{
                 marginTop: 16,
@@ -642,7 +800,6 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textPrimary,
               }}
             />
-
             <Text
               style={{
                 marginTop: 16,
@@ -866,6 +1023,7 @@ export default function KidCompetitionEditScreen() {
                 textAlignVertical: "top",
               }}
             />
+            </View>
 
             <Text
               style={{
@@ -878,26 +1036,12 @@ export default function KidCompetitionEditScreen() {
             >
               MATCHES
             </Text>
-            {matches.map((m, i) => (
-              <View
-                key={m.id}
-                style={{
-                  alignSelf: "stretch",
-                  marginTop: i === 0 ? 10 : 12,
-                  borderRadius: 12,
-                  overflow: "hidden",
-                }}
-              >
-                <Swipeable
-                  renderRightActions={() => renderDeleteAction(m.id)}
-                  friction={1.1}
-                  rightThreshold={24}
-                  overshootRight
-                  dragOffsetFromRightEdge={10}
-                >
-                  <MatchBlock
+            {matches.map((m, i) => {
+              const matchBlock = (
+                <MatchBlock
                     index={i}
                     match={m}
+                    canonicalReadOnly={canonicalReadOnly}
                     onToggleMatchResult={(v) => setMatchResult(i, v)}
                     onToggleOutcome={(label) => setMatchOutcome(i, label)}
                     onSubmissionTimeChange={(text) => setMatchSubmissionTime(i, text)}
@@ -907,11 +1051,35 @@ export default function KidCompetitionEditScreen() {
                     onImageChange={(uri, assetId) => updateMatchMedia(i, { imageUri: uri, imageAssetId: assetId })}
                     onVideoChange={(uri, assetId) => updateMatchMedia(i, { videoUri: uri, videoAssetId: assetId })}
                   />
-                </Swipeable>
-              </View>
-            ))}
+              );
+              return (
+                <View
+                  key={m.id}
+                  style={{
+                    alignSelf: "stretch",
+                    marginTop: i === 0 ? 10 : 12,
+                    borderRadius: 12,
+                    overflow: "hidden",
+                  }}
+                >
+                  {canonicalReadOnly ? (
+                    matchBlock
+                  ) : (
+                    <Swipeable
+                      renderRightActions={() => renderDeleteAction(m.id)}
+                      friction={1.1}
+                      rightThreshold={24}
+                      overshootRight
+                      dragOffsetFromRightEdge={10}
+                    >
+                      {matchBlock}
+                    </Swipeable>
+                  )}
+                </View>
+              );
+            })}
 
-            <Pressable
+            {!canonicalReadOnly ? <Pressable
               onPress={addMatch}
               style={({ pressed }) => ({
                 marginTop: 16,
@@ -925,10 +1093,10 @@ export default function KidCompetitionEditScreen() {
               })}
             >
               <Text style={{ fontSize: 15, color: UI.accent, fontWeight: "800" }}>+ Add Match</Text>
-            </Pressable>
+            </Pressable> : null}
 
             <Pressable
-              disabled={!canSave || saving || loading}
+              disabled={(!canonicalReadOnly && !canSave) || saving || loading}
               onPress={() => void onSave()}
               style={({ pressed }) => ({
                 marginTop: 24,
@@ -938,7 +1106,7 @@ export default function KidCompetitionEditScreen() {
                 borderWidth: 1,
                 borderColor: UI.accent,
                 backgroundColor: pressed ? UI.accent : UI.accent,
-                opacity: !canSave || saving || loading ? 0.5 : 1,
+                opacity: (!canonicalReadOnly && !canSave) || saving || loading ? 0.5 : 1,
                 alignItems: "center",
               })}
             >
@@ -947,7 +1115,7 @@ export default function KidCompetitionEditScreen() {
               </Text>
             </Pressable>
 
-            {saveDisabledHint && !loading && !saving ? (
+            {!canonicalReadOnly && saveDisabledHint && !loading && !saving ? (
               <Text
                 style={{
                   marginTop: 10,
@@ -961,7 +1129,7 @@ export default function KidCompetitionEditScreen() {
               </Text>
             ) : null}
 
-            {!isNew ? (
+            {!isNew && !canonicalReadOnly ? (
               <Pressable
                 disabled={loading}
                 onPress={onDelete}

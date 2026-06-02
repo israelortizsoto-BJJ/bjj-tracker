@@ -189,6 +189,7 @@ export function MatchBlock({
   onCoachNoteLayout,
   onImageChange,
   onVideoChange,
+  canonicalReadOnly = false,
 }: {
   index: number;
   match: LocalMatch;
@@ -201,6 +202,7 @@ export function MatchBlock({
   onCoachNoteLayout?: (y: number) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
+  canonicalReadOnly?: boolean;
 }) {
   type RecordingState = "idle" | "recording" | "processing" | "done";
   const [isPlaying, setIsPlaying] = useState(false);
@@ -348,8 +350,8 @@ export function MatchBlock({
 
       <View style={{ position: "relative" }}>
         <View
-          pointerEvents={controlsDisabled ? "none" : "auto"}
-          style={controlsDisabled ? { opacity: 0.6 } : undefined}
+          pointerEvents={controlsDisabled || canonicalReadOnly ? "none" : "auto"}
+          style={controlsDisabled || canonicalReadOnly ? { opacity: 0.6 } : undefined}
         >
           <MatchMediaAttachments
             imageUri={match.imageUri}
@@ -483,8 +485,8 @@ export function MatchBlock({
       </View>
 
       <View
-        pointerEvents={controlsDisabled ? "none" : "auto"}
-        style={[{ marginTop: 4, gap: 6 }, controlsDisabled ? { opacity: 0.55 } : null]}
+        pointerEvents={controlsDisabled || canonicalReadOnly ? "none" : "auto"}
+        style={[{ marginTop: 4, gap: 6 }, controlsDisabled || canonicalReadOnly ? { opacity: 0.55 } : null]}
       >
         <Text
           style={{
@@ -517,8 +519,8 @@ export function MatchBlock({
       </View>
 
       <View
-        pointerEvents={controlsDisabled ? "none" : "auto"}
-        style={[{ marginTop: 6, gap: 4 }, controlsDisabled ? { opacity: 0.55 } : null]}
+        pointerEvents={controlsDisabled || canonicalReadOnly ? "none" : "auto"}
+        style={[{ marginTop: 6, gap: 4 }, controlsDisabled || canonicalReadOnly ? { opacity: 0.55 } : null]}
       >
         <Text
           style={{
@@ -587,6 +589,7 @@ export function MatchBlock({
                       <TextInput
                         value={match.submissionTime ?? ""}
                         onChangeText={onSubmissionTimeChange}
+                        editable={!canonicalReadOnly}
                         placeholder="e.g. 0:30"
                         placeholderTextColor={UI.textSecondary}
                         keyboardType="number-pad"
