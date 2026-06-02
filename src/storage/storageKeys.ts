@@ -40,6 +40,9 @@ export const StorageKeys = {
   /** Coach lane: parent-published canonical competition topology keyed by `sharedAthleteId`. */
   coachCompetitionTopologyByAthleteId: "mm:v1:coachCompetitionTopologyByAthleteId",
 
+  /** Coach lane: annotation-only match overlays keyed by athlete + competition + match lineage. */
+  coachMatchBreakdownOverlayByLineage: "mm:v1:coachMatchBreakdownOverlayByLineage",
+
   /** Coach lane: parent-published training proof artifacts keyed by `sharedAthleteId`. */
   coachTrainingProofByAthleteId: "mm:v1:coachTrainingProofByAthleteId",
 
