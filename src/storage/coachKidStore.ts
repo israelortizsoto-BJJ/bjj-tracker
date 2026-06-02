@@ -35,6 +35,12 @@ import {
   writeCoachCompetitionAggregate,
 } from "./coachCompetitionAggregateStore";
 import {
+  isValidSyncedCompetitionTopologyArtifact,
+  pruneCoachCompetitionTopology,
+  removeCoachCompetitionTopology,
+  writeCoachCompetitionTopology,
+} from "./coachCompetitionTopologyStore";
+import {
   isValidSyncedTrainingProofArtifact,
   peekCoachTrainingProof,
   pruneCoachTrainingProof,
@@ -60,6 +66,7 @@ import {
 import type {
   CoachWeeklySyncSessionResponse,
   SyncedCompetitionAggregateArtifact,
+  SyncedCompetitionTopologyArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
   SyncedTrainingProofArtifact,
@@ -230,6 +237,7 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
   if (!sid) return existing;
 
   await removeCoachCompetitionAggregate(sid);
+  await removeCoachCompetitionTopology(sid);
   await removeCoachTrainingProof(sid);
 
   const nowIso = new Date().toISOString();
@@ -538,6 +546,44 @@ export function pickRemoteCompetitionAggregateForLinkedAthlete(
 }
 
 /**
+ * Walk writer sessions in traversal order, collect all valid canonical topology artifacts for the
+ * athlete, and return the one with the newest `updatedAt` (traversal order breaks ties).
+ */
+export function pickRemoteCompetitionTopologyForLinkedAthlete(
+  sessionsInWriterLinkTraversalOrder: CoachWeeklySyncSessionResponse[],
+  sharedAthleteId: string,
+): SyncedCompetitionTopologyArtifact | null {
+  const sid = sharedAthleteId.trim();
+  if (!sid) return null;
+
+  const candidates: SyncedCompetitionTopologyArtifact[] = [];
+  for (const session of sessionsInWriterLinkTraversalOrder) {
+    const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
+    if (!athleteInSession) continue;
+
+    const candidate = session.competitionTopologyByAthleteId?.[sid];
+    if (
+      candidate &&
+      isValidSyncedCompetitionTopologyArtifact(candidate) &&
+      candidate.sharedAthleteId.trim() === sid
+    ) {
+      candidates.push(candidate);
+    }
+  }
+
+  if (candidates.length === 0) return null;
+
+  let selected = candidates[0];
+  for (let i = 1; i < candidates.length; i++) {
+    const candidate = candidates[i];
+    if (candidate.updatedAt.localeCompare(selected.updatedAt) > 0) {
+      selected = candidate;
+    }
+  }
+  return selected;
+}
+
+/**
  * Walk writer sessions in traversal order, collect all valid training proofs for the athlete,
  * and return the one with the newest `updatedAt` (traversal order breaks ties).
  */
@@ -820,6 +866,11 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
     remoteUnionIds,
     allFetched,
   });
+  await pruneCoachCompetitionTopologyAfterRosterReconcile({
+    totalActiveWriterCount,
+    remoteUnionIds,
+    allFetched,
+  });
   await pruneCoachTrainingProofAfterRosterReconcile({
     totalActiveWriterCount,
     remoteUnionIds,
@@ -847,6 +898,16 @@ async function pruneCoachTrainingProofAfterRosterReconcile(opts: {
   const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
   if (!allFetched || totalActiveWriterCount <= 0) return;
   await pruneCoachTrainingProof(remoteUnionIds);
+}
+
+async function pruneCoachCompetitionTopologyAfterRosterReconcile(opts: {
+  totalActiveWriterCount: number;
+  remoteUnionIds: Set<string>;
+  allFetched: boolean;
+}): Promise<void> {
+  const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
+  if (!allFetched || totalActiveWriterCount <= 0) return;
+  await pruneCoachCompetitionTopology(remoteUnionIds);
 }
 
 /**
@@ -904,6 +965,68 @@ export async function reconcileCoachCompetitionAggregatesFromWriterSessions(opts
       console.log("[COMP_AGG_TRACE] hydrate_missing", {
         sharedAthleteId,
         rosterKidId: k.id,
+      });
+    }
+  }
+}
+
+/**
+ * Hydrates parent-published canonical topology from successful writer session GETs.
+ * Newest-wins full overwrite only; no competition rows, projections, or UI side effects.
+ */
+export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: {
+  successfulSnapshots: WriterSessionSnapshotOk[];
+  totalActiveWriterCount: number;
+}): Promise<void> {
+  const { successfulSnapshots, totalActiveWriterCount } = opts;
+  if (totalActiveWriterCount <= 0 || successfulSnapshots.length === 0) return;
+
+  const withSession = successfulSnapshots.filter(
+    (s): s is WriterSessionSnapshotOk & { session: CoachWeeklySyncSessionResponse } =>
+      Boolean(s.session),
+  );
+  if (withSession.length === 0) return;
+
+  const sorted = sortWriterSessionSnapshotsNewestFirst(withSession);
+  const sessionsOrdered: CoachWeeklySyncSessionResponse[] = sorted
+    .map((s) => s.session)
+    .filter((s): s is CoachWeeklySyncSessionResponse => Boolean(s));
+
+  const athleteListedInFetchedSessions = (athleteId: string) =>
+    sessionsOrdered.some((session) =>
+      session.athletes.some((athlete) => athlete.id.trim() === athleteId),
+    );
+
+  const kids = await getKidsById();
+  const primaryRosterRows = buildCanonicalSharedAthletePrimaryRowMap(kids, {
+    activeWriterInviteTokenNorms: new Set(successfulSnapshots.map((s) => s.linkTokenNorm)),
+    reconcileSource: "reconcileCoachCompetitionTopologyFromWriterSessions",
+  });
+
+  for (const kid of primaryRosterRows.values()) {
+    if (!kid?.id || isKidCoachArchived(kid)) continue;
+    const sharedAthleteId = kid.sharedAthleteId?.trim() ?? "";
+    if (!sharedAthleteId || !athleteListedInFetchedSessions(sharedAthleteId)) continue;
+
+    const artifact = pickRemoteCompetitionTopologyForLinkedAthlete(
+      sessionsOrdered,
+      sharedAthleteId,
+    );
+    if (!artifact) {
+      if (__DEV__) {
+        console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_missing", {
+          sharedAthleteId,
+          rosterKidId: kid.id,
+        });
+      }
+      continue;
+    }
+
+    const result = await writeCoachCompetitionTopology(artifact);
+    if (__DEV__ && result === "hydrate_store_overwrite") {
+      console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_ok", {
+        sharedAthleteId,
+        updatedAt: artifact.updatedAt,
       });
     }
   }
@@ -1191,6 +1314,10 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });
+    await reconcileCoachCompetitionTopologyFromWriterSessions({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
     await reconcileCoachTrainingProofFromWriterSessions({
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
@@ -1413,6 +1540,7 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   const sharedAthleteId = existing.sharedAthleteId?.trim();
   if (sharedAthleteId) {
     await removeCoachCompetitionAggregate(sharedAthleteId);
+    await removeCoachCompetitionTopology(sharedAthleteId);
     await removeCoachTrainingProof(sharedAthleteId);
   }
 

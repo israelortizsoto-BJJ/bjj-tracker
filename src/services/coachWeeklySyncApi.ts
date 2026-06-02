@@ -203,8 +203,24 @@ function parseCompetitionTopologyByAthleteIdField(
   const out: Record<string, SyncedCompetitionTopologyArtifact> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const id = key.trim();
-    if (!id || !isSyncedCompetitionTopologyArtifact(value)) continue;
-    if (value.sharedAthleteId.trim() !== id) continue;
+    if (!id || !isSyncedCompetitionTopologyArtifact(value)) {
+      if (__DEV__) {
+        console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_invalid", {
+          sharedAthleteId: id || null,
+          reason: !id ? "missing_map_key" : "invalid_artifact",
+        });
+      }
+      continue;
+    }
+    if (value.sharedAthleteId.trim() !== id) {
+      if (__DEV__) {
+        console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_invalid", {
+          sharedAthleteId: id,
+          reason: "sharedAthleteIdKeyMismatch",
+        });
+      }
+      continue;
+    }
     out[id] = value;
   }
   return out;
