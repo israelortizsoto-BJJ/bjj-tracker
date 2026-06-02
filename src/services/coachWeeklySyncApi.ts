@@ -25,11 +25,13 @@ import type {
   CoachWeeklySyncPublishBody,
   CoachWeeklySyncWeeklyPutBody,
   CoachWeeklySyncPutCompetitionAggregateBody,
+  CoachWeeklySyncPutCompetitionTopologyBody,
   CoachWeeklySyncPutTrainingProofBody,
   CoachWeeklySyncRedeemParentWriterResponse,
   CoachWeeklySyncSessionResponse,
   CoachWeeklySyncUpdateCompetitionBody,
   SyncedCompetitionAggregateArtifact,
+  SyncedCompetitionTopologyArtifact,
   SyncedTrainingProofArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
@@ -148,6 +150,60 @@ function parseCompetitionAggregateByAthleteIdField(
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const id = key.trim();
     if (!id || !isSyncedCompetitionAggregateArtifact(value)) continue;
+    if (value.sharedAthleteId.trim() !== id) continue;
+    out[id] = value;
+  }
+  return out;
+}
+
+function isSyncedCompetitionTopologyArtifact(
+  v: unknown,
+): v is SyncedCompetitionTopologyArtifact {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  if (
+    o.schemaVersion !== 1 ||
+    typeof o.sharedAthleteId !== "string" ||
+    typeof o.updatedAt !== "string" ||
+    !Array.isArray(o.competitions)
+  ) {
+    return false;
+  }
+  return o.competitions.every((competition) => {
+    if (!competition || typeof competition !== "object" || Array.isArray(competition)) {
+      return false;
+    }
+    const c = competition as Record<string, unknown>;
+    return (
+      typeof c.sharedCompetitionId === "string" &&
+      typeof c.sharedAthleteId === "string" &&
+      typeof c.competitionLineageKey === "string" &&
+      typeof c.updatedAt === "string" &&
+      Array.isArray(c.matches) &&
+      c.matches.every((match) => {
+        if (!match || typeof match !== "object" || Array.isArray(match)) return false;
+        const m = match as Record<string, unknown>;
+        return (
+          typeof m.matchLineageKey === "string" &&
+          typeof m.ordinal === "number" &&
+          Number.isFinite(m.ordinal) &&
+          (m.result === "win" || m.result === "loss" || m.result === null) &&
+          (m.durationSeconds === null ||
+            (typeof m.durationSeconds === "number" && Number.isFinite(m.durationSeconds)))
+        );
+      })
+    );
+  });
+}
+
+function parseCompetitionTopologyByAthleteIdField(
+  raw: unknown,
+): Record<string, SyncedCompetitionTopologyArtifact> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, SyncedCompetitionTopologyArtifact> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim();
+    if (!id || !isSyncedCompetitionTopologyArtifact(value)) continue;
     if (value.sharedAthleteId.trim() !== id) continue;
     out[id] = value;
   }
@@ -289,6 +345,9 @@ export async function coachSyncFetchSession(
   const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteIdField(
     p.competitionAggregateByAthleteId,
   );
+  const competitionTopologyByAthleteId = parseCompetitionTopologyByAthleteIdField(
+    p.competitionTopologyByAthleteId,
+  );
   const trainingProofByAthleteId = parseTrainingProofByAthleteIdField(p.trainingProofByAthleteId);
   if (__DEV__) {
     const inviteSk =
@@ -388,6 +447,7 @@ export async function coachSyncFetchSession(
     athletes,
     competitions,
     competitionAggregateByAthleteId,
+    competitionTopologyByAthleteId,
     trainingProofByAthleteId,
   };
 }
@@ -476,6 +536,52 @@ export async function coachSyncPutCompetitionAggregate(
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
   console.log("[COMP_AGG_TRACE] put_http_ok", {
+    operation: "PUT",
+    url,
+    httpStatus: res.status,
+    sharedAthleteId: body.sharedAthleteId,
+    linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+  });
+}
+
+export async function coachSyncPutCompetitionTopology(
+  linkToken: string,
+  parentWriterSecret: string,
+  body: CoachWeeklySyncPutCompetitionTopologyBody,
+  apiBaseUrlOverride?: string | null,
+): Promise<void> {
+  const base = resolveBase(apiBaseUrlOverride);
+  const enc = encodeURIComponent(linkToken);
+  const path = `/v1/sessions/${enc}/competition-topology`;
+  const url = joinUrl(base, path);
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${parentWriterSecret}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const payload = await parseJsonOrText(res);
+  if (!res.ok) {
+    const msg =
+      typeof payload === "object" && payload && "error" in payload
+        ? String((payload as { error: unknown }).error)
+        : `HTTP ${res.status}`;
+    console.log("[COMP_TOPOLOGY_TRACE] put_http_failed", {
+      operation: "PUT",
+      url,
+      path,
+      apiBaseUrl: base,
+      httpStatus: res.status,
+      error: msg,
+      sharedAthleteId: body.sharedAthleteId,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+    });
+    throw new CoachWeeklySyncApiError(msg, res.status);
+  }
+  console.log("[COMP_TOPOLOGY_TRACE] put_http_ok", {
     operation: "PUT",
     url,
     httpStatus: res.status,

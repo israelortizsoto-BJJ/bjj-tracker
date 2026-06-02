@@ -17,6 +17,7 @@ import {
   updateKidCompetitionEntry,
 } from "../../storage/kidCompetitionStore";
 import { schedulePublishParentCompetitionAggregate } from "./publishParentCompetitionAggregate";
+import { schedulePublishParentCompetitionTopology } from "./publishParentCompetitionTopology";
 import { athleteIdForFamilyRemoteUpdate, rosterSharedAthleteId, workerCompetitionIdForEntry } from "./CompetitionSelectors";
 import {
   competitionFamilySaveTrace,
@@ -201,6 +202,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         format: formatDraft,
       });
       schedulePublishParentCompetitionAggregate(linkedAthleteId);
+      schedulePublishParentCompetitionTopology(linkedAthleteId);
       return { ok: true, savedCompetitionId: createdRow.id };
     } catch (e) {
       setFamilyPhase("post_coachSyncCreateSessionCompetition_caught");
@@ -308,6 +310,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
       });
       await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
       schedulePublishParentCompetitionAggregate(trimmedResolved);
+      schedulePublishParentCompetitionTopology(trimmedResolved);
       console.log("[COMPETITION_SAVE]", {
         competitionId: created.id,
         sharedAthleteId: trimmedResolved ?? null,
@@ -336,6 +339,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
   await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
   if (trimmedResolved) {
     schedulePublishParentCompetitionAggregate(trimmedResolved);
+    schedulePublishParentCompetitionTopology(trimmedResolved);
   }
   console.log("[COMPETITION_SAVE]", {
     competitionId: created.id,
@@ -429,6 +433,7 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
   });
   if (athleteForRemote) {
     schedulePublishParentCompetitionAggregate(athleteForRemote);
+    schedulePublishParentCompetitionTopology(athleteForRemote);
   }
   return { ok: true, savedCompetitionId: entryId };
 }
@@ -509,6 +514,7 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
   const publishAthleteId = (trimmedResolved || athleteForRemote || "").trim();
   if (publishAthleteId) {
     schedulePublishParentCompetitionAggregate(publishAthleteId);
+    schedulePublishParentCompetitionTopology(publishAthleteId);
   }
   console.log("[COMPETITION_SAVE]", {
     competitionId: entryId,

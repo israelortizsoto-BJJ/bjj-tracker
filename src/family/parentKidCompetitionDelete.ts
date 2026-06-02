@@ -5,6 +5,7 @@ import {
 } from "../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../storage/coachShareStore";
 import { schedulePublishParentCompetitionAggregate } from "../domain/competition/publishParentCompetitionAggregate";
+import { schedulePublishParentCompetitionTopology } from "../domain/competition/publishParentCompetitionTopology";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
@@ -383,6 +384,7 @@ export async function deleteParentKidCompetitionEntry(
   await deleteKidCompetitionEntry(entryId);
   if (athleteForRemote) {
     schedulePublishParentCompetitionAggregate(athleteForRemote);
+    schedulePublishParentCompetitionTopology(athleteForRemote);
   }
   return { ok: true };
 }

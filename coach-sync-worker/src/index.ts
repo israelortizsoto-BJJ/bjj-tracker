@@ -72,6 +72,48 @@ type CompetitionAggregateArtifact = {
   latestCompetitionDate?: string;
 };
 
+type CompetitionTopologyFinishType =
+  | "submission"
+  | "points"
+  | "ref_decision"
+  | "dq"
+  | "injury"
+  | "unknown"
+  | null;
+
+type CompetitionParentMediaRef = {
+  kind: "image" | "video";
+  assetId?: string | null;
+  uri?: string | null;
+};
+
+type CompetitionMatchTopology = {
+  matchLineageKey: string;
+  ordinal: number;
+  result: "win" | "loss" | null;
+  finishType: CompetitionTopologyFinishType;
+  durationSeconds: number | null;
+  submissionType?: string | null;
+  pointsFor?: number | null;
+  pointsAgainst?: number | null;
+  parentMediaRefs?: CompetitionParentMediaRef[];
+};
+
+type CompetitionTopology = {
+  sharedCompetitionId: string;
+  sharedAthleteId: string;
+  competitionLineageKey: string;
+  updatedAt: string;
+  matches: CompetitionMatchTopology[];
+};
+
+type CompetitionTopologyArtifact = {
+  schemaVersion: 1;
+  sharedAthleteId: string;
+  updatedAt: string;
+  competitions: CompetitionTopology[];
+};
+
 type TrainingProofRankedItem = {
   key: string;
   label: string;
@@ -102,6 +144,8 @@ type SessionRecord = {
   weeklyByAthleteId: Record<string, WeeklyDoc>;
   /** Per-athlete bounded competition match intelligence; parent writer only. */
   competitionAggregateByAthleteId: Record<string, CompetitionAggregateArtifact>;
+  /** Per-athlete canonical competition structural rows; parent writer only. */
+  competitionTopologyByAthleteId: Record<string, CompetitionTopologyArtifact>;
   /** Per-athlete bounded training proof; parent writer only. */
   trainingProofByAthleteId: Record<string, TrainingProofArtifact>;
   createdAt: string;
@@ -260,9 +304,16 @@ function explainWeeklyDocParseRejection(raw: unknown): string | null {
 }
 
 const TOKEN_RE = /^[a-f0-9]{48,128}$/i;
-const SESSION_SCHEMA_VERSION = 3 as const;
+const SESSION_SCHEMA_VERSION = 4 as const;
 const MAX_ATHLETES_PER_SESSION = 24;
 const MAX_COMPETITIONS_PER_SESSION = 400;
+const MAX_TOPOLOGY_COMPETITIONS_PER_ARTIFACT = 400;
+const MAX_TOPOLOGY_MATCHES_PER_COMPETITION = 64;
+const MAX_TOPOLOGY_MATCHES_PER_ARTIFACT = 2048;
+const MAX_TOPOLOGY_MEDIA_REFS_PER_MATCH = 2;
+const MAX_TOPOLOGY_PAYLOAD_CHARS = 256_000;
+const MAX_TOPOLOGY_ID_CHARS = 200;
+const MAX_TOPOLOGY_URI_CHARS = 2_000;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
 const EVENT_STATUS_SET = new Set<CompetitionEventStatus>(["upcoming", "completed", "cancelled", "unknown"]);
 const FORMAT_SET = new Set<CompetitionFormat>(["gi", "nogi", "both"]);
@@ -772,6 +823,192 @@ function parseCompetitionAggregateByAthleteId(
   return out;
 }
 
+const TOPOLOGY_FINISH_TYPES = new Set([
+  "submission",
+  "points",
+  "ref_decision",
+  "dq",
+  "injury",
+  "unknown",
+]);
+
+function parseTopologyId(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const id = raw.trim();
+  if (!id || id.length > MAX_TOPOLOGY_ID_CHARS) return null;
+  return id;
+}
+
+function parseNullableNonNegativeInt(raw: unknown): number | null | undefined {
+  if (raw === null) return null;
+  if (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return undefined;
+  return Math.round(raw);
+}
+
+function parseTopologyMediaRefs(raw: unknown): CompetitionParentMediaRef[] | undefined | null {
+  if (typeof raw === "undefined") return undefined;
+  if (!Array.isArray(raw) || raw.length > MAX_TOPOLOGY_MEDIA_REFS_PER_MATCH) return null;
+  const refs: CompetitionParentMediaRef[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const o = item as Record<string, unknown>;
+    if (o.kind !== "image" && o.kind !== "video") return null;
+    const assetId =
+      o.assetId === null
+        ? null
+        : typeof o.assetId === "string" && o.assetId.trim().length <= MAX_TOPOLOGY_ID_CHARS
+          ? o.assetId.trim()
+          : undefined;
+    const uri =
+      o.uri === null
+        ? null
+        : typeof o.uri === "string" && o.uri.trim().length <= MAX_TOPOLOGY_URI_CHARS
+          ? o.uri.trim()
+          : undefined;
+    if (typeof o.assetId !== "undefined" && o.assetId !== null && typeof assetId === "undefined") {
+      return null;
+    }
+    if (typeof o.uri !== "undefined" && o.uri !== null && typeof uri === "undefined") {
+      return null;
+    }
+    if (!assetId && !uri) return null;
+    refs.push({
+      kind: o.kind,
+      ...(typeof assetId !== "undefined" ? { assetId } : {}),
+      ...(typeof uri !== "undefined" ? { uri } : {}),
+    });
+  }
+  return refs;
+}
+
+function parseCompetitionMatchTopology(raw: unknown): CompetitionMatchTopology | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const matchLineageKey = parseTopologyId(o.matchLineageKey);
+  const ordinal =
+    typeof o.ordinal === "number" && Number.isFinite(o.ordinal) && o.ordinal >= 1
+      ? Math.round(o.ordinal)
+      : null;
+  const result = o.result === "win" || o.result === "loss" || o.result === null ? o.result : null;
+  if (o.result !== "win" && o.result !== "loss" && o.result !== null) return null;
+  const finishType =
+    o.finishType === null ||
+    (typeof o.finishType === "string" && TOPOLOGY_FINISH_TYPES.has(o.finishType))
+      ? (o.finishType as CompetitionTopologyFinishType)
+      : undefined;
+  const durationSeconds = parseNullableNonNegativeInt(o.durationSeconds);
+  const pointsFor =
+    typeof o.pointsFor === "undefined" ? undefined : parseNullableNonNegativeInt(o.pointsFor);
+  const pointsAgainst =
+    typeof o.pointsAgainst === "undefined"
+      ? undefined
+      : parseNullableNonNegativeInt(o.pointsAgainst);
+  const submissionType =
+    typeof o.submissionType === "undefined"
+      ? undefined
+      : o.submissionType === null
+        ? null
+        : typeof o.submissionType === "string" && o.submissionType.trim().length <= 120
+          ? o.submissionType.trim()
+          : undefined;
+  const parentMediaRefs = parseTopologyMediaRefs(o.parentMediaRefs);
+  if (
+    !matchLineageKey ||
+    ordinal === null ||
+    typeof finishType === "undefined" ||
+    typeof durationSeconds === "undefined" ||
+    (typeof o.pointsFor !== "undefined" && typeof pointsFor === "undefined") ||
+    (typeof o.pointsAgainst !== "undefined" && typeof pointsAgainst === "undefined") ||
+    (typeof o.submissionType !== "undefined" && typeof submissionType === "undefined") ||
+    parentMediaRefs === null
+  ) {
+    return null;
+  }
+  return {
+    matchLineageKey,
+    ordinal,
+    result,
+    finishType,
+    durationSeconds,
+    ...(typeof submissionType !== "undefined" ? { submissionType } : {}),
+    ...(typeof pointsFor !== "undefined" ? { pointsFor } : {}),
+    ...(typeof pointsAgainst !== "undefined" ? { pointsAgainst } : {}),
+    ...(typeof parentMediaRefs !== "undefined" ? { parentMediaRefs } : {}),
+  };
+}
+
+function parseCompetitionTopologyArtifact(raw: unknown): CompetitionTopologyArtifact | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  if (JSON.stringify(raw).length > MAX_TOPOLOGY_PAYLOAD_CHARS) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.schemaVersion !== 1 || !Array.isArray(o.competitions)) return null;
+  if (o.competitions.length > MAX_TOPOLOGY_COMPETITIONS_PER_ARTIFACT) return null;
+  const sharedAthleteId = parseTopologyId(o.sharedAthleteId);
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  if (!sharedAthleteId || !updatedAt) return null;
+
+  let totalMatches = 0;
+  const seenCompetitionIds = new Set<string>();
+  const competitions: CompetitionTopology[] = [];
+  for (const item of o.competitions) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const c = item as Record<string, unknown>;
+    const sharedCompetitionId = parseTopologyId(c.sharedCompetitionId);
+    const competitionSharedAthleteId = parseTopologyId(c.sharedAthleteId);
+    const competitionLineageKey = parseTopologyId(c.competitionLineageKey);
+    const competitionUpdatedAt = typeof c.updatedAt === "string" ? c.updatedAt.trim() : "";
+    if (
+      !sharedCompetitionId ||
+      competitionSharedAthleteId !== sharedAthleteId ||
+      !competitionLineageKey ||
+      !competitionUpdatedAt ||
+      !Array.isArray(c.matches) ||
+      c.matches.length > MAX_TOPOLOGY_MATCHES_PER_COMPETITION ||
+      seenCompetitionIds.has(sharedCompetitionId)
+    ) {
+      return null;
+    }
+    seenCompetitionIds.add(sharedCompetitionId);
+    totalMatches += c.matches.length;
+    if (totalMatches > MAX_TOPOLOGY_MATCHES_PER_ARTIFACT) return null;
+    const seenMatchIds = new Set<string>();
+    const matches: CompetitionMatchTopology[] = [];
+    for (const matchRaw of c.matches) {
+      const match = parseCompetitionMatchTopology(matchRaw);
+      if (!match || seenMatchIds.has(match.matchLineageKey)) return null;
+      seenMatchIds.add(match.matchLineageKey);
+      matches.push(match);
+    }
+    competitions.push({
+      sharedCompetitionId,
+      sharedAthleteId,
+      competitionLineageKey,
+      updatedAt: competitionUpdatedAt,
+      matches,
+    });
+  }
+  return {
+    schemaVersion: 1,
+    sharedAthleteId,
+    updatedAt,
+    competitions,
+  };
+}
+
+function parseCompetitionTopologyByAthleteId(
+  raw: unknown,
+): Record<string, CompetitionTopologyArtifact> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, CompetitionTopologyArtifact> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const athleteId = key.trim();
+    const artifact = parseCompetitionTopologyArtifact(value);
+    if (!athleteId || !artifact || artifact.sharedAthleteId !== athleteId) continue;
+    out[athleteId] = artifact;
+  }
+  return out;
+}
+
 function parseTrainingProofRankedItem(raw: unknown): TrainingProofRankedItem | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
@@ -904,6 +1141,9 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
   const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteId(
     r.competitionAggregateByAthleteId,
   );
+  const competitionTopologyByAthleteId = parseCompetitionTopologyByAthleteId(
+    r.competitionTopologyByAthleteId,
+  );
   const trainingProofByAthleteId = parseTrainingProofByAthleteId(r.trainingProofByAthleteId);
 
   return {
@@ -915,6 +1155,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
     weekly,
     weeklyByAthleteId,
     competitionAggregateByAthleteId,
+    competitionTopologyByAthleteId,
     trainingProofByAthleteId,
     createdAt,
     athletes,
@@ -1125,6 +1366,7 @@ export default {
           weekly: null,
           weeklyByAthleteId: {},
           competitionAggregateByAthleteId: {},
+          competitionTopologyByAthleteId: {},
           trainingProofByAthleteId: {},
           createdAt: now,
           athletes: [],
@@ -1186,6 +1428,7 @@ export default {
           athletes: rec.athletes,
           competitions: rec.competitions,
           competitionAggregateByAthleteId: rec.competitionAggregateByAthleteId,
+          competitionTopologyByAthleteId: rec.competitionTopologyByAthleteId,
           trainingProofByAthleteId: rec.trainingProofByAthleteId,
         };
         const cf = (request as Request & { cf?: { colo?: string } }).cf;
@@ -1466,6 +1709,8 @@ export default {
         const { [athleteId]: _removedWeekly, ...restWeeklyByAthlete } = rec.weeklyByAthleteId;
         const { [athleteId]: _removedAggregate, ...restCompetitionAggregateByAthlete } =
           rec.competitionAggregateByAthleteId;
+        const { [athleteId]: _removedTopology, ...restCompetitionTopologyByAthlete } =
+          rec.competitionTopologyByAthleteId;
         const { [athleteId]: _removedProof, ...restTrainingProofByAthlete } =
           rec.trainingProofByAthleteId;
         const next: SessionRecord = {
@@ -1474,6 +1719,7 @@ export default {
           competitions: rec.competitions.filter((c) => c.sharedAthleteId !== athleteId),
           weeklyByAthleteId: restWeeklyByAthlete,
           competitionAggregateByAthleteId: restCompetitionAggregateByAthlete,
+          competitionTopologyByAthleteId: restCompetitionTopologyByAthlete,
           trainingProofByAthleteId: restTrainingProofByAthlete,
         };
         await writeSession(env.SESSIONS, token, next);
@@ -2043,6 +2289,106 @@ export default {
         };
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
+      }
+
+      const competitionTopologyPut = path.match(
+        /^\/v1\/sessions\/([^/]+)\/competition-topology$/,
+      );
+      if (competitionTopologyPut && request.method === "PUT") {
+        const token = decodeURIComponent(competitionTopologyPut[1] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token)) {
+          return error("Invalid token", 400);
+        }
+        const auth = request.headers.get("Authorization") ?? "";
+        const m = /^Bearer\s+(.+)$/.exec(auth.trim());
+        const secret = m?.[1]?.trim() ?? "";
+        if (!secret) return error("Unauthorized", 401);
+
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return error("Invalid JSON", 400);
+        }
+
+        const artifact = parseCompetitionTopologyArtifact(body);
+        if (!artifact) {
+          console.log("[COMP_TOPOLOGY_TRACE] worker_reject_invalid_payload", {
+            tokenSuffix: token.slice(-8),
+          });
+          return error("Invalid competition topology artifact", 400);
+        }
+
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec || rec.parentWriterSecret !== secret) {
+          return error("Unauthorized", 401);
+        }
+        if (!rec.athletes.some((a) => a.id.trim() === artifact.sharedAthleteId)) {
+          console.log("[COMP_TOPOLOGY_TRACE] worker_reject_athlete_scope", {
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifact.sharedAthleteId,
+          });
+          return error("sharedAthleteId is not linked to this session", 400);
+        }
+
+        const existing = rec.competitionTopologyByAthleteId[artifact.sharedAthleteId];
+        if (existing && artifact.updatedAt.localeCompare(existing.updatedAt) < 0) {
+          console.log("[COMP_TOPOLOGY_TRACE] worker_reject_stale", {
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifact.sharedAthleteId,
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
+          });
+          return error("Competition topology artifact is stale", 409);
+        }
+        if (
+          existing &&
+          artifact.updatedAt === existing.updatedAt &&
+          JSON.stringify(artifact) !== JSON.stringify(existing)
+        ) {
+          console.log("[COMP_TOPOLOGY_TRACE] worker_reject_equal_timestamp_conflict", {
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifact.sharedAthleteId,
+            updatedAt: artifact.updatedAt,
+          });
+          return error("Competition topology timestamp conflict", 409);
+        }
+        if (existing && JSON.stringify(artifact) === JSON.stringify(existing)) {
+          console.log("[COMP_TOPOLOGY_TRACE] worker_store_ok", {
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifact.sharedAthleteId,
+            competitionCount: artifact.competitions.length,
+            totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+            updatedAt: artifact.updatedAt,
+            writeMode: "idempotent_replay",
+          });
+          return json({ ok: true }, 200);
+        }
+
+        const next: SessionRecord = {
+          ...rec,
+          competitionTopologyByAthleteId: {
+            ...(rec.competitionTopologyByAthleteId || {}),
+            [artifact.sharedAthleteId]: artifact,
+          },
+        };
+        console.log("[COMP_TOPOLOGY_TRACE] worker_store_ok", {
+          tokenSuffix: token.slice(-8),
+          sharedAthleteId: artifact.sharedAthleteId,
+          competitionCount: artifact.competitions.length,
+          totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+          updatedAt: artifact.updatedAt,
+          writeMode: existing ? "newer_overwrite" : "first_write",
+        });
+        await writeSession(env.SESSIONS, token, next);
+        return json({ ok: true }, 200);
+      }
+
+      if (path.endsWith("/competition-topology") && request.method === "PUT") {
+        console.log("[COMP_TOPOLOGY_TRACE] worker_route_miss", {
+          path,
+          method: request.method,
+        });
       }
 
       const competitionAggregatePut = path.match(

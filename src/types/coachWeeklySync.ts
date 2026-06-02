@@ -91,6 +91,51 @@ export type SyncedCompetitionAggregateArtifact = {
 
 export type CoachWeeklySyncPutCompetitionAggregateBody = SyncedCompetitionAggregateArtifact;
 
+export type SyncedCompetitionTopologyFinishType =
+  | "submission"
+  | "points"
+  | "ref_decision"
+  | "dq"
+  | "injury"
+  | "unknown"
+  | null;
+
+export type SyncedCompetitionParentMediaRef = {
+  kind: "image" | "video";
+  assetId?: string | null;
+  uri?: string | null;
+};
+
+export type SyncedCompetitionMatchTopology = {
+  matchLineageKey: string;
+  ordinal: number;
+  result: "win" | "loss" | null;
+  finishType: SyncedCompetitionTopologyFinishType;
+  durationSeconds: number | null;
+  submissionType?: string | null;
+  pointsFor?: number | null;
+  pointsAgainst?: number | null;
+  parentMediaRefs?: SyncedCompetitionParentMediaRef[];
+};
+
+export type SyncedCompetitionTopology = {
+  sharedCompetitionId: SharedCompetitionId;
+  sharedAthleteId: SharedAthleteId;
+  competitionLineageKey: string;
+  updatedAt: string;
+  matches: SyncedCompetitionMatchTopology[];
+};
+
+/** Parent-published canonical structural match rows. Coach consumers remain inert until Phase 2. */
+export type SyncedCompetitionTopologyArtifact = {
+  schemaVersion: 1;
+  sharedAthleteId: SharedAthleteId;
+  updatedAt: string;
+  competitions: SyncedCompetitionTopology[];
+};
+
+export type CoachWeeklySyncPutCompetitionTopologyBody = SyncedCompetitionTopologyArtifact;
+
 export type SyncedTrainingProofRankedItem = {
   key: string;
   label: string;
@@ -121,6 +166,8 @@ export type CoachWeeklySyncSessionResponse = {
   competitions: SyncedSharedCompetition[];
   /** Per-athlete bounded competition match intelligence; parent writer only. */
   competitionAggregateByAthleteId?: Record<string, SyncedCompetitionAggregateArtifact>;
+  /** Per-athlete canonical competition topology; parent writer only. Inert until Phase 2. */
+  competitionTopologyByAthleteId?: Record<string, SyncedCompetitionTopologyArtifact>;
   /** Per-athlete bounded training proof; parent writer only. */
   trainingProofByAthleteId?: Record<string, SyncedTrainingProofArtifact>;
 };
