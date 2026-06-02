@@ -2295,6 +2295,8 @@ export default {
         /^\/v1\/sessions\/([^/]+)\/competition-topology$/,
       );
       if (competitionTopologyPut && request.method === "PUT") {
+        const competitionTopologyTraceId =
+          request.headers.get("X-Competition-Topology-Trace-Id")?.trim().slice(0, 160) || null;
         const token = decodeURIComponent(competitionTopologyPut[1] ?? "").trim().toLowerCase();
         if (!TOKEN_RE.test(token)) {
           return error("Invalid token", 400);
@@ -2314,9 +2316,22 @@ export default {
         const artifact = parseCompetitionTopologyArtifact(body);
         if (!artifact) {
           console.log("[COMP_TOPOLOGY_TRACE] worker_reject_invalid_payload", {
+            ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
             tokenSuffix: token.slice(-8),
           });
           return error("Invalid competition topology artifact", 400);
+        }
+        if (competitionTopologyTraceId) {
+          console.log("[COMP_TOPOLOGY_TRACE] worker_request_received", {
+            ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifact.sharedAthleteId,
+            competitionCount: artifact.competitions.length,
+            totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+            lineageKeyCount: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+            updatedAt: artifact.updatedAt,
+            timestamp: new Date().toISOString(),
+          });
         }
 
         const rec = await readSession(env.SESSIONS, token);
@@ -2327,6 +2342,7 @@ export default {
           console.log("[COMP_TOPOLOGY_TRACE] worker_reject_athlete_scope", {
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifact.sharedAthleteId,
+            ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
           });
           return error("sharedAthleteId is not linked to this session", 400);
         }
@@ -2338,6 +2354,7 @@ export default {
             sharedAthleteId: artifact.sharedAthleteId,
             incomingUpdatedAt: artifact.updatedAt,
             existingUpdatedAt: existing.updatedAt,
+            ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
           });
           return error("Competition topology artifact is stale", 409);
         }
@@ -2350,6 +2367,7 @@ export default {
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifact.sharedAthleteId,
             updatedAt: artifact.updatedAt,
+            ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
           });
           return error("Competition topology timestamp conflict", 409);
         }
@@ -2361,6 +2379,7 @@ export default {
             totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
             updatedAt: artifact.updatedAt,
             writeMode: "idempotent_replay",
+            traceId: competitionTopologyTraceId,
           });
           return json({ ok: true }, 200);
         }
@@ -2379,6 +2398,7 @@ export default {
           totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
           updatedAt: artifact.updatedAt,
           writeMode: existing ? "newer_overwrite" : "first_write",
+          ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
         });
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);

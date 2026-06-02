@@ -7,6 +7,7 @@ import { Alert, Pressable, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { logCompDelete, logCompSave } from "../../../../src/dev/competitionMutationDevLog";
 import {
   createCompetition,
   deleteCompetition,
@@ -312,6 +313,13 @@ export default function FamilyCompetitionEditScreen() {
       return;
     }
 
+    logCompSave("BEGIN", {
+      competitionId: isNew ? null : entryId,
+      athleteId: kidId,
+      operationKind: "optimistic",
+      surface: "familyCompetitionEdit",
+    });
+
     setSaving(true);
     const saveT0 = Date.now();
     const trace = {
@@ -337,6 +345,12 @@ export default function FamilyCompetitionEditScreen() {
           trace,
         });
         if (!created.ok) {
+          logCompSave("ERROR", {
+            athleteId: kidId,
+            operationKind: "server",
+            surface: "familyCompetitionEdit",
+            phaseDetail: created.blocked.kind,
+          });
           if (created.blocked.kind === "resolve_miss_new") {
             competitionFamilySaveTrace.phase = "resolve_miss_abort_no_post";
             Alert.alert(
@@ -375,6 +389,13 @@ export default function FamilyCompetitionEditScreen() {
           trace: { ...trace, isNew: false },
         });
         if (!updated.ok) {
+          logCompSave("ERROR", {
+            competitionId: entryId,
+            athleteId: kidId,
+            operationKind: "server",
+            surface: "familyCompetitionEdit",
+            phaseDetail: updated.blocked.kind,
+          });
           if (updated.blocked.kind === "resolve_miss_edit") {
             Alert.alert(
               "Could not sync",
@@ -399,6 +420,12 @@ export default function FamilyCompetitionEditScreen() {
         }
         savedCompetitionId = updated.savedCompetitionId;
       }
+      logCompSave("COMPLETE", {
+        competitionId: savedCompetitionId,
+        athleteId: kidId,
+        operationKind: "optimistic",
+        surface: "familyCompetitionEdit",
+      });
       competitionFamilySaveTrace.phase = "pre_exitToCompeteAfterCompetitionSave";
       console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
         stage: "calling_exitToCompeteAfterCompetitionSave",
@@ -458,6 +485,12 @@ export default function FamilyCompetitionEditScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
+            logCompDelete("BEGIN", {
+              competitionId: entryId,
+              athleteId: kidId,
+              operationKind: "optimistic",
+              surface: "familyCompetitionEdit.onDelete",
+            });
             const outcome = await deleteCompetition({
               entryId,
               kidId,

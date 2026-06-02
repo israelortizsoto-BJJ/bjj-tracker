@@ -1,4 +1,5 @@
 import { normalizeStoredSubmissionType } from "../../features/competition/submissionTypes";
+import { logCompetitionTopologyTrace } from "../../dev/competitionTopologyTrace";
 import {
   getKidCompetitionEntriesWithMatchDetailForSharedAthlete,
   type CompetitionDetailMatchSnapshot,
@@ -79,8 +80,9 @@ function buildParentMediaRefs(
   return refs.length > 0 ? refs : undefined;
 }
 
-function invalidLineage(reason: string, extra: Record<string, unknown>): never {
+function invalidLineage(reason: string, extra: Record<string, unknown>, traceId?: string): never {
   console.log("[COMP_TOPOLOGY_TRACE] build_rejected_invalid_lineage", {
+    ...(traceId ? { traceId } : {}),
     reason,
     ...extra,
   });
@@ -90,13 +92,14 @@ function invalidLineage(reason: string, extra: Record<string, unknown>): never {
 function buildCompetitionRow(
   sharedAthleteId: string,
   entry: KidCompetitionEntryWithMatchDetail,
+  traceId?: string,
 ): SyncedCompetitionTopology {
   const sharedCompetitionId = (entry.sharedCompetitionId ?? "").trim();
   if (!sharedCompetitionId) {
     return invalidLineage("missing_shared_competition_id", {
       sharedAthleteId,
       localEntryId: entry.id,
-    });
+    }, traceId);
   }
 
   const seenMatchLineageKeys = new Set<string>();
@@ -107,14 +110,14 @@ function buildCompetitionRow(
         sharedAthleteId,
         sharedCompetitionId,
         ordinal: index + 1,
-      });
+      }, traceId);
     }
     if (seenMatchLineageKeys.has(matchLineageKey)) {
       return invalidLineage("duplicate_match_lineage_key", {
         sharedAthleteId,
         sharedCompetitionId,
         matchLineageKey,
-      });
+      }, traceId);
     }
     seenMatchLineageKeys.add(matchLineageKey);
 
@@ -143,21 +146,22 @@ function buildCompetitionRow(
 export function buildCompetitionTopologyArtifactFromEntries(
   sharedAthleteId: string,
   entries: readonly KidCompetitionEntryWithMatchDetail[],
+  traceId?: string,
 ): SyncedCompetitionTopologyArtifact {
   const athleteId = sharedAthleteId.trim();
   if (!athleteId) {
-    return invalidLineage("missing_shared_athlete_id", {});
+    return invalidLineage("missing_shared_athlete_id", {}, traceId);
   }
 
   const seenCompetitionIds = new Set<string>();
   const linkedEntries = entries.filter((entry) => Boolean(entry.sharedCompetitionId?.trim()));
   const competitions = linkedEntries.map((entry) => {
-    const competition = buildCompetitionRow(athleteId, entry);
+    const competition = buildCompetitionRow(athleteId, entry, traceId);
     if (seenCompetitionIds.has(competition.sharedCompetitionId)) {
       return invalidLineage("duplicate_shared_competition_id", {
         sharedAthleteId: athleteId,
         sharedCompetitionId: competition.sharedCompetitionId,
-      });
+      }, traceId);
     }
     seenCompetitionIds.add(competition.sharedCompetitionId);
     return competition;
@@ -170,6 +174,7 @@ export function buildCompetitionTopologyArtifactFromEntries(
     competitions,
   };
   console.log("[COMP_TOPOLOGY_TRACE] build_ok", {
+    ...(traceId ? { traceId } : {}),
     sharedAthleteId: athleteId,
     competitionCount: competitions.length,
     totalMatches,
@@ -179,16 +184,25 @@ export function buildCompetitionTopologyArtifactFromEntries(
     })),
     updatedAt: artifact.updatedAt,
   });
+  logCompetitionTopologyTrace("[COMP_TOPOLOGY_TRACE]", "build_summary", {
+    traceId: traceId ?? null,
+    sharedAthleteId: athleteId,
+    competitionCount: competitions.length,
+    totalMatchCount: totalMatches,
+    lineageKeyCount: totalMatches,
+    updatedAt: artifact.updatedAt,
+  });
   return artifact;
 }
 
 /** Parent-only: builds a full overwrite artifact from canonical shell + detail storage. */
 export async function buildCompetitionTopologyArtifact(
   sharedAthleteId: string,
+  traceId?: string,
 ): Promise<SyncedCompetitionTopologyArtifact> {
   const athleteId = sharedAthleteId.trim();
   const entries = athleteId
     ? await getKidCompetitionEntriesWithMatchDetailForSharedAthlete(athleteId)
     : [];
-  return buildCompetitionTopologyArtifactFromEntries(athleteId, entries);
+  return buildCompetitionTopologyArtifactFromEntries(athleteId, entries, traceId);
 }

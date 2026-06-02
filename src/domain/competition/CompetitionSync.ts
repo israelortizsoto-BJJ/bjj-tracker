@@ -16,6 +16,11 @@ import {
   getKidCompetitionEntryById,
   updateKidCompetitionEntry,
 } from "../../storage/kidCompetitionStore";
+import {
+  logCompDelete,
+  logCompPublishGuard,
+  logCompSave,
+} from "../../dev/competitionMutationDevLog";
 import { schedulePublishParentCompetitionAggregate } from "./publishParentCompetitionAggregate";
 import { schedulePublishParentCompetitionTopology } from "./publishParentCompetitionTopology";
 import { athleteIdForFamilyRemoteUpdate, rosterSharedAthleteId, workerCompetitionIdForEntry } from "./CompetitionSelectors";
@@ -96,10 +101,52 @@ export async function updateCompetition(
 export async function deleteCompetition(
   input: DeleteCompetitionInput,
 ): Promise<ParentKidCompetitionDeleteOutcome> {
-  return deleteParentKidCompetitionEntry(input.entryId, input.kidId, getKidsById);
+  logCompDelete("BEGIN", {
+    competitionId: input.entryId,
+    athleteId: input.kidId,
+    localStoreAffected: "kidCompetitionStore+competitionDetailStore",
+    operationKind: "optimistic",
+    surface: "CompetitionSync.deleteCompetition",
+  });
+  try {
+    const outcome = await deleteParentKidCompetitionEntry(input.entryId, input.kidId, getKidsById);
+    if (outcome.ok) {
+      logCompDelete("COMPLETE", {
+        competitionId: input.entryId,
+        athleteId: input.kidId,
+        operationKind: "local",
+        surface: "CompetitionSync.deleteCompetition",
+      });
+    } else {
+      logCompDelete("ERROR", {
+        competitionId: input.entryId,
+        athleteId: input.kidId,
+        operationKind: "server",
+        surface: "CompetitionSync.deleteCompetition",
+        error: outcome.alertMessage,
+        phaseDetail: "blocked_before_local_delete",
+      });
+    }
+    return outcome;
+  } catch (e) {
+    logCompDelete("ERROR", {
+      competitionId: input.entryId,
+      athleteId: input.kidId,
+      operationKind: "local",
+      surface: "CompetitionSync.deleteCompetition",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
 }
 
 async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Promise<CreateCompetitionResult> {
+  logCompSave("BEGIN", {
+    athleteId: input.kidId,
+    operationKind: "optimistic",
+    surface: "CompetitionSync.createCompetitionFamily",
+    localStoreAffected: "kidCompetitionStore",
+  });
   const {
     kidId,
     tournamentName: name,
@@ -155,6 +202,13 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
       mounted: mounted(),
     });
     if (!target) {
+      logCompPublishGuard({
+        athleteId: kidId,
+        sharedAthleteId: linkedAthleteId,
+        operationKind: "server",
+        surface: "CompetitionSync.createCompetitionFamily",
+        phaseDetail: "resolve_miss_new_abort_no_local_write",
+      });
       setFamilyPhase("resolve_miss_abort_no_post");
       return { ok: false, blocked: { kind: "resolve_miss_new" } };
     }
@@ -187,6 +241,15 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         remoteCompetitionId: remote.competition?.id ?? null,
         mounted: mounted(),
       });
+      logCompSave("LOCAL", {
+        athleteId: kidId,
+        sharedAthleteId: linkedAthleteId,
+        canonicalPayloadIds: [remote.competition.id],
+        operationKind: "server",
+        surface: "CompetitionSync.createCompetitionFamily",
+        phaseDetail: "post_remote_create_before_local_row",
+        localStoreAffected: "kidCompetitionStore",
+      });
       const createdRow = await createKidCompetitionEntry({
         kidId,
         sharedAthleteId: linkedAthleteId,
@@ -201,10 +264,35 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         organizationOrPromoter: promoterDraft.trim() ? promoterDraft.trim() : undefined,
         format: formatDraft,
       });
+      logCompSave("PUBLISH", {
+        competitionId: createdRow.id,
+        athleteId: kidId,
+        sharedAthleteId: linkedAthleteId,
+        canonicalPayloadIds: [remote.competition.id],
+        operationKind: "local",
+        surface: "CompetitionSync.createCompetitionFamily",
+        localStoreAffected: "kidCompetitionStore",
+      });
       schedulePublishParentCompetitionAggregate(linkedAthleteId);
       schedulePublishParentCompetitionTopology(linkedAthleteId);
+      logCompSave("COMPLETE", {
+        competitionId: createdRow.id,
+        athleteId: kidId,
+        sharedAthleteId: linkedAthleteId,
+        canonicalPayloadIds: [remote.competition.id],
+        operationKind: "local",
+        surface: "CompetitionSync.createCompetitionFamily",
+      });
       return { ok: true, savedCompetitionId: createdRow.id };
     } catch (e) {
+      logCompSave("ERROR", {
+        athleteId: kidId,
+        sharedAthleteId: linkedAthleteId,
+        operationKind: "server",
+        surface: "CompetitionSync.createCompetitionFamily",
+        error: toOpErrorMessage(e),
+        phaseDetail: "coachSyncCreateSessionCompetition",
+      });
       setFamilyPhase("post_coachSyncCreateSessionCompetition_caught");
       console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
         stage: "coachSyncCreateSessionCompetition_catch",
@@ -236,10 +324,25 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
     organizationOrPromoter: promoterDraft.trim() ? promoterDraft.trim() : undefined,
     format: formatDraft,
   });
+  logCompSave("COMPLETE", {
+    competitionId: createdRow.id,
+    athleteId: kidId,
+    operationKind: "local",
+    surface: "CompetitionSync.createCompetitionFamily",
+    phaseDetail: "local_only_new",
+    localStoreAffected: "kidCompetitionStore",
+  });
   return { ok: true, savedCompetitionId: createdRow.id };
 }
 
 async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<CreateCompetitionResult> {
+  logCompSave("BEGIN", {
+    athleteId: input.kidId,
+    sharedAthleteId: input.resolvedSharedAthleteId ?? null,
+    operationKind: "optimistic",
+    surface: "CompetitionSync.createCompetitionKid",
+    overlayCount: input.matchSnapshots.length,
+  });
   const {
     kidId,
     resolvedSharedAthleteId,
@@ -274,6 +377,13 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         : undefined;
     const target = await resolveLinkedTargetForParentWriter(trimmedResolved, undefined, devCreate);
     if (!target) {
+      logCompPublishGuard({
+        athleteId: kidId,
+        sharedAthleteId: trimmedResolved,
+        operationKind: "server",
+        surface: "CompetitionSync.createCompetitionKid",
+        phaseDetail: "resolve_miss_new",
+      });
       return { ok: false, blocked: { kind: "resolve_miss_new" } };
     }
     assertDevWritableTarget(target);
@@ -292,6 +402,16 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         },
         target.apiBaseUrl,
       );
+      logCompSave("LOCAL", {
+        athleteId: kidId,
+        sharedAthleteId: trimmedResolved,
+        canonicalPayloadIds: [remote.competition.id],
+        operationKind: "server",
+        surface: "CompetitionSync.createCompetitionKid",
+        phaseDetail: "post_remote_create",
+        overlayCount: matchSnapshots.length,
+        localStoreAffected: "kidCompetitionStore+competitionDetailStore",
+      });
       const created = await createKidCompetitionEntry({
         kidId,
         sharedAthleteId: trimmedResolved,
@@ -309,8 +429,24 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
       });
       await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
+      logCompSave("PUBLISH", {
+        competitionId: created.id,
+        athleteId: kidId,
+        sharedAthleteId: trimmedResolved,
+        canonicalPayloadIds: [remote.competition.id],
+        operationKind: "local",
+        surface: "CompetitionSync.createCompetitionKid",
+      });
       schedulePublishParentCompetitionAggregate(trimmedResolved);
       schedulePublishParentCompetitionTopology(trimmedResolved);
+      logCompSave("COMPLETE", {
+        competitionId: created.id,
+        athleteId: kidId,
+        sharedAthleteId: trimmedResolved,
+        canonicalPayloadIds: [remote.competition.id],
+        operationKind: "local",
+        surface: "CompetitionSync.createCompetitionKid",
+      });
       console.log("[COMPETITION_SAVE]", {
         competitionId: created.id,
         sharedAthleteId: trimmedResolved ?? null,
@@ -318,6 +454,13 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
       });
       return { ok: true, savedCompetitionId: created.id };
     } catch (e) {
+      logCompSave("ERROR", {
+        athleteId: kidId,
+        sharedAthleteId: trimmedResolved,
+        operationKind: "server",
+        surface: "CompetitionSync.createCompetitionKid",
+        error: toOpErrorMessage(e),
+      });
       return { ok: false, blocked: { kind: "sync_api", message: toOpErrorMessage(e) || "Try again shortly." } };
     }
   }
@@ -337,10 +480,35 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
     ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
   });
   await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
+  logCompSave("LOCAL", {
+    competitionId: created.id,
+    athleteId: kidId,
+    operationKind: "local",
+    surface: "CompetitionSync.createCompetitionKid",
+    phaseDetail: "local_only_new",
+    overlayCount: matchSnapshots.length,
+    localStoreAffected: "kidCompetitionStore+competitionDetailStore",
+  });
   if (trimmedResolved) {
+    logCompSave("PUBLISH", {
+      competitionId: created.id,
+      athleteId: kidId,
+      sharedAthleteId: trimmedResolved,
+      operationKind: "local",
+      surface: "CompetitionSync.createCompetitionKid",
+      phaseDetail: "local_only_but_has_resolved_shared",
+    });
     schedulePublishParentCompetitionAggregate(trimmedResolved);
     schedulePublishParentCompetitionTopology(trimmedResolved);
   }
+  logCompSave("COMPLETE", {
+    competitionId: created.id,
+    athleteId: kidId,
+    sharedAthleteId: trimmedResolved ?? null,
+    operationKind: "local",
+    surface: "CompetitionSync.createCompetitionKid",
+    phaseDetail: "local_only_new",
+  });
   console.log("[COMPETITION_SAVE]", {
     competitionId: created.id,
     sharedAthleteId: trimmedResolved ?? null,
@@ -350,6 +518,12 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
 }
 
 async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Promise<UpdateCompetitionResult> {
+  logCompSave("BEGIN", {
+    competitionId: input.entryId,
+    athleteId: input.kidId,
+    operationKind: "optimistic",
+    surface: "CompetitionSync.updateCompetitionFamily",
+  });
   const {
     kidId,
     entryId,
@@ -395,6 +569,15 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
   if (athleteForRemote && workerCompetitionId) {
     const target = await resolveLinkedTargetForParentWriter(athleteForRemote, workerCompetitionId);
     if (!target) {
+      logCompPublishGuard({
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "CompetitionSync.updateCompetitionFamily",
+        phaseDetail: "resolve_miss_edit",
+      });
       return { ok: false, blocked: { kind: "resolve_miss_edit" } };
     }
     assertDevWritableTarget(target);
@@ -413,7 +596,25 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
         },
         target.apiBaseUrl,
       );
+      logCompSave("LOCAL", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "CompetitionSync.updateCompetitionFamily",
+        phaseDetail: "remote_patch_ok",
+      });
     } catch (e) {
+      logCompSave("ERROR", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "CompetitionSync.updateCompetitionFamily",
+        error: toOpErrorMessage(e),
+      });
       return { ok: false, blocked: { kind: "sync_api", message: toOpErrorMessage(e) || "Try again shortly." } };
     }
   }
@@ -432,13 +633,38 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
     format: formatDraft,
   });
   if (athleteForRemote) {
+    logCompSave("PUBLISH", {
+      competitionId: entryId,
+      athleteId: kidId,
+      sharedAthleteId: athleteForRemote,
+      canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+      operationKind: "local",
+      surface: "CompetitionSync.updateCompetitionFamily",
+    });
     schedulePublishParentCompetitionAggregate(athleteForRemote);
     schedulePublishParentCompetitionTopology(athleteForRemote);
   }
+  logCompSave("COMPLETE", {
+    competitionId: entryId,
+    athleteId: kidId,
+    sharedAthleteId: athleteForRemote || null,
+    canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+    operationKind: "local",
+    surface: "CompetitionSync.updateCompetitionFamily",
+    localStoreAffected: "kidCompetitionStore",
+  });
   return { ok: true, savedCompetitionId: entryId };
 }
 
 async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<UpdateCompetitionResult> {
+  logCompSave("BEGIN", {
+    competitionId: input.entryId,
+    athleteId: input.kidId,
+    sharedAthleteId: input.resolvedSharedAthleteId ?? null,
+    operationKind: "optimistic",
+    surface: "CompetitionSync.updateCompetitionKid",
+    overlayCount: input.matchSnapshots.length,
+  });
   const {
     kidId,
     entryId,
@@ -473,6 +699,15 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
   if (athleteForRemote && workerCompetitionId) {
     const target = await resolveLinkedTargetForParentWriter(athleteForRemote, workerCompetitionId);
     if (!target) {
+      logCompPublishGuard({
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "CompetitionSync.updateCompetitionKid",
+        phaseDetail: "resolve_miss_edit",
+      });
       return { ok: false, blocked: { kind: "resolve_miss_edit" } };
     }
     assertDevWritableTarget(target);
@@ -491,7 +726,25 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
         },
         target.apiBaseUrl,
       );
+      logCompSave("LOCAL", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "CompetitionSync.updateCompetitionKid",
+        phaseDetail: "remote_patch_ok",
+      });
     } catch (e) {
+      logCompSave("ERROR", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "CompetitionSync.updateCompetitionKid",
+        error: toOpErrorMessage(e),
+      });
       return { ok: false, blocked: { kind: "sync_api", message: toOpErrorMessage(e) || "Try again shortly." } };
     }
   }
@@ -513,9 +766,28 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
   await setCompetitionDetailForEntryId(entryId, { matches: matchSnapshots });
   const publishAthleteId = (trimmedResolved || athleteForRemote || "").trim();
   if (publishAthleteId) {
+    logCompSave("PUBLISH", {
+      competitionId: entryId,
+      athleteId: kidId,
+      sharedAthleteId: publishAthleteId,
+      canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+      operationKind: "local",
+      surface: "CompetitionSync.updateCompetitionKid",
+      overlayCount: matchSnapshots.length,
+    });
     schedulePublishParentCompetitionAggregate(publishAthleteId);
     schedulePublishParentCompetitionTopology(publishAthleteId);
   }
+  logCompSave("COMPLETE", {
+    competitionId: entryId,
+    athleteId: kidId,
+    sharedAthleteId: trimmedResolved ?? athleteForRemote ?? null,
+    canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+    operationKind: "local",
+    surface: "CompetitionSync.updateCompetitionKid",
+    overlayCount: matchSnapshots.length,
+    localStoreAffected: "kidCompetitionStore+competitionDetailStore",
+  });
   console.log("[COMPETITION_SAVE]", {
     competitionId: entryId,
     sharedAthleteId: trimmedResolved ?? null,

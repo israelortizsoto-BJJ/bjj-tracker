@@ -5,6 +5,7 @@ import type {
   KidCompetitionResult,
   KidCompetitionVideoRef,
 } from "../types/coachKid";
+import { logCompOverlayMaterialize, logCompSave } from "../dev/competitionMutationDevLog";
 import {
   emitCompetitionChange,
   getKidCompetitionEntries,
@@ -212,7 +213,24 @@ export async function setCompetitionDetailForEntryId(
   const all = safeParseStore(await AsyncStorage.getItem(DETAIL_STORAGE_KEY));
   all[entryId] = detail;
   await AsyncStorage.setItem(DETAIL_STORAGE_KEY, JSON.stringify(all));
-  emitCompetitionChange();
+  logCompSave("LOCAL", {
+    competitionId: entryId,
+    operationKind: "local",
+    localStoreAffected: DETAIL_STORAGE_KEY,
+    surface: "competitionStore.setCompetitionDetailForEntryId",
+    overlayCount: detail.matches?.length ?? 0,
+    canonicalPayloadIds: detail.matches?.map((m) => m.id) ?? null,
+  });
+  logCompOverlayMaterialize({
+    competitionId: entryId,
+    operationKind: "local",
+    localStoreAffected: DETAIL_STORAGE_KEY,
+    overlayCount: detail.matches?.length ?? 0,
+    canonicalPayloadIds: detail.matches?.map((m) => m.id) ?? null,
+    lineageKey: detail.matches?.[0]?.id ?? null,
+    phaseDetail: "match_detail_persisted",
+  });
+  emitCompetitionChange("setCompetitionDetailForEntryId");
 }
 
 export async function removeCompetitionDetailForEntryId(entryId: string): Promise<void> {

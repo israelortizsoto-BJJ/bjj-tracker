@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { logCompCacheInvalidation } from "../dev/competitionMutationDevLog";
+
 type Listener = () => void;
 
 const listeners = new Set<Listener>();
@@ -19,10 +21,22 @@ export function getCoachSyncHydrationVersion(): number {
   return hydrationVersion;
 }
 
-export function bumpCoachSyncHydrationVersion(): void {
+export function bumpCoachSyncHydrationVersion(context?: {
+  reason?: string;
+  sharedAthleteId?: string;
+  competitionId?: string;
+}): void {
   hydrationVersion += 1;
   if (__DEV__) {
-    console.log("[COACH_SYNC_HYDRATION] version_bump");
+    logCompCacheInvalidation({
+      operationKind: "canonical",
+      localStoreAffected: "useCoachSyncHydrationVersion subscribers (useAthleteData, useActiveAthlete)",
+      phaseDetail: context?.reason ?? "coach_sync_hydration_bump",
+      sharedAthleteId: context?.sharedAthleteId ?? null,
+      competitionId: context?.competitionId ?? null,
+      hydrationVersionNext: hydrationVersion,
+    });
+    console.log("[COACH_SYNC_HYDRATION] version_bump", context ?? {});
   }
   emit();
 }

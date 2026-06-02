@@ -15,6 +15,11 @@ import {
   logHydrationPipelineWatchAthletes,
   namesByIdFromSyncedAthletes,
 } from "../identity/hydrationPipelineTrace";
+import { logCompSave } from "../dev/competitionMutationDevLog";
+import {
+  createCompetitionTopologyTraceId,
+  logCompetitionTopologyTrace,
+} from "../dev/competitionTopologyTrace";
 import { normalizePublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import {
   CoachWeeklySyncApiError,
@@ -979,6 +984,9 @@ export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: 
   totalActiveWriterCount: number;
 }): Promise<void> {
   const { successfulSnapshots, totalActiveWriterCount } = opts;
+  const competitionTopologyTraceId = __DEV__
+    ? createCompetitionTopologyTraceId("coach-hydrate")
+    : undefined;
   if (totalActiveWriterCount <= 0 || successfulSnapshots.length === 0) return;
 
   const withSession = successfulSnapshots.filter(
@@ -991,6 +999,15 @@ export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: 
   const sessionsOrdered: CoachWeeklySyncSessionResponse[] = sorted
     .map((s) => s.session)
     .filter((s): s is CoachWeeklySyncSessionResponse => Boolean(s));
+  logCompetitionTopologyTrace("[COMP_TOPOLOGY_HYDRATE]", "hydrate_receipt", {
+    traceId: competitionTopologyTraceId,
+    successfulSnapshotCount: successfulSnapshots.length,
+    sessionCount: sessionsOrdered.length,
+    topologyAthleteKeyCount: sessionsOrdered.reduce(
+      (sum, session) => sum + Object.keys(session.competitionTopologyByAthleteId ?? {}).length,
+      0,
+    ),
+  });
 
   const athleteListedInFetchedSessions = (athleteId: string) =>
     sessionsOrdered.some((session) =>
@@ -1015,6 +1032,7 @@ export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: 
     if (!artifact) {
       if (__DEV__) {
         console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_missing", {
+          traceId: competitionTopologyTraceId,
           sharedAthleteId,
           rosterKidId: kid.id,
         });
@@ -1022,10 +1040,11 @@ export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: 
       continue;
     }
 
-    const result = await writeCoachCompetitionTopology(artifact);
+    const result = await writeCoachCompetitionTopology(artifact, competitionTopologyTraceId);
     if (__DEV__ && result === "hydrate_store_overwrite") {
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_ok", {
         sharedAthleteId,
+        traceId: competitionTopologyTraceId,
         updatedAt: artifact.updatedAt,
       });
     }
@@ -1169,6 +1188,15 @@ export async function reconcileCoachLinkedCompetitionEntriesFromWriterSessions(o
       rosterKidId: k.id,
       rosterKidFound,
       athleteListedInWriterSessions: athleteOnFetchedSessions,
+      remoteCompetitionCountSelected: remote.length,
+    });
+    logCompSave("RECONCILE", {
+      athleteId: k.id,
+      sharedAthleteId,
+      canonicalPayloadIds: remote.map((r) => r.id),
+      operationKind: "canonical",
+      surface: "reconcileCoachLinkedCompetitionEntriesFromWriterSessions",
+      localStoreAffected: "kidCompetitionStore via upsertSharedCompetitionsForKid",
       remoteCompetitionCountSelected: remote.length,
     });
     await upsertSharedCompetitionsForKid(k.id, sharedAthleteId, remote);
@@ -1329,7 +1357,9 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
         athleteIdsUnion,
       });
     }
-    bumpCoachSyncHydrationVersion();
+    bumpCoachSyncHydrationVersion({
+      reason: "refreshCoachWriterSessionsAndReconcileStores_complete",
+    });
   } else if (writerLinks.length > 0) {
     console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
       skipReconcile: "writerLinksButNoSuccessfulSessionFetches",

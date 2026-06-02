@@ -1,3 +1,4 @@
+import { logCompPublishGuard, logCompSave } from "../../dev/competitionMutationDevLog";
 import { resolveLinkedTargetForParentWriter } from "../../family/parentKidCompetitionDelete";
 import { coachSyncPutCompetitionAggregate } from "../../services/coachWeeklySyncApi";
 import { getKidCompetitionEntriesWithMatchDetailForSharedAthlete } from "../../storage/competitionStore";
@@ -12,12 +13,24 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
   if (!trimmed) return;
 
   void (async () => {
+    logCompSave("PUBLISH", {
+      sharedAthleteId: trimmed,
+      operationKind: "server",
+      surface: "publishParentCompetitionAggregate",
+      phaseDetail: "scheduled_fire_and_forget",
+    });
     try {
       // Worker PUT requires a roster row (`rec.athletes`); competition-only session match would 400 after route exists.
       const target = await resolveLinkedTargetForParentWriter(trimmed, undefined, undefined, {
         requireAthleteOnSessionRoster: true,
       });
       if (!target) {
+        logCompPublishGuard({
+          sharedAthleteId: trimmed,
+          operationKind: "server",
+          surface: "publishParentCompetitionAggregate",
+          phaseDetail: "publish_skipped_no_linked_target_rosterOnly",
+        });
         console.log("[COMP_AGG_TRACE] publish_skipped_no_linked_target", {
           sharedAthleteId: trimmed,
           resolverMode: "rosterOnly",
@@ -45,6 +58,13 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
         artifact,
         target.apiBaseUrl,
       );
+      logCompSave("COMPLETE", {
+        sharedAthleteId: trimmed,
+        operationKind: "server",
+        surface: "publishParentCompetitionAggregate",
+        canonicalPayloadIds: competitions.map((c) => c.id),
+        overlayCount: artifact.totalMatches,
+      });
       console.log("[COMP_AGG_TRACE] publish_ok", {
         sharedAthleteId: trimmed,
         putPath,
@@ -54,6 +74,12 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
         losses: artifact.losses,
       });
     } catch (error) {
+      logCompSave("ERROR", {
+        sharedAthleteId: trimmed,
+        operationKind: "server",
+        surface: "publishParentCompetitionAggregate",
+        error: error instanceof Error ? error.message : String(error),
+      });
       const status =
         error && typeof error === "object" && "status" in error
           ? (error as { status: unknown }).status

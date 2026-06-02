@@ -565,17 +565,36 @@ export async function coachSyncPutCompetitionTopology(
   parentWriterSecret: string,
   body: CoachWeeklySyncPutCompetitionTopologyBody,
   apiBaseUrlOverride?: string | null,
+  competitionTopologyTraceId?: string,
 ): Promise<void> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
   const path = `/v1/sessions/${enc}/competition-topology`;
   const url = joinUrl(base, path);
+  const totalMatchCount = body.competitions.reduce(
+    (sum, competition) => sum + competition.matches.length,
+    0,
+  );
+  if (__DEV__) {
+    console.log("[COMP_TOPOLOGY_TRACE] put_request_payload", {
+      ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
+      sharedAthleteId: body.sharedAthleteId,
+      competitionCount: body.competitions.length,
+      totalMatchCount,
+      lineageKeyCount: totalMatchCount,
+      updatedAt: body.updatedAt,
+      timestamp: new Date().toISOString(),
+    });
+  }
   const res = await fetch(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${parentWriterSecret}`,
+      ...(competitionTopologyTraceId
+        ? { "X-Competition-Topology-Trace-Id": competitionTopologyTraceId }
+        : {}),
     },
     body: JSON.stringify(body),
   });
@@ -586,6 +605,7 @@ export async function coachSyncPutCompetitionTopology(
         ? String((payload as { error: unknown }).error)
         : `HTTP ${res.status}`;
     console.log("[COMP_TOPOLOGY_TRACE] put_http_failed", {
+      traceId: competitionTopologyTraceId ?? null,
       operation: "PUT",
       url,
       path,
@@ -598,6 +618,7 @@ export async function coachSyncPutCompetitionTopology(
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
   console.log("[COMP_TOPOLOGY_TRACE] put_http_ok", {
+    ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
     operation: "PUT",
     url,
     httpStatus: res.status,

@@ -4,6 +4,10 @@ import {
   coachSyncFetchSession,
 } from "../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../storage/coachShareStore";
+import {
+  logCompDelete,
+  logCompPublishGuard,
+} from "../dev/competitionMutationDevLog";
 import { schedulePublishParentCompetitionAggregate } from "../domain/competition/publishParentCompetitionAggregate";
 import { schedulePublishParentCompetitionTopology } from "../domain/competition/publishParentCompetitionTopology";
 import {
@@ -251,6 +255,13 @@ export async function deleteParentKidCompetitionEntry(
   kidId: KidId,
   getKidsById: () => Promise<KidsById>,
 ): Promise<ParentKidCompetitionDeleteOutcome> {
+  logCompDelete("BEGIN", {
+    competitionId: entryId,
+    athleteId: kidId,
+    operationKind: "optimistic",
+    surface: "parentKidCompetitionDelete",
+    localStoreAffected: "kidCompetitionStore+competitionDetailStore",
+  });
   const kids = await getKidsById();
   const kid = kids[kidId];
   const existing = await getKidCompetitionEntryById(entryId);
@@ -267,7 +278,21 @@ export async function deleteParentKidCompetitionEntry(
             : "entry kidId mismatch",
       });
     }
+    logCompDelete("LOCAL", {
+      competitionId: entryId,
+      athleteId: kidId,
+      operationKind: "local",
+      surface: "parentKidCompetitionDelete",
+      phaseDetail: "early_exit_missing_or_mismatch_row",
+    });
     await deleteKidCompetitionEntry(entryId);
+    logCompDelete("COMPLETE", {
+      competitionId: entryId,
+      athleteId: kidId,
+      operationKind: "local",
+      surface: "parentKidCompetitionDelete",
+      phaseDetail: "early_exit",
+    });
     return { ok: true };
   }
 
@@ -337,6 +362,15 @@ export async function deleteParentKidCompetitionEntry(
       });
     }
     if (!target) {
+      logCompPublishGuard({
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+        operationKind: "server",
+        surface: "parentKidCompetitionDelete",
+        phaseDetail: "resolveLinkedTarget_null_blocks_local_delete",
+      });
       if (__DEV__) {
         console.log("[bjj-sync-debug] parent delete blocked", {
           entryId,
@@ -351,6 +385,15 @@ export async function deleteParentKidCompetitionEntry(
       };
     }
     try {
+      logCompDelete("LOCAL", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "parentKidCompetitionDelete",
+        phaseDetail: "pre_remote_delete",
+      });
       if (__DEV__) {
         console.log("[bjj-sync-debug] parent delete calling coachSyncDeleteSessionCompetition", {
           entryId,
@@ -368,12 +411,30 @@ export async function deleteParentKidCompetitionEntry(
         console.log("[bjj-sync-debug] parent delete API helper returned OK", { entryId });
       }
     } catch (e) {
+      logCompDelete("ERROR", {
+        competitionId: entryId,
+        athleteId: kidId,
+        sharedAthleteId: athleteForRemote,
+        canonicalPayloadIds: [workerCompetitionId],
+        operationKind: "server",
+        surface: "parentKidCompetitionDelete",
+        error: toOpErrorMessage(e),
+      });
       return {
         ok: false,
         alertTitle: "Could not sync",
         alertMessage: toOpErrorMessage(e) || "Try again shortly.",
       };
     }
+    logCompDelete("PUBLISH", {
+      competitionId: entryId,
+      athleteId: kidId,
+      sharedAthleteId: athleteForRemote,
+      canonicalPayloadIds: [workerCompetitionId],
+      operationKind: "server",
+      surface: "parentKidCompetitionDelete",
+      phaseDetail: "remote_delete_ok_scheduling_aggregate_topology",
+    });
   } else if (__DEV__) {
     console.log("[bjj-sync-debug] parent delete local-only (no worker DELETE)", {
       entryId,
@@ -381,10 +442,29 @@ export async function deleteParentKidCompetitionEntry(
     });
   }
 
+  logCompDelete("LOCAL", {
+    competitionId: entryId,
+    athleteId: kidId,
+    sharedAthleteId: athleteForRemote || rowSharedAthleteId || kidSharedAthleteId || null,
+    canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+    operationKind: "local",
+    surface: "parentKidCompetitionDelete",
+    phaseDetail: deletePath,
+    localStoreAffected: "kidCompetitionStore+competitionDetailStore",
+  });
   await deleteKidCompetitionEntry(entryId);
   if (athleteForRemote) {
     schedulePublishParentCompetitionAggregate(athleteForRemote);
     schedulePublishParentCompetitionTopology(athleteForRemote);
   }
+  logCompDelete("COMPLETE", {
+    competitionId: entryId,
+    athleteId: kidId,
+    sharedAthleteId: athleteForRemote || null,
+    canonicalPayloadIds: workerCompetitionId ? [workerCompetitionId] : null,
+    operationKind: "local",
+    surface: "parentKidCompetitionDelete",
+    phaseDetail: deletePath,
+  });
   return { ok: true };
 }

@@ -1,6 +1,785 @@
 # BJJ Tracker - Dev Handoff Notes
 
 
+# Date: 2026-06-01
+
+# Branch: rollback-pre-lineage-regression
+
+---
+
+# HIGH LEVEL STATUS
+
+Today was the major convergence day for the competition architecture migration.
+
+The repo crossed from:
+
+```txt
+synthetic mutable reconstruction architecture
+```
+
+into:
+
+```txt
+governed replay-safe distributed topology architecture
+```
+
+The biggest achievement:
+we successfully completed the migration from:
+
+* local synthetic competition authority
+* mixed ownership mutation flows
+* suppression-based Summary logic
+* overlay mutation ambiguity
+
+into:
+
+* canonical topology truth
+* topology-backed rendering
+* overlay isolation
+* canonicalized mutation orchestration
+* replay-safe distributed projection
+
+This is the healthiest architectural state the competition system has ever been in.
+
+---
+
+# ACTIVE PHASE
+
+```txt
+Phase 0 — local freeze race proof
+```
+
+Current operational objective:
+
+```txt
+prove save/close lifecycle collision
+WITHOUT architecture mutation
+```
+
+This is VERY important.
+
+We are no longer debugging:
+
+* authority collapse
+* topology poisoning
+* replay corruption
+
+We are now debugging:
+
+* lifecycle timing
+* projection invalidation
+* overlay render attachment
+* hydration convergence
+
+That is a MASSIVE maturity improvement.
+
+---
+
+# GOVERNING DOCS
+
+These remain source-of-truth architecture law:
+
+```txt
+docs/architecture/competition-overlay-architecture-v2.md
+docs/architecture/competition-overlay-migration-plan.md
+```
+
+NO changes should violate these docs.
+
+---
+
+# PROTECTED SYSTEMS
+
+DO NOT mutate or redesign these systems casually:
+
+```txt
+canonical authority
+hydration
+training proof
+ACK systems
+athlete isolation
+```
+
+These are now stabilized enough that random fixes could easily reintroduce old corruption patterns.
+
+---
+
+# MOST IMPORTANT ARCHITECTURE STATUS
+
+## COMPLETE
+
+### Canonical Topology Lane
+
+Implemented:
+
+* topology publication
+* topology hydration
+* topology-backed projection
+* replay-safe overwrite semantics
+* immutable lineage
+
+### Overlay Lane
+
+Implemented:
+
+* lineage-keyed overlay persistence
+* bounded annotation ownership
+* overlay-only mutation doctrine
+* replay-safe overlay attachment
+
+### Canonical Editor Doctrine
+
+Implemented:
+
+```txt
+read topology
+write overlays
+```
+
+### Summary Canonicalization
+
+Implemented:
+
+```txt
+canonical topology = structural truth
+bounded aggregates = metric truth
+```
+
+### Mutation Canonicalization
+
+Implemented:
+
+* delete orchestration
+* save orchestration
+* removal of linked local-only mutation paths
+* replay-safe delete semantics
+
+---
+
+# BIGGEST ENGINEERING ACHIEVEMENT TODAY
+
+We successfully removed:
+
+```txt
+synthetic mutable topology truth
+```
+
+from:
+
+* compete rendering
+* editor flows
+* Summary derivation
+* mutation paths
+* overlay attachment
+
+This was the root systemic instability behind:
+
+* duplicate competitions
+* replay corruption
+* hydration resurrection
+* overlay drift
+* cross-device mismatch
+* metric suppression
+* lineage collapse
+
+The platform now fundamentally behaves differently.
+
+---
+
+# MAJOR ARCHITECTURE FLOORS CREATED TODAY
+
+## topology-publication-floor-v1
+
+Canonical topology transport floor.
+
+## topology-projection-floor-v1
+
+Topology-backed projection floor.
+
+## overlay-persistence-floor-v1
+
+Lineage-keyed overlay persistence floor.
+
+## canonical-editor-floor-v1
+
+Canonical-read / overlay-write editor floor.
+
+## canonical-summary-floor-v1
+
+Topology-aware Summary floor.
+
+## canonical-platform-floor-v1
+
+Full canonical distributed topology architecture floor.
+
+These rollback points are EXTREMELY important.
+DO NOT delete tags.
+
+---
+
+# MAJOR COMMITS TODAY
+
+## Commit
+
+```txt
+39d1688
+Add forensic navigation topology tracing
+```
+
+Purpose:
+
+* forensic navigation topology tracing
+* lane-stack debugging
+* fail-closed topology inspection
+
+---
+
+## Commit
+
+```txt
+f46a628
+Add parent canonical competition topology publication lane
+```
+
+Purpose:
+
+* canonical topology publication
+* worker overwrite semantics
+* immutable lineage transport
+
+---
+
+## Commit
+
+```txt
+dbbdeff
+Add ephemeral coach competition topology projection
+```
+
+Purpose:
+
+* topology-backed coach rendering
+* projection-only runtime composition
+* replay-safe structural rendering
+
+---
+
+## Commit
+
+```txt
+187d160
+Add lineage-keyed coach match breakdown overlay store
+```
+
+Purpose:
+
+* overlay persistence isolation
+* lineage-keyed annotation ownership
+* replay-safe overlay storage
+
+---
+
+## Commit
+
+```txt
+85e4cbd
+Canonicalize coach Summary aggregate projection
+```
+
+Purpose:
+
+* remove synthetic suppression
+* canonicalize Summary projection
+* topology-aware aggregate rendering
+
+---
+
+## Commit
+
+```txt
+9d817da
+Canonicalize linked competition mutation entry points
+```
+
+Purpose:
+
+* remove local-only linked mutation paths
+* replay-safe delete orchestration
+* canonical mutation routing
+
+This was one of the most important commits of the day.
+
+---
+
+# FORENSIC DISCOVERIES TODAY
+
+## HUGE FINDING #1
+
+Coach editor save was bypassing:
+
+```txt
+CompetitionSync
+```
+
+and writing directly to:
+
+* updateKidCompetitionEntry
+* createKidCompetitionEntry
+* setCompetitionDetail
+
+This created:
+
+```txt
+canonical reads
++
+non-canonical writes
+```
+
+One of the most dangerous distributed systems states possible.
+
+FIXED TODAY.
+
+---
+
+## HUGE FINDING #2
+
+Linked competition delete paths were still using:
+
+```txt
+deleteKidCompetitionEntry
+```
+
+directly.
+
+This caused:
+
+```txt
+local delete
++
+hydration replay
+=
+competition resurrection
+```
+
+FIXED TODAY.
+
+---
+
+## HUGE FINDING #3
+
+Summary suppression was still trusting:
+
+```txt
+synthetic local lineage assumptions
+```
+
+instead of:
+
+```txt
+canonical topology
++
+bounded aggregates
+```
+
+FIXED TODAY.
+
+---
+
+# CURRENT OPERATIONAL QA STATUS
+
+## COMPETITION SYSTEM
+
+### GOOD
+
+* canonical save persistence
+* replay-safe delete
+* topology hydration
+* archive rendering
+* match rendering
+* podium rendering mostly healthy
+* cross-device convergence significantly improved
+* parent/coach Summary parity restored for competitions
+
+### MODERATE
+
+* podium gallery invalidation refresh timing
+* editor lifecycle cleanup after save
+* stale editor mount persistence
+
+### OPEN
+
+* coach overlay render attachment regression
+* overlay pills missing
+* match breakdown rendering missing
+
+---
+
+# COACH OVERLAY REGRESSION
+
+This is currently the highest architectural regression remaining.
+
+## Symptoms
+
+* dictated notes save
+* overlay store exists
+* overlay persistence lane exists
+* breakdown pills missing
+* match analysis sections missing
+
+Likely regression:
+
+```txt
+overlay hydrate/reconcile/merge/render chain disconnected
+```
+
+Most likely affected areas:
+
+* mergeCoachBreakdownIntoMatches
+* competitionReviewPillMetadata
+* overlay hydrate pipeline
+* projection attachment
+
+IMPORTANT:
+Do NOT solve this by mutating canonical topology.
+
+Correct architecture:
+
+```txt
+parent owns facts
+coach owns overlays
+```
+
+Overlays remain:
+
+```txt
+bounded lineage-keyed annotations
+```
+
+---
+
+# TRAINING PROOF DIVERGENCE
+
+Another important convergence issue discovered tonight.
+
+## Parent App
+
+Shows:
+
+```txt
+guard bottom
+Butterfly to X-Guard
+```
+
+## Coach App
+
+Shows:
+
+```txt
+top passing
+Backstep Pass
+```
+
+This confirms:
+coach Summary still prefers:
+
+```txt
+coach-local sessions
+```
+
+instead of:
+
+```txt
+parent published training proof
+```
+
+This EXACT issue existed historically and was previously documented.
+
+Likely affected areas:
+
+* useSignals
+* trainingProofStore
+* buildSummaryViewModel
+* computeProgression
+* computeCoachAlignment
+
+IMPORTANT:
+DO NOT sync full Session[] to coach.
+
+Correct architecture:
+
+```txt
+Parent owns training truth
+Coach consumes bounded proof
+```
+
+---
+
+# PODIUM GALLERY INVALIDATION BUG
+
+Observed behavior:
+
+```txt
+Comp 9 saved correctly
+archive updated
+gallery did NOT refresh
+UNTIL another competition creation forced recompute
+```
+
+Interpretation:
+This is likely:
+
+```txt
+derived projection invalidation timing
+```
+
+NOT:
+
+```txt
+competition persistence corruption
+```
+
+Likely:
+
+* memo dependency
+* stale selector
+* projection cache invalidation
+
+Data itself persisted correctly.
+
+---
+
+# SAVE/CLOSE LIFECYCLE COLLISION
+
+Current active investigation.
+
+Observed:
+
+* save succeeds
+* editor remains mounted
+* bottom-tab navigation restores stale editor state
+* competition exists correctly afterward
+
+Interpretation:
+
+```txt
+post-save lifecycle cleanup incomplete
+```
+
+NOT:
+
+```txt
+canonical persistence failure
+```
+
+Likely affected:
+
+* activeCompetitionId
+* editingCompetitionId
+* draft state cleanup
+* post-save route reset
+
+This is now UI lifecycle convergence, not architecture instability.
+
+---
+
+# CURRENT DIRTY FILES
+
+These remain intentionally dirty tonight:
+
+```txt
+app/(tabs)/this-week/family-competition/edit.tsx
+app/(tabs)/this-week/kid/[kidId]/competition/edit.tsx
+src/domain/competition/CompetitionSync.ts
+src/domain/competition/publishParentCompetitionAggregate.ts
+src/domain/competition/publishParentCompetitionTopology.ts
+src/family/parentKidCompetitionDelete.ts
+src/storage/coachKidStore.ts
+src/storage/coachMatchBreakdownOverlayStore.ts
+src/storage/coachSyncHydrationStore.ts
+src/storage/competitionStore.ts
+src/storage/kidCompetitionStore.ts
+src/dev/competitionMutationDevLog.ts
+```
+
+These are primarily:
+
+```txt
+forensic instrumentation
++
+observability scaffolding
+```
+
+NOT:
+
+* hidden authority rewrites
+* topology corruption
+* replay mutation
+
+Keep instrumentation through convergence QA.
+
+Do NOT mass-delete tomorrow morning.
+
+---
+
+# IMPORTANT QA REALIZATION
+
+The repo is NO LONGER in:
+
+```txt
+architecture crisis mode
+```
+
+We are now in:
+
+```txt
+convergence + projection alignment mode
+```
+
+That is a MASSIVE milestone.
+
+The remaining issues are:
+
+* overlay rendering
+* proof precedence
+* invalidation timing
+* lifecycle cleanup
+
+NOT:
+
+* topology collapse
+* authority poisoning
+* replay corruption
+
+---
+
+# MORNING TODO LIST — 2026-06-02
+
+## PRIORITY 1
+
+Restore coach overlay render pipeline.
+
+Trace:
+
+```txt
+publish
+→ hydrate
+→ reconcile
+→ merge
+→ projection
+→ render
+→ pill metadata
+```
+
+Determine EXACTLY where overlays disappear.
+
+DO NOT mutate canonical facts.
+
+---
+
+## PRIORITY 2
+
+Fix training proof precedence.
+
+Coach Summary must prefer:
+
+```txt
+parent proof lane
+```
+
+NOT:
+
+```txt
+coach-local sessions
+```
+
+---
+
+## PRIORITY 3
+
+Fix editor lifecycle cleanup.
+
+Expected:
+
+```txt
+save
+→ refresh
+→ exit editor
+→ stable compete root
+```
+
+---
+
+## PRIORITY 4
+
+Fix podium gallery invalidation refresh timing.
+
+Likely:
+
+```txt
+memo/cache dependency invalidation
+```
+
+NOT persistence corruption.
+
+---
+
+## PRIORITY 5
+
+Continue convergence QA:
+
+* replay
+* reconnect
+* reorder
+* hard close
+* athlete switching
+* overlay persistence
+* delete convergence
+
+---
+
+# FINAL ENGINEERING ASSESSMENT
+
+Today was one of the biggest architecture stabilization days in the history of the repo.
+
+We successfully transformed the competition system from:
+
+```txt
+synthetic mutable reconstruction architecture
+```
+
+into:
+
+```txt
+governed replay-safe distributed topology architecture
+```
+
+with:
+
+* immutable lineage
+* canonical topology
+* topology-backed rendering
+* topology-aware Summary
+* replay-safe overlays
+* canonicalized mutation orchestration
+* deterministic overwrite semantics
+* rollback-safe migration
+* bounded overlay doctrine
+* future AI-safe structural truth
+
+This is now genuinely principal-level systems/platform engineering.
+
+The repo is finally behaving like:
+
+```txt
+one governed distributed truth system
+```
+
+instead of:
+
+```txt
+multiple competing mutable ownership planes
+```
+
 
 # DATE: 2026-05-29
 

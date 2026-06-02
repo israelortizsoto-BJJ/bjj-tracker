@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logCompetitionTopologyTrace } from "../dev/competitionTopologyTrace";
 import type {
   SyncedCompetitionMatchTopology,
   SyncedCompetitionTopologyArtifact,
@@ -166,10 +167,14 @@ export async function getCoachCompetitionTopology(
 /** Newest-wins full overwrite. This cache never creates or merges topology rows locally. */
 export async function writeCoachCompetitionTopology(
   artifact: SyncedCompetitionTopologyArtifact,
+  competitionTopologyTraceId?: string,
 ): Promise<CoachCompetitionTopologyWriteResult> {
   if (!isValidSyncedCompetitionTopologyArtifact(artifact)) {
     if (__DEV__) {
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_invalid");
+      logCompetitionTopologyTrace("[COMP_TOPOLOGY_HYDRATE]", "hydrate_invalid", {
+        traceId: competitionTopologyTraceId ?? null,
+      });
     }
     return "hydrate_invalid";
   }
@@ -177,12 +182,26 @@ export async function writeCoachCompetitionTopology(
   const athleteId = artifact.sharedAthleteId.trim();
   const map = await readStore();
   const existing = map[athleteId] ?? null;
+  const totalMatchCount = artifact.competitions.reduce(
+    (sum, competition) => sum + competition.matches.length,
+    0,
+  );
+  logCompetitionTopologyTrace("[COMP_TOPOLOGY_HYDRATE]", "cache_write_received", {
+    traceId: competitionTopologyTraceId ?? null,
+    sharedAthleteId: athleteId,
+    competitionCount: artifact.competitions.length,
+    totalMatchCount,
+    lineageKeyCount: totalMatchCount,
+    incomingUpdatedAt: artifact.updatedAt,
+    existingUpdatedAt: existing?.updatedAt ?? null,
+  });
   if (existing && artifact.updatedAt.localeCompare(existing.updatedAt) <= 0) {
     if (__DEV__) {
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_skipped_stale", {
         sharedAthleteId: athleteId,
         existingUpdatedAt: existing.updatedAt,
         incomingUpdatedAt: artifact.updatedAt,
+        traceId: competitionTopologyTraceId ?? null,
       });
     }
     return "hydrate_skipped_stale";
@@ -195,6 +214,9 @@ export async function writeCoachCompetitionTopology(
       sharedAthleteId: athleteId,
       updatedAt: artifact.updatedAt,
       competitionCount: artifact.competitions.length,
+      totalMatchCount,
+      lineageKeyCount: totalMatchCount,
+      traceId: competitionTopologyTraceId ?? null,
     });
   }
   return "hydrate_store_overwrite";

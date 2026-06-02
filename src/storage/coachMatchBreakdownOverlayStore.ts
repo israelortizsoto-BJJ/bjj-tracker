@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logCompOverlayMaterialize, logCompPublishGuard } from "../dev/competitionMutationDevLog";
 import type {
   CoachMatchBreakdownOverlay,
   CoachMatchBreakdownOverlayIdentity,
@@ -102,6 +103,16 @@ export async function writeCoachMatchBreakdownOverlay(input: {
   const key = overlayCompositeKey(input.identity);
   const updatedAt = trimmed(input.updatedAt);
   if (!key || !updatedAt) {
+    logCompPublishGuard({
+      sharedAthleteId: trimmed(input.identity.sharedAthleteId) || null,
+      canonicalPayloadIds: trimmed(input.identity.sharedCompetitionId)
+        ? [trimmed(input.identity.sharedCompetitionId)]
+        : null,
+      lineageKey: trimmed(input.identity.matchLineageKey) || null,
+      operationKind: "local",
+      surface: "coachMatchBreakdownOverlayStore.writeCoachMatchBreakdownOverlay",
+      phaseDetail: !key ? "missing_lineage" : "missing_updated_at",
+    });
     if (__DEV__) {
       console.log("[COMP_OVERLAY_TRACE] overlay_upsert_rejected", {
         reason: !key ? "missing_lineage" : "missing_updated_at",
@@ -116,6 +127,14 @@ export async function writeCoachMatchBreakdownOverlay(input: {
   const map = await readStore();
   const existing = map[key] ?? null;
   if (existing && updatedAt.localeCompare(existing.updatedAt) < 0) {
+    logCompPublishGuard({
+      sharedAthleteId,
+      canonicalPayloadIds: [sharedCompetitionId],
+      lineageKey: matchLineageKey,
+      operationKind: "local",
+      surface: "coachMatchBreakdownOverlayStore.writeCoachMatchBreakdownOverlay",
+      phaseDetail: "stale_overlay",
+    });
     if (__DEV__) {
       console.log("[COMP_OVERLAY_TRACE] overlay_upsert_rejected", {
         reason: "stale_overlay",
@@ -149,6 +168,15 @@ export async function writeCoachMatchBreakdownOverlay(input: {
 
   map[key] = overlay;
   await writeStore(map);
+  logCompOverlayMaterialize({
+    sharedAthleteId,
+    canonicalPayloadIds: [sharedCompetitionId],
+    lineageKey: matchLineageKey,
+    operationKind: "local",
+    localStoreAffected: StorageKeys.coachMatchBreakdownOverlayByLineage,
+    surface: "coachMatchBreakdownOverlayStore.writeCoachMatchBreakdownOverlay",
+    phaseDetail: "overlay_persisted",
+  });
   if (__DEV__) {
     console.log("[COMP_OVERLAY_TRACE] overlay_upsert_ok", {
       sharedAthleteId,

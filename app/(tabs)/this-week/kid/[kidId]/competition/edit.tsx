@@ -27,6 +27,7 @@ import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../../../../../../src/media/persistCameraRollMedia";
+import { logCompDelete, logCompSave } from "@/src/dev/competitionMutationDevLog";
 import {
   createCompetition,
   deleteCompetition,
@@ -445,6 +446,14 @@ export default function KidCompetitionEditScreen() {
     const snapshots = matches.map((m) => snapshotFromLocal(m));
     const competitionVideos = competitionVideoRefsFromMatches(snapshots);
 
+    logCompSave("BEGIN", {
+      competitionId: isNew ? null : entryId,
+      athleteId: kidId,
+      operationKind: "optimistic",
+      surface: "parentKidCompetitionEdit",
+      overlayCount: snapshots.length,
+    });
+
     setSaving(true);
     try {
       const kidsByIdForShared = await getKidsById();
@@ -471,6 +480,13 @@ export default function KidCompetitionEditScreen() {
           matchSnapshots: snapshots,
         });
         if (!created.ok) {
+          logCompSave("ERROR", {
+            athleteId: kidId,
+            sharedAthleteId: resolvedSharedAthleteId ?? null,
+            operationKind: "server",
+            surface: "parentKidCompetitionEdit",
+            phaseDetail: created.blocked.kind,
+          });
           if (created.blocked.kind === "resolve_miss_new") {
             Alert.alert(
               "Could not sync",
@@ -511,6 +527,14 @@ export default function KidCompetitionEditScreen() {
           matchSnapshots: snapshots,
         });
         if (!updated.ok) {
+          logCompSave("ERROR", {
+            competitionId: entryId,
+            athleteId: kidId,
+            sharedAthleteId: resolvedSharedAthleteId ?? null,
+            operationKind: "server",
+            surface: "parentKidCompetitionEdit",
+            phaseDetail: updated.blocked.kind,
+          });
           if (updated.blocked.kind === "resolve_miss_edit") {
             Alert.alert(
               "Could not sync",
@@ -534,6 +558,13 @@ export default function KidCompetitionEditScreen() {
         }
         savedCompetitionId = updated.savedCompetitionId;
       }
+      logCompSave("COMPLETE", {
+        competitionId: savedCompetitionId,
+        athleteId: kidId,
+        sharedAthleteId: resolvedSharedAthleteId ?? null,
+        operationKind: "optimistic",
+        surface: "parentKidCompetitionEdit",
+      });
       exitToCompeteAfterCompetitionSave({
         navigation,
         actorRole: "parent",
@@ -542,6 +573,13 @@ export default function KidCompetitionEditScreen() {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
+      logCompSave("ERROR", {
+        competitionId: entryId,
+        athleteId: kidId,
+        operationKind: "optimistic",
+        surface: "parentKidCompetitionEdit",
+        error: msg,
+      });
       Alert.alert(
         "Could not save",
         msg ||
@@ -568,6 +606,12 @@ export default function KidCompetitionEditScreen() {
         text: "Delete",
         style: "destructive",
         onPress: async () => {
+          logCompDelete("BEGIN", {
+            competitionId: entryId,
+            athleteId: kidId,
+            operationKind: "optimistic",
+            surface: "parentKidCompetitionEdit.onDelete",
+          });
           const outcome = await deleteCompetition({ entryId, kidId });
           if (!outcome.ok) {
             Alert.alert(outcome.alertTitle, outcome.alertMessage);

@@ -92,6 +92,8 @@ export function projectCompetitionCompeteView(input: {
       console.log("[COMP_PROJECTION_TRACE] projection_missing_topology", {
         sharedAthleteId: sharedAthleteId || null,
         sharedCompetitionId: sharedCompetitionId || null,
+        canonicalLineageAvailable: false,
+        overlayAttachEligible: false,
       });
       console.log("[COMP_PROJECTION_TRACE] projection_fallback_used", {
         sharedAthleteId: sharedAthleteId || null,
@@ -122,6 +124,9 @@ export function projectCompetitionCompeteView(input: {
       sharedAthleteId,
       sharedCompetitionId,
       matchCount: matches.length,
+      lineageKeyCount: topology.matches.length,
+      canonicalLineageAvailable: true,
+      overlayAttachEligible: true,
     });
     if (attachedOverlayCount > 0) {
       console.log("[COMP_PROJECTION_TRACE] projection_overlay_attached", {

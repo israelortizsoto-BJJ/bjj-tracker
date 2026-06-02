@@ -1,5 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import {
+  logCompCacheInvalidation,
+  logCompDelete,
+  logCompHydrateReplayAfterDelete,
+  logCompSave,
+} from "../dev/competitionMutationDevLog";
 import { bestEffortDeletePersistedMedia } from "../media/persistCameraRollMedia";
 import { StorageKeys } from "./storageKeys";
 import type {
@@ -52,7 +58,15 @@ function newEntryId(): string {
 const listeners = new Set<() => void>();
 let competitionVersion = 0;
 
-export function emitCompetitionChange() {
+export function emitCompetitionChange(caller?: string) {
+  if (__DEV__) {
+    logCompCacheInvalidation({
+      operationKind: "local",
+      localStoreAffected: "kidCompetitionStore subscribers",
+      phaseDetail: caller ?? "emitCompetitionChange",
+      competitionVersionNext: competitionVersion + 1,
+    });
+  }
   console.log("[COMPETITION EMIT]");
   competitionVersion += 1;
   for (const l of listeners) l();
@@ -571,6 +585,30 @@ export async function upsertSharedCompetitionsForKid(
         b.createdAt.localeCompare(a.createdAt),
     );
 
+  if (__DEV__ && droppedStaleShared.length > 0) {
+    for (const row of droppedStaleShared) {
+      logCompHydrateReplayAfterDelete({
+        competitionId: row.id,
+        athleteId: kidId,
+        sharedAthleteId: row.sharedAthleteId ?? sharedAthleteId,
+        canonicalPayloadIds: row.sharedCompetitionId ? [row.sharedCompetitionId] : null,
+        operationKind: "canonical",
+        surface: "kidCompetitionStore.upsertSharedCompetitionsForKid",
+        phaseDetail: "reconcile_dropped_stale_shared_row",
+      });
+    }
+  }
+  logCompSave("RECONCILE", {
+    athleteId: kidId,
+    sharedAthleteId,
+    canonicalPayloadIds: remote.map((r) => r.id),
+    operationKind: "canonical",
+    localStoreAffected: StorageKeys.kidCompetitionEntries,
+    surface: "kidCompetitionStore.upsertSharedCompetitionsForKid",
+    localEntriesBefore,
+    localEntriesAfter: returnedForKid.length,
+    droppedStaleSharedCount: droppedStaleShared.length,
+  });
   console.log("[COMP_SYNC_TRACE] upsertSharedCompetitionsForKid", {
     kidId,
     sharedAthleteId,
@@ -713,6 +751,15 @@ export async function createKidCompetitionEntry(
   all.unshift(created);
   const capped = capCompetitionsByKid(all);
   await setRaw(capped);
+  logCompSave("LOCAL", {
+    competitionId: id,
+    athleteId: input.kidId,
+    sharedAthleteId: input.sharedAthleteId ?? null,
+    canonicalPayloadIds: input.sharedCompetitionId ? [input.sharedCompetitionId] : null,
+    operationKind: "local",
+    localStoreAffected: StorageKeys.kidCompetitionEntries,
+    surface: "kidCompetitionStore.createKidCompetitionEntry",
+  });
   return capped.find((e) => e.id === id) ?? created;
 }
 
@@ -921,6 +968,15 @@ export async function updateKidCompetitionEntry(
   all[idx] = updated;
   const capped = capCompetitionsByKid(all);
   await setRaw(capped);
+  logCompSave("LOCAL", {
+    competitionId: entryId,
+    athleteId: updated.kidId,
+    sharedAthleteId: updated.sharedAthleteId ?? null,
+    canonicalPayloadIds: updated.sharedCompetitionId ? [updated.sharedCompetitionId] : null,
+    operationKind: "local",
+    localStoreAffected: StorageKeys.kidCompetitionEntries,
+    surface: "kidCompetitionStore.updateKidCompetitionEntry",
+  });
   return capped.find((e) => e.id === entryId) ?? updated;
 }
 
@@ -951,6 +1007,15 @@ export async function deleteKidCompetitionEntry(entryId: string): Promise<boolea
 
   const next = all.filter((e) => e.id !== entryId);
   await setRaw(capCompetitionsByKid(next));
+  logCompDelete("LOCAL", {
+    competitionId: entryId,
+    athleteId: found.kidId,
+    sharedAthleteId: found.sharedAthleteId ?? null,
+    canonicalPayloadIds: found.sharedCompetitionId ? [found.sharedCompetitionId] : null,
+    operationKind: "local",
+    localStoreAffected: `${StorageKeys.kidCompetitionEntries}+competitionDetail`,
+    surface: "kidCompetitionStore.deleteKidCompetitionEntry",
+  });
   return true;
 }
 

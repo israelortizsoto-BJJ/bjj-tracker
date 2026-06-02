@@ -1,8 +1,14 @@
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { isCompetitionMatchUiAvailableForEventDate } from "../../_domain/dateKey";
 import { useDeviceRole } from "../../deviceRole/DeviceRoleProvider";
-import { projectCompetitionCompeteView } from "../../domain/competition/projectCompetitionCompeteView";
+import { hydrateCompetitionMatchOverlayAnnotations } from "../../domain/competition/hydrateCompetitionMatchOverlayAnnotations";
+import {
+  projectCompetitionCompeteView,
+  type CompetitionMatchOverlayAnnotation,
+} from "../../domain/competition/projectCompetitionCompeteView";
 import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
 import { competeMedalTierFromKidEntry, type KidCompetitionMedalTier } from "../../types/coachKid";
 import { CompetitionMedalMark, type CompeteKidEntryMerged } from "./MedalGallery";
@@ -32,15 +38,65 @@ export function CompetitionCard({
   onOpenEntry: (entry: CompeteKidEntryMerged) => void;
 }) {
   const { role: deviceRole } = useDeviceRole();
+  const sharedAthleteId = entry.sharedAthleteId ?? "";
+  const sharedCompetitionId = entry.sharedCompetitionId ?? "";
+  const topologyArtifact = peekCoachCompetitionTopology(sharedAthleteId);
+  const topology = topologyArtifact?.competitions.find(
+    (competition) => competition.sharedCompetitionId === sharedCompetitionId,
+  );
+  const matchLineageKeys = topology?.matches.map((match) => match.matchLineageKey) ?? [];
+  const matchLineageSignature = matchLineageKeys.join("\u0000");
+  const overlayHydrationKey = JSON.stringify([
+    sharedAthleteId,
+    sharedCompetitionId,
+    matchLineageSignature,
+  ]);
+  const [hydratedOverlayState, setHydratedOverlayState] = useState<{
+    key: string;
+    annotations: CompetitionMatchOverlayAnnotation[];
+  } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setHydratedOverlayState(null);
+      if (deviceRole !== "coach") return () => {};
+      void hydrateCompetitionMatchOverlayAnnotations({
+        sharedAthleteId,
+        sharedCompetitionId,
+        matchLineageKeys: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+      })
+        .then((annotations) => {
+          if (active) setHydratedOverlayState({ key: overlayHydrationKey, annotations });
+        })
+        .catch(() => {
+          if (active) setHydratedOverlayState({ key: overlayHydrationKey, annotations: [] });
+        });
+      return () => {
+        active = false;
+      };
+    }, [
+      deviceRole,
+      matchLineageSignature,
+      overlayHydrationKey,
+      sharedAthleteId,
+      sharedCompetitionId,
+    ]),
+  );
+
+  const legacyOverlayAnnotations = entry.matches.map((match) => ({
+    matchLineageKey: match.id,
+    coachNote: match.coachNote,
+  }));
+  const hydratedOverlayAnnotations =
+    hydratedOverlayState?.key === overlayHydrationKey ? hydratedOverlayState.annotations : null;
   const projectedEntry =
     deviceRole === "coach"
       ? projectCompetitionCompeteView({
           shell: entry,
-          topologyArtifact: peekCoachCompetitionTopology(entry.sharedAthleteId ?? ""),
-          overlayAnnotations: entry.matches.map((match) => ({
-            matchLineageKey: match.id,
-            coachNote: match.coachNote,
-          })),
+          topologyArtifact,
+          overlayAnnotations:
+            hydratedOverlayAnnotations?.length ? hydratedOverlayAnnotations : legacyOverlayAnnotations,
           fallbackMatches: entry.matches,
         })
       : entry;
