@@ -156,6 +156,24 @@ export type SyncedTrainingProofArtifact = {
 
 export type CoachWeeklySyncPutTrainingProofBody = SyncedTrainingProofArtifact;
 
+export type SyncedCoachMatchBreakdownArtifact = {
+  sharedAthleteId: SharedAthleteId;
+  sharedCompetitionId: SharedCompetitionId;
+  matchLineageKey: string;
+  coachNote?: string;
+  updatedAt: string;
+};
+
+export type SyncedCoachMatchBreakdownArtifactSet = {
+  schemaVersion: 1;
+  sharedAthleteId: SharedAthleteId;
+  updatedAt: string;
+  artifacts: SyncedCoachMatchBreakdownArtifact[];
+};
+
+export type CoachWeeklySyncPutCoachMatchBreakdownArtifactsBody =
+  SyncedCoachMatchBreakdownArtifactSet;
+
 export type CoachWeeklySyncSessionResponse = {
   schemaVersion?: number;
   coach: CoachWeeklySyncCoachSummary;
@@ -170,6 +188,8 @@ export type CoachWeeklySyncSessionResponse = {
   competitionTopologyByAthleteId?: Record<string, SyncedCompetitionTopologyArtifact>;
   /** Per-athlete bounded training proof; parent writer only. */
   trainingProofByAthleteId?: Record<string, SyncedTrainingProofArtifact>;
+  /** Per-athlete coach-owned match breakdown overlays. Parents consume read-only. */
+  coachMatchBreakdownArtifacts?: Record<string, SyncedCoachMatchBreakdownArtifactSet>;
 };
 
 export type CoachWeeklySyncCreateSessionBody = {

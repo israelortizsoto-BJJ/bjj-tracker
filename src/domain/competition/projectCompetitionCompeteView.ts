@@ -88,6 +88,15 @@ export function projectCompetitionCompeteView(input: {
       : null;
 
   if (!topology) {
+    console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+      stage: "overlay_merge_skipped_missing_topology",
+      sharedAthleteId: sharedAthleteId || null,
+      sharedCompetitionId: sharedCompetitionId || null,
+      artifactCount: input.overlayAnnotations?.length ?? 0,
+      mergeCount: 0,
+      parentRenderCount: 0,
+      reason: "missing_canonical_topology",
+    });
     if (__DEV__) {
       console.log("[COMP_PROJECTION_TRACE] projection_missing_topology", {
         sharedAthleteId: sharedAthleteId || null,
@@ -119,6 +128,15 @@ export function projectCompetitionCompeteView(input: {
       return snapshotFromTopologyMatch(match, overlay);
     });
 
+  console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+    stage: "overlay_merge_complete",
+    sharedAthleteId,
+    sharedCompetitionId,
+    lineageIds: topology.matches.map((match) => match.matchLineageKey),
+    artifactCount: overlaysByLineageKey.size,
+    mergeCount: attachedOverlayCount,
+    parentRenderCount: matches.filter((match) => (match.coachNote ?? "").trim().length > 0).length,
+  });
   if (__DEV__) {
     console.log("[COMP_PROJECTION_TRACE] projection_topology_used", {
       sharedAthleteId,

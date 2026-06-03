@@ -12,7 +12,21 @@ export async function hydrateCompetitionMatchOverlayAnnotations(input: {
   const matchLineageKeys = [...new Set(input.matchLineageKeys.map((key) => key.trim()))].filter(
     Boolean,
   );
-  if (!sharedAthleteId || !sharedCompetitionId || matchLineageKeys.length === 0) return [];
+  if (!sharedAthleteId || !sharedCompetitionId || matchLineageKeys.length === 0) {
+    console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+      stage: "overlay_hydrate_local_store_skipped",
+      sharedAthleteId: sharedAthleteId || null,
+      sharedCompetitionId: sharedCompetitionId || null,
+      lineageIds: matchLineageKeys,
+      hydrateCount: 0,
+      reason: !sharedAthleteId
+        ? "missing_sharedAthleteId"
+        : !sharedCompetitionId
+          ? "missing_sharedCompetitionId"
+          : "missing_lineage_ids",
+    });
+    return [];
+  }
 
   const canonicalMatchLineageKeys = new Set(matchLineageKeys);
   const overlays = await Promise.all(
@@ -23,5 +37,14 @@ export async function hydrateCompetitionMatchOverlayAnnotations(input: {
       ),
     ),
   );
-  return overlays.filter((overlay): overlay is NonNullable<typeof overlay> => overlay !== null);
+  const hydrated = overlays.filter((overlay): overlay is NonNullable<typeof overlay> => overlay !== null);
+  console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+    stage: "overlay_hydrate_local_store_complete",
+    sharedAthleteId,
+    sharedCompetitionId,
+    lineageIds: matchLineageKeys,
+    hydrateCount: hydrated.length,
+    artifactCount: hydrated.length,
+  });
+  return hydrated;
 }

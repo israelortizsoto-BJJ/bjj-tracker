@@ -6,6 +6,8 @@ import {
   logCompHydrateReplayAfterDelete,
   logCompSave,
 } from "../dev/competitionMutationDevLog";
+import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
+import { peekCoachMatchBreakdownArtifactSet } from "./coachMatchBreakdownArtifactStore";
 import { bestEffortDeletePersistedMedia } from "../media/persistCameraRollMedia";
 import { StorageKeys } from "./storageKeys";
 import type {
@@ -448,6 +450,10 @@ export async function upsertSharedCompetitionsForKid(
   const remoteById = new Map(remote.map((r) => [r.id, r] as const));
   const remoteIdSet = new Set(remote.map((r) => r.id));
   const devLogTag = "[bjj-coach-comp-reconcile]";
+  const artifactSet = peekCoachMatchBreakdownArtifactSet(sharedAthleteId);
+  const coachMatchBreakdownArtifactsForTrace = artifactSet
+    ? { [sharedAthleteId]: artifactSet }
+    : undefined;
 
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({
@@ -541,6 +547,11 @@ export async function upsertSharedCompetitionsForKid(
       keptTarget.push(nextRow);
     }
     bySharedId.set(r.id, nextRow);
+    logParentCompPayload(
+      "local_store_upsert_row",
+      nextRow as unknown as Record<string, unknown>,
+      coachMatchBreakdownArtifactsForTrace,
+    );
   }
 
   if (__DEV__) {
@@ -620,6 +631,14 @@ export async function upsertSharedCompetitionsForKid(
       .map((e) => e.sharedCompetitionId)
       .filter((id): id is string => Boolean(id)),
   });
+  for (const row of returnedForKid) {
+    if (!row.sharedCompetitionId) continue;
+    logParentCompPayload(
+      "local_store_final_for_kid",
+      row as unknown as Record<string, unknown>,
+      coachMatchBreakdownArtifactsForTrace,
+    );
+  }
 
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({

@@ -51,7 +51,9 @@ import {
 } from "@/src/features/competition/competitionMatchEditor";
 import { logCompSaveRouteState } from "@/src/features/competition/compSaveExitTelemetry";
 import { exitToCompeteAfterCompetitionSave } from "@/src/features/competition/syncTabAndExit";
+import { logSaveLifecycleTrace } from "@/src/features/competition/saveLifecycleTrace";
 import { deleteCompetition } from "@/src/domain/competition/CompetitionSync";
+import { schedulePublishCoachMatchBreakdownArtifacts } from "@/src/domain/competition/publishCoachMatchBreakdownArtifacts";
 import { projectCompetitionEditorView } from "@/src/domain/competition/projectCompetitionEditorView";
 import { readMatchBreakdownOverlay } from "@/src/domain/competition/readMatchBreakdownOverlay";
 import {
@@ -324,6 +326,13 @@ export default function KidCompetitionEditScreen() {
 
   useEffect(() => {
     return () => {
+      logSaveLifecycleTrace("edit_screen_unmount", {
+        competitionId: entryId || null,
+        sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+        saving: savingRef.current,
+        kidId,
+        pathname: String(pathname ?? ""),
+      });
       console.log("[COMP_EDITOR_UNMOUNT]", {
         ts: Date.now(),
         pathname: String(pathname ?? ""),
@@ -385,6 +394,13 @@ export default function KidCompetitionEditScreen() {
         }
         setLoading(false);
         return () => {
+          logSaveLifecycleTrace("edit_screen_blur", {
+            competitionId: entryId || null,
+            sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+            saving: savingRef.current,
+            isNew,
+            kidId,
+          });
           console.log("[SAVE_PRESS_TRACE] edit_screen_blur", {
             saving: savingRef.current,
             loading: loadingRef.current,
@@ -405,6 +421,13 @@ export default function KidCompetitionEditScreen() {
       });
       void loadExisting();
       return () => {
+        logSaveLifecycleTrace("edit_screen_blur", {
+          competitionId: entryId || null,
+          sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+          saving: savingRef.current,
+          isNew,
+          kidId,
+        });
         console.log("[POST_SAVE_TRACE] focus_effect_cleanup_blur", {
           kidId,
           entryId: entryId || null,
@@ -635,6 +658,12 @@ export default function KidCompetitionEditScreen() {
   );
 
   async function onSave() {
+    logSaveLifecycleTrace("save_handler_enter", {
+      competitionId: entryId || null,
+      sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+      saving: savingRef.current,
+      kidId,
+    });
     console.log("[SAVE_PRESS_TRACE] handler_enter", {
       athleteId: kidId,
       competitionId: entryId || null,
@@ -688,11 +717,22 @@ export default function KidCompetitionEditScreen() {
       });
       setSaving(true);
       try {
+        logSaveLifecycleTrace("mutation_begin", {
+          competitionId: entryId || null,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          saving: true,
+          path: "overlay",
+        });
         console.log("[SAVE_PRESS_TRACE] mutation_begin", {
           path: "overlay",
           overlayCount: matches.length,
         });
-        for (const match of matches) {
+        for (const [sequenceIndex, match] of matches.entries()) {
+          console.log("[OVERLAY_SERIAL_SAVE]", {
+            matchId: match.id,
+            ordinal: sequenceIndex + 1,
+            sequenceIndex,
+          });
           await upsertMatchBreakdownOverlay({
             identity: {
               ...overlayScope,
@@ -703,6 +743,12 @@ export default function KidCompetitionEditScreen() {
             },
           });
         }
+        logSaveLifecycleTrace("mutation_complete", {
+          competitionId: entryId || null,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          saving: true,
+          path: "overlay",
+        });
         console.log("[SAVE_PRESS_TRACE] mutation_complete", {
           path: "overlay",
           overlayCount: matches.length,
@@ -713,6 +759,20 @@ export default function KidCompetitionEditScreen() {
           overlayScope,
           draftCoachNotes: matches.map((m) => m.coachNote?.trim() || null),
           timestamp: Date.now(),
+        });
+        console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+          stage: "coach_local_overlay_saved",
+          sharedAthleteId: overlayScope.sharedAthleteId,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          artifactCount: matches.filter((m) => (m.coachNote ?? "").trim().length > 0).length,
+          lineageIds: matches.map((m) => m.id),
+          publishPayloadCount: matches.filter((m) => (m.coachNote ?? "").trim().length > 0).length,
+          publishLane: "coach_match_breakdown_artifacts",
+          note: "Local coach overlay store write completed; bounded remote artifact publish scheduled.",
+        });
+        schedulePublishCoachMatchBreakdownArtifacts({
+          sharedAthleteId: overlayScope.sharedAthleteId,
+          kidId,
         });
         if (__DEV__) {
           console.log("[COMP_EDITOR_TRACE] editor_overlay_saved", {
@@ -742,6 +802,8 @@ export default function KidCompetitionEditScreen() {
           actorRole: "coach",
           athleteId: kidId,
           competitionId: entryId,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          saving: savingRef.current,
         });
         console.log("[POST_SAVE_TRACE] post_exit_to_compete_sync_return", {
           kidId,
@@ -772,6 +834,12 @@ export default function KidCompetitionEditScreen() {
           ts: Date.now(),
           pathname: String(pathname ?? ""),
           kidId,
+        });
+        logSaveLifecycleTrace("setSaving_false", {
+          competitionId: entryId || null,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          saving: savingRef.current,
+          path: "overlay",
         });
         console.log("[SAVE_PRESS_TRACE] setSaving", {
           value: false,
@@ -808,6 +876,12 @@ export default function KidCompetitionEditScreen() {
     });
     setSaving(true);
     try {
+      logSaveLifecycleTrace("mutation_begin", {
+        competitionId: isNew ? null : entryId,
+        sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+        saving: true,
+        path: "local_shell",
+      });
       const kidsByIdForShared = await getKidsById();
       const resolvedSharedAthleteId =
         (kidsByIdForShared[kidId]?.sharedAthleteId ?? "").trim() || undefined;
@@ -874,6 +948,12 @@ export default function KidCompetitionEditScreen() {
         });
         await setCompetitionDetailForEntryId(entryId, { matches: snapshots });
       }
+      logSaveLifecycleTrace("mutation_complete", {
+        competitionId: savedCompetitionId,
+        sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+        saving: true,
+        path: "local_shell",
+      });
       console.log("[SAVE_PRESS_TRACE] mutation_complete", {
         path: "local_shell",
         competitionId: savedCompetitionId,
@@ -897,6 +977,8 @@ export default function KidCompetitionEditScreen() {
         actorRole: "coach",
         athleteId: kidId,
         competitionId: savedCompetitionId,
+        sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+        saving: savingRef.current,
       });
     } catch (e) {
       console.log("[SAVE_PRESS_TRACE] mutation_error", e);
@@ -924,6 +1006,12 @@ export default function KidCompetitionEditScreen() {
         ts: Date.now(),
         pathname: String(pathname ?? ""),
         kidId,
+      });
+      logSaveLifecycleTrace("setSaving_false", {
+        competitionId: entryId || null,
+        sharedCompetitionId: overlayScope?.sharedCompetitionId ?? null,
+        saving: savingRef.current,
+        path: "local_shell",
       });
       console.log("[SAVE_PRESS_TRACE] setSaving", {
         value: false,

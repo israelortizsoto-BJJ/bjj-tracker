@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
+import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import {
   athleteIdSetFromSynced,
@@ -10,10 +11,16 @@ import {
 } from "../identity/hydrationPipelineTrace";
 import type {
   CoachWeeklySyncSessionResponse,
+  SyncedCoachMatchBreakdownArtifactSet,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
   SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
+import {
+  isValidSyncedCoachMatchBreakdownArtifactSet,
+  writeCoachMatchBreakdownArtifactSet,
+} from "./coachMatchBreakdownArtifactStore";
+import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
 import { enforceWeeklyAthleteInvariant } from "./invariants/weeklyAthleteInvariant";
 import { StorageKeys } from "./storageKeys";
 
@@ -97,6 +104,20 @@ function normalizeCompetitions(raw: unknown): SyncedSharedCompetition[] {
   );
 }
 
+function normalizeCoachMatchBreakdownArtifacts(
+  raw: unknown,
+): Record<string, SyncedCoachMatchBreakdownArtifactSet> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, SyncedCoachMatchBreakdownArtifactSet> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim();
+    if (!id || !isValidSyncedCoachMatchBreakdownArtifactSet(value)) continue;
+    if (value.sharedAthleteId.trim() !== id) continue;
+    out[id] = value;
+  }
+  return out;
+}
+
 /** Rehydrates a persisted session blob; returns null if shape is not usable. */
 function normalizeStoredSession(
   raw: unknown,
@@ -118,7 +139,43 @@ function normalizeStoredSession(
   const weekly = weeklyRaw === null ? null : isValidWeeklyDoc(weeklyRaw) ? weeklyRaw : null;
   const weeklyByAthleteId = normalizeWeeklyByAthleteId(p.weeklyByAthleteId);
   const athletes = normalizeAthletes(p.athletes);
+  const rawCompetitions = p.competitions;
+  if (Array.isArray(rawCompetitions)) {
+    for (const raw of rawCompetitions) {
+      if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        logParentCompPayload(
+          "cache_rehydrate_pre_normalize",
+          raw as Record<string, unknown>,
+        );
+      }
+    }
+  }
   const competitions = normalizeCompetitions(p.competitions);
+  const coachMatchBreakdownArtifacts = normalizeCoachMatchBreakdownArtifacts(
+    p.coachMatchBreakdownArtifacts,
+  );
+  for (const comp of competitions) {
+    logParentCompPayload(
+      "cache_rehydrate_after_normalize",
+      comp as unknown as Record<string, unknown>,
+      coachMatchBreakdownArtifacts,
+    );
+  }
+  if (Array.isArray(rawCompetitions) && rawCompetitions.length !== competitions.length) {
+    console.log(
+      "[PARENT_COMP_PAYLOAD]",
+      JSON.stringify(
+        {
+          stage: "cache_rehydrate_normalize_strip_summary",
+          rawCompetitionCount: rawCompetitions.length,
+          normalizedCompetitionCount: competitions.length,
+          strippedCount: rawCompetitions.length - competitions.length,
+        },
+        null,
+        2,
+      ),
+    );
+  }
   return {
     ...(typeof p.schemaVersion === "number" ? { schemaVersion: p.schemaVersion } : {}),
     coach,
@@ -126,6 +183,7 @@ function normalizeStoredSession(
     weeklyByAthleteId,
     athletes,
     competitions,
+    coachMatchBreakdownArtifacts,
   };
 }
 
@@ -325,6 +383,23 @@ export async function setCachedWeeklyForLinkToken(
     tokenNorm: nextTokenNorm,
     session: nextSession ?? undefined,
   };
+  if (cachedFullSession !== undefined) {
+    const artifactSets = Object.values(cachedFullSession.coachMatchBreakdownArtifacts ?? {});
+    for (const artifactSet of artifactSets) {
+      await writeCoachMatchBreakdownArtifactSet(artifactSet);
+    }
+    if (artifactSets.length > 0) {
+      console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+        stage: "parent_overlay_cache_hydrated_from_session",
+        artifactSetCount: artifactSets.length,
+        artifactCount: artifactSets.reduce((sum, artifactSet) => sum + artifactSet.artifacts.length, 0),
+        sharedAthleteIds: artifactSets.map((artifactSet) => artifactSet.sharedAthleteId),
+      });
+      bumpCoachSyncHydrationVersion({
+        reason: "coach_match_breakdown_artifacts_hydrated",
+      });
+    }
+  }
   if (__DEV__) {
     console.log("[bjj-weekly-cache-write systemKey]", {
       inviteSystemKey: map[linkToken].weekly?.systemKey ?? null,

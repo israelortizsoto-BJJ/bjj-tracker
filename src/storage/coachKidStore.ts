@@ -52,6 +52,10 @@ import {
   removeCoachTrainingProof,
   writeCoachTrainingProof,
 } from "./coachTrainingProofStore";
+import {
+  pruneCoachMatchBreakdownArtifactSets,
+  removeCoachMatchBreakdownArtifactSet,
+} from "./coachMatchBreakdownArtifactStore";
 import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
@@ -241,9 +245,10 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
   const sid = existing.sharedAthleteId?.trim();
   if (!sid) return existing;
 
-  await removeCoachCompetitionAggregate(sid);
-  await removeCoachCompetitionTopology(sid);
-  await removeCoachTrainingProof(sid);
+    await removeCoachCompetitionAggregate(sid);
+    await removeCoachCompetitionTopology(sid);
+    await removeCoachTrainingProof(sid);
+    await removeCoachMatchBreakdownArtifactSet(sid);
 
   const nowIso = new Date().toISOString();
   const { sharedAthleteId: _omit, sharedFromInviteTokenNorm: _tok, ...rest } = existing;
@@ -915,6 +920,16 @@ async function pruneCoachCompetitionTopologyAfterRosterReconcile(opts: {
   await pruneCoachCompetitionTopology(remoteUnionIds);
 }
 
+async function pruneCoachMatchBreakdownArtifactsAfterRosterReconcile(opts: {
+  totalActiveWriterCount: number;
+  remoteUnionIds: Set<string>;
+  allFetched: boolean;
+}): Promise<void> {
+  const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
+  if (!allFetched || totalActiveWriterCount <= 0) return;
+  await pruneCoachMatchBreakdownArtifactSets(remoteUnionIds);
+}
+
 /**
  * Hydrates local bounded competition aggregate artifacts from successful writer session GETs.
  * Overwrite-only; no competition rows, Summary, or signals side effects.
@@ -1349,6 +1364,11 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
     await reconcileCoachTrainingProofFromWriterSessions({
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
+    });
+    await pruneCoachMatchBreakdownArtifactsAfterRosterReconcile({
+      totalActiveWriterCount: writerLinks.length,
+      remoteUnionIds: new Set(athleteIdsUnion),
+      allFetched: successfulSnapshots.length === writerLinks.length,
     });
     if (__DEV__) {
       console.log("[COACH_SYNC_HYDRATION] reconcile_complete_before_bump", {

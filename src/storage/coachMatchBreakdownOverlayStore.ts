@@ -95,6 +95,15 @@ export async function readCoachMatchBreakdownOverlay(
   return overlay;
 }
 
+export async function listCoachMatchBreakdownOverlaysForAthlete(
+  sharedAthleteId: string,
+): Promise<CoachMatchBreakdownOverlay[]> {
+  const athleteId = sharedAthleteId.trim();
+  if (!athleteId) return [];
+  const map = await readStore();
+  return Object.values(map).filter((overlay) => overlay.sharedAthleteId.trim() === athleteId);
+}
+
 export async function writeCoachMatchBreakdownOverlay(input: {
   identity: CoachMatchBreakdownOverlayIdentity;
   patch: CoachMatchBreakdownOverlayPatch;

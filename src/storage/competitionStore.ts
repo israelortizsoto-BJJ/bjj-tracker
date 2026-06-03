@@ -1,5 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
+import { peekCoachMatchBreakdownArtifactSet } from "./coachMatchBreakdownArtifactStore";
+
 import type {
   KidCompetitionEntry,
   KidCompetitionResult,
@@ -134,6 +137,20 @@ export async function getKidCompetitionEntriesWithMatchDetailForKid(
     requestedKidId: k,
     rowsReturned: merged.length,
   });
+  for (const row of merged) {
+    const athleteId = (row.sharedAthleteId ?? "").trim();
+    const artifactSet = athleteId ? peekCoachMatchBreakdownArtifactSet(athleteId) : null;
+    logParentCompPayload(
+      "canonical_slice_hydrated_with_match_detail",
+      {
+        ...row,
+        matchCount: row.matches.length,
+        matchCoachNoteCount: row.matches.filter((m) => (m.coachNote ?? "").trim().length > 0)
+          .length,
+      } as unknown as Record<string, unknown>,
+      artifactSet ? { [athleteId]: artifactSet } : undefined,
+    );
+  }
   return merged;
 }
 
@@ -145,7 +162,22 @@ export async function getKidCompetitionEntriesWithMatchDetailForSharedAthlete(
   if (!aid) return [];
   const all = await getKidCompetitionEntries();
   const entries = all.filter((e) => (e.sharedAthleteId ?? "").trim() === aid);
-  return mergeCompetitionMatchDetailIntoEntries(entries);
+  const merged = await mergeCompetitionMatchDetailIntoEntries(entries);
+  const artifactSet = peekCoachMatchBreakdownArtifactSet(aid);
+  const coachMatchBreakdownArtifactsForTrace = artifactSet ? { [aid]: artifactSet } : undefined;
+  for (const row of merged) {
+    logParentCompPayload(
+      "canonical_slice_hydrated_with_match_detail",
+      {
+        ...row,
+        matchCount: row.matches.length,
+        matchCoachNoteCount: row.matches.filter((m) => (m.coachNote ?? "").trim().length > 0)
+          .length,
+      } as unknown as Record<string, unknown>,
+      coachMatchBreakdownArtifactsForTrace,
+    );
+  }
+  return merged;
 }
 
 /** Latest competition for weekly coaching / drafts (derived from detail merge, no extra storage). */

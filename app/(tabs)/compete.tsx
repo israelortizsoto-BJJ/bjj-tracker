@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { localTodayDateKey, toDateKey } from "@/src/_domain/dateKey";
 import { CompetitionCard } from "@/src/features/competition/CompetitionCard";
+import { logSaveLifecycleTrace } from "@/src/features/competition/saveLifecycleTrace";
 import { MedalCollection } from "@/src/features/competition/MedalCollection";
 import type { CompeteKidEntryMerged } from "@/src/features/competition/MedalGallery";
 import {
@@ -212,6 +213,12 @@ export default function CompetitionTab() {
 
   useFocusEffect(
     useCallback(() => {
+      logSaveLifecycleTrace("compete_screen_focus", {
+        competitionId: null,
+        sharedCompetitionId: null,
+        athleteId: athleteId.trim() || null,
+        linkedKidId: linkedKidId ?? null,
+      });
       console.log("[COMP_FOCUS_RELOAD]", {
         ts: Date.now(),
         linkedKidId: linkedKidId ?? null,

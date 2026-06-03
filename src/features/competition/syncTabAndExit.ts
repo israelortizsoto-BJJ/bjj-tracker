@@ -16,6 +16,7 @@ import {
   scheduleNavStateAfterSaveLog,
 } from "./compSaveExitTelemetry";
 import { logAuthorityNavigationReplayDev } from "../../identity/authorityTelemetry";
+import { logSaveLifecycleTrace } from "./saveLifecycleTrace";
 
 /**
  * Minimal navigation surface for tab parent walk + dispatch (compatible with Expo Router's typed `useNavigation()`).
@@ -161,9 +162,42 @@ export function exitToCompeteAfterCompetitionSave(args: {
   /** Local kid id / route scope for the editor (not mutating global athlete selection). */
   athleteId: string;
   competitionId: string | null;
+  /** Trace-only — canonical/shared competition id when known at call site. */
+  sharedCompetitionId?: string | null;
+  /** Trace-only — editor saving flag when known at call site. */
+  saving?: boolean;
 }): void {
-  const { navigation, actorRole, athleteId, competitionId } = args;
+  const { navigation, actorRole, athleteId, competitionId, sharedCompetitionId, saving } = args;
+  const lifecycleCtx = {
+    competitionId,
+    sharedCompetitionId: sharedCompetitionId ?? null,
+    ...(saving !== undefined ? { saving } : {}),
+  };
+  const logSyncStep = (
+    point: "syncTabAndExit_step_before" | "syncTabAndExit_step_after",
+    stepName: string,
+    extra: Record<string, unknown> = {},
+  ) => {
+    logSaveLifecycleTrace(point, {
+      ...lifecycleCtx,
+      stepName,
+      ...extra,
+    });
+  };
+  const logLaneNormalizeBypass = (reason: string) => {
+    logSaveLifecycleTrace("syncTabAndExit_lane_normalize_bypass", {
+      ...lifecycleCtx,
+      reason,
+      laneRouteName,
+      laneStackKey,
+    });
+  };
+  logSaveLifecycleTrace("syncTabAndExit_enter", lifecycleCtx);
+  logSyncStep("syncTabAndExit_step_before", "read_route_info_begin");
   const riBegin = store.getRouteInfo();
+  logSyncStep("syncTabAndExit_step_after", "read_route_info_begin", {
+    pathname: String(riBegin.pathname ?? ""),
+  });
   console.log("[COMP_EXIT_BEGIN]", {
     ts: Date.now(),
     pathname: String(riBegin.pathname ?? ""),
@@ -172,36 +206,73 @@ export function exitToCompeteAfterCompetitionSave(args: {
     competitionId,
   });
   if (__DEV__) {
+    logSyncStep("syncTabAndExit_step_before", "dev_read_route_info_for_replay");
     const ri = store.getRouteInfo();
+    logSyncStep("syncTabAndExit_step_after", "dev_read_route_info_for_replay", {
+      pathname: String(ri.pathname ?? ""),
+    });
+    logSyncStep("syncTabAndExit_step_before", "dev_log_authority_replay_begin");
     logAuthorityNavigationReplayDev("exit_to_compete_save_begin", {
       actorRole,
       athleteId,
       competitionId,
       pathname: String(ri.pathname ?? ""),
     });
+    logSyncStep("syncTabAndExit_step_after", "dev_log_authority_replay_begin");
   }
+  logSyncStep("syncTabAndExit_step_before", "log_comp_save_normalized");
   logCompSaveNormalized({
     actorRole,
     athleteId,
     destination: "/compete",
     competitionId,
   });
+  logSyncStep("syncTabAndExit_step_after", "log_comp_save_normalized");
 
+  logSyncStep("syncTabAndExit_step_before", "read_root_navigation_ref");
   const rootNav = store.navigationRef?.current;
+  logSyncStep("syncTabAndExit_step_after", "read_root_navigation_ref", {
+    hasRootNav: Boolean(rootNav),
+  });
+  logSyncStep("syncTabAndExit_step_before", "read_root_state");
   const rootState = rootNav?.getRootState() as NavigationState | undefined;
+  logSyncStep("syncTabAndExit_step_after", "read_root_state", {
+    rootStateType: rootState?.type ?? null,
+    rootRouteCount: rootState?.routes?.length ?? 0,
+  });
 
+  logSyncStep("syncTabAndExit_step_before", "create_compete_nav_action");
   const navAction = CommonActions.navigate({
     name: "compete",
     merge: true,
   } as Parameters<typeof CommonActions.navigate>[0]);
+  logSyncStep("syncTabAndExit_step_after", "create_compete_nav_action");
 
+  logSyncStep("syncTabAndExit_step_before", "validate_tabs_navigation");
   const tabsNav = validatedTabsNavigation(navigation);
+  logSyncStep("syncTabAndExit_step_after", "validate_tabs_navigation", {
+    hasTabsNav: Boolean(tabsNav),
+  });
+  logSyncStep("syncTabAndExit_step_before", "find_tabs_fallback");
   const tabsFallback = !tabsNav ? findValidatedTabsStateInTree(rootState) : null;
+  logSyncStep("syncTabAndExit_step_after", "find_tabs_fallback", {
+    hasTabsFallback: Boolean(tabsFallback),
+    tabsFallbackKey: tabsFallback?.key ?? null,
+  });
 
   const targetTab = "compete";
+  logSyncStep("syncTabAndExit_step_before", "read_current_route_info");
   const ri = store.getRouteInfo();
+  logSyncStep("syncTabAndExit_step_after", "read_current_route_info", {
+    pathname: String(ri.pathname ?? ""),
+  });
+  logSyncStep("syncTabAndExit_step_before", "derive_lane_route");
   const currentRoute = String(ri.pathname ?? "");
   const laneRouteName: "this-week" | "coach" = actorRole === "coach" ? "coach" : "this-week";
+  logSyncStep("syncTabAndExit_step_after", "derive_lane_route", {
+    laneRouteName,
+    targetTab,
+  });
 
   const logStackReset = (resetApplied: boolean, before: string[], after: string[]) => {
     logCompExitStackReset({
@@ -215,16 +286,44 @@ export function exitToCompeteAfterCompetitionSave(args: {
   };
 
   if (!rootNav || (!tabsNav && !tabsFallback?.key)) {
+    logSyncStep("syncTabAndExit_step_before", "fallback_read_tab_snapshot");
     const tabSnap = readTabNavigatorStateForExit(null, tabsFallback, rootNav);
+    logSyncStep("syncTabAndExit_step_after", "fallback_read_tab_snapshot", {
+      tabSnapType: tabSnap?.type ?? null,
+    });
+    logSyncStep("syncTabAndExit_step_before", "fallback_log_stack_reset");
     logStackReset(false, laneStackScreenNames(tabSnap, laneRouteName), []);
+    logSyncStep("syncTabAndExit_step_after", "fallback_log_stack_reset");
+    logSaveLifecycleTrace("syncTabAndExit_before_navigation", {
+      ...lifecycleCtx,
+      navOp: "router_replace_compete_fallback",
+    });
     router.replace("/compete");
+    logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+      ...lifecycleCtx,
+      navOp: "router_replace_compete_fallback",
+    });
     scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
     return;
   }
 
+  logSyncStep("syncTabAndExit_step_before", "read_tab_layer_state_before");
   const tabLayerStateBefore = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
+  logSyncStep("syncTabAndExit_step_after", "read_tab_layer_state_before", {
+    tabLayerType: tabLayerStateBefore?.type ?? null,
+    tabLayerRouteCount: tabLayerStateBefore?.routes?.length ?? 0,
+  });
+  logSyncStep("syncTabAndExit_step_before", "read_active_stack_before");
   const activeStackBefore = laneStackScreenNames(tabLayerStateBefore, laneRouteName);
+  logSyncStep("syncTabAndExit_step_after", "read_active_stack_before", {
+    activeStackBefore,
+  });
+  logSyncStep("syncTabAndExit_step_before", "read_lane_stack_before");
   const laneStackBefore = laneOuterStackForNormalization(tabLayerStateBefore, laneRouteName);
+  logSyncStep("syncTabAndExit_step_after", "read_lane_stack_before", {
+    laneStackKey: laneStackBefore?.key ?? null,
+    laneRouteCount: laneStackBefore?.routes?.length ?? 0,
+  });
   const laneStackKey = laneStackBefore?.key ?? null;
 
   const schedulePostDispatchTelemetry = () => {
@@ -271,32 +370,59 @@ export function exitToCompeteAfterCompetitionSave(args: {
   };
 
   const focusCompete = () => {
+    logSyncStep("syncTabAndExit_step_before", "focus_compete_log_begin");
     console.log("[COMP_NAVIGATE_COMPETE]", {
       ts: Date.now(),
       pathname: currentRoute,
       kidId: athleteId,
     });
+    logSyncStep("syncTabAndExit_step_after", "focus_compete_log_begin");
     if (tabsNav) {
+      logSaveLifecycleTrace("syncTabAndExit_before_navigation", {
+        ...lifecycleCtx,
+        navOp: "dispatch_focus_compete_tabs_nav",
+      });
       tabsNav.dispatch(navAction);
+      logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+        ...lifecycleCtx,
+        navOp: "dispatch_focus_compete_tabs_nav",
+      });
       schedulePostDispatchTelemetry();
       return;
     }
     if (tabsFallback?.key && rootNav) {
+      logSaveLifecycleTrace("syncTabAndExit_before_navigation", {
+        ...lifecycleCtx,
+        navOp: "dispatch_focus_compete_root_nav",
+      });
       rootNav.dispatch({
         ...navAction,
         target: tabsFallback.key,
+      });
+      logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+        ...lifecycleCtx,
+        navOp: "dispatch_focus_compete_root_nav",
       });
       schedulePostDispatchTelemetry();
     }
   };
 
   const normalizeLaneToRoot = (nav: TabSyncScreenNavigation): boolean => {
+    logSyncStep("syncTabAndExit_step_before", "normalize_check_lane_stack_key", {
+      laneRouteName,
+    });
     if (!laneStackBefore?.key) {
+      logSyncStep("syncTabAndExit_step_after", "normalize_check_lane_stack_key", {
+        hasLaneStackKey: false,
+      });
+      logSyncStep("syncTabAndExit_step_before", "normalize_serialize_root_state_missing_lane");
       console.log("[COMP_ROOT_STATE_SNAPSHOT]", {
         tree: serializeNavigationStateTree(
           rootNav?.getRootState() as NavigationState | undefined,
         ),
       });
+      logSyncStep("syncTabAndExit_step_after", "normalize_serialize_root_state_missing_lane");
+      logSyncStep("syncTabAndExit_step_before", "normalize_warn_lane_stack_not_found");
       console.warn("[COMP_LANE_NORMALIZE_FAIL]", {
         ts: Date.now(),
         pathname: currentRoute,
@@ -305,9 +431,19 @@ export function exitToCompeteAfterCompetitionSave(args: {
         laneRouteName,
         reason: "lane_stack_not_found",
       });
+      logSyncStep("syncTabAndExit_step_after", "normalize_warn_lane_stack_not_found");
       return false;
     }
+    logSyncStep("syncTabAndExit_step_after", "normalize_check_lane_stack_key", {
+      hasLaneStackKey: true,
+      laneStackKey: laneStackBefore.key,
+    });
+    logSyncStep("syncTabAndExit_step_before", "normalize_check_already_root");
     if (isLaneNormalizedToRoot(laneStackBefore)) {
+      logSyncStep("syncTabAndExit_step_after", "normalize_check_already_root", {
+        alreadyRoot: true,
+      });
+      logSyncStep("syncTabAndExit_step_before", "normalize_log_already_clean");
       console.log("[COMP_LANE_ALREADY_CLEAN]", {
         ts: Date.now(),
         pathname: currentRoute,
@@ -316,8 +452,13 @@ export function exitToCompeteAfterCompetitionSave(args: {
         laneRouteName,
         laneStackKey: laneStackBefore.key,
       });
+      logSyncStep("syncTabAndExit_step_after", "normalize_log_already_clean");
       return true;
     }
+    logSyncStep("syncTabAndExit_step_after", "normalize_check_already_root", {
+      alreadyRoot: false,
+    });
+    logSyncStep("syncTabAndExit_step_before", "normalize_log_begin");
     console.log("[COMP_LANE_NORMALIZE_BEGIN]", {
       ts: Date.now(),
       pathname: currentRoute,
@@ -327,12 +468,21 @@ export function exitToCompeteAfterCompetitionSave(args: {
       laneStackKey: laneStackBefore.key,
       activeStackBefore,
     });
+    logSyncStep("syncTabAndExit_step_after", "normalize_log_begin");
+    logSaveLifecycleTrace("syncTabAndExit_before_navigation", {
+      ...lifecycleCtx,
+      navOp: "dispatch_lane_stack_reset",
+    });
     nav.dispatch({
       ...CommonActions.reset({
         index: 0,
         routes: [{ name: "index" }],
       }),
       target: laneStackBefore.key,
+    });
+    logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+      ...lifecycleCtx,
+      navOp: "dispatch_lane_stack_reset",
     });
     const tabLayerStateAfterReset = readTabNavigatorStateForExit(tabsNav, tabsFallback, rootNav);
     const laneStackAfterReset = laneOuterStackForNormalization(
@@ -391,16 +541,56 @@ export function exitToCompeteAfterCompetitionSave(args: {
   };
 
   if (tabsNav) {
-    if (!normalizeLaneToRoot(tabsNav)) return;
+    logSyncStep("syncTabAndExit_step_before", "call_normalize_lane_tabs_nav");
+    if (!normalizeLaneToRoot(tabsNav)) {
+      logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_tabs_nav", {
+        normalized: false,
+      });
+      if (laneStackKey) return;
+      logLaneNormalizeBypass("missing_lane_stack");
+    } else {
+      logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_tabs_nav", {
+        normalized: true,
+      });
+    }
+    logSyncStep("syncTabAndExit_step_before", "call_focus_compete_tabs_nav");
     focusCompete();
+    logSyncStep("syncTabAndExit_step_after", "call_focus_compete_tabs_nav");
   } else if (tabsFallback?.key && rootNav) {
-    if (!normalizeLaneToRoot(rootNav as TabSyncScreenNavigation)) return;
+    logSyncStep("syncTabAndExit_step_before", "call_normalize_lane_root_nav");
+    if (!normalizeLaneToRoot(rootNav as TabSyncScreenNavigation)) {
+      logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_root_nav", {
+        normalized: false,
+      });
+      if (laneStackKey) return;
+      logLaneNormalizeBypass("missing_lane_stack");
+    } else {
+      logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_root_nav", {
+        normalized: true,
+      });
+    }
+    logSyncStep("syncTabAndExit_step_before", "call_focus_compete_root_nav");
     focusCompete();
+    logSyncStep("syncTabAndExit_step_after", "call_focus_compete_root_nav");
   } else {
+    logSyncStep("syncTabAndExit_step_before", "no_tabs_log_stack_reset");
     logStackReset(false, activeStackBefore, laneStackScreenNames(tabLayerStateBefore, laneRouteName));
+    logSyncStep("syncTabAndExit_step_after", "no_tabs_log_stack_reset");
+    logSaveLifecycleTrace("syncTabAndExit_before_navigation", {
+      ...lifecycleCtx,
+      navOp: "router_replace_compete_no_tabs",
+    });
     router.replace("/compete");
+    logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+      ...lifecycleCtx,
+      navOp: "router_replace_compete_no_tabs",
+    });
     scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
     return;
   }
 
+  logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+    ...lifecycleCtx,
+    navOp: "exit_function_complete",
+  });
 }

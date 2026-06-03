@@ -43,6 +43,9 @@ export const StorageKeys = {
   /** Coach lane: annotation-only match overlays keyed by athlete + competition + match lineage. */
   coachMatchBreakdownOverlayByLineage: "mm:v1:coachMatchBreakdownOverlayByLineage",
 
+  /** Parent/coach read cache: remote coach-owned match breakdown artifacts keyed by athlete. */
+  coachMatchBreakdownArtifactsByAthleteId: "mm:v1:coachMatchBreakdownArtifactsByAthleteId",
+
   /** Coach lane: parent-published training proof artifacts keyed by `sharedAthleteId`. */
   coachTrainingProofByAthleteId: "mm:v1:coachTrainingProofByAthleteId",
 

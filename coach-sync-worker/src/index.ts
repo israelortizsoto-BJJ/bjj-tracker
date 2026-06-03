@@ -131,6 +131,21 @@ type TrainingProofArtifact = {
   weeklyGoalMet: boolean;
 };
 
+type CoachMatchBreakdownArtifact = {
+  sharedAthleteId: string;
+  sharedCompetitionId: string;
+  matchLineageKey: string;
+  coachNote?: string;
+  updatedAt: string;
+};
+
+type CoachMatchBreakdownArtifactSet = {
+  schemaVersion: 1;
+  sharedAthleteId: string;
+  updatedAt: string;
+  artifacts: CoachMatchBreakdownArtifact[];
+};
+
 /** Stored shape; legacy rows omit schemaVersion / athletes / parentWriterSecret / weeklyByAthleteId until migrated. */
 type SessionRecord = {
   schemaVersion: number;
@@ -148,6 +163,8 @@ type SessionRecord = {
   competitionTopologyByAthleteId: Record<string, CompetitionTopologyArtifact>;
   /** Per-athlete bounded training proof; parent writer only. */
   trainingProofByAthleteId: Record<string, TrainingProofArtifact>;
+  /** Per-athlete coach-owned match breakdown overlays. Parent consumes read-only. */
+  coachMatchBreakdownArtifacts: Record<string, CoachMatchBreakdownArtifactSet>;
   createdAt: string;
   athletes: SharedAthlete[];
   competitions: SharedCompetition[];
@@ -304,7 +321,7 @@ function explainWeeklyDocParseRejection(raw: unknown): string | null {
 }
 
 const TOKEN_RE = /^[a-f0-9]{48,128}$/i;
-const SESSION_SCHEMA_VERSION = 4 as const;
+const SESSION_SCHEMA_VERSION = 5 as const;
 const MAX_ATHLETES_PER_SESSION = 24;
 const MAX_COMPETITIONS_PER_SESSION = 400;
 const MAX_TOPOLOGY_COMPETITIONS_PER_ARTIFACT = 400;
@@ -314,6 +331,9 @@ const MAX_TOPOLOGY_MEDIA_REFS_PER_MATCH = 2;
 const MAX_TOPOLOGY_PAYLOAD_CHARS = 256_000;
 const MAX_TOPOLOGY_ID_CHARS = 200;
 const MAX_TOPOLOGY_URI_CHARS = 2_000;
+const MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE = 2048;
+const MAX_COACH_BREAKDOWN_TEXT_CHARS = 8_000;
+const MAX_COACH_BREAKDOWN_PAYLOAD_CHARS = 256_000;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
 const EVENT_STATUS_SET = new Set<CompetitionEventStatus>(["upcoming", "completed", "cancelled", "unknown"]);
 const FORMAT_SET = new Set<CompetitionFormat>(["gi", "nogi", "both"]);
@@ -1098,11 +1118,93 @@ function parseTrainingProofByAthleteId(
   return out;
 }
 
+function parseCoachMatchBreakdownArtifact(raw: unknown): CoachMatchBreakdownArtifact | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const sharedAthleteId = parseTopologyId(o.sharedAthleteId);
+  const sharedCompetitionId = parseTopologyId(o.sharedCompetitionId);
+  const matchLineageKey = parseTopologyId(o.matchLineageKey);
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  const coachNoteRaw = typeof o.coachNote === "string" ? o.coachNote.trim() : "";
+  if (!sharedAthleteId || !sharedCompetitionId || !matchLineageKey || !updatedAt) return null;
+  if (coachNoteRaw.length > MAX_COACH_BREAKDOWN_TEXT_CHARS) return null;
+  return {
+    sharedAthleteId,
+    sharedCompetitionId,
+    matchLineageKey,
+    ...(coachNoteRaw ? { coachNote: coachNoteRaw } : {}),
+    updatedAt,
+  };
+}
+
+function parseCoachMatchBreakdownArtifactSet(
+  raw: unknown,
+): CoachMatchBreakdownArtifactSet | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  if (JSON.stringify(raw).length > MAX_COACH_BREAKDOWN_PAYLOAD_CHARS) return null;
+  const o = raw as Record<string, unknown>;
+  if (o.schemaVersion !== 1 || !Array.isArray(o.artifacts)) return null;
+  const sharedAthleteId = parseTopologyId(o.sharedAthleteId);
+  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
+  if (!sharedAthleteId || !updatedAt) return null;
+  if (o.artifacts.length > MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE) return null;
+
+  const identityKeys = new Set<string>();
+  const artifacts: CoachMatchBreakdownArtifact[] = [];
+  for (const rawArtifact of o.artifacts) {
+    const artifact = parseCoachMatchBreakdownArtifact(rawArtifact);
+    if (!artifact || artifact.sharedAthleteId !== sharedAthleteId) return null;
+    const identityKey = JSON.stringify([
+      artifact.sharedAthleteId,
+      artifact.sharedCompetitionId,
+      artifact.matchLineageKey,
+    ]);
+    if (identityKeys.has(identityKey)) return null;
+    identityKeys.add(identityKey);
+    artifacts.push(artifact);
+  }
+
+  return {
+    schemaVersion: 1,
+    sharedAthleteId,
+    updatedAt,
+    artifacts,
+  };
+}
+
+function parseCoachMatchBreakdownArtifacts(
+  raw: unknown,
+): Record<string, CoachMatchBreakdownArtifactSet> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, CoachMatchBreakdownArtifactSet> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const id = key.trim();
+    if (!id || id.length > MAX_TOPOLOGY_ID_CHARS) continue;
+    const artifactSet = parseCoachMatchBreakdownArtifactSet(value);
+    if (!artifactSet || artifactSet.sharedAthleteId !== id) continue;
+    out[id] = artifactSet;
+  }
+  return out;
+}
+
 /** Entries keyed only by athletes still on the session; bounded for KV size. */
 function weeklyByAthleteIdForStorageAndApi(rec: SessionRecord): Record<string, WeeklyDoc> {
   const athleteIds = new Set(rec.athletes.map((a) => a.id));
   const out: Record<string, WeeklyDoc> = {};
   for (const [k, v] of Object.entries(rec.weeklyByAthleteId)) {
+    if (!athleteIds.has(k)) continue;
+    out[k] = v;
+    if (Object.keys(out).length >= MAX_ATHLETES_PER_SESSION) break;
+  }
+  return out;
+}
+
+function coachMatchBreakdownArtifactsForStorageAndApi(
+  rec: SessionRecord,
+): Record<string, CoachMatchBreakdownArtifactSet> {
+  const athleteIds = new Set(rec.athletes.map((a) => a.id));
+  const out: Record<string, CoachMatchBreakdownArtifactSet> = {};
+  for (const [k, v] of Object.entries(rec.coachMatchBreakdownArtifacts)) {
     if (!athleteIds.has(k)) continue;
     out[k] = v;
     if (Object.keys(out).length >= MAX_ATHLETES_PER_SESSION) break;
@@ -1145,6 +1247,9 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
     r.competitionTopologyByAthleteId,
   );
   const trainingProofByAthleteId = parseTrainingProofByAthleteId(r.trainingProofByAthleteId);
+  const coachMatchBreakdownArtifacts = parseCoachMatchBreakdownArtifacts(
+    r.coachMatchBreakdownArtifacts,
+  );
 
   return {
     schemaVersion: SESSION_SCHEMA_VERSION,
@@ -1157,6 +1262,7 @@ function normalizeSessionRecord(raw: unknown): SessionRecord | null {
     competitionAggregateByAthleteId,
     competitionTopologyByAthleteId,
     trainingProofByAthleteId,
+    coachMatchBreakdownArtifacts,
     createdAt,
     athletes,
     competitions,
@@ -1238,6 +1344,7 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
     ...rec,
     schemaVersion: SESSION_SCHEMA_VERSION,
     weeklyByAthleteId: weeklyByAthleteIdForStorageAndApi(rec),
+    coachMatchBreakdownArtifacts: coachMatchBreakdownArtifactsForStorageAndApi(rec),
     athletes: rec.athletes.slice(0, MAX_ATHLETES_PER_SESSION),
     competitions: rec.competitions.slice(0, MAX_COMPETITIONS_PER_SESSION),
   };
@@ -1368,6 +1475,7 @@ export default {
           competitionAggregateByAthleteId: {},
           competitionTopologyByAthleteId: {},
           trainingProofByAthleteId: {},
+          coachMatchBreakdownArtifacts: {},
           createdAt: now,
           athletes: [],
           competitions: [],
@@ -1416,6 +1524,7 @@ export default {
             getAssemblyDiffs[id] = lost.length > 0 ? lost : ["filtered_by_weeklyByAthleteIdForStorageAndApi"];
           }
         }
+        const apiCoachMatchBreakdownArtifacts = coachMatchBreakdownArtifactsForStorageAndApi(rec);
         const getPayload = {
           schemaVersion: rec.schemaVersion,
           coach: {
@@ -1430,7 +1539,22 @@ export default {
           competitionAggregateByAthleteId: rec.competitionAggregateByAthleteId,
           competitionTopologyByAthleteId: rec.competitionTopologyByAthleteId,
           trainingProofByAthleteId: rec.trainingProofByAthleteId,
+          coachMatchBreakdownArtifacts: apiCoachMatchBreakdownArtifacts,
         };
+        console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+          stage: "worker_get_payload_assembled",
+          athleteCount: rec.athletes.length,
+          competitionCount: rec.competitions.length,
+          topologyArtifactCount: Object.keys(rec.competitionTopologyByAthleteId ?? {}).length,
+          aggregateArtifactCount: Object.keys(rec.competitionAggregateByAthleteId ?? {}).length,
+          trainingProofArtifactCount: Object.keys(rec.trainingProofByAthleteId ?? {}).length,
+          coachMatchBreakdownArtifactCount: Object.values(apiCoachMatchBreakdownArtifacts).reduce(
+            (sum, artifactSet) => sum + artifactSet.artifacts.length,
+            0,
+          ),
+          coachMatchBreakdownArtifactByAthleteCount: Object.keys(apiCoachMatchBreakdownArtifacts).length,
+          hasCoachMatchBreakdownArtifactField: true,
+        });
         const cf = (request as Request & { cf?: { colo?: string } }).cf;
         console.log("[SYSTEMKEY TRACE WORKER]", {
           traceStage: "7_GET_response_payload_worker",
@@ -1713,6 +1837,8 @@ export default {
           rec.competitionTopologyByAthleteId;
         const { [athleteId]: _removedProof, ...restTrainingProofByAthlete } =
           rec.trainingProofByAthleteId;
+        const { [athleteId]: _removedCoachMatchBreakdowns, ...restCoachMatchBreakdownArtifacts } =
+          rec.coachMatchBreakdownArtifacts;
         const next: SessionRecord = {
           ...rec,
           athletes: rec.athletes.filter((a) => a.id !== athleteId),
@@ -1721,6 +1847,7 @@ export default {
           competitionAggregateByAthleteId: restCompetitionAggregateByAthlete,
           competitionTopologyByAthleteId: restCompetitionTopologyByAthlete,
           trainingProofByAthleteId: restTrainingProofByAthlete,
+          coachMatchBreakdownArtifacts: restCoachMatchBreakdownArtifacts,
         };
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
@@ -2287,6 +2414,97 @@ export default {
           ...rec,
           competitions: rec.competitions.filter((c) => c.id !== competitionId),
         };
+        await writeSession(env.SESSIONS, token, next);
+        return json({ ok: true }, 200);
+      }
+
+      const coachMatchBreakdownsPut = path.match(
+        /^\/v1\/sessions\/([^/]+)\/coach-match-breakdowns$/,
+      );
+      if (coachMatchBreakdownsPut && request.method === "PUT") {
+        const token = decodeURIComponent(coachMatchBreakdownsPut[1] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token)) {
+          return error("Invalid token", 400);
+        }
+        const auth = request.headers.get("Authorization") ?? "";
+        const m = /^Bearer\s+(.+)$/.exec(auth.trim());
+        const secret = m?.[1]?.trim() ?? "";
+        if (!secret) return error("Unauthorized", 401);
+
+        let body: unknown;
+        try {
+          body = await request.json();
+        } catch {
+          return error("Invalid JSON", 400);
+        }
+
+        const artifactSet = parseCoachMatchBreakdownArtifactSet(body);
+        if (!artifactSet) {
+          console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+            stage: "worker_coach_overlay_reject_invalid_payload",
+            tokenSuffix: token.slice(-8),
+          });
+          return error("Invalid coach match breakdown artifact set", 400);
+        }
+
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec || rec.writerSecret !== secret) {
+          return error("Unauthorized", 401);
+        }
+        if (!rec.athletes.some((a) => a.id.trim() === artifactSet.sharedAthleteId)) {
+          console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+            stage: "worker_coach_overlay_reject_athlete_scope",
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifactSet.sharedAthleteId,
+          });
+          return error("sharedAthleteId is not linked to this session", 400);
+        }
+
+        const existing = rec.coachMatchBreakdownArtifacts[artifactSet.sharedAthleteId];
+        if (existing && artifactSet.updatedAt.localeCompare(existing.updatedAt) < 0) {
+          console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+            stage: "worker_coach_overlay_reject_stale",
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifactSet.sharedAthleteId,
+            incomingUpdatedAt: artifactSet.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
+            artifactCount: artifactSet.artifacts.length,
+          });
+          return error("Coach match breakdown artifact set is stale", 409);
+        }
+        if (
+          existing &&
+          artifactSet.updatedAt === existing.updatedAt &&
+          JSON.stringify(artifactSet) !== JSON.stringify(existing)
+        ) {
+          console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+            stage: "worker_coach_overlay_reject_equal_timestamp_conflict",
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifactSet.sharedAthleteId,
+            updatedAt: artifactSet.updatedAt,
+          });
+          return error("Coach match breakdown artifact timestamp conflict", 409);
+        }
+
+        const next: SessionRecord = {
+          ...rec,
+          coachMatchBreakdownArtifacts: {
+            ...(rec.coachMatchBreakdownArtifacts || {}),
+            [artifactSet.sharedAthleteId]: artifactSet,
+          },
+        };
+        console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+          stage: "worker_coach_overlay_store_ok",
+          tokenSuffix: token.slice(-8),
+          sharedAthleteId: artifactSet.sharedAthleteId,
+          artifactCount: artifactSet.artifacts.length,
+          sharedCompetitionIds: [
+            ...new Set(artifactSet.artifacts.map((artifact) => artifact.sharedCompetitionId)),
+          ],
+          lineageIds: artifactSet.artifacts.map((artifact) => artifact.matchLineageKey),
+          updatedAt: artifactSet.updatedAt,
+          writeMode: existing ? "newer_or_equal_overwrite" : "first_write",
+        });
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
       }

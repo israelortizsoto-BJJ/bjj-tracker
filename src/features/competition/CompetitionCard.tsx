@@ -6,9 +6,14 @@ import { isCompetitionMatchUiAvailableForEventDate } from "../../_domain/dateKey
 import { useDeviceRole } from "../../deviceRole/DeviceRoleProvider";
 import { hydrateCompetitionMatchOverlayAnnotations } from "../../domain/competition/hydrateCompetitionMatchOverlayAnnotations";
 import {
+  mergeCoachBreakdownIntoMatches,
+  overlayAnnotationsFromCoachMatchBreakdownArtifactSet,
+} from "../../domain/competition/mergeCoachBreakdownIntoMatches";
+import {
   projectCompetitionCompeteView,
   type CompetitionMatchOverlayAnnotation,
 } from "../../domain/competition/projectCompetitionCompeteView";
+import { getCoachMatchBreakdownArtifactSet } from "../../storage/coachMatchBreakdownArtifactStore";
 import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
 import { competeMedalTierFromKidEntry, type KidCompetitionMedalTier } from "../../types/coachKid";
 import { CompetitionMedalMark, type CompeteKidEntryMerged } from "./MedalGallery";
@@ -44,7 +49,9 @@ export function CompetitionCard({
   const topology = topologyArtifact?.competitions.find(
     (competition) => competition.sharedCompetitionId === sharedCompetitionId,
   );
-  const matchLineageKeys = topology?.matches.map((match) => match.matchLineageKey) ?? [];
+  const entryMatchLineageKeys = entry.matches.map((match) => match.id);
+  const matchLineageKeys =
+    topology?.matches.map((match) => match.matchLineageKey) ?? entryMatchLineageKeys;
   const matchLineageSignature = matchLineageKeys.join("\u0000");
   const overlayHydrationKey = JSON.stringify([
     sharedAthleteId,
@@ -56,20 +63,100 @@ export function CompetitionCard({
     annotations: CompetitionMatchOverlayAnnotation[];
   } | null>(null);
 
+  console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+    stage: "competition_card_render_gate",
+    deviceRole,
+    sharedAthleteId: sharedAthleteId || null,
+    sharedCompetitionId: sharedCompetitionId || null,
+    lineageIds: matchLineageKeys,
+    hydrateEligible: deviceRole === "coach" || deviceRole === "parent",
+    topologyMatchCount: matchLineageKeys.length,
+    entryMatchCount: entry.matches.length,
+    parentRenderCount: entry.matches.filter((match) => (match.coachNote ?? "").trim().length > 0)
+      .length,
+    gate:
+      deviceRole === "coach"
+        ? "coach_local_hydrate_enabled"
+        : deviceRole === "parent"
+          ? "parent_remote_hydrate_enabled"
+          : "unsupported_role",
+  });
+
   useFocusEffect(
     useCallback(() => {
       let active = true;
       setHydratedOverlayState(null);
-      if (deviceRole !== "coach") return () => {};
+      if (deviceRole === "parent") {
+        void getCoachMatchBreakdownArtifactSet(sharedAthleteId)
+          .then((artifactSet) => {
+            const annotations = overlayAnnotationsFromCoachMatchBreakdownArtifactSet({
+              artifactSet,
+              sharedAthleteId,
+              sharedCompetitionId,
+              matchLineageKeys: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+            });
+            console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+              stage: "competition_card_parent_hydrate_complete",
+              deviceRole,
+              sharedAthleteId: sharedAthleteId || null,
+              sharedCompetitionId: sharedCompetitionId || null,
+              lineageIds: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+              hydrateCount: annotations.length,
+            });
+            if (active) setHydratedOverlayState({ key: overlayHydrationKey, annotations });
+          })
+          .catch(() => {
+            console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+              stage: "competition_card_parent_hydrate_failed",
+              deviceRole,
+              sharedAthleteId: sharedAthleteId || null,
+              sharedCompetitionId: sharedCompetitionId || null,
+              lineageIds: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+              hydrateCount: 0,
+            });
+            if (active) setHydratedOverlayState({ key: overlayHydrationKey, annotations: [] });
+          });
+        return () => {
+          active = false;
+        };
+      }
+      if (deviceRole !== "coach") {
+        console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+          stage: "competition_card_hydrate_gated",
+          deviceRole,
+          sharedAthleteId: sharedAthleteId || null,
+          sharedCompetitionId: sharedCompetitionId || null,
+          lineageIds: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+          hydrateCount: 0,
+          reason: "device_role_not_supported",
+        });
+        return () => {};
+      }
       void hydrateCompetitionMatchOverlayAnnotations({
         sharedAthleteId,
         sharedCompetitionId,
         matchLineageKeys: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
       })
         .then((annotations) => {
+          console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+            stage: "competition_card_hydrate_complete",
+            deviceRole,
+            sharedAthleteId: sharedAthleteId || null,
+            sharedCompetitionId: sharedCompetitionId || null,
+            lineageIds: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+            hydrateCount: annotations.length,
+          });
           if (active) setHydratedOverlayState({ key: overlayHydrationKey, annotations });
         })
         .catch(() => {
+          console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+            stage: "competition_card_hydrate_failed",
+            deviceRole,
+            sharedAthleteId: sharedAthleteId || null,
+            sharedCompetitionId: sharedCompetitionId || null,
+            lineageIds: matchLineageSignature ? matchLineageSignature.split("\u0000") : [],
+            hydrateCount: 0,
+          });
           if (active) setHydratedOverlayState({ key: overlayHydrationKey, annotations: [] });
         });
       return () => {
@@ -99,7 +186,35 @@ export function CompetitionCard({
             hydratedOverlayAnnotations?.length ? hydratedOverlayAnnotations : legacyOverlayAnnotations,
           fallbackMatches: entry.matches,
         })
+      : deviceRole === "parent"
+        ? {
+            ...entry,
+            matches: mergeCoachBreakdownIntoMatches({
+              matches: entry.matches,
+              overlayAnnotations: hydratedOverlayAnnotations ?? [],
+              sharedAthleteId,
+              sharedCompetitionId,
+            }),
+          }
       : entry;
+  console.log("[COACH_OVERLAY_SYNC_TRACE]", {
+    stage: "competition_card_projected_render",
+    deviceRole,
+    sharedAthleteId: sharedAthleteId || null,
+    sharedCompetitionId: sharedCompetitionId || null,
+    artifactCount:
+      deviceRole === "coach"
+        ? (hydratedOverlayAnnotations?.length ?? legacyOverlayAnnotations.filter((a) => a.coachNote?.trim()).length)
+        : deviceRole === "parent"
+          ? (hydratedOverlayAnnotations?.length ?? 0)
+        : 0,
+    mergeCount: projectedEntry.matches.filter((match) => (match.coachNote ?? "").trim().length > 0)
+      .length,
+    parentRenderCount:
+      deviceRole === "parent"
+        ? projectedEntry.matches.filter((match) => (match.coachNote ?? "").trim().length > 0).length
+        : 0,
+  });
   const tier = competeMedalTierFromKidEntry(entry);
   const isPastCompetition = isCompetitionMatchUiAvailableForEventDate(entry.eventDate);
 
