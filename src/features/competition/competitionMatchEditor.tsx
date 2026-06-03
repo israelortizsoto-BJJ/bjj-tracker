@@ -57,8 +57,15 @@ export type LocalMatch = {
 };
 
 export function createEmptyMatch(idSuffix: string): LocalMatch {
+  const id = `match-${idSuffix}`;
+  if (__DEV__) {
+    console.log("[LINEAGE_TRACE] create_empty_match", {
+      id,
+      idSuffix,
+    });
+  }
   return {
-    id: `match-${idSuffix}`,
+    id,
     matchResult: null,
     outcome: null,
     submissionTime: null,
@@ -140,6 +147,14 @@ export function deriveInitialMatches(
   idSuffix: string,
 ): LocalMatch[] {
   if (detail && detail.matches.length > 0) {
+    if (__DEV__) {
+      console.log("[LINEAGE_TRACE] derive_initial_matches_detail", {
+        entryId: entry.id,
+        sharedAthleteId: entry.sharedAthleteId ?? null,
+        sharedCompetitionId: entry.sharedCompetitionId ?? null,
+        detailMatchIds: detail.matches.map((m) => m.id),
+      });
+    }
     return detail.matches.map((m) => localMatchFromSnapshot(m));
   }
   const u = typeof entry.videoUri === "string" ? entry.videoUri.trim() : "";
@@ -148,9 +163,18 @@ export function deriveInitialMatches(
       ? entry.videoAssetId.trim()
       : null;
   if (u) {
+    const id = `match-legacy-${idSuffix}`;
+    if (__DEV__) {
+      console.log("[LINEAGE_TRACE] derive_initial_matches_legacy_fallback", {
+        entryId: entry.id,
+        sharedAthleteId: entry.sharedAthleteId ?? null,
+        sharedCompetitionId: entry.sharedCompetitionId ?? null,
+        generatedMatchIds: [id],
+      });
+    }
     return [
       {
-        id: `match-legacy-${idSuffix}`,
+        id,
         matchResult: null,
         outcome: null,
         submissionTime: null,
@@ -162,6 +186,14 @@ export function deriveInitialMatches(
         imageAssetId: null,
       },
     ];
+  }
+  if (__DEV__) {
+    console.log("[LINEAGE_TRACE] derive_initial_matches_empty_fallback", {
+      entryId: entry.id,
+      sharedAthleteId: entry.sharedAthleteId ?? null,
+      sharedCompetitionId: entry.sharedCompetitionId ?? null,
+      generatedIdSuffix: `init-${idSuffix}`,
+    });
   }
   return [createEmptyMatch(`init-${idSuffix}`)];
 }
@@ -418,7 +450,7 @@ export function MatchBlock({
               color: UI.textSecondary,
             }}
           >
-            Coach note (optional)
+            Coach Match Breakdown
           </Text>
           <Pressable
             onPress={startRecording}

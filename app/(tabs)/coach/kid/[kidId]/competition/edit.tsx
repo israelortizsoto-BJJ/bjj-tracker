@@ -164,6 +164,10 @@ export default function KidCompetitionEditScreen() {
   } | null>(null);
   const [linkedCompetition, setLinkedCompetition] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(saving);
+  const loadingRef = useRef(loading);
+  savingRef.current = saving;
+  loadingRef.current = loading;
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
@@ -177,6 +181,13 @@ export default function KidCompetitionEditScreen() {
 
   const loadExisting = useCallback(async () => {
     if (!entryId) return;
+    console.log("[POST_SAVE_TRACE] loadExisting_begin", {
+      kidId,
+      entryId,
+      saving: savingRef.current,
+      pathname: String(pathname ?? ""),
+      timestamp: Date.now(),
+    });
     setLoading(true);
     try {
       const found = await getKidCompetitionEntryById(entryId);
@@ -214,6 +225,13 @@ export default function KidCompetitionEditScreen() {
         setCanonicalReadOnly(isLinkedCompetition);
         setOverlayScope(null);
         setMatches(fallbackMatches);
+        console.log("[POST_SAVE_TRACE] loadExisting_hydrated", {
+          source: "fallback_matches",
+          canonicalReadOnly: isLinkedCompetition,
+          overlayScope: null,
+          matchCount: fallbackMatches.length,
+          firstCoachNote: fallbackMatches[0]?.coachNote?.slice(0, 40) ?? null,
+        });
         if (__DEV__) {
           console.log("[COMP_EDITOR_TRACE] editor_missing_topology", {
             sharedAthleteId: sharedAthleteId || null,
@@ -252,11 +270,26 @@ export default function KidCompetitionEditScreen() {
       });
       setCanonicalReadOnly(projected.source === "canonical_topology");
       setOverlayScope({ sharedAthleteId, sharedCompetitionId });
-      setMatches(projected.matches.map((match) => localMatchFromSnapshot(match)));
+      const nextMatches = projected.matches.map((match) => localMatchFromSnapshot(match));
+      setMatches(nextMatches);
+      console.log("[POST_SAVE_TRACE] loadExisting_hydrated", {
+        source: projected.source,
+        canonicalReadOnly: projected.source === "canonical_topology",
+        overlayScope: { sharedAthleteId, sharedCompetitionId },
+        overlayCount: overlays.length,
+        matchCount: nextMatches.length,
+        firstCoachNote: nextMatches[0]?.coachNote?.slice(0, 40) ?? null,
+      });
     } finally {
       setLoading(false);
+      console.log("[POST_SAVE_TRACE] loadExisting_end", {
+        kidId,
+        entryId,
+        saving: savingRef.current,
+        timestamp: Date.now(),
+      });
     }
-  }, [entryId, kidId, reactId, navigation]);
+  }, [entryId, kidId, reactId, navigation, pathname]);
 
   useEffect(() => {
     if (!kidId) {
@@ -296,11 +329,38 @@ export default function KidCompetitionEditScreen() {
         pathname: String(pathname ?? ""),
         kidId,
       });
+      console.log("[SAVE_PRESS_TRACE] unmount", {
+        saving: savingRef.current,
+        loading: loadingRef.current,
+        pathname: String(pathname ?? ""),
+        kidId,
+        entryId: entryId || null,
+        timestamp: Date.now(),
+      });
+      if (savingRef.current) {
+        console.log("[SAVE_PRESS_TRACE] unmount_while_saving", {
+          saving: savingRef.current,
+          loading: loadingRef.current,
+          pathname: String(pathname ?? ""),
+          kidId,
+          entryId: entryId || null,
+          timestamp: Date.now(),
+        });
+      }
     };
-  }, [pathname, kidId]);
+  }, [pathname, kidId, entryId]);
 
   useFocusEffect(
     useCallback(() => {
+      console.log("[SAVE_PRESS_TRACE] edit_screen_focus", {
+        saving: savingRef.current,
+        loading: loadingRef.current,
+        canonicalReadOnly,
+        overlayScope: !!overlayScope,
+        kidId,
+        entryId: entryId || null,
+        timestamp: Date.now(),
+      });
       logCompSaveRouteState({
         pathname: String(pathname ?? ""),
         segments,
@@ -324,15 +384,63 @@ export default function KidCompetitionEditScreen() {
           setLinkedCompetition(false);
         }
         setLoading(false);
-        return;
+        return () => {
+          console.log("[SAVE_PRESS_TRACE] edit_screen_blur", {
+            saving: savingRef.current,
+            loading: loadingRef.current,
+            canonicalReadOnly,
+            overlayScope: !!overlayScope,
+            kidId,
+            entryId: entryId || null,
+            isNew,
+            timestamp: Date.now(),
+          });
+        };
       }
+      console.log("[POST_SAVE_TRACE] focus_effect_loadExisting_scheduled", {
+        kidId,
+        entryId: entryId || null,
+        saving: savingRef.current,
+        timestamp: Date.now(),
+      });
       void loadExisting();
-    }, [isNew, loadExisting, openNonce, pathname, segments, kidId]),
+      return () => {
+        console.log("[POST_SAVE_TRACE] focus_effect_cleanup_blur", {
+          kidId,
+          entryId: entryId || null,
+          saving: savingRef.current,
+          timestamp: Date.now(),
+        });
+        console.log("[SAVE_PRESS_TRACE] edit_screen_blur", {
+          saving: savingRef.current,
+          loading: loadingRef.current,
+          canonicalReadOnly,
+          overlayScope: !!overlayScope,
+          kidId,
+          entryId: entryId || null,
+          isNew,
+          timestamp: Date.now(),
+        });
+      };
+    }, [isNew, loadExisting, openNonce, pathname, segments, kidId, entryId]),
   );
 
   const canSave = useMemo(() => {
     return nameDraft.trim().length > 0 && isValidYMD(dateDraft);
   }, [nameDraft, dateDraft]);
+
+  const savePressDisabled =
+    (!canonicalReadOnly && !canSave) || saving || loading;
+
+  console.log("[SAVE_PRESS_TRACE] render_state", {
+    saving,
+    loading,
+    disabled: savePressDisabled,
+    canonicalReadOnly,
+    overlayScope: !!overlayScope,
+    canSave,
+    timestamp: Date.now(),
+  });
 
   const saveDisabledHint = useMemo(() => {
     if (canSave) return null;
@@ -527,7 +635,23 @@ export default function KidCompetitionEditScreen() {
   );
 
   async function onSave() {
-    if ((!canonicalReadOnly && !canSave) || !kidId) return;
+    console.log("[SAVE_PRESS_TRACE] handler_enter", {
+      athleteId: kidId,
+      competitionId: entryId || null,
+      matchId: matches[0]?.id ?? null,
+      timestamp: Date.now(),
+    });
+    if ((!canonicalReadOnly && !canSave) || !kidId) {
+      if (!kidId) {
+        console.log("[SAVE_PRESS_TRACE] early_return_missing_ids");
+      } else {
+        console.log("[SAVE_PRESS_TRACE] early_return_disabled_state", {
+          canSave,
+          canonicalReadOnly,
+        });
+      }
+      return;
+    }
     if (canonicalReadOnly && !overlayScope) {
       logCompPublishGuard({
         competitionId: entryId,
@@ -540,6 +664,10 @@ export default function KidCompetitionEditScreen() {
         "Still syncing",
         "Canonical match details are not available yet. Refresh and reopen this competition before saving coach notes.",
       );
+      console.log("[SAVE_PRESS_TRACE] early_return_stale_guard", {
+        canonicalReadOnly,
+        overlayScope: overlayScope ?? null,
+      });
       return;
     }
     if (canonicalReadOnly && overlayScope) {
@@ -553,21 +681,39 @@ export default function KidCompetitionEditScreen() {
         surface: "coachCompetitionEdit.canonical_overlay_only",
         lineageKey: matches[0]?.id ?? null,
       });
+      console.log("[SAVE_PRESS_TRACE] setSaving", {
+        value: true,
+        path: "overlay",
+        timestamp: Date.now(),
+      });
       setSaving(true);
       try {
-        await Promise.all(
-          matches.map((match) =>
-            upsertMatchBreakdownOverlay({
-              identity: {
-                ...overlayScope,
-                matchLineageKey: match.id,
-              },
-              patch: {
-                coachNote: match.coachNote?.trim() || null,
-              },
-            }),
-          ),
-        );
+        console.log("[SAVE_PRESS_TRACE] mutation_begin", {
+          path: "overlay",
+          overlayCount: matches.length,
+        });
+        for (const match of matches) {
+          await upsertMatchBreakdownOverlay({
+            identity: {
+              ...overlayScope,
+              matchLineageKey: match.id,
+            },
+            patch: {
+              coachNote: match.coachNote?.trim() || null,
+            },
+          });
+        }
+        console.log("[SAVE_PRESS_TRACE] mutation_complete", {
+          path: "overlay",
+          overlayCount: matches.length,
+        });
+        console.log("[POST_SAVE_TRACE] mutation_complete_overlay", {
+          kidId,
+          entryId,
+          overlayScope,
+          draftCoachNotes: matches.map((m) => m.coachNote?.trim() || null),
+          timestamp: Date.now(),
+        });
         if (__DEV__) {
           console.log("[COMP_EDITOR_TRACE] editor_overlay_saved", {
             ...overlayScope,
@@ -583,13 +729,28 @@ export default function KidCompetitionEditScreen() {
           operationKind: "canonical",
           surface: "coachCompetitionEdit.canonical_overlay_only",
         });
+        console.log("[POST_SAVE_TRACE] pre_exit_to_compete", {
+          kidId,
+          entryId,
+          canonicalReadOnly,
+          overlayScope,
+          pathname: String(pathname ?? ""),
+          canGoBack: router.canGoBack(),
+        });
         exitToCompeteAfterCompetitionSave({
           navigation,
           actorRole: "coach",
           athleteId: kidId,
           competitionId: entryId,
         });
+        console.log("[POST_SAVE_TRACE] post_exit_to_compete_sync_return", {
+          kidId,
+          entryId,
+          pathname: String(pathname ?? ""),
+          timestamp: Date.now(),
+        });
       } catch (e) {
+        console.log("[SAVE_PRESS_TRACE] mutation_error", e);
         const msg = e instanceof Error ? e.message : String(e);
         logCompSave("ERROR", {
           competitionId: entryId,
@@ -601,10 +762,21 @@ export default function KidCompetitionEditScreen() {
         });
         Alert.alert("Could not save", msg || "Coach notes could not be saved.");
       } finally {
+        console.log("[SAVE_PRESS_TRACE] finally", {
+          path: "overlay",
+          savingBeforeClear: savingRef.current,
+          loading: loadingRef.current,
+          timestamp: Date.now(),
+        });
         console.log("[COMP_EDITOR_FINALLY]", {
           ts: Date.now(),
           pathname: String(pathname ?? ""),
           kidId,
+        });
+        console.log("[SAVE_PRESS_TRACE] setSaving", {
+          value: false,
+          path: "overlay",
+          timestamp: Date.now(),
         });
         setSaving(false);
       }
@@ -614,6 +786,7 @@ export default function KidCompetitionEditScreen() {
     const eventDate = dateDraft.trim();
     if (!isValidYMD(eventDate)) {
       Alert.alert("Invalid date", "Use YYYY-MM-DD.");
+      console.log("[SAVE_PRESS_TRACE] early_return_invalid_payload", { eventDate });
       return;
     }
 
@@ -628,6 +801,11 @@ export default function KidCompetitionEditScreen() {
       overlayCount: snapshots.length,
     });
 
+    console.log("[SAVE_PRESS_TRACE] setSaving", {
+      value: true,
+      path: "local_shell",
+      timestamp: Date.now(),
+    });
     setSaving(true);
     try {
       const kidsByIdForShared = await getKidsById();
@@ -646,10 +824,19 @@ export default function KidCompetitionEditScreen() {
           "Coach review only",
           "Linked competition facts are managed by the parent. Refresh and reopen the competition to add coach notes.",
         );
+        console.log("[SAVE_PRESS_TRACE] early_return_coach_role_blocked", {
+          linkedCompetition,
+          isNew,
+          resolvedSharedAthleteId: resolvedSharedAthleteId ?? null,
+        });
         return;
       }
 
       let savedCompetitionId = entryId;
+      console.log("[SAVE_PRESS_TRACE] mutation_begin", {
+        path: "local_shell",
+        isNew,
+      });
       if (isNew) {
         const created = await createKidCompetitionEntry({
           kidId,
@@ -687,6 +874,10 @@ export default function KidCompetitionEditScreen() {
         });
         await setCompetitionDetailForEntryId(entryId, { matches: snapshots });
       }
+      console.log("[SAVE_PRESS_TRACE] mutation_complete", {
+        path: "local_shell",
+        competitionId: savedCompetitionId,
+      });
       console.log("[COMPETITION_SAVE]", {
         competitionId: savedCompetitionId,
         sharedAthleteId: resolvedSharedAthleteId ?? null,
@@ -708,6 +899,7 @@ export default function KidCompetitionEditScreen() {
         competitionId: savedCompetitionId,
       });
     } catch (e) {
+      console.log("[SAVE_PRESS_TRACE] mutation_error", e);
       const msg = e instanceof Error ? e.message : String(e);
       logCompSave("ERROR", {
         competitionId: entryId,
@@ -722,10 +914,21 @@ export default function KidCompetitionEditScreen() {
           "Competition data could not be saved. If this keeps happening, try shorter notes or remove the video(s) and save again.",
       );
     } finally {
+      console.log("[SAVE_PRESS_TRACE] finally", {
+        path: "local_shell",
+        savingBeforeClear: savingRef.current,
+        loading: loadingRef.current,
+        timestamp: Date.now(),
+      });
       console.log("[COMP_EDITOR_FINALLY]", {
         ts: Date.now(),
         pathname: String(pathname ?? ""),
         kidId,
+      });
+      console.log("[SAVE_PRESS_TRACE] setSaving", {
+        value: false,
+        path: "local_shell",
+        timestamp: Date.now(),
       });
       setSaving(false);
     }
@@ -1186,9 +1389,35 @@ export default function KidCompetitionEditScreen() {
               <Text style={{ fontSize: 15, color: UI.accent, fontWeight: "800" }}>+ Add Match</Text>
             </Pressable> : null}
 
+            {(() => {
+              console.log("[SAVE_PRESS_TRACE] pre_pressable_render", {
+                saving,
+                loading,
+                disabled: savePressDisabled,
+                canonicalReadOnly,
+                overlayScope: !!overlayScope,
+                canSave,
+                timestamp: Date.now(),
+              });
+              return null;
+            })()}
+
             <Pressable
-              disabled={(!canonicalReadOnly && !canSave) || saving || loading}
-              onPress={() => void onSave()}
+              disabled={savePressDisabled}
+              onPress={() => {
+                console.log("[SAVE_PRESS_TRACE] pressable_onPress", {
+                  athleteId: kidId,
+                  competitionId: entryId || null,
+                  matchId: matches[0]?.id ?? null,
+                  timestamp: Date.now(),
+                  disabled: savePressDisabled,
+                  saving,
+                  loading,
+                  canonicalReadOnly,
+                  canSave,
+                });
+                void onSave();
+              }}
               style={({ pressed }) => ({
                 marginTop: 24,
                 paddingVertical: 14,
@@ -1197,7 +1426,7 @@ export default function KidCompetitionEditScreen() {
                 borderWidth: 1,
                 borderColor: UI.accent,
                 backgroundColor: pressed ? UI.accent : UI.accent,
-                opacity: (!canonicalReadOnly && !canSave) || saving || loading ? 0.5 : 1,
+                opacity: savePressDisabled ? 0.5 : 1,
                 alignItems: "center",
               })}
             >

@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from "react-native";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import { labelForSubmissionTypeKey } from "./submissionTypes";
@@ -27,6 +28,8 @@ export function MatchCard({
   index: number;
 }) {
   const won = snapshot.matchResult === "win";
+  const [coachBreakdownExpanded, setCoachBreakdownExpanded] = useState(false);
+  const coachBreakdown = snapshot.coachNote?.trim() ?? "";
 
   const methodLines: string[] = [];
   if (snapshot.outcome) {
@@ -88,8 +91,26 @@ export function MatchCard({
           <Text style={styles.value}>{videoLabel(snapshot)}</Text>
         </View>
       </View>
-      {snapshot.coachNote?.trim() ? (
-        <Text style={styles.coachText}>{snapshot.coachNote.trim()}</Text>
+      {coachBreakdown ? (
+        <View style={styles.coachSection}>
+          <Text style={styles.coachLabel}>Coach Match Breakdown</Text>
+          <Text
+            numberOfLines={coachBreakdownExpanded ? undefined : 3}
+            style={styles.coachText}
+          >
+            {coachBreakdown}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${coachBreakdownExpanded ? "Collapse" : "Read more"} coach match breakdown for match ${index + 1}`}
+            onPress={() => setCoachBreakdownExpanded((expanded) => !expanded)}
+            style={({ pressed }) => [styles.readMore, pressed ? styles.readMorePressed : null]}
+          >
+            <Text style={styles.readMoreText}>
+              {coachBreakdownExpanded ? "Show Less" : "Read More"}
+            </Text>
+          </Pressable>
+        </View>
       ) : null}
     </View>
   );
@@ -166,10 +187,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  coachSection: {
+    marginTop: 9,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: FEED.line,
+    borderRadius: FEED.radius,
+    backgroundColor: FEED.panel,
+  },
+  coachLabel: {
+    color: FEED.text,
+    fontSize: 12,
+    fontWeight: "900",
+  },
   coachText: {
     marginTop: 7,
     color: FEED.muted,
     fontSize: 13,
     lineHeight: 18,
+  },
+  readMore: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+  readMorePressed: {
+    opacity: 0.76,
+  },
+  readMoreText: {
+    color: FEED.text,
+    fontSize: 12,
+    fontWeight: "900",
   },
 });

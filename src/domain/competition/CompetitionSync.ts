@@ -23,6 +23,7 @@ import {
 } from "../../dev/competitionMutationDevLog";
 import { schedulePublishParentCompetitionAggregate } from "./publishParentCompetitionAggregate";
 import { schedulePublishParentCompetitionTopology } from "./publishParentCompetitionTopology";
+import { stabilizeCompetitionMatchLineageBeforePersist } from "./stabilizeCompetitionMatchLineage";
 import { athleteIdForFamilyRemoteUpdate, rosterSharedAthleteId, workerCompetitionIdForEntry } from "./CompetitionSelectors";
 import {
   competitionFamilySaveTrace,
@@ -428,7 +429,14 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         coachNotes: coachNotes.trim() ? coachNotes.trim() : undefined,
         ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
       });
-      await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
+      const stabilizedMatchSnapshots = await stabilizeCompetitionMatchLineageBeforePersist({
+        entryId: created.id,
+        sharedAthleteId: trimmedResolved,
+        sharedCompetitionId: remote.competition.id,
+        matches: matchSnapshots,
+        source: "CompetitionSync.createCompetitionKid.linked",
+      });
+      await setCompetitionDetailForEntryId(created.id, { matches: stabilizedMatchSnapshots });
       logCompSave("PUBLISH", {
         competitionId: created.id,
         athleteId: kidId,
@@ -763,8 +771,18 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
     coachNotes: coachNotes.trim() ? coachNotes.trim() : undefined,
     competitionVideos,
   });
-  await setCompetitionDetailForEntryId(entryId, { matches: matchSnapshots });
   const publishAthleteId = (trimmedResolved || athleteForRemote || "").trim();
+  const detailMatchSnapshots =
+    publishAthleteId && workerCompetitionId
+      ? await stabilizeCompetitionMatchLineageBeforePersist({
+          entryId,
+          sharedAthleteId: publishAthleteId,
+          sharedCompetitionId: workerCompetitionId,
+          matches: matchSnapshots,
+          source: "CompetitionSync.updateCompetitionKid.linked",
+        })
+      : matchSnapshots;
+  await setCompetitionDetailForEntryId(entryId, { matches: detailMatchSnapshots });
   if (publishAthleteId) {
     logCompSave("PUBLISH", {
       competitionId: entryId,
