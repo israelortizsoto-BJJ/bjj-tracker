@@ -5,7 +5,10 @@ import {
 } from "../../family/parentKidCompetitionDelete";
 import { medalTierFromKidResult } from "../../types/coachKid";
 import { getKidsById } from "../../storage/coachKidStore";
-import { setCompetitionDetailForEntryId } from "../../storage/competitionStore";
+import {
+  setCompetitionDetailForEntry,
+  setCompetitionDetailForEntryId,
+} from "../../storage/competitionStore";
 import {
   CoachWeeklySyncApiError,
   coachSyncCreateSessionCompetition,
@@ -436,7 +439,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         matches: matchSnapshots,
         source: "CompetitionSync.createCompetitionKid.linked",
       });
-      await setCompetitionDetailForEntryId(created.id, { matches: stabilizedMatchSnapshots });
+      await setCompetitionDetailForEntry(created, { matches: stabilizedMatchSnapshots });
       logCompSave("PUBLISH", {
         competitionId: created.id,
         athleteId: kidId,
@@ -487,7 +490,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
     coachNotes: coachNotes.trim() ? coachNotes.trim() : undefined,
     ...(competitionVideos.length > 0 ? { competitionVideos } : {}),
   });
-  await setCompetitionDetailForEntryId(created.id, { matches: matchSnapshots });
+  await setCompetitionDetailForEntry(created, { matches: matchSnapshots });
   logCompSave("LOCAL", {
     competitionId: created.id,
     athleteId: kidId,
@@ -627,7 +630,7 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
     }
   }
 
-  await updateKidCompetitionEntry(entryId, {
+  const updatedEntry = await updateKidCompetitionEntry(entryId, {
     ...(athleteForRemote ? { sharedAthleteId: athleteForRemote } : {}),
     ...(workerCompetitionId ? { sharedCompetitionId: workerCompetitionId } : {}),
     tournamentName: name,
@@ -757,7 +760,7 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
     }
   }
 
-  await updateKidCompetitionEntry(entryId, {
+  const updatedEntry = await updateKidCompetitionEntry(entryId, {
     ...(trimmedResolved ? { sharedAthleteId: trimmedResolved } : {}),
     tournamentName: name,
     eventDate,
@@ -782,7 +785,12 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
           source: "CompetitionSync.updateCompetitionKid.linked",
         })
       : matchSnapshots;
-  await setCompetitionDetailForEntryId(entryId, { matches: detailMatchSnapshots });
+  const detailOwnerEntry = updatedEntry ?? existing;
+  if (detailOwnerEntry) {
+    await setCompetitionDetailForEntry(detailOwnerEntry, { matches: detailMatchSnapshots });
+  } else {
+    await setCompetitionDetailForEntryId(entryId, { matches: detailMatchSnapshots });
+  }
   if (publishAthleteId) {
     logCompSave("PUBLISH", {
       competitionId: entryId,

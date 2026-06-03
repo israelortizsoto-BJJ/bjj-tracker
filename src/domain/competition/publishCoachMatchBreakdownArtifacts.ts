@@ -41,6 +41,19 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
       }
 
       const artifactSet = await buildCoachMatchBreakdownArtifacts(sharedAthleteId);
+      console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+        stage: "coach_publish_request",
+        sharedAthleteId,
+        sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+        matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+        overlayCount: artifactSet.artifacts.length,
+        artifacts: artifactSet.artifacts.map((artifact) => ({
+          sharedAthleteId: artifact.sharedAthleteId,
+          sharedCompetitionId: artifact.sharedCompetitionId,
+          matchLineageKey: artifact.matchLineageKey,
+          hasCoachNote: Boolean(artifact.coachNote?.trim()),
+        })),
+      });
       console.log("[COACH_OVERLAY_SYNC_TRACE]", {
         stage: "coach_overlay_publish_attempt",
         sharedAthleteId,

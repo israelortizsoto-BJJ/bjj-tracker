@@ -1,6 +1,653 @@
 # BJJ Tracker - Dev Handoff Notes
 
 
+
+
+
+## Date: 2026-06-02
+
+## Branch: `rollback-pre-lineage-regression`
+
+## Current Stable Tag:
+
+* `coach-overlay-lifecycle-floor-v1`
+* `coach-overlay-stability-floor-v1`
+
+---
+
+# HIGH LEVEL SUMMARY
+
+Today was one of the most important stabilization days in the entire Competition Overlay migration effort.
+Today was a major architectural stabilization day. You moved from “system integrity uncertainty” into “bounded feature-lane debugging,” which is a huge repo maturity shift.
+We successfully moved the Coach Match Breakdown system from:
+
+* unstable persistence
+* ambiguous save lifecycle behavior
+* lineage drift uncertainty
+* navigation replay deadlocks
+
+into:
+
+* stable overlay persistence
+* deterministic lineage
+* stable save lifecycle
+* stable hard-close replay
+* bounded navigation topology compatibility
+
+The platform is now operating from a much healthier architectural baseline.
+
+The remaining major unresolved lane is:
+
+```text
+Coach MatchBreakdown hydration from Coach → Parent
+```
+
+Importantly:
+this is now isolated as a bounded transport/hydrate lane issue, NOT a platform integrity issue.
+
+---
+
+# ACTIVE PHASE
+
+```text
+Phase 0 — local freeze race proof
+```
+
+Transitioning toward:
+
+```text
+Phase 1 — bounded parent overlay hydrate lane
+```
+
+---
+
+# GOVERNING ARCHITECTURE PRINCIPLES
+
+## Protected Systems
+
+* canonical authority
+* bounded overlay ownership
+* topology hydration
+* newest-wins sync semantics
+* stable lineage
+* replay determinism
+* athlete isolation
+
+## Explicit Non-Goals
+
+We intentionally avoided:
+
+* topology mutation
+* fuzzy overlay attachment
+* ordinal fallback matching
+* multi-owner competition records
+* overlay → canonical merge
+* router timeout hacks
+* artificial navigation delays
+
+---
+
+# MAJOR ARCHITECTURAL MILESTONES ACHIEVED TODAY
+
+---
+
+# 1. MATCH LINEAGE STABILIZATION FLOOR
+
+## Problem
+
+MatchBreakdowns were disappearing because transient local match IDs were being treated as canonical lineage identifiers.
+
+Examples:
+
+* `match-new-*`
+* `match-init-*`
+* `match-legacy-*`
+
+This caused:
+
+* overlay orphaning
+* overlay mismatch
+* lineage instability across reopen/rebuilds
+
+## Root Cause
+
+Linked competition persistence canonized editor-local transient IDs before topology publication.
+
+## Solution
+
+Introduced:
+
+```text
+src/domain/competition/stabilizeCompetitionMatchLineage.ts
+```
+
+Integrated into:
+
+```text
+CompetitionSync.ts
+```
+
+before:
+
+```text
+setCompetitionDetailForEntryId(...)
+```
+
+## Stable Precedence Rules
+
+For linked competitions only:
+
+1. preserve existing canonical lineage
+2. reuse prior persisted slot lineage
+3. generate deterministic fallback:
+
+```text
+match-lineage-{sharedCompetitionId}-slot-{ordinal}
+```
+
+## Result
+
+Stable lineage now survives:
+
+* save
+* reopen
+* tab switching
+* hard close
+* topology replay
+
+---
+
+# 2. OVERLAY PERSISTENCE RACE CONDITION FIX
+
+## Problem
+
+Only the last MatchBreakdown survived after save.
+
+Example:
+
+* Match 1 lost
+* Match 2 lost
+* Match 3 survived
+
+## Root Cause
+
+Overlay store used:
+
+```text
+readStore()
+→ mutate map
+→ writeStore(map)
+```
+
+while save path used:
+
+```ts
+Promise.all(matches.map(...))
+```
+
+This created classic lost-update races.
+
+## Solution
+
+Serialized overlay writes:
+
+```ts
+for (const match of matches) {
+  await upsertMatchBreakdownOverlay(...)
+}
+```
+
+## Result
+
+Confirmed stable:
+
+* multi-match persistence
+* reopen replay
+* hard-close replay
+* cross-tab replay
+
+This was a critical stabilization milestone.
+
+---
+
+# 3. SAVE LIFECYCLE FORENSICS + STABILIZATION
+
+## Problem
+
+Save button visually “misfired.”
+UI appeared frozen even though persistence sometimes succeeded.
+
+## Important Discovery
+
+Persistence WAS succeeding.
+
+The issue was:
+
+```text
+save-exit orchestration
+```
+
+NOT:
+
+```text
+save mutation integrity
+```
+
+This distinction was extremely important.
+
+## Forensic System Added
+
+```text
+[SAVE_LIFECYCLE_TRACE]
+```
+
+Instrumented:
+
+* save handler
+* mutation begin/complete
+* setSaving(false)
+* syncTabAndExit
+* blur/focus
+* unmount lifecycle
+
+## Major Discovery
+
+The lifecycle stalled at:
+
+```text
+syncTabAndExit_enter
+```
+
+before:
+
+```text
+syncTabAndExit_before_navigation
+```
+
+Further tracing isolated failure to:
+
+```text
+call_normalize_lane_tabs_nav
+```
+
+with:
+
+```text
+laneStackKey: null
+normalized: false
+```
+
+---
+
+# 4. NAVIGATION TOPOLOGY COMPATIBILITY REPAIR
+
+## Root Cause
+
+`syncTabAndExit()` assumed a coach lane stack always existed.
+
+In current topology:
+
+* lane stack may legitimately not exist
+* normalization silently no-op’d
+* orchestration dead-ended before navigation dispatch
+
+## Solution
+
+Added bounded compatibility handling:
+
+If:
+
+```text
+laneStackKey === null
+```
+
+then:
+
+* emit lifecycle trace
+* bypass normalization dead-end
+* continue direct compete navigation dispatch
+
+WITHOUT:
+
+* fake stacks
+* retries
+* router hacks
+* delays
+* topology mutation
+
+## Result
+
+Save lifecycle is now stable.
+
+Confirmed:
+
+* save exits correctly
+* compete focus works
+* editor unmount works
+* persistence survives replay
+
+---
+
+# 5. COACH OVERLAY LOCAL STABILITY FLOOR ACHIEVED
+
+## Proven Stable
+
+| System                    | Status |
+| ------------------------- | ------ |
+| overlay save              | ✅      |
+| overlay persistence       | ✅      |
+| multi-match save          | ✅      |
+| lineage stability         | ✅      |
+| tab replay                | ✅      |
+| hard-close replay         | ✅      |
+| save lifecycle            | ✅      |
+| compete navigation replay | ✅      |
+| topology compatibility    | ✅      |
+
+This is now a legitimate RC stabilization floor.
+
+---
+
+# CURRENT REMAINING ISSUE
+
+# Coach → Parent MatchBreakdown Hydration
+
+## Current Behavior
+
+### Coach App
+
+* MatchBreakdowns save correctly
+* Persist locally
+* Survive reopen
+* Survive hard-close
+
+### Parent App
+
+* canonical competition data hydrates correctly
+* match results hydrate correctly
+* overlays DO NOT appear
+
+---
+
+# IMPORTANT ARCHITECTURAL FINDING
+
+This is NOT:
+
+* overlay corruption
+* topology corruption
+* lineage corruption
+* save corruption
+* authority corruption
+
+The remaining issue is isolated to:
+
+```text
+bounded overlay transport + hydrate
+```
+
+ONLY.
+
+---
+
+# CURRENT OVERLAY ARCHITECTURE
+
+## Coach Side
+
+Local overlay persistence:
+
+```text
+coachMatchBreakdownOverlayStore
+```
+
+Bounded artifact build:
+
+```text
+buildCoachMatchBreakdownArtifacts.ts
+```
+
+Publication:
+
+```text
+publishCoachMatchBreakdownArtifacts.ts
+```
+
+Worker endpoint:
+
+```text
+PUT /v1/sessions/:token/coach-match-breakdowns
+```
+
+---
+
+# Parent Side
+
+Hydration store:
+
+```text
+coachMatchBreakdownArtifactStore
+```
+
+Ephemeral merge:
+
+```text
+mergeCoachBreakdownIntoMatches.ts
+```
+
+Parent render:
+
+```text
+CompetitionCard.tsx
+```
+
+Importantly:
+overlays are NOT merged into canonical competition ownership.
+
+This remains architecturally correct.
+
+---
+
+# MOST IMPORTANT LEARNING
+
+We now understand the system clearly:
+
+## Parent-Owned
+
+Canonical:
+
+* competitions
+* matches
+* results
+* placements
+* topology
+* aggregate metrics
+
+## Coach-Owned
+
+Bounded overlays:
+
+* MatchBreakdowns
+* commentary
+* analysis
+
+This separation is now functioning correctly locally.
+
+The remaining work is ONLY:
+
+```text
+cross-device bounded overlay visibility
+```
+
+---
+
+# GIT CHECKPOINTS CREATED
+
+## Commit
+
+```text
+e49653b
+Stabilize coach overlay save lifecycle and navigation replay
+```
+
+## Tags
+
+```text
+coach-overlay-stability-floor-v1
+coach-overlay-lifecycle-floor-v1
+```
+
+These are now trusted rollback points.
+
+---
+
+# TOMORROW — HIGHEST ROI PRIORITIES
+
+# PRIORITY 1 — COACH → PARENT OVERLAY HYDRATE
+
+## Objective
+
+Get MatchBreakdowns to hydrate from Coach app into Parent app.
+
+## Investigation Focus
+
+Trace:
+
+```text
+coach publish
+→ worker persistence
+→ session GET payload
+→ parent hydrate
+→ local artifact store
+→ merge attach
+→ parent render
+```
+
+## Most Likely Remaining Failure Zones
+
+### Candidate A
+
+Worker GET payload omits:
+
+```text
+coachMatchBreakdownArtifacts
+```
+
+### Candidate B
+
+Hydrate normalization strips artifacts.
+
+### Candidate C
+
+Artifact store hydrates correctly,
+but merge lineage matching fails.
+
+---
+
+# PRIORITY 2 — VERIFY EXACT LINEAGE MATCHING
+
+Maintain strict:
+
+```ts
+match.id === matchLineageKey
+```
+
+DO NOT:
+
+* loosen matching
+* add ordinal fallback
+* fuzzy attach
+* slot guessing
+
+This is critical to prevent reintroducing corruption.
+
+---
+
+# PRIORITY 3 — PARENT UI RENDER PASS
+
+Once hydrate works:
+
+* ensure MatchBreakdown renders in isolated card
+* collapsed preview behavior
+* “Read More”
+* coach-only bounded presentation
+* no canonical mutation
+
+---
+
+# KEY LESSONS LEARNED TODAY
+
+## 1. Most “save failures” were NOT persistence failures
+
+The system was saving correctly while lifecycle orchestration stalled.
+
+This distinction changed the debugging strategy entirely.
+
+---
+
+## 2. Trace-first debugging prevented architectural damage
+
+We solved:
+
+* lineage instability
+* overwrite races
+* navigation deadlocks
+
+WITHOUT reopening:
+
+* authority
+* topology
+* hydration ownership
+
+This was the correct discipline.
+
+---
+
+## 3. Stable lineage is foundational
+
+Once lineage stabilized:
+
+* overlays persisted deterministically
+* replay became predictable
+* QA became trustworthy
+
+---
+
+## 4. Bounded overlay ownership is working
+
+Coach overlays are now properly isolated from canonical competition ownership.
+
+This is a major architectural success.
+
+---
+
+# CURRENT REPO HEALTH
+
+| Area                   | Status      |
+| ---------------------- | ----------- |
+| authority              | stable      |
+| overlay persistence    | stable      |
+| lineage                | stable      |
+| replay                 | stable      |
+| save lifecycle         | stable      |
+| navigation replay      | stable      |
+| topology compatibility | stable      |
+| coach local UX         | stable      |
+| parent overlay hydrate | active lane |
+
+---
+
+# RECOMMENDED MORNING START
+
+1. Restart Metro clean
+2. Validate coach overlay local persistence still healthy
+3. Begin bounded parent hydrate investigation
+4. Use trace-first approach again
+5. DO NOT broaden architecture scope
+
+We are now debugging a bounded transport lane, not stabilizing the entire platform anymore.
+
+
+
+
 # Date: 2026-06-01
 
 # Branch: rollback-pre-lineage-regression

@@ -177,6 +177,43 @@ export function CompetitionCard({
   }));
   const hydratedOverlayAnnotations =
     hydratedOverlayState?.key === overlayHydrationKey ? hydratedOverlayState.annotations : null;
+  const hydrationKeyMismatch =
+    hydratedOverlayState !== null && hydratedOverlayState.key !== overlayHydrationKey;
+  const hydrationPending = hydratedOverlayState === null;
+  const staleEntryCoachNotesInShell = entry.matches.filter(
+    (match) => (match.coachNote ?? "").trim().length > 0,
+  ).length;
+
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "competition_detail_render_selector",
+    deviceRole,
+    entryId: entry.id,
+    sharedAthleteId: sharedAthleteId || null,
+    sharedCompetitionId: sharedCompetitionId || null,
+    entryUpdatedAt: entry.updatedAt ?? null,
+    hydrationKey: overlayHydrationKey,
+    hydratedStateKey: hydratedOverlayState?.key ?? null,
+    hydrationKeyMismatch,
+    hydrationPending: hydratedOverlayState === null,
+    hydrateEligible: deviceRole === "coach" || deviceRole === "parent",
+    topologyPresent: Boolean(topology),
+    topologyMatchCount: topology?.matches.length ?? 0,
+    entryMatchCount: entry.matches.length,
+    matchLineageKeys,
+    slotKeys: matchLineageKeys.map((key) => {
+      const slotMatch = /-slot-(\d+)$/.exec(key.trim());
+      return slotMatch ? `slot-${slotMatch[1]}` : null;
+    }),
+    entryMatchIds: entry.matches.map((match) => match.id),
+    staleShellCoachNoteCount: staleEntryCoachNotesInShell,
+    hydratedOverlayCount: hydratedOverlayAnnotations?.length ?? null,
+    legacyOverlayCount: legacyOverlayAnnotations.filter((a) => a.coachNote?.trim()).length,
+    readingStaleCompetitionShell:
+      staleEntryCoachNotesInShell > 0 &&
+      deviceRole === "parent" &&
+      (hydratedOverlayAnnotations?.length ?? 0) === 0,
+  });
+
   const projectedEntry =
     deviceRole === "coach"
       ? projectCompetitionCompeteView({
@@ -215,6 +252,56 @@ export function CompetitionCard({
         ? projectedEntry.matches.filter((match) => (match.coachNote ?? "").trim().length > 0).length
         : 0,
   });
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "competition_detail_render_projected",
+    deviceRole,
+    entryId: entry.id,
+    sharedAthleteId: sharedAthleteId || null,
+    sharedCompetitionId: sharedCompetitionId || null,
+    projectedMatchCount: projectedEntry.matches.length,
+    projectedCoachNoteCount: projectedEntry.matches.filter((m) => (m.coachNote ?? "").trim()).length,
+    projectedMatchIds: projectedEntry.matches.map((m) => m.id),
+    projectedCoachNoteMatchIds: projectedEntry.matches
+      .filter((m) => (m.coachNote ?? "").trim())
+      .map((m) => m.id),
+    overlaySource:
+      deviceRole === "parent"
+        ? hydratedOverlayAnnotations
+          ? "hydrated_artifacts"
+          : hydrationPending
+            ? "hydration_pending"
+            : "empty_hydration"
+        : deviceRole === "coach"
+          ? hydratedOverlayAnnotations?.length
+            ? "hydrated_overlays"
+            : legacyOverlayAnnotations.some((a) => a.coachNote?.trim())
+              ? "legacy_shell_coach_notes"
+              : hydrationPending
+                ? "hydration_pending"
+                : "empty_hydration"
+          : "unsupported_role",
+    overlaysSkippedReason:
+      deviceRole === "parent" && !hydratedOverlayAnnotations?.length
+        ? hydrationPending
+          ? "awaiting_async_hydration"
+          : hydrationKeyMismatch
+            ? "hydration_key_mismatch"
+            : "no_matching_artifacts_for_competition"
+        : null,
+  });
+  for (const match of projectedEntry.matches) {
+    const coachNote = match.coachNote?.trim();
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: coachNote ? "competition_detail_match_overlay_present" : "competition_detail_match_overlay_absent",
+      sharedAthleteId: sharedAthleteId || null,
+      sharedCompetitionId: sharedCompetitionId || null,
+      matchLineageKey: match.id,
+      matchId: match.id,
+      hasCoachNote: Boolean(coachNote),
+      deviceRole,
+      entryId: entry.id,
+    });
+  }
   const tier = competeMedalTierFromKidEntry(entry);
   const isPastCompetition = isCompetitionMatchUiAvailableForEventDate(entry.eventDate);
 

@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 
-import { getCompetitionDetailByEntryId } from "../../storage/competitionStore";
+import { getCompetitionDetailForEntry } from "../../storage/competitionStore";
 import {
   getKidsById,
   getLatestKidWeeklyFocusForWeek,
@@ -185,7 +185,7 @@ export default function CoachAthleteScreen() {
       const hydrated = await Promise.all(
         entries.slice(0, 6).map(async (competition) => ({
           competition,
-          detail: await getCompetitionDetailByEntryId(competition.id),
+          detail: (await getCompetitionDetailForEntry(competition)).detail,
         })),
       );
 

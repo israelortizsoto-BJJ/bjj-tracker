@@ -3,6 +3,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useCoachSyncHydrationVersion } from "@/src/storage/coachSyncHydrationStore";
+import { peekCoachMatchBreakdownArtifactSet } from "@/src/storage/coachMatchBreakdownArtifactStore";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -167,6 +168,35 @@ export default function CompetitionTab() {
       athleteId: trimmedAthleteId,
       entriesLoaded: merged.length,
     });
+    for (const row of merged) {
+      const sharedAthleteId = (row.sharedAthleteId ?? trimmedAthleteId).trim();
+      const sharedCompetitionId = (row.sharedCompetitionId ?? "").trim();
+      const artifactSet = sharedAthleteId ? peekCoachMatchBreakdownArtifactSet(sharedAthleteId) : null;
+      const compArtifacts =
+        artifactSet?.artifacts.filter(
+          (a) => a.sharedCompetitionId.trim() === sharedCompetitionId,
+        ) ?? [];
+      const entryMatchIds = row.matches.map((m) => m.id);
+      const entryCoachNoteCount = row.matches.filter((m) => (m.coachNote ?? "").trim()).length;
+      console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+        stage: "compete_entries_loaded",
+        entryId: row.id,
+        sharedAthleteId: sharedAthleteId || null,
+        sharedCompetitionId: sharedCompetitionId || null,
+        entryUpdatedAt: row.updatedAt ?? null,
+        entryMatchCount: row.matches.length,
+        entryMatchIds,
+        entryCoachNoteCount,
+        artifactSetPresent: Boolean(artifactSet),
+        artifactSetUpdatedAt: artifactSet?.updatedAt ?? null,
+        artifactCountForComp: compArtifacts.length,
+        artifactLineageKeys: compArtifacts.map((a) => a.matchLineageKey.trim()),
+        readingStaleCompetitionEntry: compArtifacts.length > 0 && entryCoachNoteCount === 0,
+        lineageJoinEligibleCount: compArtifacts.filter((a) =>
+          entryMatchIds.includes(a.matchLineageKey.trim()),
+        ).length,
+      });
+    }
     if (__DEV__ && devTraceRef.current.deviceRole === "coach") {
       const trace = devTraceRef.current;
       logCoachHydrationResolveTrace("competition_resolve", {

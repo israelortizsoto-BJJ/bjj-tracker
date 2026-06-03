@@ -1,4 +1,4 @@
-import { getCoachSyncApiBaseUrl } from "../config/coachSync";
+import { getCoachSyncApiBaseUrl, logSyncBaseUrlTrace } from "../config/coachSync";
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import {
@@ -356,6 +356,10 @@ export async function coachSyncFetchSession(
   const url = joinUrl(base, `/v1/sessions/${enc}`);
   const method = "GET";
   const body = undefined;
+  logSyncBaseUrlTrace({
+    baseUrl: base,
+    endpoint: `/v1/sessions/${enc}`,
+  });
   console.log("[API CALL]", {
     url,
     method,
@@ -429,6 +433,24 @@ export async function coachSyncFetchSession(
   const coachMatchBreakdownArtifacts = parseCoachMatchBreakdownArtifactsField(
     p.coachMatchBreakdownArtifacts,
   );
+  const coachMatchBreakdownArtifactList = Object.values(coachMatchBreakdownArtifacts).flatMap(
+    (artifactSet) => artifactSet.artifacts,
+  );
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "parent_fetch_received",
+    sharedAthleteId: coachMatchBreakdownArtifactList[0]?.sharedAthleteId ?? null,
+    sharedCompetitionId: coachMatchBreakdownArtifactList[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: coachMatchBreakdownArtifactList[0]?.matchLineageKey ?? null,
+    overlayCount: coachMatchBreakdownArtifactList.length,
+    artifacts: coachMatchBreakdownArtifactList.map((artifact) => ({
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasCoachNote: Boolean(artifact.coachNote?.trim()),
+    })),
+    artifactSetCount: Object.keys(coachMatchBreakdownArtifacts).length,
+    hasRawField: Object.prototype.hasOwnProperty.call(p, "coachMatchBreakdownArtifacts"),
+  });
   const rawCoachMatchBreakdownArtifacts = p.coachMatchBreakdownArtifacts;
   if (rawCompetitionsArray.length > 0) {
     for (const raw of rawCompetitionsArray) {
@@ -597,6 +619,11 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
   const enc = encodeURIComponent(linkToken);
   const path = `/v1/sessions/${enc}/coach-match-breakdowns`;
   const url = joinUrl(base, path);
+  logSyncBaseUrlTrace({
+    baseUrl: base,
+    endpoint: path,
+    role: "coach",
+  });
   console.log("[COACH_OVERLAY_SYNC_TRACE]", {
     stage: "coach_overlay_publish_http_request",
     operation: "PUT",

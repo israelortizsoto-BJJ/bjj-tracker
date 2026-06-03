@@ -56,6 +56,7 @@ import {
   pruneCoachMatchBreakdownArtifactSets,
   removeCoachMatchBreakdownArtifactSet,
 } from "./coachMatchBreakdownArtifactStore";
+import { reconcileCoachMatchBreakdownArtifacts } from "../domain/competition/reconcileCoachMatchBreakdownArtifacts";
 import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
@@ -1362,6 +1363,10 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       totalActiveWriterCount: writerLinks.length,
     });
     await reconcileCoachTrainingProofFromWriterSessions({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
+    await reconcileCoachMatchBreakdownArtifacts({
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });

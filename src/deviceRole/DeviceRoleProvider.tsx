@@ -8,6 +8,7 @@ import React, {
   useState,
 } from "react";
 
+import { getCoachSyncApiBaseUrl, logSyncBaseUrlTrace, setSyncBaseUrlTraceRole } from "../config/coachSync";
 import type { DeviceRole } from "../storage/deviceRoleStore";
 import { getDeviceRole, persistDeviceRole } from "../storage/deviceRoleStore";
 
@@ -34,6 +35,12 @@ export function DeviceRoleProvider({ children }: { children: React.ReactNode }) 
     (async () => {
       try {
         const r = await getDeviceRole();
+        setSyncBaseUrlTraceRole(r);
+        logSyncBaseUrlTrace({
+          baseUrl: getCoachSyncApiBaseUrl(),
+          endpoint: "bootstrap_sync_config_resolution",
+          role: r ?? "unknown",
+        });
         if (alive) setRoleState(r);
       } finally {
         if (alive) setLoading(false);
@@ -46,6 +53,12 @@ export function DeviceRoleProvider({ children }: { children: React.ReactNode }) 
 
   const setRole = useCallback(async (next: DeviceRole) => {
     await persistDeviceRole(next);
+    setSyncBaseUrlTraceRole(next);
+    logSyncBaseUrlTrace({
+      baseUrl: getCoachSyncApiBaseUrl(),
+      endpoint: "bootstrap_sync_config_resolution",
+      role: next,
+    });
     setRoleState(next);
   }, []);
 

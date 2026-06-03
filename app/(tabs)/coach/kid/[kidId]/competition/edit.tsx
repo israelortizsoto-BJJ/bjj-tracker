@@ -27,7 +27,7 @@ import {
 } from "../../../../../../src/storage/kidCompetitionStore";
 import {
   competitionVideoRefsFromMatches,
-  getCompetitionDetailByEntryId,
+  getCompetitionDetailForEntry,
   setCompetitionDetailForEntryId,
 } from "../../../../../../src/storage/competitionStore";
 import { getKidsById, todayYMD } from "../../../../../../src/storage/coachKidStore";
@@ -211,7 +211,7 @@ export default function KidCompetitionEditScreen() {
       setFormatDraft(found.format);
       setNotesDraft(found.coachNotes ?? "");
       setMedalImageDraft(found.medalImageUri);
-      const detail = await getCompetitionDetailByEntryId(found.id);
+      const { detail } = await getCompetitionDetailForEntry(found);
       const fallbackMatches = deriveInitialMatches(found, detail, reactId);
       const sharedAthleteId = found.sharedAthleteId?.trim() ?? "";
       const sharedCompetitionId = found.sharedCompetitionId?.trim() ?? "";

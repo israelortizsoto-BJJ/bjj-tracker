@@ -35,7 +35,7 @@ import {
 } from "@/src/domain/competition/CompetitionSync";
 import {
   competitionVideoRefsFromMatches,
-  getCompetitionDetailByEntryId,
+  getCompetitionDetailForEntry,
 } from "../../../../../../src/storage/competitionStore";
 import {
   getKidCompetitionEntryById,
@@ -203,7 +203,7 @@ export default function KidCompetitionEditScreen() {
       setFormatDraft(found.format);
       setNotesDraft(found.coachNotes ?? "");
       setMedalImageDraft(found.medalImageUri);
-      const detail = await getCompetitionDetailByEntryId(found.id);
+      const { detail } = await getCompetitionDetailForEntry(found);
       setMatches(deriveInitialMatches(found, detail, reactId));
     } finally {
       setLoading(false);

@@ -173,6 +173,11 @@ type SessionRecord = {
 
 /** TEMP: grep worker tail for this id to confirm deployed bundle matches this file. */
 const WORKER_AUDIT_BUILD_ID = "coach-sync-worker:weekly-corruption-trace-2026-05-15";
+const COACH_OVERLAY_GET_PAYLOAD_BUILD_ID =
+  "coach-sync-worker:coach-overlay-get-payload-repair-2026-06-03";
+const WORKER_RUNTIME_VERSION = "coach-overlay-get-runtime-2026-06-03-v2";
+
+console.log("[WORKER_RUNTIME_VERSION]", WORKER_RUNTIME_VERSION);
 
 const WEEKLY_CORRUPTION_TRACE = "[WEEKLY CORRUPTION TRACE]";
 
@@ -1212,6 +1217,12 @@ function coachMatchBreakdownArtifactsForStorageAndApi(
   return out;
 }
 
+function coachMatchBreakdownArtifactList(
+  artifactsByAthleteId: Record<string, CoachMatchBreakdownArtifactSet>,
+): CoachMatchBreakdownArtifact[] {
+  return Object.values(artifactsByAthleteId).flatMap((artifactSet) => artifactSet.artifacts);
+}
+
 /** Normalize legacy v1 KV rows into in-memory shape (persisted on next write). */
 function normalizeSessionRecord(raw: unknown): SessionRecord | null {
   if (!raw || typeof raw !== "object") return null;
@@ -1391,6 +1402,23 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
         : "(no key)",
     weeklyByAthleteJsonSnippet: JSON.stringify(toStore.weeklyByAthleteId).slice(0, 4000),
   });
+  const coachOverlayPutList = coachMatchBreakdownArtifactList(
+    toStore.coachMatchBreakdownArtifacts,
+  );
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "worker_put_session_serialized",
+    buildId: COACH_OVERLAY_GET_PAYLOAD_BUILD_ID,
+    sharedAthleteId: coachOverlayPutList[0]?.sharedAthleteId ?? null,
+    sharedCompetitionId: coachOverlayPutList[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: coachOverlayPutList[0]?.matchLineageKey ?? null,
+    overlayCount: coachOverlayPutList.length,
+    artifactSetCount: Object.keys(toStore.coachMatchBreakdownArtifacts).length,
+    hasStorageField: Object.prototype.hasOwnProperty.call(
+      toStore,
+      "coachMatchBreakdownArtifacts",
+    ),
+    tokenSuffix: token.slice(-8),
+  });
   logWeeklyCorruptionTrace("kv_put_raw_before_write", {
     tokenSuffix: token.slice(-8),
     putJsonBytes: putJson.length,
@@ -1405,6 +1433,26 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
       ? (readBack as Record<string, unknown>)
       : null;
   const readBackWeeklyBy = readBackRoot?.weeklyByAthleteId;
+  const readBackCoachMatchBreakdownArtifacts = parseCoachMatchBreakdownArtifacts(
+    readBackRoot?.coachMatchBreakdownArtifacts,
+  );
+  const coachOverlayReadBackList = coachMatchBreakdownArtifactList(
+    readBackCoachMatchBreakdownArtifacts,
+  );
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "worker_put_session_readback",
+    buildId: COACH_OVERLAY_GET_PAYLOAD_BUILD_ID,
+    sharedAthleteId: coachOverlayReadBackList[0]?.sharedAthleteId ?? null,
+    sharedCompetitionId: coachOverlayReadBackList[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: coachOverlayReadBackList[0]?.matchLineageKey ?? null,
+    overlayCount: coachOverlayReadBackList.length,
+    artifactSetCount: Object.keys(readBackCoachMatchBreakdownArtifacts).length,
+    hasStorageField: Boolean(
+      readBackRoot &&
+        Object.prototype.hasOwnProperty.call(readBackRoot, "coachMatchBreakdownArtifacts"),
+    ),
+    tokenSuffix: token.slice(-8),
+  });
   const putProbes = probeWeeklyByMap(toStore.weeklyByAthleteId);
   const readBackProbes = probeWeeklyByMap(readBackWeeklyBy);
   const putToReadBackDiffs: Record<string, string[]> = {};
@@ -1487,6 +1535,12 @@ export default {
 
       const sessionGet = path.match(/^\/v1\/sessions\/([^/]+)$/);
       if (sessionGet && request.method === "GET") {
+        console.log("[WORKER_RUNTIME_TRACE]", {
+          stage: "get_route_enter",
+          url: request.url,
+          method: request.method,
+          runtimeVersion: WORKER_RUNTIME_VERSION,
+        });
         const token = decodeURIComponent(sessionGet[1] ?? "").trim().toLowerCase();
         if (!TOKEN_RE.test(token)) {
           return error("Invalid token", 400);
@@ -1525,6 +1579,9 @@ export default {
           }
         }
         const apiCoachMatchBreakdownArtifacts = coachMatchBreakdownArtifactsForStorageAndApi(rec);
+        const apiCoachMatchBreakdownArtifactList = coachMatchBreakdownArtifactList(
+          apiCoachMatchBreakdownArtifacts,
+        );
         const getPayload = {
           schemaVersion: rec.schemaVersion,
           coach: {
@@ -1554,6 +1611,26 @@ export default {
           ),
           coachMatchBreakdownArtifactByAthleteCount: Object.keys(apiCoachMatchBreakdownArtifacts).length,
           hasCoachMatchBreakdownArtifactField: true,
+        });
+        console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+          stage: "worker_get_payload",
+          buildId: COACH_OVERLAY_GET_PAYLOAD_BUILD_ID,
+          sharedAthleteId: apiCoachMatchBreakdownArtifactList[0]?.sharedAthleteId ?? null,
+          sharedCompetitionId: apiCoachMatchBreakdownArtifactList[0]?.sharedCompetitionId ?? null,
+          matchLineageKey: apiCoachMatchBreakdownArtifactList[0]?.matchLineageKey ?? null,
+          overlayCount: apiCoachMatchBreakdownArtifactList.length,
+          artifacts: apiCoachMatchBreakdownArtifactList.map((artifact) => ({
+            sharedAthleteId: artifact.sharedAthleteId,
+            sharedCompetitionId: artifact.sharedCompetitionId,
+            matchLineageKey: artifact.matchLineageKey,
+            hasCoachNote: Boolean(artifact.coachNote?.trim()),
+          })),
+          artifactSetCount: Object.keys(apiCoachMatchBreakdownArtifacts).length,
+          hasPayloadField: Object.prototype.hasOwnProperty.call(
+            getPayload,
+            "coachMatchBreakdownArtifacts",
+          ),
+          tokenSuffix: token.slice(-8),
         });
         const cf = (request as Request & { cf?: { colo?: string } }).cf;
         console.log("[SYSTEMKEY TRACE WORKER]", {
@@ -1611,6 +1688,21 @@ export default {
             : false,
           inviteWeeklySystemKey: rec.weekly?.systemKey ?? null,
           serializedWeeklyBySnippet: JSON.stringify(getPayload.weeklyByAthleteId).slice(0, 4000),
+        });
+        console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+          stage: "worker_get_payload_before_json",
+          buildId: COACH_OVERLAY_GET_PAYLOAD_BUILD_ID,
+          sharedAthleteId: apiCoachMatchBreakdownArtifactList[0]?.sharedAthleteId ?? null,
+          sharedCompetitionId: apiCoachMatchBreakdownArtifactList[0]?.sharedCompetitionId ?? null,
+          matchLineageKey: apiCoachMatchBreakdownArtifactList[0]?.matchLineageKey ?? null,
+          overlayCount: apiCoachMatchBreakdownArtifactList.length,
+          artifactSetCount: Object.keys(getPayload.coachMatchBreakdownArtifacts).length,
+          hasPayloadField: Object.prototype.hasOwnProperty.call(
+            getPayload,
+            "coachMatchBreakdownArtifacts",
+          ),
+          serializedFieldBytes: JSON.stringify(getPayload.coachMatchBreakdownArtifacts).length,
+          tokenSuffix: token.slice(-8),
         });
         return json(getPayload, 200);
       }
@@ -2422,6 +2514,12 @@ export default {
         /^\/v1\/sessions\/([^/]+)\/coach-match-breakdowns$/,
       );
       if (coachMatchBreakdownsPut && request.method === "PUT") {
+        console.log("[WORKER_RUNTIME_TRACE]", {
+          stage: "put_route_enter",
+          url: request.url,
+          method: request.method,
+          runtimeVersion: WORKER_RUNTIME_VERSION,
+        });
         const token = decodeURIComponent(coachMatchBreakdownsPut[1] ?? "").trim().toLowerCase();
         if (!TOKEN_RE.test(token)) {
           return error("Invalid token", 400);
@@ -2446,6 +2544,20 @@ export default {
           });
           return error("Invalid coach match breakdown artifact set", 400);
         }
+        console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+          stage: "worker_put_received",
+          sharedAthleteId: artifactSet.sharedAthleteId,
+          sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+          matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+          overlayCount: artifactSet.artifacts.length,
+          artifacts: artifactSet.artifacts.map((artifact) => ({
+            sharedAthleteId: artifact.sharedAthleteId,
+            sharedCompetitionId: artifact.sharedCompetitionId,
+            matchLineageKey: artifact.matchLineageKey,
+            hasCoachNote: Boolean(artifact.coachNote?.trim()),
+          })),
+          tokenSuffix: token.slice(-8),
+        });
 
         const rec = await readSession(env.SESSIONS, token);
         if (!rec || rec.writerSecret !== secret) {
@@ -2506,6 +2618,20 @@ export default {
           writeMode: existing ? "newer_or_equal_overwrite" : "first_write",
         });
         await writeSession(env.SESSIONS, token, next);
+        console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+          stage: "worker_put_persisted",
+          sharedAthleteId: artifactSet.sharedAthleteId,
+          sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+          matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+          overlayCount: artifactSet.artifacts.length,
+          artifacts: artifactSet.artifacts.map((artifact) => ({
+            sharedAthleteId: artifact.sharedAthleteId,
+            sharedCompetitionId: artifact.sharedCompetitionId,
+            matchLineageKey: artifact.matchLineageKey,
+            hasCoachNote: Boolean(artifact.coachNote?.trim()),
+          })),
+          tokenSuffix: token.slice(-8),
+        });
         return json({ ok: true }, 200);
       }
 

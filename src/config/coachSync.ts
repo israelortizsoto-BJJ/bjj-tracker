@@ -1,5 +1,12 @@
 import Constants from "expo-constants";
 
+import { getAppVariant } from "./runtime";
+import type { DeviceRole } from "../storage/deviceRoleStore";
+
+type SyncBaseUrlTraceRole = DeviceRole | "unknown";
+
+let syncBaseUrlTraceRole: SyncBaseUrlTraceRole = "unknown";
+
 function isExtraValuePresent(value: unknown): boolean {
   if (value === undefined || value === null) return false;
   if (typeof value === "string" && value.trim() === "") return false;
@@ -48,4 +55,21 @@ export function getCoachSyncApiBaseUrl(): string | null {
 
 export function isCoachSyncConfigured(): boolean {
   return getCoachSyncApiBaseUrl() !== null;
+}
+
+export function setSyncBaseUrlTraceRole(role: DeviceRole | null): void {
+  syncBaseUrlTraceRole = role ?? "unknown";
+}
+
+export function logSyncBaseUrlTrace(input: {
+  baseUrl: string | null;
+  endpoint: string;
+  role?: SyncBaseUrlTraceRole;
+}): void {
+  console.log("[SYNC_BASE_URL_TRACE]", {
+    baseUrl: input.baseUrl,
+    endpoint: input.endpoint,
+    runtimeEnv: getAppVariant(),
+    role: input.role ?? syncBaseUrlTraceRole,
+  });
 }

@@ -10,6 +10,41 @@ type ArtifactSetByAthleteId = Record<string, SyncedCoachMatchBreakdownArtifactSe
 
 let artifactMemory: ArtifactSetByAthleteId | null = null;
 
+function slotKeyFromLineageKey(matchLineageKey: string): string | null {
+  const trimmed = matchLineageKey.trim();
+  const slotMatch = /-slot-(\d+)$/.exec(trimmed);
+  return slotMatch ? `slot-${slotMatch[1]}` : null;
+}
+
+function artifactSetTraceSummary(
+  artifactSet: SyncedCoachMatchBreakdownArtifactSet | null,
+  traceAthleteId?: string,
+) {
+  if (!artifactSet) {
+    return {
+      traceAthleteId: traceAthleteId ?? null,
+      artifactCount: 0,
+      updatedAt: null as string | null,
+      lineageKeys: [] as string[],
+      slotKeys: [] as (string | null)[],
+      matchIds: [] as string[],
+      competitionIds: [] as string[],
+    };
+  }
+  return {
+    traceAthleteId: traceAthleteId ?? artifactSet.sharedAthleteId.trim(),
+    artifactSetAthleteId: artifactSet.sharedAthleteId.trim(),
+    artifactCount: artifactSet.artifacts.length,
+    updatedAt: artifactSet.updatedAt,
+    lineageKeys: artifactSet.artifacts.map((a) => a.matchLineageKey.trim()),
+    slotKeys: artifactSet.artifacts.map((a) => slotKeyFromLineageKey(a.matchLineageKey)),
+    matchIds: artifactSet.artifacts.map((a) => a.matchLineageKey.trim()),
+    competitionIds: [
+      ...new Set(artifactSet.artifacts.map((a) => a.sharedCompetitionId.trim()).filter(Boolean)),
+    ],
+  };
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -77,9 +112,19 @@ function safeParseStore(raw: string | null): ArtifactSetByAthleteId {
 }
 
 async function readStore(): Promise<ArtifactSetByAthleteId> {
-  const map = safeParseStore(
-    await AsyncStorage.getItem(StorageKeys.coachMatchBreakdownArtifactsByAthleteId),
-  );
+  const raw = await AsyncStorage.getItem(StorageKeys.coachMatchBreakdownArtifactsByAthleteId);
+  const map = safeParseStore(raw);
+  const athleteIds = Object.keys(map);
+  const totalArtifacts = athleteIds.reduce((sum, id) => sum + (map[id]?.artifacts.length ?? 0), 0);
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "artifact_store_hydrate_read",
+    memoryWasLoaded: artifactMemory !== null,
+    rawBytes: raw?.length ?? 0,
+    athleteCount: athleteIds.length,
+    artifactCount: totalArtifacts,
+    sharedAthleteIds: athleteIds,
+    perAthlete: athleteIds.map((id) => artifactSetTraceSummary(map[id] ?? null, id)),
+  });
   artifactMemory = map;
   return map;
 }
@@ -96,17 +141,54 @@ export function peekCoachMatchBreakdownArtifactSet(
   sharedAthleteId: string,
 ): SyncedCoachMatchBreakdownArtifactSet | null {
   const athleteId = sharedAthleteId.trim();
-  if (!athleteId || !artifactMemory) return null;
-  return artifactMemory[athleteId] ?? null;
+  if (!athleteId) {
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "artifact_store_peek_skip",
+      reason: "empty_sharedAthleteId",
+      sharedAthleteId: null,
+    });
+    return null;
+  }
+  if (!artifactMemory) {
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "artifact_store_peek_miss",
+      sharedAthleteId: athleteId,
+      reason: "memory_not_loaded",
+      ...artifactSetTraceSummary(null, athleteId),
+    });
+    return null;
+  }
+  const found = artifactMemory[athleteId] ?? null;
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: found ? "artifact_store_peek_hit" : "artifact_store_peek_miss",
+    sharedAthleteId: athleteId,
+    reason: found ? null : "athlete_not_in_memory_map",
+    ...artifactSetTraceSummary(found, athleteId),
+  });
+  return found;
 }
 
 export async function getCoachMatchBreakdownArtifactSet(
   sharedAthleteId: string,
 ): Promise<SyncedCoachMatchBreakdownArtifactSet | null> {
   const athleteId = sharedAthleteId.trim();
-  if (!athleteId) return null;
+  if (!athleteId) {
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "artifact_store_get_skip",
+      reason: "empty_sharedAthleteId",
+      sharedAthleteId: null,
+    });
+    return null;
+  }
   const map = await readStore();
-  return map[athleteId] ?? null;
+  const found = map[athleteId] ?? null;
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: found ? "artifact_store_get_hit" : "artifact_store_get_miss",
+    sharedAthleteId: athleteId,
+    reason: found ? null : "athlete_not_in_disk_map",
+    ...artifactSetTraceSummary(found, athleteId),
+  });
+  return found;
 }
 
 export async function writeCoachMatchBreakdownArtifactSet(
@@ -114,6 +196,12 @@ export async function writeCoachMatchBreakdownArtifactSet(
 ): Promise<void> {
   const athleteId = artifactSet.sharedAthleteId.trim();
   if (!athleteId || !isValidSyncedCoachMatchBreakdownArtifactSet(artifactSet)) {
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "artifact_store_write_skip",
+      reason: !athleteId ? "empty_sharedAthleteId" : "invalid_artifact_set_shape",
+      sharedAthleteId: athleteId || null,
+      ...artifactSetTraceSummary(isValidSyncedCoachMatchBreakdownArtifactSet(artifactSet) ? artifactSet : null),
+    });
     console.log("[COACH_OVERLAY_SYNC_TRACE]", {
       stage: "parent_overlay_hydrate_skip_invalid",
       sharedAthleteId: athleteId || null,
@@ -124,6 +212,15 @@ export async function writeCoachMatchBreakdownArtifactSet(
   const map = await readStore();
   const existing = map[athleteId] ?? null;
   if (existing && artifactSet.updatedAt.localeCompare(existing.updatedAt) < 0) {
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "artifact_store_write_skip",
+      reason: "incoming_stale_vs_existing",
+      sharedAthleteId: athleteId,
+      incomingUpdatedAt: artifactSet.updatedAt,
+      existingUpdatedAt: existing.updatedAt,
+      incoming: artifactSetTraceSummary(artifactSet),
+      existing: artifactSetTraceSummary(existing),
+    });
     console.log("[COACH_OVERLAY_SYNC_TRACE]", {
       stage: "parent_overlay_hydrate_skip_stale",
       sharedAthleteId: athleteId,
@@ -136,6 +233,20 @@ export async function writeCoachMatchBreakdownArtifactSet(
 
   map[athleteId] = artifactSet;
   await writeStore(map);
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "parent_artifact_store_write",
+    sharedAthleteId: athleteId,
+    sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+    overlayCount: artifactSet.artifacts.length,
+    artifacts: artifactSet.artifacts.map((artifact) => ({
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasCoachNote: Boolean(artifact.coachNote?.trim()),
+    })),
+    updatedAt: artifactSet.updatedAt,
+  });
   const artifactsByCompetitionId = new Map<string, number>();
   for (const artifact of artifactSet.artifacts) {
     const compId = artifact.sharedCompetitionId.trim();

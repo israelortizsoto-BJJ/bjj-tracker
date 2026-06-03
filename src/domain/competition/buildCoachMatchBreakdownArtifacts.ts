@@ -45,6 +45,20 @@ export async function buildCoachMatchBreakdownArtifacts(
     artifacts,
   };
 
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "coach_publish_build",
+    sharedAthleteId: athleteId,
+    sharedCompetitionId: artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: artifacts[0]?.matchLineageKey ?? null,
+    overlayCount: artifacts.length,
+    artifacts: artifacts.map((artifact) => ({
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasCoachNote: Boolean(artifact.coachNote?.trim()),
+    })),
+  });
+
   console.log("[COACH_OVERLAY_SYNC_TRACE]", {
     stage: "coach_overlay_artifacts_built",
     sharedAthleteId: athleteId,

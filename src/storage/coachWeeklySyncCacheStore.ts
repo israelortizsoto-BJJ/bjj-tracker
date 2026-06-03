@@ -107,7 +107,19 @@ function normalizeCompetitions(raw: unknown): SyncedSharedCompetition[] {
 function normalizeCoachMatchBreakdownArtifacts(
   raw: unknown,
 ): Record<string, SyncedCoachMatchBreakdownArtifactSet> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "parent_cache_normalize",
+      sharedAthleteId: null,
+      sharedCompetitionId: null,
+      matchLineageKey: null,
+      overlayCount: 0,
+      artifacts: [],
+      artifactSetCount: 0,
+      rawFieldType: Array.isArray(raw) ? "array" : typeof raw,
+    });
+    return {};
+  }
   const out: Record<string, SyncedCoachMatchBreakdownArtifactSet> = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const id = key.trim();
@@ -115,6 +127,22 @@ function normalizeCoachMatchBreakdownArtifacts(
     if (value.sharedAthleteId.trim() !== id) continue;
     out[id] = value;
   }
+  const artifacts = Object.values(out).flatMap((artifactSet) => artifactSet.artifacts);
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: "parent_cache_normalize",
+    sharedAthleteId: artifacts[0]?.sharedAthleteId ?? null,
+    sharedCompetitionId: artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: artifacts[0]?.matchLineageKey ?? null,
+    overlayCount: artifacts.length,
+    artifacts: artifacts.map((artifact) => ({
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasCoachNote: Boolean(artifact.coachNote?.trim()),
+    })),
+    artifactSetCount: Object.keys(out).length,
+    rawFieldType: Array.isArray(raw) ? "array" : typeof raw,
+  });
   return out;
 }
 
@@ -385,6 +413,21 @@ export async function setCachedWeeklyForLinkToken(
   };
   if (cachedFullSession !== undefined) {
     const artifactSets = Object.values(cachedFullSession.coachMatchBreakdownArtifacts ?? {});
+    console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+      stage: "artifact_cache_session_hydrate_begin",
+      artifactSetCount: artifactSets.length,
+      artifactCount: artifactSets.reduce((sum, artifactSet) => sum + artifactSet.artifacts.length, 0),
+      sharedAthleteIds: artifactSets.map((artifactSet) => artifactSet.sharedAthleteId),
+      perAthlete: artifactSets.map((artifactSet) => ({
+        sharedAthleteId: artifactSet.sharedAthleteId,
+        updatedAt: artifactSet.updatedAt,
+        artifactCount: artifactSet.artifacts.length,
+        lineageKeys: artifactSet.artifacts.map((a) => a.matchLineageKey.trim()),
+        competitionIds: [
+          ...new Set(artifactSet.artifacts.map((a) => a.sharedCompetitionId.trim()).filter(Boolean)),
+        ],
+      })),
+    });
     for (const artifactSet of artifactSets) {
       await writeCoachMatchBreakdownArtifactSet(artifactSet);
     }

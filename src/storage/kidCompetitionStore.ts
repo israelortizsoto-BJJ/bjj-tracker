@@ -420,8 +420,17 @@ export async function stripWorkerSyncLinkageForKid(kidId: KidId): Promise<void> 
   const next = all.map((e) => {
     if (e.kidId !== kidId) return e;
     const { sharedAthleteId: _a, sharedCompetitionId: _c, ...rest } = e;
+    const oldId = rest.id;
     const id =
       rest.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX) ? newEntryId() : rest.id;
+    if (id !== oldId) {
+      console.log("[COMP_DETAIL_ID_TRACE]", {
+        stage: "shell_strip_remap",
+        oldId,
+        newId: id,
+        sharedCompetitionId: e.sharedCompetitionId ?? null,
+      });
+    }
     return normalizeKidCompetitionEntry({
       ...rest,
       id,
@@ -454,6 +463,17 @@ export async function upsertSharedCompetitionsForKid(
   const coachMatchBreakdownArtifactsForTrace = artifactSet
     ? { [sharedAthleteId]: artifactSet }
     : undefined;
+
+  const droppedStaleSharedIds: string[] = [];
+
+  console.log("[COMP_DETAIL_ID_TRACE]", {
+    stage: "shell_reconcile_begin",
+    kidId,
+    sharedAthleteId,
+    remoteCompetitionCount: remote.length,
+    localEntriesBefore,
+    localEntryIdsBefore: targetKid.map((r) => r.id),
+  });
 
   if (__DEV__) {
     const summarize = (r: KidCompetitionEntry) => ({
@@ -499,6 +519,13 @@ export async function upsertSharedCompetitionsForKid(
       continue;
     }
     droppedStaleShared.push(row);
+    droppedStaleSharedIds.push(row.sharedCompetitionId);
+    console.log("[COMP_DETAIL_ID_TRACE]", {
+      stage: "shell_reconcile_drop",
+      sharedCompetitionId: row.sharedCompetitionId,
+      droppedLocalId: row.id,
+      droppedStaleSharedIds: [...droppedStaleSharedIds],
+    });
     // Absent from remote: drop. Local-only coach rows have no `sharedCompetitionId`.
   }
 
@@ -522,9 +549,20 @@ export async function upsertSharedCompetitionsForKid(
 
   for (const r of remote) {
     const existing = bySharedId.get(r.id);
+    const existingLocalId = existing?.id ?? null;
+    const generatedNextId = `shared-comp-${r.id}`;
+    const reusedExistingId = Boolean(existing?.id);
+    console.log("[COMP_DETAIL_ID_TRACE]", {
+      stage: "shell_reconcile_row",
+      sharedCompetitionId: r.id,
+      existingLocalId,
+      generatedNextId,
+      reusedExistingId,
+      droppedStaleSharedIds: [...droppedStaleSharedIds],
+    });
     const nextRow: KidCompetitionEntry = {
       ...(existing ?? {}),
-      id: existing?.id ?? `shared-comp-${r.id}`,
+      id: existing?.id ?? generatedNextId,
       kidId,
       sharedAthleteId,
       sharedCompetitionId: r.id,
@@ -587,6 +625,11 @@ export async function upsertSharedCompetitionsForKid(
 
   const nextAll = capCompetitionsByKid([...rest, ...keptTarget]);
   await setRaw(nextAll);
+  const { copyCompetitionDetailToCanonicalKeyForEntry } = await import("./competitionStore");
+  for (const row of keptTarget) {
+    if (!row.sharedCompetitionId) continue;
+    await copyCompetitionDetailToCanonicalKeyForEntry(row);
+  }
   const returnedForKid = nextAll
     .filter((e) => e.kidId === kidId)
     .slice()
@@ -626,6 +669,18 @@ export async function upsertSharedCompetitionsForKid(
     remoteCompetitionCount: remote.length,
     localEntriesBefore,
     localEntriesAfter: returnedForKid.length,
+    finalPersistedEntryIds: returnedForKid.map((e) => e.id),
+    finalPersistedSharedCompetitionIds: returnedForKid
+      .map((e) => e.sharedCompetitionId)
+      .filter((id): id is string => Boolean(id)),
+  });
+  console.log("[COMP_DETAIL_ID_TRACE]", {
+    stage: "shell_reconcile_complete",
+    kidId,
+    sharedAthleteId,
+    localEntriesBefore,
+    localEntriesAfter: returnedForKid.length,
+    droppedStaleSharedIds,
     finalPersistedEntryIds: returnedForKid.map((e) => e.id),
     finalPersistedSharedCompetitionIds: returnedForKid
       .map((e) => e.sharedCompetitionId)

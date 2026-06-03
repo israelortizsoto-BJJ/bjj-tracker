@@ -31,6 +31,19 @@ export function MatchCard({
   const [coachBreakdownExpanded, setCoachBreakdownExpanded] = useState(false);
   const coachBreakdown = snapshot.coachNote?.trim() ?? "";
 
+  console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
+    stage: coachBreakdown ? "competition_detail_match_card_overlay_visible" : "competition_detail_match_card_overlay_hidden",
+    matchId: snapshot.id,
+    matchLineageKey: snapshot.id,
+    slotKey: (() => {
+      const slotMatch = /-slot-(\d+)$/.exec(snapshot.id.trim());
+      return slotMatch ? `slot-${slotMatch[1]}` : null;
+    })(),
+    index,
+    hasCoachNote: Boolean(coachBreakdown),
+    coachNotePreview: coachBreakdown ? coachBreakdown.slice(0, 40) : null,
+  });
+
   const methodLines: string[] = [];
   if (snapshot.outcome) {
     if (snapshot.outcome === "Submission" && snapshot.submissionTime?.trim()) {
