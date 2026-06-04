@@ -1,5 +1,8 @@
 import { toDateKey } from "../../_domain/dateKey";
-import type { KidCompetitionEntryWithMatchDetail } from "../../storage/competitionStore";
+import {
+  competitionDetailKeyForSharedCompetitionId,
+  type KidCompetitionEntryWithMatchDetail,
+} from "../../storage/competitionStore";
 import type { SyncedCompetitionAggregateArtifact } from "../../types/coachWeeklySync";
 
 type MatchRow = KidCompetitionEntryWithMatchDetail["matches"][number];
@@ -103,6 +106,38 @@ export function buildCompetitionAggregateArtifact(
   competitions: readonly KidCompetitionEntryWithMatchDetail[],
 ): SyncedCompetitionAggregateArtifact {
   const athleteId = sharedAthleteId.trim();
+  if (__DEV__) {
+    for (const competition of competitions) {
+      const rawShellMatches = (competition as { matches?: unknown }).matches;
+      const shellMatchCount = Array.isArray(rawShellMatches) ? rawShellMatches.length : 0;
+      const sharedCompetitionId = competition.sharedCompetitionId ?? null;
+      const isShellEntry =
+        Boolean(sharedCompetitionId) &&
+        competition.id === competitionDetailKeyForSharedCompetitionId(sharedCompetitionId ?? "");
+      console.log("[TOPOLOGY_BUILD_SOURCE_TRACE]", {
+        stage: "aggregate_builder_input",
+        entryId: competition.id,
+        sharedCompetitionId,
+        shellMatchCount,
+        canonicalDetailMatchCount: competition.matches.length,
+        mergedMatchCount: competition.matches.length,
+        sourceStrategy: "aggregate_merged_canonical_detail_input",
+        firstFiveMatchIds: competition.matches.slice(0, 5).map((match) => match.id),
+      });
+      console.log("[SHELL_AUTHORITY_TRACE]", {
+        entryId: competition.id,
+        sharedCompetitionId,
+        isShellEntry,
+        matchCount: competition.matches.length,
+        sourceCaller: "buildCompetitionAggregateArtifact",
+        resolutionPath: "aggregate_builder_input",
+        selectedAsCanonical: isShellEntry,
+        rejectedReason: isShellEntry
+          ? null
+          : "non_shell_entry_aggregate_input",
+      });
+    }
+  }
   const matches = collectMatches(competitions);
   const normalizedMatches = matches.map((match) => ({
     ...match,
@@ -136,10 +171,10 @@ export function buildCompetitionAggregateArtifact(
   const latestName =
     typeof latest?.tournamentName === "string" ? latest.tournamentName.trim() : "";
   const latestDate = latest ? toDateKey(latest.eventDate) : null;
-
-  return {
+  const updatedAt = new Date().toISOString();
+  const artifact: SyncedCompetitionAggregateArtifact = {
     sharedAthleteId: athleteId,
-    updatedAt: new Date().toISOString(),
+    updatedAt,
     totalCompetitions: competitions.length,
     totalMatches: matches.length,
     wins,
@@ -160,4 +195,20 @@ export function buildCompetitionAggregateArtifact(
     ...(latestName ? { latestCompetitionName: latestName } : {}),
     ...(latestDate ? { latestCompetitionDate: latestDate } : {}),
   };
+
+  if (__DEV__) {
+    console.log("[COMP_AGGREGATE_TRACE]", {
+      stage: "parent_aggregate_build",
+      sharedAthleteId: athleteId,
+      competitionCount: competitions.length,
+      matchCount: matches.length,
+      winCount: wins,
+      lossCount: losses,
+      submissionCount: submissionWins,
+      fastestSubmission: artifact.fastestSubmissionSeconds,
+      updatedAt,
+    });
+  }
+
+  return artifact;
 }

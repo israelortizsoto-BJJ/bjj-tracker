@@ -4,6 +4,7 @@ import type {
 } from "../../lib/signals/computeSignals";
 import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
 import type { SyncedCompetitionAggregateArtifact } from "../../types/coachWeeklySync";
+import { formatSecondsAsMmSs } from "./matchDurationFormat";
 
 export type CompetitionAggregateMetricsOverlay = Pick<
   SignalOutput["competition"],
@@ -23,16 +24,6 @@ function normalizeMatchResult(value: unknown): "win" | "loss" | null {
   if (normalized === "win") return "win";
   if (normalized === "loss") return "loss";
   return null;
-}
-
-function formatMatchTime(totalSeconds: number | null): string | null {
-  if (totalSeconds === null || !Number.isFinite(totalSeconds) || totalSeconds < 0) {
-    return null;
-  }
-  const rounded = Math.round(totalSeconds);
-  const minutes = Math.floor(rounded / 60);
-  const seconds = rounded % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 /**
@@ -78,8 +69,8 @@ function buildMetricsOverlay(
     losses: artifact.losses,
     winRate: artifact.winRate,
     submissionRate: artifact.submissionRate,
-    fastestSubmission: formatMatchTime(artifact.fastestSubmissionSeconds),
-    averageMatchTime: formatMatchTime(artifact.averageMatchSeconds),
+    fastestSubmission: formatSecondsAsMmSs(artifact.fastestSubmissionSeconds),
+    averageMatchTime: formatSecondsAsMmSs(artifact.averageMatchSeconds),
     winStyle: artifact.dominantWinStyle,
   };
 }

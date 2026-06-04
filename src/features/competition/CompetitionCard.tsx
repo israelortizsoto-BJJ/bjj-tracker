@@ -289,6 +289,34 @@ export function CompetitionCard({
             : "no_matching_artifacts_for_competition"
         : null,
   });
+  console.log("[COACH_COMPETE_DETAIL_TRACE]", {
+    stage: "card_projected_render",
+    deviceRole,
+    entryId: entry.id,
+    sharedAthleteId: sharedAthleteId || null,
+    sharedCompetitionId: sharedCompetitionId || null,
+    topologyPresent: Boolean(topology),
+    topologyUpdatedAt: topologyArtifact?.updatedAt ?? null,
+    topologyMatchCount: topology?.matches.length ?? 0,
+    fallbackMatchCount: entry.matches.length,
+    projectedMatchCount: projectedEntry.matches.length,
+    projectedMatchIds: projectedEntry.matches.map((match) => match.id),
+    projectionSource:
+      deviceRole === "coach" && topology ? "coach_topology" : "fallback_detail",
+  });
+  console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+    stage: "coach_compete_render",
+    sharedCompetitionId: sharedCompetitionId || null,
+    updatedAt: topologyArtifact?.updatedAt ?? null,
+    matchCount: projectedEntry.matches.length,
+    firstFiveMatchIds: projectedEntry.matches.slice(0, 5).map((match) => match.id),
+    firstFiveMatchResults: projectedEntry.matches
+      .slice(0, 5)
+      .map((match) => match.matchResult),
+    accepted: deviceRole === "coach" ? Boolean(topology) : true,
+    overwriteReason:
+      deviceRole === "coach" && topology ? "topology_rendered" : "fallback_or_parent_render",
+  });
   for (const match of projectedEntry.matches) {
     const coachNote = match.coachNote?.trim();
     console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {

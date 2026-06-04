@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import {
@@ -60,6 +61,42 @@ export default function SummaryCompetitionCard(props: SummaryCompetitionProps) {
   const matchLabel =
     totalMatches === 1 ? "1 recorded match" : `${totalMatches} recorded matches`;
   const recordValue = hasMatchData ? `${record.wins}–${record.losses}` : "—";
+  const previousRenderRef = useRef<{
+    wins: number;
+    losses: number;
+    totalMatches: number;
+    winRate: number | null;
+    submissionRate: number | null;
+    averageMatchTime: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const current = {
+      wins: record.wins,
+      losses: record.losses,
+      totalMatches,
+      winRate,
+      submissionRate,
+      averageMatchTime,
+    };
+    const previous = previousRenderRef.current;
+    console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+      stage: "summary_competition_card_render",
+      previousRecord: previous ? { wins: previous.wins, losses: previous.losses } : null,
+      renderedRecord: { wins: current.wins, losses: current.losses },
+      previousTotals: previous,
+      renderedTotals: current,
+    });
+    previousRenderRef.current = current;
+  }, [
+    averageMatchTime,
+    record.losses,
+    record.wins,
+    submissionRate,
+    totalMatches,
+    winRate,
+  ]);
 
   const formatLastDate = (dateKey: string | null) => {
     if (!dateKey) return null;

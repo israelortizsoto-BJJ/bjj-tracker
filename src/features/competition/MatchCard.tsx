@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
+import { formatSubmissionTimeDisplay } from "../../domain/competition/matchDurationFormat";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import { labelForSubmissionTypeKey } from "./submissionTypes";
 
@@ -45,9 +46,10 @@ export function MatchCard({
   });
 
   const methodLines: string[] = [];
+  const submissionTimeDisplay = formatSubmissionTimeDisplay(snapshot.submissionTime);
   if (snapshot.outcome) {
-    if (snapshot.outcome === "Submission" && snapshot.submissionTime?.trim()) {
-      methodLines.push(`${snapshot.outcome} · ${snapshot.submissionTime.trim()}`);
+    if (snapshot.outcome === "Submission" && submissionTimeDisplay) {
+      methodLines.push(`${snapshot.outcome} · ${submissionTimeDisplay}`);
     } else {
       methodLines.push(snapshot.outcome);
     }
@@ -88,7 +90,7 @@ export function MatchCard({
         <View style={styles.matchField}>
           <Text style={styles.label}>Submission time</Text>
           <Text style={styles.value}>
-            {snapshot.outcome === "Submission" ? snapshot.submissionTime?.trim() || "None" : "—"}
+            {snapshot.outcome === "Submission" ? submissionTimeDisplay || "None" : "—"}
           </Text>
         </View>
         <View style={styles.matchField}>

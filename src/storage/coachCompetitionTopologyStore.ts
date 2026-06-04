@@ -5,6 +5,7 @@ import type {
   SyncedCompetitionMatchTopology,
   SyncedCompetitionTopologyArtifact,
 } from "../types/coachWeeklySync";
+import { emitCompetitionChange } from "./kidCompetitionStore";
 import { StorageKeys } from "./storageKeys";
 
 type TopologyByAthleteId = Record<string, SyncedCompetitionTopologyArtifact>;
@@ -129,6 +130,107 @@ function safeParseStore(raw: string | null): TopologyByAthleteId {
   }
 }
 
+function logCoachTopologyMatchTrace(
+  stage: string,
+  artifact: SyncedCompetitionTopologyArtifact,
+  extra?: Record<string, unknown>,
+): void {
+  for (const competition of artifact.competitions) {
+    console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+      stage,
+      sharedCompetitionId: competition.sharedCompetitionId,
+      updatedAt: artifact.updatedAt,
+      matchCount: competition.matches.length,
+      firstFiveMatchIds: competition.matches
+        .slice(0, 5)
+        .map((match) => match.matchLineageKey),
+      firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
+      ...extra,
+    });
+  }
+}
+
+function topologyMatchCountForCompetition(
+  artifact: SyncedCompetitionTopologyArtifact | null,
+  sharedCompetitionId: string,
+): number | null {
+  if (!artifact) return null;
+  const competition = artifact.competitions.find(
+    (candidate) => candidate.sharedCompetitionId === sharedCompetitionId,
+  );
+  return competition ? competition.matches.length : null;
+}
+
+function logCoachTopologyAcceptanceTrace(input: {
+  artifact: SyncedCompetitionTopologyArtifact;
+  existing: SyncedCompetitionTopologyArtifact | null;
+  overwriteAccepted: boolean;
+  rejectionReason: string | null;
+  equalitySkipped: boolean;
+  cacheWritePerformed: boolean;
+  invalidateTriggered: boolean;
+}): void {
+  for (const competition of input.artifact.competitions) {
+    console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+      sharedCompetitionId: competition.sharedCompetitionId,
+      incomingUpdatedAt: input.artifact.updatedAt,
+      existingUpdatedAt: input.existing?.updatedAt ?? null,
+      incomingMatchCount: competition.matches.length,
+      existingMatchCount: topologyMatchCountForCompetition(
+        input.existing,
+        competition.sharedCompetitionId,
+      ),
+      overwriteAccepted: input.overwriteAccepted,
+      rejectionReason: input.rejectionReason,
+      equalitySkipped: input.equalitySkipped,
+      cacheWritePerformed: input.cacheWritePerformed,
+      invalidateTriggered: input.invalidateTriggered,
+    });
+  }
+}
+
+function logCoachTopologyAcceptanceCacheTrace(input: {
+  stage: string;
+  sharedAthleteId: string | null;
+  artifact: SyncedCompetitionTopologyArtifact | null;
+  rejectionReason: string | null;
+}): void {
+  if (!input.artifact) {
+    console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+      sharedCompetitionId: null,
+      incomingUpdatedAt: null,
+      existingUpdatedAt: null,
+      incomingMatchCount: null,
+      existingMatchCount: null,
+      overwriteAccepted: false,
+      rejectionReason: input.rejectionReason,
+      equalitySkipped: false,
+      cacheWritePerformed: false,
+      invalidateTriggered: false,
+      stage: input.stage,
+      sharedAthleteId: input.sharedAthleteId,
+    });
+    return;
+  }
+
+  for (const competition of input.artifact.competitions) {
+    console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+      sharedCompetitionId: competition.sharedCompetitionId,
+      incomingUpdatedAt: null,
+      existingUpdatedAt: input.artifact.updatedAt,
+      incomingMatchCount: null,
+      existingMatchCount: competition.matches.length,
+      overwriteAccepted: false,
+      rejectionReason: input.rejectionReason,
+      equalitySkipped: false,
+      cacheWritePerformed: false,
+      invalidateTriggered: false,
+      stage: input.stage,
+      sharedAthleteId: input.sharedAthleteId,
+    });
+  }
+}
+
 async function readStore(): Promise<TopologyByAthleteId> {
   const map = safeParseStore(
     await AsyncStorage.getItem(StorageKeys.coachCompetitionTopologyByAthleteId),
@@ -150,8 +252,38 @@ export function peekCoachCompetitionTopology(
   sharedAthleteId: string,
 ): SyncedCompetitionTopologyArtifact | null {
   const athleteId = sharedAthleteId.trim();
-  if (!athleteId || !topologyMemory) return null;
-  return topologyMemory[athleteId] ?? null;
+  if (!athleteId) {
+    if (__DEV__) {
+      logCoachTopologyAcceptanceCacheTrace({
+        stage: "cache_peek_skipped_empty_athlete",
+        sharedAthleteId: null,
+        artifact: null,
+        rejectionReason: "empty_shared_athlete_id",
+      });
+    }
+    return null;
+  }
+  if (!topologyMemory) {
+    if (__DEV__) {
+      logCoachTopologyAcceptanceCacheTrace({
+        stage: "cache_peek_memory_not_loaded",
+        sharedAthleteId: athleteId,
+        artifact: null,
+        rejectionReason: "memory_not_loaded",
+      });
+    }
+    return null;
+  }
+  const artifact = topologyMemory[athleteId] ?? null;
+  if (__DEV__) {
+    logCoachTopologyAcceptanceCacheTrace({
+      stage: artifact ? "cache_peek_hit" : "cache_peek_miss",
+      sharedAthleteId: athleteId,
+      artifact,
+      rejectionReason: artifact ? null : "no_artifact_for_shared_athlete",
+    });
+  }
+  return artifact;
 }
 
 /** Read-only canonical topology cache for one shared athlete. */
@@ -159,9 +291,28 @@ export async function getCoachCompetitionTopology(
   sharedAthleteId: string,
 ): Promise<SyncedCompetitionTopologyArtifact | null> {
   const athleteId = sharedAthleteId.trim();
-  if (!athleteId) return null;
+  if (!athleteId) {
+    if (__DEV__) {
+      logCoachTopologyAcceptanceCacheTrace({
+        stage: "cache_read_skipped_empty_athlete",
+        sharedAthleteId: null,
+        artifact: null,
+        rejectionReason: "empty_shared_athlete_id",
+      });
+    }
+    return null;
+  }
   const map = await readStore();
-  return map[athleteId] ?? null;
+  const artifact = map[athleteId] ?? null;
+  if (__DEV__) {
+    logCoachTopologyAcceptanceCacheTrace({
+      stage: artifact ? "cache_read_hit" : "cache_read_miss",
+      sharedAthleteId: athleteId,
+      artifact,
+      rejectionReason: artifact ? null : "no_artifact_for_shared_athlete",
+    });
+  }
+  return artifact;
 }
 
 /** Newest-wins full overwrite. This cache never creates or merges topology rows locally. */
@@ -171,6 +322,18 @@ export async function writeCoachCompetitionTopology(
 ): Promise<CoachCompetitionTopologyWriteResult> {
   if (!isValidSyncedCompetitionTopologyArtifact(artifact)) {
     if (__DEV__) {
+      console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+        sharedCompetitionId: null,
+        incomingUpdatedAt: null,
+        existingUpdatedAt: null,
+        incomingMatchCount: null,
+        existingMatchCount: null,
+        overwriteAccepted: false,
+        rejectionReason: "invalid_topology_artifact",
+        equalitySkipped: false,
+        cacheWritePerformed: false,
+        invalidateTriggered: false,
+      });
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_invalid");
       logCompetitionTopologyTrace("[COMP_TOPOLOGY_HYDRATE]", "hydrate_invalid", {
         traceId: competitionTopologyTraceId ?? null,
@@ -195,8 +358,40 @@ export async function writeCoachCompetitionTopology(
     incomingUpdatedAt: artifact.updatedAt,
     existingUpdatedAt: existing?.updatedAt ?? null,
   });
+  if (__DEV__) {
+    logCoachTopologyAcceptanceTrace({
+      artifact,
+      existing,
+      overwriteAccepted: false,
+      rejectionReason: null,
+      equalitySkipped: false,
+      cacheWritePerformed: false,
+      invalidateTriggered: false,
+    });
+  }
   if (existing && artifact.updatedAt.localeCompare(existing.updatedAt) <= 0) {
     if (__DEV__) {
+      logCoachTopologyAcceptanceTrace({
+        artifact,
+        existing,
+        overwriteAccepted: false,
+        rejectionReason:
+          artifact.updatedAt === existing.updatedAt
+            ? "incoming_equal_updatedAt_rejected"
+            : "incoming_older_updatedAt_rejected",
+        equalitySkipped: artifact.updatedAt === existing.updatedAt,
+        cacheWritePerformed: false,
+        invalidateTriggered: false,
+      });
+      logCoachTopologyMatchTrace("coach_topology_store_write", artifact, {
+        incomingUpdatedAt: artifact.updatedAt,
+        existingUpdatedAt: existing.updatedAt,
+        accepted: false,
+        overwriteReason:
+          artifact.updatedAt === existing.updatedAt
+            ? "equal_or_replay_rejected_by_newest_wins"
+            : "incoming_older_rejected",
+      });
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_skipped_stale", {
         sharedAthleteId: athleteId,
         existingUpdatedAt: existing.updatedAt,
@@ -210,6 +405,21 @@ export async function writeCoachCompetitionTopology(
   map[athleteId] = artifact;
   await writeStore(map);
   if (__DEV__) {
+    logCoachTopologyAcceptanceTrace({
+      artifact,
+      existing,
+      overwriteAccepted: true,
+      rejectionReason: null,
+      equalitySkipped: false,
+      cacheWritePerformed: true,
+      invalidateTriggered: false,
+    });
+    logCoachTopologyMatchTrace("coach_topology_store_write", artifact, {
+      incomingUpdatedAt: artifact.updatedAt,
+      existingUpdatedAt: existing?.updatedAt ?? null,
+      accepted: true,
+      overwriteReason: existing ? "newer_overwrite" : "first_write",
+    });
     console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_store_overwrite", {
       sharedAthleteId: athleteId,
       updatedAt: artifact.updatedAt,
@@ -217,6 +427,30 @@ export async function writeCoachCompetitionTopology(
       totalMatchCount,
       lineageKeyCount: totalMatchCount,
       traceId: competitionTopologyTraceId ?? null,
+    });
+    console.log("[COACH_COMPETE_DETAIL_TRACE]", {
+      stage: "canonical_detail_hydrate",
+      sharedAthleteId: athleteId,
+      updatedAt: artifact.updatedAt,
+      competitionCount: artifact.competitions.length,
+      projectedMatchCounts: artifact.competitions.map((competition) => ({
+        sharedCompetitionId: competition.sharedCompetitionId,
+        matchCount: competition.matches.length,
+        matchLineageKeys: competition.matches.map((match) => match.matchLineageKey),
+      })),
+      invalidation: "competition_store_emit",
+    });
+  }
+  emitCompetitionChange("writeCoachCompetitionTopology");
+  if (__DEV__) {
+    logCoachTopologyAcceptanceTrace({
+      artifact,
+      existing,
+      overwriteAccepted: true,
+      rejectionReason: null,
+      equalitySkipped: false,
+      cacheWritePerformed: true,
+      invalidateTriggered: true,
     });
   }
   return "hydrate_store_overwrite";

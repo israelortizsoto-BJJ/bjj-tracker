@@ -1,5 +1,6 @@
 import { calendarDaysBetweenYMD, toDateKey } from "../../_domain/dateKey";
 import type { TrainingSkillBucket } from "../../ai-coach/skillBucketText";
+import { formatSecondsAsMmSs } from "../../domain/competition/matchDurationFormat";
 import { getPlacementLabel } from "../../features/competition/placementLabel";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import type { Session, TechniqueEntry } from "../../types";
@@ -827,16 +828,6 @@ function parseMatchTimeSeconds(value: unknown): number | null {
   return Math.round(minutes * 60 + seconds);
 }
 
-function formatMatchTime(totalSeconds: number | null): string | null {
-  if (totalSeconds === null || !Number.isFinite(totalSeconds) || totalSeconds < 0) {
-    return null;
-  }
-  const rounded = Math.round(totalSeconds);
-  const minutes = Math.floor(rounded / 60);
-  const seconds = rounded % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
 function resolveWinStyle(input: {
   submissionWins: number;
   pointsStyleWins: number;
@@ -1135,14 +1126,14 @@ export function computeSignals(input: SignalInput = {}): SignalOutput {
   const fastestSubmission =
     submissionWinTimes.length === 0
       ? null
-      : formatMatchTime(Math.min(...submissionWinTimes));
+      : formatSecondsAsMmSs(Math.min(...submissionWinTimes));
   const timedMatchSeconds = validMatches
     .map((match) => parseMatchTimeSeconds(match.submissionTime))
     .filter((seconds): seconds is number => seconds !== null);
   const averageMatchTime =
     timedMatchSeconds.length === 0
       ? null
-      : formatMatchTime(
+      : formatSecondsAsMmSs(
           timedMatchSeconds.reduce((sum, seconds) => sum + seconds, 0) /
             timedMatchSeconds.length,
         );

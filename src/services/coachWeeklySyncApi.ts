@@ -426,9 +426,37 @@ export async function coachSyncFetchSession(
   const competitionAggregateByAthleteId = parseCompetitionAggregateByAthleteIdField(
     p.competitionAggregateByAthleteId,
   );
+  console.log("[COMP_AGGREGATE_TRACE]", {
+    stage: "coach_fetch_received",
+    aggregateCount: Object.keys(competitionAggregateByAthleteId).length,
+    aggregates: Object.values(competitionAggregateByAthleteId).map((artifact) => ({
+      sharedAthleteId: artifact.sharedAthleteId,
+      updatedAt: artifact.updatedAt,
+      totalCompetitions: artifact.totalCompetitions,
+      totalMatches: artifact.totalMatches,
+      wins: artifact.wins,
+      losses: artifact.losses,
+      submissionRate: artifact.submissionRate,
+      fastestSubmission: artifact.fastestSubmissionSeconds,
+    })),
+  });
   const competitionTopologyByAthleteId = parseCompetitionTopologyByAthleteIdField(
     p.competitionTopologyByAthleteId,
   );
+  for (const artifact of Object.values(competitionTopologyByAthleteId)) {
+    for (const competition of artifact.competitions) {
+      console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+        stage: "coach_topology_receive",
+        sharedCompetitionId: competition.sharedCompetitionId,
+        updatedAt: artifact.updatedAt,
+        matchCount: competition.matches.length,
+        firstFiveMatchIds: competition.matches
+          .slice(0, 5)
+          .map((match) => match.matchLineageKey),
+        firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
+      });
+    }
+  }
   const trainingProofByAthleteId = parseTrainingProofByAthleteIdField(p.trainingProofByAthleteId);
   const coachMatchBreakdownArtifacts = parseCoachMatchBreakdownArtifactsField(
     p.coachMatchBreakdownArtifacts,
@@ -756,6 +784,18 @@ export async function coachSyncPutCompetitionAggregate(
     sharedAthleteId: body.sharedAthleteId,
     linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
   });
+  console.log("[COMP_AGGREGATE_TRACE]", {
+    stage: "parent_aggregate_publish_http_ok",
+    sharedAthleteId: body.sharedAthleteId,
+    updatedAt: body.updatedAt,
+    totalCompetitions: body.totalCompetitions,
+    totalMatches: body.totalMatches,
+    wins: body.wins,
+    losses: body.losses,
+    submissionRate: body.submissionRate,
+    fastestSubmission: body.fastestSubmissionSeconds,
+    httpStatus: res.status,
+  });
 }
 
 export async function coachSyncPutCompetitionTopology(
@@ -783,6 +823,18 @@ export async function coachSyncPutCompetitionTopology(
       updatedAt: body.updatedAt,
       timestamp: new Date().toISOString(),
     });
+    for (const competition of body.competitions) {
+      console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+        stage: "parent_topology_publish",
+        sharedCompetitionId: competition.sharedCompetitionId,
+        updatedAt: body.updatedAt,
+        matchCount: competition.matches.length,
+        firstFiveMatchIds: competition.matches
+          .slice(0, 5)
+          .map((match) => match.matchLineageKey),
+        firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
+      });
+    }
   }
   const res = await fetch(url, {
     method: "PUT",

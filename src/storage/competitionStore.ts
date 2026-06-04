@@ -55,8 +55,32 @@ export type CompetitionDetailForEntryResolution = {
   resolutionStrategy: CompetitionDetailResolutionStrategy;
 };
 
+export type CompetitionDetailCanonicalizationResult = {
+  migrationPerformed: boolean;
+  canonicalKey: string;
+  legacyEntryId: string;
+  matchCount: number;
+};
+
 export function competitionDetailKeyForSharedCompetitionId(sharedCompetitionId: string): string {
   return `${SHARED_COMP_LOCAL_ID_PREFIX}${sharedCompetitionId.trim()}`;
+}
+
+function isShellEntryId(id: string | null | undefined): boolean {
+  return typeof id === "string" && id.trim().startsWith(SHARED_COMP_LOCAL_ID_PREFIX);
+}
+
+function logShellAuthorityTrace(input: {
+  entryId: string | null;
+  sharedCompetitionId: string | null;
+  isShellEntry: boolean;
+  matchCount: number | null;
+  sourceCaller: string;
+  resolutionPath: string;
+  selectedAsCanonical: boolean;
+  rejectedReason: string | null;
+}): void {
+  console.log("[SHELL_AUTHORITY_TRACE]", input);
 }
 
 function safeParseStore(raw: string | null): StoreShape {
@@ -222,6 +246,18 @@ async function logCompetitionDetailInventory(all: StoreShape): Promise<void> {
         derivationMethod:
           derivedSharedCompetitionIds.length > 0 ? "match_lineage_key" : "none",
       });
+      logShellAuthorityTrace({
+        entryId: detailEntryId,
+        sharedCompetitionId: shellById.get(detailEntryId)?.sharedCompetitionId ?? null,
+        isShellEntry: isShellEntryId(detailEntryId),
+        matchCount: matches.length,
+        sourceCaller: "competitionStore.logCompetitionDetailInventory",
+        resolutionPath: "inventory_detail_blob",
+        selectedAsCanonical: false,
+        rejectedReason: isShellEntryId(detailEntryId)
+          ? "inventory_only_shell_detail_blob_present"
+          : "inventory_only_non_shell_detail_blob",
+      });
     }
 
     const duplicateSharedCompetitionClaims = [...sharedIdToDetailOwners.entries()]
@@ -258,6 +294,20 @@ export async function getCompetitionDetailForEntry(
 
   if (sharedCompetitionId) {
     const canonicalSharedShellId = competitionDetailKeyForSharedCompetitionId(sharedCompetitionId);
+    logShellAuthorityTrace({
+      entryId: canonicalSharedShellId,
+      sharedCompetitionId,
+      isShellEntry: isShellEntryId(canonicalSharedShellId),
+      matchCount: hasValidMatches(all[canonicalSharedShellId])
+        ? all[canonicalSharedShellId].matches.length
+        : null,
+      sourceCaller: "competitionStore.getCompetitionDetailForEntry",
+      resolutionPath: "canonical_shared_shell_id_probe",
+      selectedAsCanonical: hasValidMatches(all[canonicalSharedShellId]),
+      rejectedReason: hasValidMatches(all[canonicalSharedShellId])
+        ? null
+        : "canonical_shell_detail_missing_or_invalid",
+    });
     if (hasValidMatches(all[canonicalSharedShellId])) {
       logCompetitionDetailCanonicalization({
         legacyEntryId: entryId || null,
@@ -281,6 +331,16 @@ export async function getCompetitionDetailForEntry(
   }
 
   if (entryId && hasValidMatches(all[entryId])) {
+    logShellAuthorityTrace({
+      entryId,
+      sharedCompetitionId,
+      isShellEntry: isShellEntryId(entryId),
+      matchCount: all[entryId].matches.length,
+      sourceCaller: "competitionStore.getCompetitionDetailForEntry",
+      resolutionPath: "direct_entry_id_probe",
+      selectedAsCanonical: true,
+      rejectedReason: null,
+    });
     logCompetitionDetailCanonicalization({
       legacyEntryId: entryId,
       canonicalKey: sharedCompetitionId
@@ -311,6 +371,23 @@ export async function getCompetitionDetailForEntry(
         row.kidId === entry.kidId &&
         (row.sharedCompetitionId ?? "").trim() === sharedCompetitionId,
     );
+    for (const row of exactRows) {
+      logShellAuthorityTrace({
+        entryId: row.id,
+        sharedCompetitionId,
+        isShellEntry: isShellEntryId(row.id),
+        matchCount: hasValidMatches(all[row.id]) ? all[row.id].matches.length : null,
+        sourceCaller: "competitionStore.getCompetitionDetailForEntry",
+        resolutionPath: "exact_shared_competition_match_candidate",
+        selectedAsCanonical: exactRows.length === 1 && hasValidMatches(all[row.id]),
+        rejectedReason:
+          exactRows.length > 1
+            ? "ambiguous_exact_shared_competition_match"
+            : hasValidMatches(all[row.id])
+              ? null
+              : "candidate_detail_missing_or_invalid",
+      });
+    }
     if (exactRows.length === 1) {
       const resolvedEntryId = exactRows[0].id;
       if (!hasValidMatches(all[resolvedEntryId])) {
@@ -406,10 +483,51 @@ export async function mergeCompetitionMatchDetailIntoEntries(
 ): Promise<KidCompetitionEntryWithMatchDetail[]> {
   return Promise.all(
     entries.map(async (entry) => {
-      const { detail } = await getCompetitionDetailForEntry(entry);
+      const { detail, resolvedEntryId, resolutionStrategy } = await getCompetitionDetailForEntry(entry);
+      const matches = Array.isArray(detail?.matches) ? [...detail.matches] : [];
+      const rawShellMatches = (entry as { matches?: unknown }).matches;
+      const shellMatchCount = Array.isArray(rawShellMatches) ? rawShellMatches.length : 0;
+      if (__DEV__) {
+        console.log("[COACH_COMPETE_DETAIL_TRACE]", {
+          stage: "merged_detail_recompute",
+          entryId: entry.id,
+          sharedAthleteId: entry.sharedAthleteId ?? null,
+          sharedCompetitionId: entry.sharedCompetitionId ?? null,
+          resolvedEntryId,
+          resolutionStrategy,
+          projectedMatchCount: matches.length,
+          projectedMatchIds: matches.map((match) => match.id),
+        });
+        console.log("[TOPOLOGY_BUILD_SOURCE_TRACE]", {
+          stage: "canonical_detail_resolver",
+          entryId: entry.id,
+          sharedCompetitionId: entry.sharedCompetitionId ?? null,
+          shellMatchCount,
+          canonicalDetailMatchCount: Array.isArray(detail?.matches) ? detail.matches.length : 0,
+          mergedMatchCount: matches.length,
+          sourceStrategy: resolutionStrategy,
+          resolvedEntryId,
+          firstFiveMatchIds: matches.slice(0, 5).map((match) => match.id),
+        });
+        logShellAuthorityTrace({
+          entryId: entry.id,
+          sharedCompetitionId: entry.sharedCompetitionId ?? null,
+          isShellEntry: isShellEntryId(entry.id),
+          matchCount: matches.length,
+          sourceCaller: "competitionStore.mergeCompetitionMatchDetailIntoEntries",
+          resolutionPath: `merge_detail_${resolutionStrategy}`,
+          selectedAsCanonical: resolutionStrategy === "canonical_shared_shell_id",
+          rejectedReason:
+            resolutionStrategy === "canonical_shared_shell_id"
+              ? null
+              : isShellEntryId(entry.id)
+                ? "shell_entry_merged_with_non_shell_resolution"
+                : "non_shell_entry_merge",
+        });
+      }
       return {
         ...entry,
-        matches: Array.isArray(detail?.matches) ? [...detail.matches] : [],
+        matches,
       };
     }),
   );
@@ -428,6 +546,22 @@ export async function getKidCompetitionEntriesWithMatchDetailForKid(
     return [];
   }
   const entries = await getKidCompetitionEntriesForKid(k);
+  if (__DEV__) {
+    for (const entry of entries) {
+      logShellAuthorityTrace({
+        entryId: entry.id,
+        sharedCompetitionId: entry.sharedCompetitionId ?? null,
+        isShellEntry: isShellEntryId(entry.id),
+        matchCount: null,
+        sourceCaller: "competitionStore.getKidCompetitionEntriesWithMatchDetailForKid",
+        resolutionPath: "pre_merge_entry_selector",
+        selectedAsCanonical: false,
+        rejectedReason: isShellEntryId(entry.id)
+          ? "shell_entry_in_selector_input"
+          : "non_shell_entry_in_selector_input",
+      });
+    }
+  }
   const merged = await mergeCompetitionMatchDetailIntoEntries(entries);
   console.log("[COMP_SYNC_TRACE] getKidCompetitionEntriesWithMatchDetailForKid", {
     requestedKidId: k,
@@ -458,6 +592,22 @@ export async function getKidCompetitionEntriesWithMatchDetailForSharedAthlete(
   if (!aid) return [];
   const all = await getKidCompetitionEntries();
   const entries = all.filter((e) => (e.sharedAthleteId ?? "").trim() === aid);
+  if (__DEV__) {
+    for (const entry of entries) {
+      logShellAuthorityTrace({
+        entryId: entry.id,
+        sharedCompetitionId: entry.sharedCompetitionId ?? null,
+        isShellEntry: isShellEntryId(entry.id),
+        matchCount: null,
+        sourceCaller: "competitionStore.getKidCompetitionEntriesWithMatchDetailForSharedAthlete",
+        resolutionPath: "pre_merge_shared_athlete_selector",
+        selectedAsCanonical: false,
+        rejectedReason: isShellEntryId(entry.id)
+          ? "shell_entry_in_shared_athlete_selector_input"
+          : "non_shell_entry_in_shared_athlete_selector_input",
+      });
+    }
+  }
   const merged = await mergeCompetitionMatchDetailIntoEntries(entries);
   const artifactSet = peekCoachMatchBreakdownArtifactSet(aid);
   const coachMatchBreakdownArtifactsForTrace = artifactSet ? { [aid]: artifactSet } : undefined;
@@ -576,6 +726,15 @@ export async function setCompetitionDetailForEntryId(
     lineageKey: detail.matches?.[0]?.id ?? null,
     phaseDetail: "match_detail_persisted",
   });
+  if (__DEV__) {
+    console.log("[COMPETE_REFRESH_TRACE]", {
+      stage: "save_lifecycle_completion",
+      entryId,
+      matchCount: matches.length,
+      matchIds: matches.map((m) => m.id),
+      invalidateTrigger: "setCompetitionDetailForEntryId",
+    });
+  }
   emitCompetitionChange("setCompetitionDetailForEntryId");
 }
 
@@ -599,10 +758,10 @@ export async function setCompetitionDetailForEntry(
 
 export async function copyCompetitionDetailToCanonicalKeyForEntry(
   entry: KidCompetitionEntry,
-): Promise<void> {
+): Promise<CompetitionDetailCanonicalizationResult | null> {
   const legacyEntryId = entry.id.trim();
   const sharedCompetitionId = entry.sharedCompetitionId?.trim() || "";
-  if (!legacyEntryId || !sharedCompetitionId) return;
+  if (!legacyEntryId || !sharedCompetitionId) return null;
 
   const canonicalKey = competitionDetailKeyForSharedCompetitionId(sharedCompetitionId);
   const all = safeParseStore(await AsyncStorage.getItem(DETAIL_STORAGE_KEY));
@@ -616,19 +775,28 @@ export async function copyCompetitionDetailToCanonicalKeyForEntry(
     emitCompetitionChange("copyCompetitionDetailToCanonicalKeyForEntry");
   }
 
+  const matchCount = canCopy
+    ? legacyDetail.matches.length
+    : hasValidMatches(canonicalDetail)
+      ? canonicalDetail.matches.length
+      : hasValidMatches(legacyDetail)
+        ? legacyDetail.matches.length
+        : 0;
+
   logCompetitionDetailCanonicalization({
     legacyEntryId,
     canonicalKey,
     migrationPerformed: canCopy,
     fallbackUsed: false,
-    matchCount: canCopy
-      ? legacyDetail.matches.length
-      : hasValidMatches(canonicalDetail)
-        ? canonicalDetail.matches.length
-        : hasValidMatches(legacyDetail)
-          ? legacyDetail.matches.length
-          : 0,
+    matchCount,
   });
+
+  return {
+    migrationPerformed: canCopy,
+    canonicalKey,
+    legacyEntryId,
+    matchCount,
+  };
 }
 
 export async function removeCompetitionDetailForEntryId(entryId: string): Promise<void> {

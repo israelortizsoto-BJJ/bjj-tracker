@@ -77,6 +77,18 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
         lineageKeyCount: totalMatches,
         updatedAt: artifact.updatedAt,
       });
+      for (const competition of artifact.competitions) {
+        console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+          stage: "parent_topology_publish",
+          sharedCompetitionId: competition.sharedCompetitionId,
+          updatedAt: artifact.updatedAt,
+          matchCount: competition.matches.length,
+          firstFiveMatchIds: competition.matches
+            .slice(0, 5)
+            .map((match) => match.matchLineageKey),
+          firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
+        });
+      }
       await coachSyncPutCompetitionTopology(
         target.linkToken,
         target.parentWriterSecret,

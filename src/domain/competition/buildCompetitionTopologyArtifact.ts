@@ -1,6 +1,7 @@
 import { normalizeStoredSubmissionType } from "../../features/competition/submissionTypes";
 import { logCompetitionTopologyTrace } from "../../dev/competitionTopologyTrace";
 import {
+  competitionDetailKeyForSharedCompetitionId,
   getKidCompetitionEntriesWithMatchDetailForSharedAthlete,
   type CompetitionDetailMatchSnapshot,
   type KidCompetitionEntryWithMatchDetail,
@@ -143,6 +144,23 @@ function buildCompetitionRow(
   };
 }
 
+function logTopologyMatchTrace(
+  stage: string,
+  competition: SyncedCompetitionTopology,
+  artifactUpdatedAt: string,
+  extra?: Record<string, unknown>,
+): void {
+  console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+    stage,
+    sharedCompetitionId: competition.sharedCompetitionId,
+    updatedAt: artifactUpdatedAt,
+    matchCount: competition.matches.length,
+    firstFiveMatchIds: competition.matches.slice(0, 5).map((match) => match.matchLineageKey),
+    firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
+    ...extra,
+  });
+}
+
 export function buildCompetitionTopologyArtifactFromEntries(
   sharedAthleteId: string,
   entries: readonly KidCompetitionEntryWithMatchDetail[],
@@ -155,6 +173,36 @@ export function buildCompetitionTopologyArtifactFromEntries(
 
   const seenCompetitionIds = new Set<string>();
   const linkedEntries = entries.filter((entry) => Boolean(entry.sharedCompetitionId?.trim()));
+  for (const entry of linkedEntries) {
+    const rawShellMatches = (entry as { matches?: unknown }).matches;
+    const shellMatchCount = Array.isArray(rawShellMatches) ? rawShellMatches.length : 0;
+    const sharedCompetitionId = entry.sharedCompetitionId ?? null;
+    const isShellEntry =
+      Boolean(sharedCompetitionId) &&
+      entry.id === competitionDetailKeyForSharedCompetitionId(sharedCompetitionId ?? "");
+    console.log("[TOPOLOGY_BUILD_SOURCE_TRACE]", {
+      stage: "topology_builder_input",
+      entryId: entry.id,
+      sharedCompetitionId,
+      shellMatchCount,
+      canonicalDetailMatchCount: entry.matches.length,
+      mergedMatchCount: entry.matches.length,
+      sourceStrategy: "merged_canonical_detail_input",
+      firstFiveMatchIds: entry.matches.slice(0, 5).map((match) => match.id),
+    });
+    console.log("[SHELL_AUTHORITY_TRACE]", {
+      entryId: entry.id,
+      sharedCompetitionId,
+      isShellEntry,
+      matchCount: entry.matches.length,
+      sourceCaller: "buildCompetitionTopologyArtifact.buildCompetitionTopologyArtifactFromEntries",
+      resolutionPath: "topology_builder_input",
+      selectedAsCanonical: isShellEntry,
+      rejectedReason: isShellEntry
+        ? null
+        : "non_shell_entry_topology_input",
+    });
+  }
   const competitions = linkedEntries.map((entry) => {
     const competition = buildCompetitionRow(athleteId, entry, traceId);
     if (seenCompetitionIds.has(competition.sharedCompetitionId)) {
@@ -184,6 +232,24 @@ export function buildCompetitionTopologyArtifactFromEntries(
     })),
     updatedAt: artifact.updatedAt,
   });
+  for (const competition of competitions) {
+    logTopologyMatchTrace("parent_topology_build", competition, artifact.updatedAt, {
+      sharedAthleteId: athleteId,
+    });
+    console.log("[TOPOLOGY_BUILD_SOURCE_TRACE]", {
+      stage: "topology_artifact_output",
+      entryId: null,
+      sharedCompetitionId: competition.sharedCompetitionId,
+      shellMatchCount: null,
+      canonicalDetailMatchCount: null,
+      mergedMatchCount: competition.matches.length,
+      sourceStrategy: "topology_matches_from_merged_entry_matches",
+      firstFiveMatchIds: competition.matches
+        .slice(0, 5)
+        .map((match) => match.matchLineageKey),
+      finalTopologyMatchCount: competition.matches.length,
+    });
+  }
   logCompetitionTopologyTrace("[COMP_TOPOLOGY_TRACE]", "build_summary", {
     traceId: traceId ?? null,
     sharedAthleteId: athleteId,

@@ -22,6 +22,7 @@ import {
 import {
   getCoachCompetitionAggregate,
   peekCoachCompetitionAggregate,
+  useCoachCompetitionAggregateVersion,
 } from "../storage/coachCompetitionAggregateStore";
 import {
   getCoachTrainingProof,
@@ -73,7 +74,9 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     );
 
   const hydrationVersion = useCoachSyncHydrationVersion();
+  const coachAggregateVersion = useCoachCompetitionAggregateVersion();
   const prevHydrationVersionRef = useRef(hydrationVersion);
+  const prevCoachAggregateVersionRef = useRef(coachAggregateVersion);
 
   const coachAggregatePeek =
     deviceRole === "coach" && trimmedAthlete
@@ -91,11 +94,14 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       setCoachAggregate(null);
       setCoachTrainingProof(null);
       prevHydrationVersionRef.current = hydrationVersion;
+      prevCoachAggregateVersionRef.current = coachAggregateVersion;
       return;
     }
 
     const triggeredByHydrationInvalidation =
       prevHydrationVersionRef.current !== hydrationVersion;
+    const triggeredByAggregateInvalidation =
+      prevCoachAggregateVersionRef.current !== coachAggregateVersion;
 
     if (__DEV__ && triggeredByHydrationInvalidation) {
       console.log("[COACH_SYNC_HYDRATION] useSignals_overlay_reload", {
@@ -104,8 +110,17 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
         deviceRole,
       });
     }
+    if (__DEV__ && triggeredByAggregateInvalidation) {
+      console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+        stage: "useSignals_aggregate_reload",
+        athleteId: trimmedAthlete,
+        coachAggregateVersion,
+        previousCoachAggregateVersion: prevCoachAggregateVersionRef.current,
+      });
+    }
 
     prevHydrationVersionRef.current = hydrationVersion;
+    prevCoachAggregateVersionRef.current = coachAggregateVersion;
 
     let mounted = true;
     const athleteId = trimmedAthlete;
@@ -117,6 +132,17 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     void getCoachCompetitionAggregate(athleteId).then((artifact) => {
       if (!mounted) return;
       setCoachAggregate(artifact);
+      if (__DEV__) {
+        console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+          stage: "useSignals_aggregate_state_set",
+          athleteId,
+          aggregateUpdatedAt: artifact?.updatedAt ?? null,
+          totalMatches: artifact?.totalMatches ?? null,
+          wins: artifact?.wins ?? null,
+          losses: artifact?.losses ?? null,
+          coachAggregateVersion,
+        });
+      }
     });
     void getCoachTrainingProof(athleteId).then((artifact) => {
       if (!mounted) return;
@@ -126,12 +152,26 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     return () => {
       mounted = false;
     };
-  }, [hydrationVersion, deviceRole, trimmedAthlete]);
+  }, [hydrationVersion, coachAggregateVersion, deviceRole, trimmedAthlete]);
 
   return useMemo(() => {
     const hasAthlete = trimmedAthlete.length > 0;
 
     if (__DEV__) {
+      console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+        stage: "useSignals_recompute",
+        athleteId: hasAthlete ? trimmedAthlete : null,
+        deviceRole,
+        coachAggregateVersion,
+        aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
+        aggregateRecord: effectiveCoachAggregate
+          ? {
+              wins: effectiveCoachAggregate.wins,
+              losses: effectiveCoachAggregate.losses,
+              totalMatches: effectiveCoachAggregate.totalMatches,
+            }
+          : null,
+      });
       const prevScope = lastSignalsAthleteScopeRef.current;
       if (prevScope !== null && prevScope !== trimmedAthlete) {
         // TEMP Phase 1 authority stabilization
@@ -250,6 +290,27 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           console.log("[COMP_AGG_TRACE] overlay_missing", {
             sharedAthleteId: trimmedAthlete,
           });
+          console.log("[COMP_AGGREGATE_TRACE]", {
+            stage: "useSignals_overlay_skipped",
+            sharedAthleteId: trimmedAthlete,
+            reason: "overlay_missing",
+            localValues: {
+              totalMatches: computed.competition.totalMatches,
+              wins: computed.competition.wins,
+              losses: computed.competition.losses,
+              winRate: computed.competition.winRate,
+              submissionRate: computed.competition.submissionRate,
+            },
+          });
+          console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+            stage: "aggregate_overlay_application",
+            sharedAthleteId: trimmedAthlete,
+            applied: false,
+            reason: "overlay_missing",
+            localRecord: computed.competition.record,
+            finalRecord: withCoachOverlays.competition.record,
+            coachAggregateVersion,
+          });
         }
       } else if (!hasBoundedAggregateVisibility(aggregate, trimmedAthlete)) {
         if (__DEV__) {
@@ -258,6 +319,37 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
             totalMatches: aggregate.totalMatches,
             wins: aggregate.wins,
             losses: aggregate.losses,
+          });
+          console.log("[COMP_AGGREGATE_TRACE]", {
+            stage: "useSignals_overlay_skipped",
+            sharedAthleteId: trimmedAthlete,
+            reason: "overlay_hidden_visibility",
+            localValues: {
+              totalMatches: computed.competition.totalMatches,
+              wins: computed.competition.wins,
+              losses: computed.competition.losses,
+              winRate: computed.competition.winRate,
+              submissionRate: computed.competition.submissionRate,
+            },
+            overlayValues: {
+              updatedAt: aggregate.updatedAt,
+              totalCompetitions: aggregate.totalCompetitions,
+              totalMatches: aggregate.totalMatches,
+              wins: aggregate.wins,
+              losses: aggregate.losses,
+              winRate: aggregate.winRate,
+              submissionRate: aggregate.submissionRate,
+            },
+          });
+          console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+            stage: "aggregate_overlay_application",
+            sharedAthleteId: trimmedAthlete,
+            applied: false,
+            reason: "overlay_hidden_visibility",
+            localRecord: computed.competition.record,
+            overlayRecord: { wins: aggregate.wins, losses: aggregate.losses },
+            finalRecord: withCoachOverlays.competition.record,
+            coachAggregateVersion,
           });
         }
       } else {
@@ -270,6 +362,48 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           });
         }
         withCoachOverlays = overlayCompetitionAggregateSignals(withCoachOverlays, aggregate);
+        if (__DEV__) {
+          console.log("[COMP_AGGREGATE_TRACE]", {
+            stage: "useSignals_overlay_applied",
+            sharedAthleteId: trimmedAthlete,
+            localValues: {
+              totalMatches: computed.competition.totalMatches,
+              wins: computed.competition.wins,
+              losses: computed.competition.losses,
+              winRate: computed.competition.winRate,
+              submissionRate: computed.competition.submissionRate,
+            },
+            overlayValues: {
+              updatedAt: aggregate.updatedAt,
+              totalCompetitions: aggregate.totalCompetitions,
+              totalMatches: aggregate.totalMatches,
+              wins: aggregate.wins,
+              losses: aggregate.losses,
+              winRate: aggregate.winRate,
+              submissionRate: aggregate.submissionRate,
+            },
+            finalValues: {
+              totalMatches: withCoachOverlays.competition.totalMatches,
+              wins: withCoachOverlays.competition.wins,
+              losses: withCoachOverlays.competition.losses,
+              winRate: withCoachOverlays.competition.winRate,
+              submissionRate: withCoachOverlays.competition.submissionRate,
+            },
+          });
+          console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+            stage: "aggregate_overlay_application",
+            sharedAthleteId: trimmedAthlete,
+            applied: true,
+            localRecord: computed.competition.record,
+            overlayRecord: { wins: aggregate.wins, losses: aggregate.losses },
+            finalRecord: withCoachOverlays.competition.record,
+            totalMatches: withCoachOverlays.competition.totalMatches,
+            winRate: withCoachOverlays.competition.winRate,
+            submissionRate: withCoachOverlays.competition.submissionRate,
+            averageMatchTime: withCoachOverlays.competition.averageMatchTime,
+            coachAggregateVersion,
+          });
+        }
       }
     }
 
@@ -372,6 +506,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     coachTrainingProof,
     coachAggregatePeek,
     coachTrainingProofPeek,
+    coachAggregateVersion,
     deviceRole,
     linkedKidTrim,
     referenceDate,

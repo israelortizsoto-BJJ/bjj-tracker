@@ -88,6 +88,16 @@ export function projectCompetitionCompeteView(input: {
       : null;
 
   if (!topology) {
+    console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+      stage: "coach_compete_projection",
+      sharedCompetitionId: sharedCompetitionId || null,
+      updatedAt: topologyArtifact?.updatedAt ?? null,
+      matchCount: fallbackMatches.length,
+      firstFiveMatchIds: fallbackMatches.slice(0, 5).map((match) => match.id),
+      firstFiveMatchResults: fallbackMatches.slice(0, 5).map((match) => match.matchResult),
+      accepted: false,
+      overwriteReason: "missing_topology_fallback_used",
+    });
     console.log("[COACH_OVERLAY_SYNC_TRACE]", {
       stage: "overlay_merge_skipped_missing_topology",
       sharedAthleteId: sharedAthleteId || null,
@@ -136,6 +146,16 @@ export function projectCompetitionCompeteView(input: {
     artifactCount: overlaysByLineageKey.size,
     mergeCount: attachedOverlayCount,
     parentRenderCount: matches.filter((match) => (match.coachNote ?? "").trim().length > 0).length,
+  });
+  console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+    stage: "coach_compete_projection",
+    sharedCompetitionId,
+    updatedAt: topologyArtifact?.updatedAt ?? null,
+    matchCount: matches.length,
+    firstFiveMatchIds: matches.slice(0, 5).map((match) => match.id),
+    firstFiveMatchResults: matches.slice(0, 5).map((match) => match.matchResult),
+    accepted: true,
+    overwriteReason: "topology_projection_used",
   });
   if (__DEV__) {
     console.log("[COMP_PROJECTION_TRACE] projection_topology_used", {

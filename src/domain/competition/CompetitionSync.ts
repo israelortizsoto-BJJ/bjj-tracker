@@ -84,6 +84,37 @@ function assertDevWritableTarget(target: { linkToken: string; parentWriterSecret
   }
 }
 
+function scheduleCompetitionAggregatePublishAfterMutation(input: {
+  mutationType: "create" | "edit" | "delete";
+  sharedAthleteId: string | null | undefined;
+  sharedCompetitionId?: string | null;
+  triggerReason: string;
+}): void {
+  const sharedAthleteId = input.sharedAthleteId?.trim() ?? "";
+  if (!sharedAthleteId) {
+    if (__DEV__) {
+      console.log("[COMP_AGGREGATE_PUBLISH_TRIGGER_TRACE]", {
+        mutationType: input.mutationType,
+        sharedAthleteId: null,
+        sharedCompetitionId: input.sharedCompetitionId ?? null,
+        triggerReason: input.triggerReason,
+        aggregatePublishScheduled: false,
+        skipReason: "missing_sharedAthleteId",
+      });
+    }
+    return;
+  }
+
+  console.log("[COMP_AGGREGATE_PUBLISH_TRIGGER_TRACE]", {
+    mutationType: input.mutationType,
+    sharedAthleteId,
+    sharedCompetitionId: input.sharedCompetitionId ?? null,
+    triggerReason: input.triggerReason,
+    aggregatePublishScheduled: true,
+  });
+  schedulePublishParentCompetitionAggregate(sharedAthleteId);
+}
+
 export async function createCompetition(
   input: FamilyCreateCompetitionInput | KidCreateCompetitionInput,
 ): Promise<CreateCompetitionResult> {
@@ -277,7 +308,12 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         surface: "CompetitionSync.createCompetitionFamily",
         localStoreAffected: "kidCompetitionStore",
       });
-      schedulePublishParentCompetitionAggregate(linkedAthleteId);
+      scheduleCompetitionAggregatePublishAfterMutation({
+        mutationType: "create",
+        sharedAthleteId: linkedAthleteId,
+        sharedCompetitionId: remote.competition.id,
+        triggerReason: "createCompetitionFamily_after_local_shell_persisted",
+      });
       schedulePublishParentCompetitionTopology(linkedAthleteId);
       logCompSave("COMPLETE", {
         competitionId: createdRow.id,
@@ -448,7 +484,12 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         operationKind: "local",
         surface: "CompetitionSync.createCompetitionKid",
       });
-      schedulePublishParentCompetitionAggregate(trimmedResolved);
+      scheduleCompetitionAggregatePublishAfterMutation({
+        mutationType: "create",
+        sharedAthleteId: trimmedResolved,
+        sharedCompetitionId: remote.competition.id,
+        triggerReason: "createCompetitionKid_after_detail_persisted",
+      });
       schedulePublishParentCompetitionTopology(trimmedResolved);
       logCompSave("COMPLETE", {
         competitionId: created.id,
@@ -509,7 +550,12 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
       surface: "CompetitionSync.createCompetitionKid",
       phaseDetail: "local_only_but_has_resolved_shared",
     });
-    schedulePublishParentCompetitionAggregate(trimmedResolved);
+    scheduleCompetitionAggregatePublishAfterMutation({
+      mutationType: "create",
+      sharedAthleteId: trimmedResolved,
+      sharedCompetitionId: created.sharedCompetitionId ?? null,
+      triggerReason: "createCompetitionKid_local_after_detail_persisted",
+    });
     schedulePublishParentCompetitionTopology(trimmedResolved);
   }
   logCompSave("COMPLETE", {
@@ -652,7 +698,12 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
       operationKind: "local",
       surface: "CompetitionSync.updateCompetitionFamily",
     });
-    schedulePublishParentCompetitionAggregate(athleteForRemote);
+    scheduleCompetitionAggregatePublishAfterMutation({
+      mutationType: "edit",
+      sharedAthleteId: athleteForRemote,
+      sharedCompetitionId: workerCompetitionId ?? null,
+      triggerReason: "updateCompetitionFamily_after_local_shell_persisted",
+    });
     schedulePublishParentCompetitionTopology(athleteForRemote);
   }
   logCompSave("COMPLETE", {
@@ -801,7 +852,12 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
       surface: "CompetitionSync.updateCompetitionKid",
       overlayCount: matchSnapshots.length,
     });
-    schedulePublishParentCompetitionAggregate(publishAthleteId);
+    scheduleCompetitionAggregatePublishAfterMutation({
+      mutationType: "edit",
+      sharedAthleteId: publishAthleteId,
+      sharedCompetitionId: workerCompetitionId ?? null,
+      triggerReason: "updateCompetitionKid_after_detail_persisted",
+    });
     schedulePublishParentCompetitionTopology(publishAthleteId);
   }
   logCompSave("COMPLETE", {

@@ -1138,7 +1138,47 @@ export default function SummaryScreen() {
     sessions: sessionsRaw,
     competitions,
   });
+  const previousCompetitionRenderRef = useRef<{
+    wins: number;
+    losses: number;
+    totalMatches: number;
+    winRate: number | null;
+    submissionRate: number | null;
+    averageMatchTime: string | null;
+  } | null>(null);
   const weeklySessionCountForSummary = signals.frequency.weeklySessionCount;
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const current = {
+      wins: signals.competition.record.wins,
+      losses: signals.competition.record.losses,
+      totalMatches: signals.competition.totalMatches,
+      winRate: signals.competition.winRate,
+      submissionRate: signals.competition.submissionRate,
+      averageMatchTime: signals.competition.averageMatchTime,
+    };
+    const previous = previousCompetitionRenderRef.current;
+    console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+      stage: "summary_vm_recompute",
+      deviceRole,
+      athleteId: activeAthleteId.trim() || null,
+      previousRecord: previous ? { wins: previous.wins, losses: previous.losses } : null,
+      renderedRecord: { wins: current.wins, losses: current.losses },
+      previousTotals: previous,
+      renderedTotals: current,
+    });
+    previousCompetitionRenderRef.current = current;
+  }, [
+    activeAthleteId,
+    deviceRole,
+    signals.competition.record.wins,
+    signals.competition.record.losses,
+    signals.competition.totalMatches,
+    signals.competition.winRate,
+    signals.competition.submissionRate,
+    signals.competition.averageMatchTime,
+  ]);
 
   useEffect(() => {
     if (!__DEV__ || !summaryTraceReady) return;

@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useSyncExternalStore } from "react";
 
 import type { SyncedCompetitionAggregateArtifact } from "../types/coachWeeklySync";
 import { StorageKeys } from "./storageKeys";
@@ -7,9 +8,55 @@ type AggregateByAthleteId = Record<string, SyncedCompetitionAggregateArtifact>;
 
 /** In-process mirror of the last disk read/write for synchronous coach Summary overlay reads. */
 let aggregatesMemory: AggregateByAthleteId | null = null;
+const listeners = new Set<() => void>();
+let aggregateVersion = 0;
 
 function syncAggregatesMemory(map: AggregateByAthleteId): void {
   aggregatesMemory = map;
+}
+
+function emitCoachCompetitionAggregateChange(context: {
+  reason: string;
+  sharedAthleteId?: string | null;
+  updatedAt?: string | null;
+}): void {
+  aggregateVersion += 1;
+  if (__DEV__) {
+    console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+      stage: "subscriber_notification",
+      reason: context.reason,
+      sharedAthleteId: context.sharedAthleteId ?? null,
+      updatedAt: context.updatedAt ?? null,
+      aggregateVersion,
+      listenerCount: listeners.size,
+    });
+  }
+  for (const listener of listeners) {
+    try {
+      listener();
+    } catch {
+      // ignore subscriber errors
+    }
+  }
+}
+
+export function getCoachCompetitionAggregateVersion(): number {
+  return aggregateVersion;
+}
+
+export function subscribeCoachCompetitionAggregate(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function useCoachCompetitionAggregateVersion(): number {
+  return useSyncExternalStore(
+    subscribeCoachCompetitionAggregate,
+    getCoachCompetitionAggregateVersion,
+    getCoachCompetitionAggregateVersion,
+  );
 }
 
 /** Read-only sync peek (memory only; returns null until store has been read or written). */
@@ -63,6 +110,20 @@ function normalizeAggregateMap(raw: unknown): AggregateByAthleteId {
   return out;
 }
 
+function summarizeAggregate(artifact: SyncedCompetitionAggregateArtifact | null) {
+  if (!artifact) return null;
+  return {
+    sharedAthleteId: artifact.sharedAthleteId,
+    updatedAt: artifact.updatedAt,
+    totalCompetitions: artifact.totalCompetitions,
+    totalMatches: artifact.totalMatches,
+    wins: artifact.wins,
+    losses: artifact.losses,
+    submissionRate: artifact.submissionRate,
+    fastestSubmission: artifact.fastestSubmissionSeconds,
+  };
+}
+
 async function readStore(): Promise<AggregateByAthleteId> {
   const map = safeParseStore(
     await AsyncStorage.getItem(StorageKeys.coachCompetitionAggregatesByAthleteId),
@@ -113,6 +174,34 @@ export async function writeCoachCompetitionAggregate(
   }
 
   const map = await readStore();
+  const existing = map[athleteId] ?? null;
+  const comparison = existing
+    ? artifact.updatedAt.localeCompare(existing.updatedAt)
+    : 1;
+  const accepted = !existing || comparison >= 0;
+
+  if (__DEV__) {
+    console.log("[COMP_AGGREGATE_TRACE]", {
+      stage: "coach_aggregate_store_write_decision",
+      sharedAthleteId: athleteId,
+      existing: summarizeAggregate(existing),
+      incoming: summarizeAggregate(artifact),
+      accepted,
+      overwriteReason: !existing
+        ? "no_existing_artifact"
+        : comparison > 0
+          ? "incoming_newer"
+          : comparison === 0
+            ? "same_timestamp_refresh"
+            : "incoming_older_rejected",
+      updatedAtComparison: comparison,
+    });
+  }
+
+  if (!accepted) {
+    return;
+  }
+
   map[athleteId] = artifact;
   await writeStore(map);
 
@@ -121,7 +210,23 @@ export async function writeCoachCompetitionAggregate(
       sharedAthleteId: athleteId,
       updatedAt: artifact.updatedAt,
     });
+    console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+      stage: "aggregate_store_write",
+      sharedAthleteId: athleteId,
+      existing: summarizeAggregate(existing),
+      incoming: summarizeAggregate(artifact),
+      overwriteReason: !existing
+        ? "no_existing_artifact"
+        : comparison > 0
+          ? "incoming_newer"
+          : "same_timestamp_refresh",
+    });
   }
+  emitCoachCompetitionAggregateChange({
+    reason: "writeCoachCompetitionAggregate",
+    sharedAthleteId: athleteId,
+    updatedAt: artifact.updatedAt,
+  });
 }
 
 export async function removeCoachCompetitionAggregate(
@@ -141,6 +246,10 @@ export async function removeCoachCompetitionAggregate(
       reason: "remove",
     });
   }
+  emitCoachCompetitionAggregateChange({
+    reason: "removeCoachCompetitionAggregate",
+    sharedAthleteId: athleteId,
+  });
 }
 
 /**
@@ -169,4 +278,8 @@ export async function pruneCoachCompetitionAggregates(
       allowedCount: allowed.size,
     });
   }
+  emitCoachCompetitionAggregateChange({
+    reason: "pruneCoachCompetitionAggregates",
+    sharedAthleteId: removed.join(",") || null,
+  });
 }

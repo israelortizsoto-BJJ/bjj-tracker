@@ -68,6 +68,12 @@ export function emitCompetitionChange(caller?: string) {
       phaseDetail: caller ?? "emitCompetitionChange",
       competitionVersionNext: competitionVersion + 1,
     });
+    console.log("[COMPETE_REFRESH_TRACE]", {
+      stage: "invalidate_trigger",
+      caller: caller ?? "emitCompetitionChange",
+      competitionVersionBefore: competitionVersion,
+      competitionVersionAfter: competitionVersion + 1,
+    });
   }
   console.log("[COMPETITION EMIT]");
   competitionVersion += 1;
@@ -233,6 +239,23 @@ function persistKidCompetitionEntryShape(entry: KidCompetitionEntry): KidCompeti
 
 /** Local rows mirrored from the worker use `id` `shared-comp-<workerCompetitionId>`. */
 const SHARED_COMP_LOCAL_ID_PREFIX = "shared-comp-";
+
+function isShellEntryId(id: string | null | undefined): boolean {
+  return typeof id === "string" && id.trim().startsWith(SHARED_COMP_LOCAL_ID_PREFIX);
+}
+
+function logShellAuthorityTrace(input: {
+  entryId: string | null;
+  sharedCompetitionId: string | null;
+  isShellEntry: boolean;
+  matchCount: number | null;
+  sourceCaller: string;
+  resolutionPath: string;
+  selectedAsCanonical: boolean;
+  rejectedReason: string | null;
+}): void {
+  console.log("[SHELL_AUTHORITY_TRACE]", input);
+}
 
 function trimSharedIdField(raw: unknown): string | undefined {
   if (typeof raw !== "string") return undefined;
@@ -552,6 +575,16 @@ export async function upsertSharedCompetitionsForKid(
     const existingLocalId = existing?.id ?? null;
     const generatedNextId = `shared-comp-${r.id}`;
     const reusedExistingId = Boolean(existing?.id);
+    logShellAuthorityTrace({
+      entryId: existing?.id ?? generatedNextId,
+      sharedCompetitionId: r.id,
+      isShellEntry: isShellEntryId(existing?.id ?? generatedNextId),
+      matchCount: null,
+      sourceCaller: "kidCompetitionStore.upsertSharedCompetitionsForKid",
+      resolutionPath: existing ? "shared_shell_reconcile_reuse" : "shared_shell_reconcile_create",
+      selectedAsCanonical: false,
+      rejectedReason: "shell_row_materialization_only",
+    });
     console.log("[COMP_DETAIL_ID_TRACE]", {
       stage: "shell_reconcile_row",
       sharedCompetitionId: r.id,
@@ -625,10 +658,46 @@ export async function upsertSharedCompetitionsForKid(
 
   const nextAll = capCompetitionsByKid([...rest, ...keptTarget]);
   await setRaw(nextAll);
-  const { copyCompetitionDetailToCanonicalKeyForEntry } = await import("./competitionStore");
   for (const row of keptTarget) {
     if (!row.sharedCompetitionId) continue;
-    await copyCompetitionDetailToCanonicalKeyForEntry(row);
+    logShellAuthorityTrace({
+      entryId: row.id,
+      sharedCompetitionId: row.sharedCompetitionId,
+      isShellEntry: isShellEntryId(row.id),
+      matchCount: null,
+      sourceCaller: "kidCompetitionStore.upsertSharedCompetitionsForKid",
+      resolutionPath: "shared_shell_persisted_to_kidCompetitionStore",
+      selectedAsCanonical: false,
+      rejectedReason: "shell_row_persisted_not_detail_authority",
+    });
+  }
+  const { copyCompetitionDetailToCanonicalKeyForEntry } = await import("./competitionStore");
+  const aggregateRepublishAthleteIds = new Set<string>();
+  for (const row of keptTarget) {
+    if (!row.sharedCompetitionId) continue;
+    const canonicalization = await copyCompetitionDetailToCanonicalKeyForEntry(row);
+    const sharedAthleteId = row.sharedAthleteId?.trim() ?? "";
+    if (canonicalization?.migrationPerformed && sharedAthleteId) {
+      aggregateRepublishAthleteIds.add(sharedAthleteId);
+      if (__DEV__) {
+        console.log("[COMP_AGGREGATE_TRACE]", {
+          stage: "canonical_detail_copy_republish_scheduled",
+          sharedAthleteId,
+          sharedCompetitionId: row.sharedCompetitionId,
+          legacyEntryId: canonicalization.legacyEntryId,
+          canonicalKey: canonicalization.canonicalKey,
+          matchCount: canonicalization.matchCount,
+        });
+      }
+    }
+  }
+  if (aggregateRepublishAthleteIds.size > 0) {
+    const { schedulePublishParentCompetitionAggregate } = await import(
+      "../domain/competition/publishParentCompetitionAggregate"
+    );
+    for (const sharedAthleteId of aggregateRepublishAthleteIds) {
+      schedulePublishParentCompetitionAggregate(sharedAthleteId);
+    }
   }
   const returnedForKid = nextAll
     .filter((e) => e.kidId === kidId)
@@ -743,7 +812,22 @@ export async function getKidCompetitionEntryById(
   id: string,
 ): Promise<KidCompetitionEntry | null> {
   const all = await getRaw();
-  return all.find((e) => e.id === id) ?? null;
+  const found = all.find((e) => e.id === id) ?? null;
+  logShellAuthorityTrace({
+    entryId: id,
+    sharedCompetitionId: found?.sharedCompetitionId ?? null,
+    isShellEntry: isShellEntryId(id),
+    matchCount: null,
+    sourceCaller: "kidCompetitionStore.getKidCompetitionEntryById",
+    resolutionPath: found ? "entry_id_read_hit" : "entry_id_read_miss",
+    selectedAsCanonical: false,
+    rejectedReason: found
+      ? isShellEntryId(found.id)
+        ? "shell_entry_returned_to_caller"
+        : "non_shell_entry_returned_to_caller"
+      : "entry_not_found",
+  });
+  return found;
 }
 
 export type KidCompetitionCreateInput = {

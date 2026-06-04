@@ -42,6 +42,18 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
       const artifact = buildCompetitionAggregateArtifact(trimmed, competitions);
       const putPath = `/v1/sessions/${encodeURIComponent(target.linkToken)}/competition-aggregate`;
       const kvKey = `s:${target.linkToken.trim().toLowerCase()}`;
+      console.log("[COMP_AGGREGATE_TRACE]", {
+        stage: "parent_aggregate_publish",
+        sharedAthleteId: trimmed,
+        totalCompetitions: artifact.totalCompetitions,
+        totalMatches: artifact.totalMatches,
+        wins: artifact.wins,
+        losses: artifact.losses,
+        submissionRate: artifact.submissionRate,
+        fastestSubmission: artifact.fastestSubmissionSeconds,
+        artifactUpdatedAt: artifact.updatedAt,
+        publishTimestamp: new Date().toISOString(),
+      });
       console.log("[COMP_AGG_TRACE] publish_attempt", {
         sharedAthleteId: trimmed,
         operation: "PUT",

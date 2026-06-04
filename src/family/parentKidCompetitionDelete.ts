@@ -454,6 +454,13 @@ export async function deleteParentKidCompetitionEntry(
   });
   await deleteKidCompetitionEntry(entryId);
   if (athleteForRemote) {
+    console.log("[COMP_AGGREGATE_PUBLISH_TRIGGER_TRACE]", {
+      mutationType: "delete",
+      sharedAthleteId: athleteForRemote,
+      sharedCompetitionId: workerCompetitionId || null,
+      triggerReason: "parentKidCompetitionDelete_after_local_delete",
+      aggregatePublishScheduled: true,
+    });
     schedulePublishParentCompetitionAggregate(athleteForRemote);
     schedulePublishParentCompetitionTopology(athleteForRemote);
   }

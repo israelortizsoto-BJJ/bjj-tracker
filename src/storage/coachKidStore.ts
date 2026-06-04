@@ -551,6 +551,21 @@ export function pickRemoteCompetitionAggregateForLinkedAthlete(
       candidateCount: candidates.length,
       traversalOrderUpdatedAts,
     });
+    console.log("[COMP_AGGREGATE_TRACE]", {
+      stage: "coach_hydrate_candidate_selected",
+      sharedAthleteId: sid,
+      candidateCount: candidates.length,
+      traversalOrderUpdatedAts,
+      incoming: {
+        updatedAt: selected.updatedAt,
+        totalCompetitions: selected.totalCompetitions,
+        totalMatches: selected.totalMatches,
+        wins: selected.wins,
+        losses: selected.losses,
+        submissionRate: selected.submissionRate,
+        fastestSubmission: selected.fastestSubmissionSeconds,
+      },
+    });
   }
 
   return selected;
@@ -568,6 +583,7 @@ export function pickRemoteCompetitionTopologyForLinkedAthlete(
   if (!sid) return null;
 
   const candidates: SyncedCompetitionTopologyArtifact[] = [];
+  const traversalOrderUpdatedAts: string[] = [];
   for (const session of sessionsInWriterLinkTraversalOrder) {
     const athleteInSession = session.athletes.some((a) => a.id.trim() === sid);
     if (!athleteInSession) continue;
@@ -579,16 +595,73 @@ export function pickRemoteCompetitionTopologyForLinkedAthlete(
       candidate.sharedAthleteId.trim() === sid
     ) {
       candidates.push(candidate);
+      traversalOrderUpdatedAts.push(candidate.updatedAt);
+      if (__DEV__) {
+        for (const competition of candidate.competitions) {
+          console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+            sharedCompetitionId: competition.sharedCompetitionId,
+            incomingUpdatedAt: candidate.updatedAt,
+            existingUpdatedAt: null,
+            incomingMatchCount: competition.matches.length,
+            existingMatchCount: null,
+            overwriteAccepted: false,
+            rejectionReason: null,
+            equalitySkipped: false,
+            cacheWritePerformed: false,
+            invalidateTriggered: false,
+            sharedAthleteId: sid,
+            selectionStage: "remote_topology_candidate_seen",
+            candidateIndex: candidates.length - 1,
+          });
+        }
+      }
     }
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    if (__DEV__) {
+      console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+        sharedCompetitionId: null,
+        incomingUpdatedAt: null,
+        existingUpdatedAt: null,
+        incomingMatchCount: null,
+        existingMatchCount: null,
+        overwriteAccepted: false,
+        rejectionReason: "no_remote_topology_candidates",
+        equalitySkipped: false,
+        cacheWritePerformed: false,
+        invalidateTriggered: false,
+        sharedAthleteId: sid,
+      });
+    }
+    return null;
+  }
 
   let selected = candidates[0];
   for (let i = 1; i < candidates.length; i++) {
     const candidate = candidates[i];
     if (candidate.updatedAt.localeCompare(selected.updatedAt) > 0) {
       selected = candidate;
+    }
+  }
+  if (__DEV__) {
+    for (const competition of selected.competitions) {
+      console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+        sharedCompetitionId: competition.sharedCompetitionId,
+        incomingUpdatedAt: selected.updatedAt,
+        existingUpdatedAt: null,
+        incomingMatchCount: competition.matches.length,
+        existingMatchCount: null,
+        overwriteAccepted: false,
+        rejectionReason: null,
+        equalitySkipped: false,
+        cacheWritePerformed: false,
+        invalidateTriggered: false,
+        sharedAthleteId: sid,
+        selectionStage: "remote_topology_candidate_selected",
+        candidateCount: candidates.length,
+        traversalOrderUpdatedAts,
+      });
     }
   }
   return selected;
@@ -981,6 +1054,22 @@ export async function reconcileCoachCompetitionAggregatesFromWriterSessions(opts
       sharedAthleteId,
     );
     if (artifact) {
+      if (__DEV__) {
+        console.log("[COMP_AGGREGATE_TRACE]", {
+          stage: "coach_hydrate_reconcile_write",
+          sharedAthleteId,
+          rosterKidId: k.id,
+          incoming: {
+            updatedAt: artifact.updatedAt,
+            totalCompetitions: artifact.totalCompetitions,
+            totalMatches: artifact.totalMatches,
+            wins: artifact.wins,
+            losses: artifact.losses,
+            submissionRate: artifact.submissionRate,
+            fastestSubmission: artifact.fastestSubmissionSeconds,
+          },
+        });
+      }
       await writeCoachCompetitionAggregate(artifact);
     } else if (__DEV__) {
       console.log("[COMP_AGG_TRACE] hydrate_missing", {
@@ -1057,6 +1146,30 @@ export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: 
     }
 
     const result = await writeCoachCompetitionTopology(artifact, competitionTopologyTraceId);
+    if (__DEV__) {
+      for (const competition of artifact.competitions) {
+        console.log("[COACH_TOPOLOGY_ACCEPTANCE_TRACE]", {
+          sharedCompetitionId: competition.sharedCompetitionId,
+          incomingUpdatedAt: artifact.updatedAt,
+          existingUpdatedAt: null,
+          incomingMatchCount: competition.matches.length,
+          existingMatchCount: null,
+          overwriteAccepted: result === "hydrate_store_overwrite",
+          rejectionReason:
+            result === "hydrate_skipped_stale"
+              ? "writeCoachCompetitionTopology_returned_hydrate_skipped_stale"
+              : result === "hydrate_invalid"
+                ? "writeCoachCompetitionTopology_returned_hydrate_invalid"
+                : null,
+          equalitySkipped: result === "hydrate_skipped_stale",
+          cacheWritePerformed: result === "hydrate_store_overwrite",
+          invalidateTriggered: result === "hydrate_store_overwrite",
+          sharedAthleteId,
+          selectionStage: "reconcile_write_result",
+          writeResult: result,
+        });
+      }
+    }
     if (__DEV__ && result === "hydrate_store_overwrite") {
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_ok", {
         sharedAthleteId,

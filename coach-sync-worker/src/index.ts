@@ -114,6 +114,26 @@ type CompetitionTopologyArtifact = {
   competitions: CompetitionTopology[];
 };
 
+function logCoachTopologyMatchTrace(
+  stage: string,
+  artifact: CompetitionTopologyArtifact,
+  extra?: Record<string, unknown>,
+) {
+  for (const competition of artifact.competitions) {
+    console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
+      stage,
+      sharedCompetitionId: competition.sharedCompetitionId,
+      updatedAt: artifact.updatedAt,
+      matchCount: competition.matches.length,
+      firstFiveMatchIds: competition.matches
+        .slice(0, 5)
+        .map((match) => match.matchLineageKey),
+      firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
+      ...extra,
+    });
+  }
+}
+
 type TrainingProofRankedItem = {
   key: string;
   label: string;
@@ -1582,6 +1602,29 @@ export default {
         const apiCoachMatchBreakdownArtifactList = coachMatchBreakdownArtifactList(
           apiCoachMatchBreakdownArtifacts,
         );
+        const aggregateArtifacts = Object.values(rec.competitionAggregateByAthleteId ?? {});
+        console.log("[COMP_AGGREGATE_TRACE]", {
+          stage: "worker_get_payload",
+          aggregateCount: aggregateArtifacts.length,
+          aggregates: aggregateArtifacts.map((artifact) => ({
+            sharedAthleteId: artifact.sharedAthleteId,
+            updatedAt: artifact.updatedAt,
+            totalCompetitions: artifact.totalCompetitions,
+            totalMatches: artifact.totalMatches,
+            wins: artifact.wins,
+            losses: artifact.losses,
+            submissionRate: artifact.submissionRate,
+            fastestSubmission: artifact.fastestSubmissionSeconds,
+          })),
+          tokenSuffix: token.slice(-8),
+        });
+        for (const artifact of Object.values(rec.competitionTopologyByAthleteId ?? {})) {
+          logCoachTopologyMatchTrace("worker_get_topology", artifact, {
+            accepted: true,
+            overwriteReason: "get_payload_serialized",
+            tokenSuffix: token.slice(-8),
+          });
+        }
         const getPayload = {
           schemaVersion: rec.schemaVersion,
           coach: {
@@ -2693,6 +2736,12 @@ export default {
 
         const existing = rec.competitionTopologyByAthleteId[artifact.sharedAthleteId];
         if (existing && artifact.updatedAt.localeCompare(existing.updatedAt) < 0) {
+          logCoachTopologyMatchTrace("worker_put_topology", artifact, {
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
+            accepted: false,
+            overwriteReason: "incoming_older_rejected",
+          });
           console.log("[COMP_TOPOLOGY_TRACE] worker_reject_stale", {
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifact.sharedAthleteId,
@@ -2707,6 +2756,12 @@ export default {
           artifact.updatedAt === existing.updatedAt &&
           JSON.stringify(artifact) !== JSON.stringify(existing)
         ) {
+          logCoachTopologyMatchTrace("worker_put_topology", artifact, {
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
+            accepted: false,
+            overwriteReason: "equal_timestamp_conflict_rejected",
+          });
           console.log("[COMP_TOPOLOGY_TRACE] worker_reject_equal_timestamp_conflict", {
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifact.sharedAthleteId,
@@ -2716,6 +2771,12 @@ export default {
           return error("Competition topology timestamp conflict", 409);
         }
         if (existing && JSON.stringify(artifact) === JSON.stringify(existing)) {
+          logCoachTopologyMatchTrace("worker_put_topology", artifact, {
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
+            accepted: true,
+            overwriteReason: "idempotent_replay",
+          });
           console.log("[COMP_TOPOLOGY_TRACE] worker_store_ok", {
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifact.sharedAthleteId,
@@ -2743,6 +2804,12 @@ export default {
           updatedAt: artifact.updatedAt,
           writeMode: existing ? "newer_overwrite" : "first_write",
           ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
+        });
+        logCoachTopologyMatchTrace("worker_put_topology", artifact, {
+          incomingUpdatedAt: artifact.updatedAt,
+          existingUpdatedAt: existing?.updatedAt ?? null,
+          accepted: true,
+          overwriteReason: existing ? "newer_overwrite" : "first_write",
         });
         await writeSession(env.SESSIONS, token, next);
         return json({ ok: true }, 200);
@@ -2795,6 +2862,18 @@ export default {
             [artifact.sharedAthleteId]: artifact,
           },
         };
+        console.log("[COMP_AGGREGATE_TRACE]", {
+          stage: "worker_put_competition_aggregate",
+          tokenSuffix: token.slice(-8),
+          sharedAthleteId: artifact.sharedAthleteId,
+          updatedAt: artifact.updatedAt,
+          totalCompetitions: artifact.totalCompetitions,
+          totalMatches: artifact.totalMatches,
+          wins: artifact.wins,
+          losses: artifact.losses,
+          submissionRate: artifact.submissionRate,
+          fastestSubmission: artifact.fastestSubmissionSeconds,
+        });
         console.log("[COMP_AGG_TRACE] worker_put_competition_aggregate", {
           tokenSuffix: token.slice(-8),
           kvKey: `s:${token}`,

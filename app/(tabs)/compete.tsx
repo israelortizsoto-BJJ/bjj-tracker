@@ -1,6 +1,6 @@
 import { router, type Href } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { useCoachSyncHydrationVersion } from "@/src/storage/coachSyncHydrationStore";
 import { peekCoachMatchBreakdownArtifactSet } from "@/src/storage/coachMatchBreakdownArtifactStore";
@@ -16,7 +16,11 @@ import {
   getKidCompetitionEntriesWithMatchDetailForKid,
   getKidCompetitionEntriesWithMatchDetailForSharedAthlete,
 } from "@/src/storage/competitionStore";
-import { kidIdForUnlinkedParentAthleteCompetitions } from "@/src/storage/kidCompetitionStore";
+import {
+  getCompetitionVersion,
+  kidIdForUnlinkedParentAthleteCompetitions,
+  subscribeCompetition,
+} from "@/src/storage/kidCompetitionStore";
 import { logCoachHydrationResolveTrace } from "@/src/identity/coachHydrationResolveTrace";
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
 import { useDeviceRole } from "@/src/deviceRole/DeviceRoleProvider";
@@ -85,14 +89,34 @@ function initialsFromName(name: string): string {
   return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }
 
-/** Avoid `setEntries` when async load returns the same row ids (stops focus-effect churn). */
-function competeEntriesSameIds(
+function matchSignature(entry: CompeteKidEntryMerged): string {
+  return entry.matches
+    .map((match) =>
+      [
+        match.id,
+        match.matchResult ?? "",
+        match.outcome ?? "",
+        match.submissionTime ?? "",
+        match.submissionType ?? "",
+        match.coachNote ?? "",
+        match.imageUri ?? "",
+        match.videoUri ?? "",
+      ].join(":"),
+    )
+    .join("|");
+}
+
+/** Avoid `setEntries` only when shell ids and hydrated match payloads are unchanged. */
+function competeEntriesSameProjection(
   prev: readonly CompeteKidEntryMerged[],
   next: readonly CompeteKidEntryMerged[],
 ): boolean {
   if (prev.length !== next.length) return false;
   for (let i = 0; i < prev.length; i += 1) {
     if (prev[i]?.id !== next[i]?.id) return false;
+    if (prev[i]?.updatedAt !== next[i]?.updatedAt) return false;
+    if (prev[i]?.matches.length !== next[i]?.matches.length) return false;
+    if (matchSignature(prev[i]) !== matchSignature(next[i])) return false;
   }
   return true;
 }
@@ -130,6 +154,11 @@ export default function CompetitionTab() {
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
   const loadGenerationRef = useRef(0);
   const coachSyncHydrationVersion = useCoachSyncHydrationVersion();
+  const competitionVersion = useSyncExternalStore(
+    subscribeCompetition,
+    getCompetitionVersion,
+    getCompetitionVersion,
+  );
   const devTraceRef = useRef({
     deviceRole,
     authorityBootstrapState,
@@ -149,6 +178,7 @@ export default function CompetitionTab() {
         athleteId: athleteId.trim() || null,
         linkedKidId: linkedKidId ?? null,
         coachSyncHydrationVersion,
+        competitionVersion,
       });
     }
     const trimmedAthleteId = athleteId.trim();
@@ -168,6 +198,37 @@ export default function CompetitionTab() {
       athleteId: trimmedAthleteId,
       entriesLoaded: merged.length,
     });
+    if (__DEV__) {
+      console.log("[COMPETE_REFRESH_TRACE]", {
+        stage: "entry_array_refresh",
+        gen,
+        athleteId: trimmedAthleteId,
+        linkedKidId: lk ?? null,
+        competitionVersion,
+        coachSyncHydrationVersion,
+        entryCount: merged.length,
+        matchCounts: merged.map((entry) => ({
+          entryId: entry.id,
+          sharedCompetitionId: entry.sharedCompetitionId ?? null,
+          matchCount: entry.matches.length,
+          matchIds: entry.matches.map((match) => match.id),
+        })),
+      });
+      console.log("[COACH_COMPETE_DETAIL_TRACE]", {
+        stage: "entry_array_refresh",
+        gen,
+        athleteId: trimmedAthleteId,
+        linkedKidId: lk ?? null,
+        competitionVersion,
+        coachSyncHydrationVersion,
+        projectedEntries: merged.map((entry) => ({
+          entryId: entry.id,
+          sharedCompetitionId: entry.sharedCompetitionId ?? null,
+          matchCount: entry.matches.length,
+          matchIds: entry.matches.map((match) => match.id),
+        })),
+      });
+    }
     for (const row of merged) {
       const sharedAthleteId = (row.sharedAthleteId ?? trimmedAthleteId).trim();
       const sharedCompetitionId = (row.sharedCompetitionId ?? "").trim();
@@ -218,11 +279,31 @@ export default function CompetitionTab() {
     }
     if (gen !== loadGenerationRef.current) return;
     setEntries((prev) => {
-      if (competeEntriesSameIds(prev, merged)) {
+      const prevTotalMatches = prev.reduce((sum, entry) => sum + entry.matches.length, 0);
+      const nextTotalMatches = merged.reduce((sum, entry) => sum + entry.matches.length, 0);
+      if (competeEntriesSameProjection(prev, merged)) {
         if (__DEV__) {
           console.log("[COMPETE_RENDER_LOOP_TRACE] setEntries_unchanged", {
             gen,
             count: merged.length,
+          });
+          console.log("[COMPETE_REFRESH_TRACE]", {
+            stage: "set_entries_unchanged",
+            gen,
+            competitionVersion,
+            prevEntryCount: prev.length,
+            nextEntryCount: merged.length,
+            matchCountBefore: prevTotalMatches,
+            matchCountAfter: nextTotalMatches,
+            rerenderCause: "projection_unchanged",
+          });
+          console.log("[COACH_COMPETE_DETAIL_TRACE]", {
+            stage: "stale_projection_skipped",
+            gen,
+            competitionVersion,
+            rerenderReason: "projection_unchanged",
+            matchCountBefore: prevTotalMatches,
+            matchCountAfter: nextTotalMatches,
           });
         }
         return prev;
@@ -233,10 +314,30 @@ export default function CompetitionTab() {
           prevCount: prev.length,
           nextCount: merged.length,
         });
+        console.log("[COMPETE_REFRESH_TRACE]", {
+          stage: "set_entries_apply",
+          gen,
+          competitionVersion,
+          prevEntryCount: prev.length,
+          nextEntryCount: merged.length,
+          matchCountBefore: prevTotalMatches,
+          matchCountAfter: nextTotalMatches,
+          rerenderCause:
+            prev.length === merged.length ? "detail_projection_changed" : "entry_array_changed",
+        });
+        console.log("[COACH_COMPETE_DETAIL_TRACE]", {
+          stage: "stale_projection_applied",
+          gen,
+          competitionVersion,
+          rerenderReason:
+            prev.length === merged.length ? "detail_projection_changed" : "entry_array_changed",
+          matchCountBefore: prevTotalMatches,
+          matchCountAfter: nextTotalMatches,
+        });
       }
       return merged;
     });
-  }, [athleteId, linkedKidId, coachSyncHydrationVersion]);
+  }, [athleteId, linkedKidId, coachSyncHydrationVersion, competitionVersion]);
 
   const loadCompetitionsRef = useRef(loadCompetitions);
   loadCompetitionsRef.current = loadCompetitions;
@@ -259,6 +360,7 @@ export default function CompetitionTab() {
           athleteId: athleteId.trim() || null,
           linkedKidId: linkedKidId ?? null,
           coachSyncHydrationVersion,
+          competitionVersion,
         });
       }
       void loadCompetitionsRef.current();
@@ -267,7 +369,7 @@ export default function CompetitionTab() {
           console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_cleanup");
         }
       };
-    }, [athleteId, linkedKidId, coachSyncHydrationVersion]),
+    }, [athleteId, linkedKidId, coachSyncHydrationVersion, competitionVersion]),
   );
 
   const noAthleteSelected = hydrationReady && !athleteId.trim();
