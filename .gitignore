@@ -39,3 +39,4 @@ ios/
 android/
 .env.local
 logs/
+docs/dev-handoff.backup.md
