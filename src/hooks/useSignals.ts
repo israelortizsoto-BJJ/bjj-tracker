@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import {
   computeSignals,
@@ -28,6 +28,10 @@ import {
   getCoachTrainingProof,
   peekCoachTrainingProof,
 } from "../storage/coachTrainingProofStore";
+import {
+  getCompetitionVersion,
+  subscribeCompetition,
+} from "../storage/kidCompetitionStore";
 import { useCoachSyncHydrationVersion } from "../storage/coachSyncHydrationStore";
 import type {
   SyncedCompetitionAggregateArtifact,
@@ -75,6 +79,13 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
 
   const hydrationVersion = useCoachSyncHydrationVersion();
   const coachAggregateVersion = useCoachCompetitionAggregateVersion();
+  const competitionVersion = useSyncExternalStore(
+    subscribeCompetition,
+    getCompetitionVersion,
+    getCompetitionVersion,
+  );
+  const coachTopologyOverlayInvalidation =
+    deviceRole === "coach" ? competitionVersion : 0;
   const prevHydrationVersionRef = useRef(hydrationVersion);
   const prevCoachAggregateVersionRef = useRef(coachAggregateVersion);
 
@@ -516,5 +527,6 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     trimmedAthlete,
     kidId,
     hydrationVersion,
+    coachTopologyOverlayInvalidation,
   ]);
 }
