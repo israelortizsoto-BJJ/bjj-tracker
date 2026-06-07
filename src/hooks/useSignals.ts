@@ -42,6 +42,17 @@ import type {
 
 import { useAthleteData } from "./useAthleteData";
 
+function compareIsoTimestamp(a?: string | null, b?: string | null): number | null {
+  const left = typeof a === "string" ? a.trim() : "";
+  const right = typeof b === "string" ? b.trim() : "";
+  if (!left || !right) return null;
+  const leftMs = Date.parse(left);
+  const rightMs = Date.parse(right);
+  if (!Number.isFinite(leftMs) || !Number.isFinite(rightMs)) return null;
+  if (leftMs === rightMs) return 0;
+  return leftMs > rightMs ? 1 : -1;
+}
+
 export function useSignals(input: SignalInput = {}): SignalOutput {
   const {
     referenceDate,
@@ -315,12 +326,12 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
       }
     } else {
       const aggregate = effectiveCoachAggregate;
+      const topologyMatchCount =
+        topologyArtifactForProvenance?.competitions.reduce(
+          (sum, competition) => sum + competition.matches.length,
+          0,
+        ) ?? 0;
       if (!aggregate) {
-        const topologyMatchCount =
-          topologyArtifactForProvenance?.competitions.reduce(
-            (sum, competition) => sum + competition.matches.length,
-            0,
-          ) ?? 0;
         if (topologyArtifactForProvenance && topologyMatchCount > 0) {
           sourceOfCompetitionMetrics = "topology";
           withCoachOverlays = overlayCompetitionTopologyMetricsSignals(
@@ -424,57 +435,108 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           });
         }
       } else {
-        sourceOfCompetitionMetrics = "aggregate";
-        if (__DEV__) {
-          console.log("[COMP_AGG_TRACE] overlay_applied", {
-            sharedAthleteId: trimmedAthlete,
-            totalMatches: aggregate.totalMatches,
-            wins: aggregate.wins,
-            losses: aggregate.losses,
-          });
-        }
-        withCoachOverlays = overlayCompetitionAggregateSignals(withCoachOverlays, aggregate);
-        if (__DEV__) {
-          console.log("[COMP_AGGREGATE_TRACE]", {
-            stage: "useSignals_overlay_applied",
-            sharedAthleteId: trimmedAthlete,
-            localValues: {
-              totalMatches: computed.competition.totalMatches,
-              wins: computed.competition.wins,
-              losses: computed.competition.losses,
-              winRate: computed.competition.winRate,
-              submissionRate: computed.competition.submissionRate,
-            },
-            overlayValues: {
-              updatedAt: aggregate.updatedAt,
-              totalCompetitions: aggregate.totalCompetitions,
+        const topologyUpdatedAtComparison = compareIsoTimestamp(
+          topologyArtifactForProvenance?.updatedAt ?? null,
+          aggregate.updatedAt,
+        );
+        const topologyHasMetrics =
+          Boolean(topologyArtifactForProvenance) && topologyMatchCount > 0;
+        const topologyNewerThanAggregate = topologyUpdatedAtComparison === 1;
+        const topologyAggregateMatchCountMismatch =
+          topologyUpdatedAtComparison === null &&
+          topologyHasMetrics &&
+          topologyMatchCount !== aggregate.totalMatches;
+        const shouldUseTopologyMetrics =
+          topologyHasMetrics &&
+          (topologyNewerThanAggregate || topologyAggregateMatchCountMismatch);
+
+        if (shouldUseTopologyMetrics && topologyArtifactForProvenance) {
+          sourceOfCompetitionMetrics = "topology";
+          withCoachOverlays = overlayCompetitionTopologyMetricsSignals(
+            withCoachOverlays,
+            topologyArtifactForProvenance,
+          );
+          if (__DEV__) {
+            console.log("[TOPOLOGY_SUMMARY_METRICS]", {
+              sharedAthleteId: trimmedAthlete,
+              fallbackReason: topologyNewerThanAggregate
+                ? "aggregate_stale_topology_newer"
+                : "aggregate_stale_match_count_mismatch",
+              topologyUpdatedAt: topologyArtifactForProvenance.updatedAt,
+              aggregateUpdatedAt: aggregate.updatedAt,
+              topologyUpdatedAtComparison,
+              topologyWins: withCoachOverlays.competition.wins,
+              topologyLosses: withCoachOverlays.competition.losses,
+              topologyTotalMatches: withCoachOverlays.competition.totalMatches,
+              topologyUnresolved:
+                topologyMatchCount -
+                (withCoachOverlays.competition.wins + withCoachOverlays.competition.losses),
+              aggregateWins: aggregate.wins,
+              aggregateLosses: aggregate.losses,
+              aggregateTotalMatches: aggregate.totalMatches,
+            });
+            console.log("[COMP_AGG_TRACE] overlay_replaced_by_topology", {
+              sharedAthleteId: trimmedAthlete,
+              topologyUpdatedAt: topologyArtifactForProvenance.updatedAt,
+              aggregateUpdatedAt: aggregate.updatedAt,
+              topologyMatchCount,
+              aggregateMatchCount: aggregate.totalMatches,
+              topologyUpdatedAtComparison,
+            });
+          }
+        } else {
+          sourceOfCompetitionMetrics = "aggregate";
+          if (__DEV__) {
+            console.log("[COMP_AGG_TRACE] overlay_applied", {
+              sharedAthleteId: trimmedAthlete,
               totalMatches: aggregate.totalMatches,
               wins: aggregate.wins,
               losses: aggregate.losses,
-              winRate: aggregate.winRate,
-              submissionRate: aggregate.submissionRate,
-            },
-            finalValues: {
+            });
+          }
+          withCoachOverlays = overlayCompetitionAggregateSignals(withCoachOverlays, aggregate);
+          if (__DEV__) {
+            console.log("[COMP_AGGREGATE_TRACE]", {
+              stage: "useSignals_overlay_applied",
+              sharedAthleteId: trimmedAthlete,
+              localValues: {
+                totalMatches: computed.competition.totalMatches,
+                wins: computed.competition.wins,
+                losses: computed.competition.losses,
+                winRate: computed.competition.winRate,
+                submissionRate: computed.competition.submissionRate,
+              },
+              overlayValues: {
+                updatedAt: aggregate.updatedAt,
+                totalCompetitions: aggregate.totalCompetitions,
+                totalMatches: aggregate.totalMatches,
+                wins: aggregate.wins,
+                losses: aggregate.losses,
+                winRate: aggregate.winRate,
+                submissionRate: aggregate.submissionRate,
+              },
+              finalValues: {
+                totalMatches: withCoachOverlays.competition.totalMatches,
+                wins: withCoachOverlays.competition.wins,
+                losses: withCoachOverlays.competition.losses,
+                winRate: withCoachOverlays.competition.winRate,
+                submissionRate: withCoachOverlays.competition.submissionRate,
+              },
+            });
+            console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
+              stage: "aggregate_overlay_application",
+              sharedAthleteId: trimmedAthlete,
+              applied: true,
+              localRecord: computed.competition.record,
+              overlayRecord: { wins: aggregate.wins, losses: aggregate.losses },
+              finalRecord: withCoachOverlays.competition.record,
               totalMatches: withCoachOverlays.competition.totalMatches,
-              wins: withCoachOverlays.competition.wins,
-              losses: withCoachOverlays.competition.losses,
               winRate: withCoachOverlays.competition.winRate,
               submissionRate: withCoachOverlays.competition.submissionRate,
-            },
-          });
-          console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
-            stage: "aggregate_overlay_application",
-            sharedAthleteId: trimmedAthlete,
-            applied: true,
-            localRecord: computed.competition.record,
-            overlayRecord: { wins: aggregate.wins, losses: aggregate.losses },
-            finalRecord: withCoachOverlays.competition.record,
-            totalMatches: withCoachOverlays.competition.totalMatches,
-            winRate: withCoachOverlays.competition.winRate,
-            submissionRate: withCoachOverlays.competition.submissionRate,
-            averageMatchTime: withCoachOverlays.competition.averageMatchTime,
-            coachAggregateVersion,
-          });
+              averageMatchTime: withCoachOverlays.competition.averageMatchTime,
+              coachAggregateVersion,
+            });
+          }
         }
       }
     }
@@ -492,6 +554,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
           proofUpdatedAt: null,
           sessionCount: localSessionCount,
+          metricSource: sourceOfCompetitionMetrics,
         });
         console.log("[SUMMARY_PROOF_CONSUME]", {
           athleteId: trimmedAthlete,
@@ -531,6 +594,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
           proofUpdatedAt: proof.updatedAt,
           sessionCount: localSessionCount,
+          metricSource: sourceOfCompetitionMetrics,
         });
         console.log("[SUMMARY_PROOF_CONSUME]", {
           athleteId: trimmedAthlete,
@@ -578,6 +642,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
         aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
         proofUpdatedAt: proof.updatedAt,
         sessionCount: localSessionCount,
+        metricSource: sourceOfCompetitionMetrics,
       });
       console.log("[SUMMARY_PROOF_CONSUME]", {
         athleteId: trimmedAthlete,
