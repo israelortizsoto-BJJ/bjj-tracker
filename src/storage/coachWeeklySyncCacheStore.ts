@@ -2,6 +2,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
+import {
+  logCacheProvenance,
+  logKeyRead,
+  logKeyWrite,
+} from "../dev/persistenceAudit";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import {
   athleteIdSetFromSynced,
@@ -319,11 +324,29 @@ function safeParseOrDefault<T>(raw: string | null, fallback: T): T {
 
 async function readMap(): Promise<CacheMap> {
   const raw = await AsyncStorage.getItem(StorageKeys.coachWeeklySyncCacheByToken);
+  logKeyRead({
+    key: StorageKeys.coachWeeklySyncCacheByToken,
+    raw,
+    source: "coachWeeklySyncCacheStore.readMap",
+  });
+  logCacheProvenance({
+    key: StorageKeys.coachWeeklySyncCacheByToken,
+    raw,
+    source: "coachWeeklySyncCacheStore.readMap",
+    readKind: "diskRead",
+  });
   return safeParseOrDefault<CacheMap>(raw, {});
 }
 
 async function writeMap(map: CacheMap): Promise<void> {
-  await AsyncStorage.setItem(StorageKeys.coachWeeklySyncCacheByToken, JSON.stringify(map));
+  const raw = JSON.stringify(map);
+  logKeyWrite({
+    key: StorageKeys.coachWeeklySyncCacheByToken,
+    raw,
+    source: "coachWeeklySyncCacheStore.writeMap",
+    extra: { tokenCount: Object.keys(map).length },
+  });
+  await AsyncStorage.setItem(StorageKeys.coachWeeklySyncCacheByToken, raw);
 }
 
 export function cacheEntryHasUsableWeeklyDoc(
@@ -340,7 +363,25 @@ export async function getCachedWeeklyForLinkToken(
   const map = await readMap();
   const raw = map[linkToken as keyof CacheMap];
   if (raw === undefined) return null;
-  return normalizeReadEntry(raw, linkToken);
+  const entry = normalizeReadEntry(raw, linkToken);
+  logCacheProvenance({
+    key: StorageKeys.coachWeeklySyncCacheByToken,
+    source: "coachWeeklySyncCacheStore.getCachedWeeklyForLinkToken",
+    readKind: "diskRead",
+    athleteIds: entry?.athletes.map((a) => a.id.trim()).filter(Boolean) ?? [],
+    sharedAthleteIds: entry?.athletes.map((a) => a.id.trim()).filter(Boolean) ?? [],
+    fetchedAt: entry?.fetchedAt ?? null,
+    entityCounts: {
+      athleteCount: entry?.athletes.length ?? 0,
+      competitionCount: entry?.session?.competitions?.length ?? 0,
+      weeklyByAthleteCount: Object.keys(entry?.weeklyByAthleteId ?? {}).length,
+    },
+    extra: {
+      tokenNorm: entry?.tokenNorm ?? normalizeInviteLinkToken(linkToken),
+      hasFullSession: Boolean(entry?.session),
+    },
+  });
+  return entry;
 }
 
 export async function setCachedWeeklyForLinkToken(

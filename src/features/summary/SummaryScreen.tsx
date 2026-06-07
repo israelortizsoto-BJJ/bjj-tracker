@@ -94,6 +94,7 @@ import { useActiveAthlete } from "../../hooks/useActiveAthlete";
 import { useAuthorityConsumerRouteTelemetry } from "../../hooks/useAuthorityConsumerRouteTelemetry";
 import { useAthleteData, type SummaryFlowTraceRole } from "../../hooks/useAthleteData";
 import { useSignals } from "../../hooks/useSignals";
+import { useActiveKidId } from "../../state/activeKidStore";
 import {
   deleteAthlete,
   setActiveAthleteId,
@@ -294,6 +295,10 @@ function summaryEmptyInsightCopy(input: {
   return null;
 }
 
+function summaryRuntimeIds(rows: ParentAthlete[]): string[] {
+  return rows.map((a) => a.id.trim()).filter(Boolean);
+}
+
 export default function SummaryScreen() {
   const router = useRouter();
   const segments = useSegments();
@@ -308,6 +313,7 @@ export default function SummaryScreen() {
     kidsById,
     refreshActiveAthleteAuthority,
   } = useActiveAthlete();
+  const activeKidId = useActiveKidId();
   const { role: deviceRole } = useDeviceRole();
   const coachSyncHydrationVersion = useCoachSyncHydrationVersion();
   const prevCoachSyncHydrationVersionRef = useRef(coachSyncHydrationVersion);
@@ -342,8 +348,28 @@ export default function SummaryScreen() {
   const weeklySessionSourceRef = useRef<"cache" | "network" | "none">("none");
   const previousValidationRef = useRef<IdentityValidationResult | null>(null);
   const previousTrendRef = useRef<SummaryTrend | null>(null);
+  const pendingDeletedAthleteIdRef = useRef<string | null>(null);
+  const prevSummaryRuntimeRosterIdsRef = useRef<string>("");
   const prevAthleteIdForPrevSignalsRef = useRef(activeAthleteId);
   if (prevAthleteIdForPrevSignalsRef.current !== activeAthleteId) {
+    if (__DEV__) {
+      console.log("[ACTIVE_ATHLETE_RUNTIME]", {
+        phase: "summary_activeAthleteId_render_change",
+        callbackSource: "SummaryScreen.render",
+        activeAthleteId,
+        previousActiveAthleteId: prevAthleteIdForPrevSignalsRef.current || null,
+        rosterIds: summaryRuntimeIds(operatingAthleteRoster),
+        rosterLength: operatingAthleteRoster.length,
+        selectedAthleteIds: activeAthleteId.trim() ? [activeAthleteId.trim()] : [],
+        deletedAthleteId: pendingDeletedAthleteIdRef.current,
+        deletedAthleteStillExists: pendingDeletedAthleteIdRef.current
+          ? operatingAthleteRoster.some((a) => a.id.trim() === pendingDeletedAthleteIdRef.current)
+          : null,
+        activeAthletePresentInRoster: activeAthleteId.trim()
+          ? operatingAthleteRoster.some((a) => a.id.trim() === activeAthleteId.trim())
+          : false,
+      });
+    }
     prevAthleteIdForPrevSignalsRef.current = activeAthleteId;
     previousValidationRef.current = null;
     previousTrendRef.current = null;
@@ -365,16 +391,40 @@ export default function SummaryScreen() {
   }, [activeAthleteId]);
 
   const summarySwitcherAthletes = useMemo(() => {
+    let next: ParentAthlete[];
     if (
       deviceRole === "coach" &&
       (authorityBootstrapState === "coach_unresolved" ||
         (authorityBootstrapState === "coach_disconnected" &&
           coachOperatingAthleteChoices.length > 0))
     ) {
-      return coachOperatingAthleteChoices;
+      next = coachOperatingAthleteChoices;
+    } else {
+      next = operatingAthleteRoster;
     }
-    return operatingAthleteRoster;
+    if (__DEV__) {
+      const deletedAthleteId = pendingDeletedAthleteIdRef.current;
+      console.log("[SUMMARY_SWITCHER_RUNTIME]", {
+        phase: "summarySwitcherAthletes_recompute",
+        callbackSource: "SummaryScreen.useMemo.summarySwitcherAthletes",
+        activeAthleteId: activeAthleteId.trim() || null,
+        rosterIds: summaryRuntimeIds(operatingAthleteRoster),
+        rosterLength: operatingAthleteRoster.length,
+        selectedAthleteIds: summaryRuntimeIds(next),
+        deletedAthleteId,
+        deletedAthleteStillExists: deletedAthleteId
+          ? next.some((a) => a.id.trim() === deletedAthleteId)
+          : null,
+        activeAthletePresentInRoster: activeAthleteId.trim()
+          ? operatingAthleteRoster.some((a) => a.id.trim() === activeAthleteId.trim())
+          : false,
+        authorityBootstrapState,
+        deviceRole,
+      });
+    }
+    return next;
   }, [
+    activeAthleteId,
     operatingAthleteRoster,
     authorityBootstrapState,
     coachOperatingAthleteChoices,
@@ -919,20 +969,107 @@ export default function SummaryScreen() {
 
   const rosterAthleteRow = useMemo(() => {
     const id = activeAthleteId.trim();
-    if (!id) return null;
-    return operatingAthleteRoster.find((a) => a.id.trim() === id) ?? null;
+    const row = id ? operatingAthleteRoster.find((a) => a.id.trim() === id) ?? null : null;
+    if (__DEV__) {
+      const deletedAthleteId = pendingDeletedAthleteIdRef.current;
+      console.log("[SUMMARY_RENDER_RUNTIME]", {
+        phase: "rosterAthleteRow_recompute",
+        callbackSource: "SummaryScreen.useMemo.rosterAthleteRow",
+        activeAthleteId: id || null,
+        rosterIds: summaryRuntimeIds(operatingAthleteRoster),
+        rosterLength: operatingAthleteRoster.length,
+        selectedAthleteIds: row?.id ? [row.id.trim()] : [],
+        deletedAthleteId,
+        deletedAthleteStillExists: deletedAthleteId
+          ? operatingAthleteRoster.some((a) => a.id.trim() === deletedAthleteId)
+          : null,
+        activeAthletePresentInRoster: id
+          ? operatingAthleteRoster.some((a) => a.id.trim() === id)
+          : false,
+      });
+    }
+    return row;
   }, [activeAthleteId, operatingAthleteRoster]);
 
   const athleteForSummary = useMemo(() => {
+    let row: ParentAthlete | null;
     if (appliedProfile && appliedProfile.id === activeAthleteId) {
-      return appliedProfile;
+      row = appliedProfile;
+    } else if (athlete) {
+      row = athlete;
+    } else {
+      row = rosterAthleteRow;
     }
-    if (athlete) return athlete;
-    return rosterAthleteRow;
-  }, [appliedProfile, activeAthleteId, athlete, rosterAthleteRow]);
+    if (__DEV__) {
+      const deletedAthleteId = pendingDeletedAthleteIdRef.current;
+      console.log("[SUMMARY_RENDER_RUNTIME]", {
+        phase: "athleteForSummary_recompute",
+        callbackSource: "SummaryScreen.useMemo.athleteForSummary",
+        activeAthleteId: activeAthleteId.trim() || null,
+        rosterIds: summaryRuntimeIds(operatingAthleteRoster),
+        rosterLength: operatingAthleteRoster.length,
+        selectedAthleteIds: row?.id ? [row.id.trim()] : [],
+        deletedAthleteId,
+        deletedAthleteStillExists: deletedAthleteId
+          ? operatingAthleteRoster.some((a) => a.id.trim() === deletedAthleteId)
+          : null,
+        activeAthletePresentInRoster: activeAthleteId.trim()
+          ? operatingAthleteRoster.some((a) => a.id.trim() === activeAthleteId.trim())
+          : false,
+        source: appliedProfile && appliedProfile.id === activeAthleteId
+          ? "appliedProfile"
+          : athlete
+            ? "useActiveAthlete.athlete"
+            : "rosterAthleteRow",
+      });
+    }
+    return row;
+  }, [appliedProfile, activeAthleteId, athlete, operatingAthleteRoster, rosterAthleteRow]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    const rosterIds = summaryRuntimeIds(operatingAthleteRoster);
+    const rosterSignature = rosterIds.join(",");
+    const deletedAthleteId = pendingDeletedAthleteIdRef.current;
+    console.log("[SUMMARY_RENDER_RUNTIME]", {
+      phase: "render_commit",
+      callbackSource: "SummaryScreen.useEffect.render",
+      activeAthleteId: activeAthleteId.trim() || null,
+      rosterIds,
+      rosterLength: rosterIds.length,
+      selectedAthleteIds: summaryRuntimeIds(summarySwitcherAthletes),
+      deletedAthleteId,
+      deletedAthleteStillExists: deletedAthleteId
+        ? rosterIds.includes(deletedAthleteId)
+        : null,
+      activeAthletePresentInRoster: activeAthleteId.trim()
+        ? rosterIds.includes(activeAthleteId.trim())
+        : false,
+      rosterLengthChanged: prevSummaryRuntimeRosterIdsRef.current !== rosterSignature,
+    });
+    prevSummaryRuntimeRosterIdsRef.current = rosterSignature;
+  });
 
   const activeAthleteName =
     athleteForSummary?.name?.trim() || rosterAthleteRow?.name?.trim() || "";
+
+  const canonicalSharedAthleteIdForDelete = useMemo(() => {
+    const activeId = activeAthleteId.trim();
+    if (activeId.startsWith("shared_ath_")) return activeId;
+    const selectedKidId =
+      typeof activeKidId === "string" && activeKidId.trim() ? activeKidId.trim() : "";
+    if (selectedKidId) {
+      const sid = kidsById[selectedKidId]?.sharedAthleteId?.trim() ?? "";
+      if (sid) return sid;
+    }
+    const linkedKidId =
+      typeof summaryLinkedKidId === "string" && summaryLinkedKidId.trim()
+        ? summaryLinkedKidId.trim()
+        : "";
+    if (!linkedKidId) return null;
+    const sid = kidsById[linkedKidId]?.sharedAthleteId?.trim() ?? "";
+    return sid || null;
+  }, [activeAthleteId, activeKidId, kidsById, summaryLinkedKidId]);
 
   useEffect(() => {
     if (!__DEV__) return;
@@ -1018,6 +1155,66 @@ export default function SummaryScreen() {
     await setActiveAthleteId(id);
   }, []);
 
+  const deleteActiveAthlete = useCallback(async () => {
+    const deletedAthleteId = activeAthleteId.trim() || null;
+    pendingDeletedAthleteIdRef.current = deletedAthleteId;
+    if (__DEV__) {
+      console.log("[SUMMARY_RENDER_RUNTIME]", {
+        phase: "delete_before_dispatch",
+        callbackSource: "SummaryScreen.deleteActiveAthlete",
+        activeAthleteId,
+        rosterIds: summaryRuntimeIds(operatingAthleteRoster),
+        rosterLength: operatingAthleteRoster.length,
+        selectedAthleteIds: activeAthleteId.trim() ? [activeAthleteId.trim()] : [],
+        deletedAthleteId,
+        deletedAthleteStillExists: deletedAthleteId
+          ? operatingAthleteRoster.some((a) => a.id.trim() === deletedAthleteId)
+          : null,
+        activeAthletePresentInRoster: activeAthleteId.trim()
+          ? operatingAthleteRoster.some((a) => a.id.trim() === activeAthleteId.trim())
+          : false,
+      });
+      console.log("[DELETE_CANONICAL_HANDOFF]", {
+        activeAthleteId,
+        activeKidId: activeKidId ?? null,
+        summaryLinkedKidId:
+          typeof summaryLinkedKidId === "string" && summaryLinkedKidId.trim()
+            ? summaryLinkedKidId.trim()
+            : null,
+        resolvedSharedAthleteId: canonicalSharedAthleteIdForDelete,
+      });
+    }
+    const ok = await deleteAthlete({
+      athleteId: activeAthleteId,
+      canonicalSharedAthleteId: canonicalSharedAthleteIdForDelete,
+    });
+    if (__DEV__) {
+      console.log("[SUMMARY_RENDER_RUNTIME]", {
+        phase: "delete_after_completion",
+        callbackSource: "SummaryScreen.deleteActiveAthlete",
+        activeAthleteId,
+        rosterIds: summaryRuntimeIds(operatingAthleteRoster),
+        rosterLength: operatingAthleteRoster.length,
+        selectedAthleteIds: activeAthleteId.trim() ? [activeAthleteId.trim()] : [],
+        deletedAthleteId,
+        deletedAthleteStillExists: deletedAthleteId
+          ? operatingAthleteRoster.some((a) => a.id.trim() === deletedAthleteId)
+          : null,
+        activeAthletePresentInRoster: activeAthleteId.trim()
+          ? operatingAthleteRoster.some((a) => a.id.trim() === activeAthleteId.trim())
+          : false,
+        deleteResult: ok,
+      });
+    }
+    return ok;
+  }, [
+    activeAthleteId,
+    activeKidId,
+    canonicalSharedAthleteIdForDelete,
+    operatingAthleteRoster,
+    summaryLinkedKidId,
+  ]);
+
   const handleOpenManageAthlete = useCallback(() => {
     if (!activeAthleteId.trim()) return;
 
@@ -1037,7 +1234,7 @@ export default function SummaryScreen() {
             router.push("/summary/profile");
           }
           if (buttonIndex === 1) {
-            const ok = await deleteAthlete(activeAthleteId);
+            const ok = await deleteActiveAthlete();
             if (ok) router.replace("/summary");
           }
         },
@@ -1052,14 +1249,20 @@ export default function SummaryScreen() {
           text: `Delete ${athleteName}`,
           style: "destructive",
           onPress: async () => {
-            const ok = await deleteAthlete(activeAthleteId);
+            const ok = await deleteActiveAthlete();
             if (ok) router.replace("/summary");
           },
         },
         { text: "Cancel", style: "cancel" },
       ]);
     }
-  }, [activeAthleteId, athleteForSummary?.name, rosterAthleteRow?.name, router]);
+  }, [
+    activeAthleteId,
+    athleteForSummary?.name,
+    deleteActiveAthlete,
+    rosterAthleteRow?.name,
+    router,
+  ]);
 
   const summaryFlowTraceRole: SummaryFlowTraceRole =
     deviceRole === "coach" ? "coach" : deviceRole === "parent" ? "parent" : "unknown";

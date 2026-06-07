@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logKeyRead, logKeyWrite } from "../dev/persistenceAudit";
 import { StorageKeys } from "./storageKeys";
 import type { Session } from "../types";
 
@@ -14,11 +15,24 @@ function safeParseSessions(raw: string | null): Session[] {
 }
 
 export async function getSessions(): Promise<Session[]> {
-  return safeParseSessions(await AsyncStorage.getItem(StorageKeys.sessions));
+  const raw = await AsyncStorage.getItem(StorageKeys.sessions);
+  logKeyRead({
+    key: StorageKeys.sessions,
+    raw,
+    source: "sessionsStore.getSessions",
+  });
+  return safeParseSessions(raw);
 }
 
 export async function setSessions(next: Session[]): Promise<void> {
-  await AsyncStorage.setItem(StorageKeys.sessions, JSON.stringify(next));
+  const raw = JSON.stringify(next);
+  logKeyWrite({
+    key: StorageKeys.sessions,
+    raw,
+    source: "sessionsStore.setSessions",
+    extra: { sessionCount: next.length },
+  });
+  await AsyncStorage.setItem(StorageKeys.sessions, raw);
 }
 
 export async function deleteSessionsForKid(kidId: string): Promise<void> {

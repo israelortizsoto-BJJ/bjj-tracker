@@ -104,6 +104,65 @@ export async function listCoachMatchBreakdownOverlaysForAthlete(
   return Object.values(map).filter((overlay) => overlay.sharedAthleteId.trim() === athleteId);
 }
 
+export async function deleteCoachMatchBreakdownOverlaysForCompetition(input: {
+  sharedAthleteId: string;
+  sharedCompetitionId: string;
+  matchLineageKeys?: readonly string[] | null;
+}): Promise<{
+  removedOverlayCount: number;
+  removedMatchLineageKeys: string[];
+}> {
+  const sharedAthleteId = trimmed(input.sharedAthleteId);
+  const sharedCompetitionId = trimmed(input.sharedCompetitionId);
+  const lineageFilter =
+    input.matchLineageKeys && input.matchLineageKeys.length > 0
+      ? new Set(input.matchLineageKeys.map((key) => trimmed(key)).filter(Boolean))
+      : null;
+
+  if (!sharedAthleteId || !sharedCompetitionId) {
+    if (__DEV__) {
+      console.log("[OVERLAY_RETIREMENT_PRUNE]", {
+        sharedAthleteId: sharedAthleteId || null,
+        sharedCompetitionId: sharedCompetitionId || null,
+        removedOverlayCount: 0,
+        removedMatchLineageKeys: [],
+        skipped: true,
+        reason: !sharedAthleteId ? "missing_sharedAthleteId" : "missing_sharedCompetitionId",
+      });
+    }
+    return { removedOverlayCount: 0, removedMatchLineageKeys: [] };
+  }
+
+  const map = await readStore();
+  const removedMatchLineageKeys: string[] = [];
+  for (const [key, overlay] of Object.entries(map)) {
+    if (overlay.sharedAthleteId.trim() !== sharedAthleteId) continue;
+    if (overlay.sharedCompetitionId.trim() !== sharedCompetitionId) continue;
+    const matchLineageKey = overlay.matchLineageKey.trim();
+    if (lineageFilter && !lineageFilter.has(matchLineageKey)) continue;
+    delete map[key];
+    removedMatchLineageKeys.push(matchLineageKey);
+  }
+
+  if (removedMatchLineageKeys.length > 0) {
+    await writeStore(map);
+  }
+
+  if (__DEV__) {
+    console.log("[OVERLAY_RETIREMENT_PRUNE]", {
+      sharedAthleteId,
+      sharedCompetitionId,
+      removedOverlayCount: removedMatchLineageKeys.length,
+      removedMatchLineageKeys,
+    });
+  }
+
+  return {
+    removedOverlayCount: removedMatchLineageKeys.length,
+    removedMatchLineageKeys,
+  };
+}
+
 export async function writeCoachMatchBreakdownOverlay(input: {
   identity: CoachMatchBreakdownOverlayIdentity;
   patch: CoachMatchBreakdownOverlayPatch;

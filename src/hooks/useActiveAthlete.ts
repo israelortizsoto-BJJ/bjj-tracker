@@ -115,6 +115,10 @@ function athleteTraceStoreSourceReason(
   }
 }
 
+function athleteRuntimeIds(rows: ParentAthlete[]): string[] {
+  return rows.map((a) => a.id.trim()).filter(Boolean);
+}
+
 export { linkedKidIdForParentAthlete } from "../identity/buildAthleteAuthoritySnapshot";
 export type { LinkedKidForParentAthleteOptions } from "../identity/buildAthleteAuthoritySnapshot";
 
@@ -143,6 +147,10 @@ export function useActiveAthlete(): UseActiveAthleteResult {
   const lastAppliedDigestRef = useRef("");
   const roleRef = useRef(role);
   roleRef.current = role;
+  const operatingAthleteRosterRef = useRef<ParentAthlete[]>(operatingAthleteRoster);
+  operatingAthleteRosterRef.current = operatingAthleteRoster;
+  const athleteIdStateRef = useRef(athleteId);
+  athleteIdStateRef.current = athleteId;
 
   const applyStorageSnapshot = useCallback(
     (
@@ -385,9 +393,43 @@ export function useActiveAthlete(): UseActiveAthleteResult {
 
       lastAppliedDigestRef.current = applyDigest;
 
+      if (__DEV__) {
+        console.log("[ACTIVE_ROSTER_RUNTIME]", {
+          phase: "before_setOperatingAthleteRoster",
+          callbackSource: snap.meta?.sourceTrigger ?? "unknown",
+          activeAthleteId: idToApply || null,
+          rosterIds: athleteRuntimeIds(snap.operatingAthleteRoster),
+          rosterLength: snap.operatingAthleteRoster.length,
+          selectedAthleteIds: idToApply ? [idToApply] : [],
+          deletedAthleteId: null,
+          deletedAthleteStillExists: null,
+          activeAthletePresentInRoster: idToApply
+            ? snap.operatingAthleteRoster.some((a) => a.id.trim() === idToApply)
+            : false,
+          previousRosterIds: athleteRuntimeIds(operatingAthleteRosterRef.current),
+          previousRosterLength: operatingAthleteRosterRef.current.length,
+        });
+      }
+
       setAthletes(snap.sorted);
       setOperatingAthleteRoster(snap.operatingAthleteRoster);
       setKidsById(snap.loadedKids);
+      if (__DEV__) {
+        console.log("[ACTIVE_ATHLETE_RUNTIME]", {
+          phase: "before_setAthleteIdState",
+          callbackSource: snap.meta?.sourceTrigger ?? "unknown",
+          activeAthleteId: idToApply || null,
+          previousActiveAthleteId: athleteIdStateRef.current || null,
+          rosterIds: athleteRuntimeIds(snap.operatingAthleteRoster),
+          rosterLength: snap.operatingAthleteRoster.length,
+          selectedAthleteIds: idToApply ? [idToApply] : [],
+          deletedAthleteId: null,
+          deletedAthleteStillExists: null,
+          activeAthletePresentInRoster: idToApply
+            ? snap.operatingAthleteRoster.some((a) => a.id.trim() === idToApply)
+            : false,
+        });
+      }
       setAthleteIdState(idToApply);
       setAuthorityBootstrapState(snap.authorityBootstrapState);
       setCoachOperatingAthleteChoices(snap.coachOperatingAthleteChoices);
@@ -584,17 +626,84 @@ export function useActiveAthlete(): UseActiveAthleteResult {
 
   useEffect(() => {
     return subscribeActiveAthleteChanges(() => {
+      if (__DEV__) {
+        console.log("[ACTIVE_ATHLETE_RUNTIME]", {
+          phase: "subscribeActiveAthleteChanges_callback_enter",
+          callbackSource: "active_athlete_store_subscription",
+          activeAthleteId: athleteIdStateRef.current || null,
+          rosterIds: athleteRuntimeIds(operatingAthleteRosterRef.current),
+          rosterLength: operatingAthleteRosterRef.current.length,
+          selectedAthleteIds: athleteIdStateRef.current ? [athleteIdStateRef.current] : [],
+          deletedAthleteId: null,
+          deletedAthleteStillExists: null,
+          activeAthletePresentInRoster: athleteIdStateRef.current
+            ? operatingAthleteRosterRef.current.some(
+                (a) => a.id.trim() === athleteIdStateRef.current,
+              )
+            : false,
+        });
+      }
       if (roleLoadingRef.current) return;
       void (async () => {
         const { snap, fetchParallelDepth, repoFetchOrdinal } = await fetchIdentitySnapshot(
           "active_athlete_store_subscription",
           { skipCoachWriterSessionRefresh: true },
         );
+        if (__DEV__) {
+          console.log("[ACTIVE_ATHLETE_RUNTIME]", {
+            phase: "subscribeActiveAthleteChanges_snapshot_ready",
+            callbackSource: "active_athlete_store_subscription",
+            activeAthleteId: snap.resolvedId.trim() || null,
+            rosterIds: athleteRuntimeIds(snap.operatingAthleteRoster),
+            rosterLength: snap.operatingAthleteRoster.length,
+            selectedAthleteIds: snap.resolvedId.trim() ? [snap.resolvedId.trim()] : [],
+            deletedAthleteId: null,
+            deletedAthleteStillExists: null,
+            activeAthletePresentInRoster: snap.resolvedId.trim()
+              ? snap.operatingAthleteRoster.some((a) => a.id.trim() === snap.resolvedId.trim())
+              : false,
+            repoFetchOrdinal,
+          });
+        }
         if (roleLoadingRef.current) return;
         applyStorageSnapshot(snap, roleRef.current, { fetchParallelDepth, repoFetchOrdinal });
       })();
     });
   }, [applyStorageSnapshot, fetchIdentitySnapshot, role]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log("[ACTIVE_ROSTER_RUNTIME]", {
+      phase: "after_setOperatingAthleteRoster_commit",
+      callbackSource: "state_commit",
+      activeAthleteId: athleteId || null,
+      rosterIds: athleteRuntimeIds(operatingAthleteRoster),
+      rosterLength: operatingAthleteRoster.length,
+      selectedAthleteIds: athleteId ? [athleteId] : [],
+      deletedAthleteId: null,
+      deletedAthleteStillExists: null,
+      activeAthletePresentInRoster: athleteId
+        ? operatingAthleteRoster.some((a) => a.id.trim() === athleteId)
+        : false,
+    });
+  }, [athleteId, operatingAthleteRoster]);
+
+  useEffect(() => {
+    if (!__DEV__) return;
+    console.log("[ACTIVE_ATHLETE_RUNTIME]", {
+      phase: "activeAthleteId_state_commit",
+      callbackSource: "state_commit",
+      activeAthleteId: athleteId || null,
+      rosterIds: athleteRuntimeIds(operatingAthleteRoster),
+      rosterLength: operatingAthleteRoster.length,
+      selectedAthleteIds: athleteId ? [athleteId] : [],
+      deletedAthleteId: null,
+      deletedAthleteStillExists: null,
+      activeAthletePresentInRoster: athleteId
+        ? operatingAthleteRoster.some((a) => a.id.trim() === athleteId)
+        : false,
+    });
+  }, [athleteId, operatingAthleteRoster]);
 
   const resolvedAthleteId = athleteId.trim();
 

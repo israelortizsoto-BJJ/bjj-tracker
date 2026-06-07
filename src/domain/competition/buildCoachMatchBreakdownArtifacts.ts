@@ -3,6 +3,7 @@ import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeek
 
 export async function buildCoachMatchBreakdownArtifacts(
   sharedAthleteId: string,
+  options?: { updatedAtOverride?: string | null },
 ): Promise<SyncedCoachMatchBreakdownArtifactSet> {
   const athleteId = sharedAthleteId.trim();
   if (!athleteId) {
@@ -32,11 +33,12 @@ export async function buildCoachMatchBreakdownArtifacts(
     );
 
   const updatedAt =
-    artifacts.reduce<string | null>(
+    options?.updatedAtOverride?.trim() ||
+    (artifacts.reduce<string | null>(
       (latest, artifact) =>
         latest === null || artifact.updatedAt.localeCompare(latest) > 0 ? artifact.updatedAt : latest,
       null,
-    ) ?? new Date().toISOString();
+    ) ?? new Date().toISOString());
 
   const artifactSet: SyncedCoachMatchBreakdownArtifactSet = {
     schemaVersion: 1,

@@ -201,6 +201,34 @@ console.log("[WORKER_RUNTIME_VERSION]", WORKER_RUNTIME_VERSION);
 
 const WEEKLY_CORRUPTION_TRACE = "[WEEKLY CORRUPTION TRACE]";
 
+function roughByteSize(value: unknown): number {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return 0;
+  }
+}
+
+function rosterArtifactCountsByAthlete(rec: SessionRecord) {
+  return Object.fromEntries(
+    rec.athletes.map((athlete) => {
+      const id = athlete.id;
+      return [
+        id,
+        {
+          topology: rec.competitionTopologyByAthleteId[id] ? 1 : 0,
+          proof: rec.trainingProofByAthleteId[id] ? 1 : 0,
+          aggregate: rec.competitionAggregateByAthleteId[id] ? 1 : 0,
+          weekly: rec.weeklyByAthleteId[id] ? 1 : 0,
+          competitions: rec.competitions.filter((competition) => competition.sharedAthleteId === id).length,
+          coachMatchBreakdownArtifacts:
+            rec.coachMatchBreakdownArtifacts[id]?.artifacts.length ?? 0,
+        },
+      ];
+    }),
+  );
+}
+
 /** Field-level probe for before/after diffs across KV → parse → GET assembly. */
 type WeeklyFieldProbe = {
   weekStartYMD: string | null;
@@ -1367,6 +1395,20 @@ async function readSession(kv: KVNamespace, token: string): Promise<SessionRecor
         )
       : null,
   });
+  if (normalized) {
+    console.log("[REMOTE_ROSTER_STORAGE_AUDIT]", {
+      currentPersistedAthleteIds: normalized.athletes.map((athlete) => athlete.id),
+      afterDeleteAthleteIds: null,
+      artifactsStillRetainedAfterDelete: null,
+      storageStage: "readSession_after_normalize",
+      tokenSuffix: token.slice(-8),
+      topologyCounts: Object.keys(normalized.competitionTopologyByAthleteId ?? {}).length,
+      aggregateCounts: Object.keys(normalized.competitionAggregateByAthleteId ?? {}).length,
+      proofCounts: Object.keys(normalized.trainingProofByAthleteId ?? {}).length,
+      perAthleteArtifactCounts: rosterArtifactCountsByAthlete(normalized),
+      timestamp: new Date().toISOString(),
+    });
+  }
   return normalized;
 }
 
@@ -1421,6 +1463,18 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
         ? toStore.weekly.systemKey ?? null
         : "(no key)",
     weeklyByAthleteJsonSnippet: JSON.stringify(toStore.weeklyByAthleteId).slice(0, 4000),
+  });
+  console.log("[REMOTE_ROSTER_STORAGE_AUDIT]", {
+    currentPersistedAthleteIds: toStore.athletes.map((athlete) => athlete.id),
+    afterDeleteAthleteIds: null,
+    artifactsStillRetainedAfterDelete: null,
+    storageStage: "writeSession_before_put",
+    tokenSuffix: token.slice(-8),
+    topologyCounts: Object.keys(toStore.competitionTopologyByAthleteId ?? {}).length,
+    aggregateCounts: Object.keys(toStore.competitionAggregateByAthleteId ?? {}).length,
+    proofCounts: Object.keys(toStore.trainingProofByAthleteId ?? {}).length,
+    perAthleteArtifactCounts: rosterArtifactCountsByAthlete(toStore),
+    timestamp: new Date().toISOString(),
   });
   const coachOverlayPutList = coachMatchBreakdownArtifactList(
     toStore.coachMatchBreakdownArtifacts,
@@ -1567,7 +1621,7 @@ export default {
         }
         const rec = await readSession(env.SESSIONS, token);
         if (!rec) {
-          return error("Not found", 404);
+          return json({ ok: true, alreadyRetired: true }, 200);
         }
 
         // Debug clear propagation: see if the stored weekly doc actually drops the recap key.
@@ -1641,6 +1695,32 @@ export default {
           trainingProofByAthleteId: rec.trainingProofByAthleteId,
           coachMatchBreakdownArtifacts: apiCoachMatchBreakdownArtifacts,
         };
+        console.log("[REMOTE_ROSTER_FORENSIC]", {
+          sharedAthleteIdsReturned: rec.athletes.map((athlete) => athlete.id),
+          athleteCount: rec.athletes.length,
+          deletedRetiredArchivedByAthlete: Object.fromEntries(
+            rec.athletes.map((athlete) => [
+              athlete.id,
+              { deleted: false, retired: false, archived: false },
+            ]),
+          ),
+          topologyProofAggregateCountsPerAthlete: rosterArtifactCountsByAthlete(rec),
+          requestType: "GET /v1/sessions/:token",
+          tokenSuffix: token.slice(-8),
+          timestamp: new Date().toISOString(),
+        });
+        console.log("[WORKER_ROSTER_RESPONSE]", {
+          sharedAthleteIds: rec.athletes.map((athlete) => athlete.id),
+          athleteCount: rec.athletes.length,
+          inviteIds: [token.slice(-8)],
+          topologyCounts: Object.keys(rec.competitionTopologyByAthleteId ?? {}).length,
+          aggregateCounts: Object.keys(rec.competitionAggregateByAthleteId ?? {}).length,
+          proofCounts: Object.keys(rec.trainingProofByAthleteId ?? {}).length,
+          payloadGeneratedAt: new Date().toISOString(),
+          requestType: "GET /v1/sessions/:token",
+          payloadByteSize: roughByteSize(getPayload),
+          timestamp: new Date().toISOString(),
+        });
         console.log("[COACH_OVERLAY_SYNC_TRACE]", {
           stage: "worker_get_payload_assembled",
           athleteCount: rec.athletes.length,
@@ -1962,9 +2042,41 @@ export default {
         }
         const hadAthlete = rec.athletes.some((a) => a.id === athleteId);
         if (!hadAthlete) {
+          console.log("[CANONICAL_RETIREMENT_WORKER]", {
+            beforeAthleteIds: rec.athletes.map((athlete) => athlete.id),
+            afterAthleteIds: rec.athletes.map((athlete) => athlete.id),
+            removedArtifactCounts: {
+              roster: 0,
+              weekly: 0,
+              trainingProof: 0,
+              competitionAggregates: 0,
+              competitionTopology: 0,
+              coachOverlays: 0,
+              competitions: 0,
+            },
+            retainedArtifactCounts: {
+              weekly: Object.keys(rec.weeklyByAthleteId ?? {}).length,
+              trainingProof: Object.keys(rec.trainingProofByAthleteId ?? {}).length,
+              competitionAggregates: Object.keys(rec.competitionAggregateByAthleteId ?? {}).length,
+              competitionTopology: Object.keys(rec.competitionTopologyByAthleteId ?? {}).length,
+              coachOverlays: Object.keys(rec.coachMatchBreakdownArtifacts ?? {}).length,
+              competitions: rec.competitions.length,
+            },
+            persisted: false,
+            idempotentNoop: true,
+            failure: null,
+            deletedAthleteId: athleteId,
+            tokenSuffix: token.slice(-8),
+            timestamp: new Date().toISOString(),
+          });
           return error("Not found", 404);
         }
 
+        const removedCompetitionCount = rec.competitions.filter(
+          (competition) => competition.sharedAthleteId === athleteId,
+        ).length;
+        const removedCoachOverlayCount =
+          rec.coachMatchBreakdownArtifacts[athleteId]?.artifacts.length ?? 0;
         const { [athleteId]: _removedWeekly, ...restWeeklyByAthlete } = rec.weeklyByAthleteId;
         const { [athleteId]: _removedAggregate, ...restCompetitionAggregateByAthlete } =
           rec.competitionAggregateByAthleteId;
@@ -1984,7 +2096,110 @@ export default {
           trainingProofByAthleteId: restTrainingProofByAthlete,
           coachMatchBreakdownArtifacts: restCoachMatchBreakdownArtifacts,
         };
-        await writeSession(env.SESSIONS, token, next);
+        console.log("[REMOTE_ROSTER_STORAGE_AUDIT]", {
+          currentPersistedAthleteIds: rec.athletes.map((athlete) => athlete.id),
+          afterDeleteAthleteIds: next.athletes.map((athlete) => athlete.id),
+          artifactsStillRetainedAfterDelete: {
+            weekly: Boolean(restWeeklyByAthlete[athleteId]),
+            topology: Boolean(restCompetitionTopologyByAthlete[athleteId]),
+            aggregate: Boolean(restCompetitionAggregateByAthlete[athleteId]),
+            proof: Boolean(restTrainingProofByAthlete[athleteId]),
+            coachMatchBreakdowns: Boolean(restCoachMatchBreakdownArtifacts[athleteId]),
+            competitions: next.competitions.some(
+              (competition) => competition.sharedAthleteId === athleteId,
+            ),
+          },
+          storageStage: "DELETE_athlete_before_writeSession",
+          tokenSuffix: token.slice(-8),
+          deletedAthleteId: athleteId,
+          topologyCounts: Object.keys(next.competitionTopologyByAthleteId ?? {}).length,
+          aggregateCounts: Object.keys(next.competitionAggregateByAthleteId ?? {}).length,
+          proofCounts: Object.keys(next.trainingProofByAthleteId ?? {}).length,
+          timestamp: new Date().toISOString(),
+        });
+        console.log("[REMOTE_ROSTER_FORENSIC]", {
+          sharedAthleteIdsReturned: next.athletes.map((athlete) => athlete.id),
+          athleteCount: next.athletes.length,
+          deletedRetiredArchivedByAthlete: Object.fromEntries(
+            next.athletes.map((athlete) => [
+              athlete.id,
+              { deleted: false, retired: false, archived: false },
+            ]),
+          ),
+          topologyProofAggregateCountsPerAthlete: rosterArtifactCountsByAthlete(next),
+          requestType: "DELETE /v1/sessions/:token/athletes/:athleteId",
+          tokenSuffix: token.slice(-8),
+          deletedAthleteId: athleteId,
+          timestamp: new Date().toISOString(),
+        });
+        console.log("[WORKER_ROSTER_RESPONSE]", {
+          sharedAthleteIds: next.athletes.map((athlete) => athlete.id),
+          athleteCount: next.athletes.length,
+          inviteIds: [token.slice(-8)],
+          topologyCounts: Object.keys(next.competitionTopologyByAthleteId ?? {}).length,
+          aggregateCounts: Object.keys(next.competitionAggregateByAthleteId ?? {}).length,
+          proofCounts: Object.keys(next.trainingProofByAthleteId ?? {}).length,
+          payloadGeneratedAt: new Date().toISOString(),
+          requestType: "DELETE /v1/sessions/:token/athletes/:athleteId",
+          deletedAthleteId: athleteId,
+          removedTopology: Boolean(_removedTopology),
+          removedAggregate: Boolean(_removedAggregate),
+          removedProof: Boolean(_removedProof),
+          removedCoachMatchBreakdowns: Boolean(_removedCoachMatchBreakdowns),
+          timestamp: new Date().toISOString(),
+        });
+        try {
+          await writeSession(env.SESSIONS, token, next);
+          console.log("[CANONICAL_RETIREMENT_WORKER]", {
+            beforeAthleteIds: rec.athletes.map((athlete) => athlete.id),
+            afterAthleteIds: next.athletes.map((athlete) => athlete.id),
+            removedArtifactCounts: {
+              roster: 1,
+              weekly: _removedWeekly ? 1 : 0,
+              trainingProof: _removedProof ? 1 : 0,
+              competitionAggregates: _removedAggregate ? 1 : 0,
+              competitionTopology: _removedTopology ? 1 : 0,
+              coachOverlays: removedCoachOverlayCount,
+              competitions: removedCompetitionCount,
+            },
+            retainedArtifactCounts: {
+              weekly: Object.keys(next.weeklyByAthleteId ?? {}).length,
+              trainingProof: Object.keys(next.trainingProofByAthleteId ?? {}).length,
+              competitionAggregates: Object.keys(next.competitionAggregateByAthleteId ?? {}).length,
+              competitionTopology: Object.keys(next.competitionTopologyByAthleteId ?? {}).length,
+              coachOverlays: Object.keys(next.coachMatchBreakdownArtifacts ?? {}).length,
+              competitions: next.competitions.length,
+            },
+            persisted: true,
+            idempotentNoop: false,
+            failure: null,
+            deletedAthleteId: athleteId,
+            tokenSuffix: token.slice(-8),
+            timestamp: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.log("[CANONICAL_RETIREMENT_WORKER]", {
+            beforeAthleteIds: rec.athletes.map((athlete) => athlete.id),
+            afterAthleteIds: next.athletes.map((athlete) => athlete.id),
+            removedArtifactCounts: {
+              roster: 1,
+              weekly: _removedWeekly ? 1 : 0,
+              trainingProof: _removedProof ? 1 : 0,
+              competitionAggregates: _removedAggregate ? 1 : 0,
+              competitionTopology: _removedTopology ? 1 : 0,
+              coachOverlays: removedCoachOverlayCount,
+              competitions: removedCompetitionCount,
+            },
+            retainedArtifactCounts: null,
+            persisted: false,
+            idempotentNoop: false,
+            failure: err instanceof Error ? err.message : String(err),
+            deletedAthleteId: athleteId,
+            tokenSuffix: token.slice(-8),
+            timestamp: new Date().toISOString(),
+          });
+          throw err;
+        }
         return json({ ok: true }, 200);
       }
 

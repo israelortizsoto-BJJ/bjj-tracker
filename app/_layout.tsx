@@ -5,6 +5,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { getAppVariant, isDev } from "../src/config/runtime";
 import { DeviceRoleProvider } from "../src/deviceRole/DeviceRoleProvider";
+import { logAsyncStorageInventory } from "../src/dev/persistenceAudit";
 import { ensureStorageUpToDate } from "../src/storage/migrations";
 
 export default function RootLayout() {
@@ -30,7 +31,9 @@ export default function RootLayout() {
 
     (async () => {
       try {
+        await logAsyncStorageInventory("startup_pre_migration");
         await ensureStorageUpToDate();
+        await logAsyncStorageInventory("startup_post_migration");
       } catch (e) {
         console.warn("Storage migration failed:", e);
       } finally {

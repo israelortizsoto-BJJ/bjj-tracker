@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { logCompetitionTopologyTrace } from "../dev/competitionTopologyTrace";
+import {
+  logCacheProvenance,
+  logKeyRead,
+  logKeyWrite,
+} from "../dev/persistenceAudit";
 import type {
   SyncedCompetitionMatchTopology,
   SyncedCompetitionTopologyArtifact,
@@ -232,18 +237,56 @@ function logCoachTopologyAcceptanceCacheTrace(input: {
 }
 
 async function readStore(): Promise<TopologyByAthleteId> {
-  const map = safeParseStore(
-    await AsyncStorage.getItem(StorageKeys.coachCompetitionTopologyByAthleteId),
-  );
+  const raw = await AsyncStorage.getItem(StorageKeys.coachCompetitionTopologyByAthleteId);
+  logKeyRead({
+    key: StorageKeys.coachCompetitionTopologyByAthleteId,
+    raw,
+    source: "coachCompetitionTopologyStore.readStore",
+  });
+  const map = safeParseStore(raw);
+  const artifacts = Object.values(map);
+  const updatedAts = artifacts.map((artifact) => artifact.updatedAt).sort();
+  logCacheProvenance({
+    key: StorageKeys.coachCompetitionTopologyByAthleteId,
+    raw,
+    source: "coachCompetitionTopologyStore.readStore",
+    readKind: "diskRead",
+    athleteIds: Object.keys(map),
+    sharedAthleteIds: Object.keys(map),
+    updatedAt: updatedAts[updatedAts.length - 1] ?? null,
+    entityCounts: {
+      artifactCount: artifacts.length,
+      competitionCount: artifacts.reduce(
+        (sum, artifact) => sum + artifact.competitions.length,
+        0,
+      ),
+      matchCount: artifacts.reduce(
+        (sum, artifact) =>
+          sum +
+          artifact.competitions.reduce(
+            (inner, competition) => inner + competition.matches.length,
+            0,
+          ),
+        0,
+      ),
+    },
+  });
   topologyMemory = map;
   return map;
 }
 
 async function writeStore(map: TopologyByAthleteId): Promise<void> {
   topologyMemory = map;
+  const raw = JSON.stringify(map);
+  logKeyWrite({
+    key: StorageKeys.coachCompetitionTopologyByAthleteId,
+    raw,
+    source: "coachCompetitionTopologyStore.writeStore",
+    extra: { artifactCount: Object.keys(map).length },
+  });
   await AsyncStorage.setItem(
     StorageKeys.coachCompetitionTopologyByAthleteId,
-    JSON.stringify(map),
+    raw,
   );
 }
 
@@ -275,6 +318,16 @@ export function peekCoachCompetitionTopology(
     return null;
   }
   const artifact = topologyMemory[athleteId] ?? null;
+  logCacheProvenance({
+    key: StorageKeys.coachCompetitionTopologyByAthleteId,
+    source: "coachCompetitionTopologyStore.peekCoachCompetitionTopology",
+    readKind: "memoryRead",
+    athleteIds: athleteId ? [athleteId] : [],
+    sharedAthleteIds: athleteId ? [athleteId] : [],
+    updatedAt: artifact?.updatedAt ?? null,
+    entityCounts: { memoryEntryCount: Object.keys(topologyMemory).length },
+    extra: { hit: Boolean(artifact) },
+  });
   if (__DEV__) {
     logCoachTopologyAcceptanceCacheTrace({
       stage: artifact ? "cache_peek_hit" : "cache_peek_miss",

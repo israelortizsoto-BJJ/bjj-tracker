@@ -1,5 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import {
+  activeParentWeeklyLinksWithSecret,
+  dedupeActiveParentWeeklyLinksByInviteToken,
+} from "../coachShare/coachLinkBinding";
+import { normalizeInviteLinkToken } from "../coachShare/inviteLinkToken";
+import { logKeyRead, logKeyWrite } from "../dev/persistenceAudit";
 import { buildCanonicalSharedAthletePrimaryRowMap } from "../identity/canonicalSharedAthleteOwner";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import { logIdentityBindInterceptTrace } from "../identity/identityBindInterceptTrace";
@@ -11,9 +17,11 @@ import {
   namesByIdFromParentAthletes,
 } from "../identity/hydrationPipelineTrace";
 import { runLineageIntegrityScan } from "../identity/lineageIntegrityDetection";
+import { coachSyncDeleteSessionAthlete } from "../services/coachWeeklySyncApi";
 import { isKidCoachArchived, type Kid, type KidsById } from "../types/coachKid";
 
-import { getKidsById } from "./coachKidStore";
+import { clearKidSharedAthleteLink, getKidsById } from "./coachKidStore";
+import { getCoachLinks } from "./coachShareStore";
 import { StorageKeys } from "./storageKeys";
 
 export type OnboardingVersion = "v1" | "v2";
@@ -319,6 +327,11 @@ export async function projectParentCanonicalAthleteForLinkedKid(input: {
 export async function getAthletes(): Promise<ParentAthlete[]> {
   try {
     const raw = await AsyncStorage.getItem(StorageKeys.parentAthletes);
+    logKeyRead({
+      key: StorageKeys.parentAthletes,
+      raw,
+      source: "athleteStore.getAthletes",
+    });
     const list = safeParseAthletes(raw);
     if (__DEV__) {
       logHydrationPipelineWatchAthletes({
@@ -362,6 +375,10 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
   }
 
   let changed = false;
+  const recoveredSharedAthleteIds: string[] = [];
+  const recoveredKidIds: string[] = [];
+  const alreadyExistingAthleteIds: string[] = [];
+  const newlyProjectedAthleteIds: string[] = [];
 
   const primaryByShared = buildCanonicalSharedAthletePrimaryRowMap(kidsById, {
     reconcileSource: "ensureOperatingAthletesFromCoachLinkedKids",
@@ -378,11 +395,15 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
 
     const prev = byId.get(sid);
     if (prev) {
+      alreadyExistingAthleteIds.push(sid);
       if (rosterName && prev.name !== rosterName) {
         byId.set(sid, { ...prev, name: rosterName });
         changed = true;
       }
     } else {
+      recoveredSharedAthleteIds.push(sid);
+      recoveredKidIds.push(k.id);
+      newlyProjectedAthleteIds.push(sid);
       byId.set(sid, { id: sid, name: displayName });
       logCanonicalProjectionTrace("[CANONICAL_PARENT_UPSERT]", {
         athleteName: displayName,
@@ -414,6 +435,16 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
     }
   }
 
+  if (__DEV__) {
+    console.log("[BOOTSTRAP_RECOVERY_SOURCE]", {
+      recoveredSharedAthleteIds,
+      recoveredKidIds,
+      alreadyExistingAthleteIds,
+      newlyProjectedAthleteIds,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   if (!changed) return;
 
   const next = Array.from(byId.values());
@@ -430,7 +461,17 @@ export async function ensureOperatingAthletesFromCoachLinkedKids(
     });
   }
   try {
-    await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+    const raw = JSON.stringify(next);
+    logKeyWrite({
+      key: StorageKeys.parentAthletes,
+      raw,
+      source: "athleteStore.ensureOperatingAthletesFromCoachLinkedKids",
+      extra: {
+        athleteCount: next.length,
+        derivedFromCoachKids: true,
+      },
+    });
+    await AsyncStorage.setItem(StorageKeys.parentAthletes, raw);
     if (__DEV__) {
       logHydrationPipelineWatchAthletes({
         stage: "4_storage_persistence",
@@ -606,18 +647,219 @@ export async function updateAthlete(id: string, patch: ParentAthleteUpdate): Pro
   return merged;
 }
 
-export async function deleteAthlete(id: string): Promise<boolean> {
-  const trimmedId = typeof id === "string" ? id.trim() : "";
+export type DeleteAthleteInput = {
+  athleteId: string;
+  canonicalSharedAthleteId?: string | null;
+};
+
+export async function deleteAthlete(input: DeleteAthleteInput): Promise<boolean> {
+  const trimmedId = typeof input.athleteId === "string" ? input.athleteId.trim() : "";
   if (!trimmedId) return false;
 
-  const existing = await getAthletes();
+  const [existing, coachLinks] = await Promise.all([
+    getAthletes(),
+    getCoachLinks(),
+  ]);
+  const target = existing.find((a) => a.id === trimmedId) ?? null;
   const next = existing.filter((a) => a.id !== trimmedId);
   if (next.length === existing.length) return false;
 
+  const retirementSharedAthleteId =
+    typeof input.canonicalSharedAthleteId === "string"
+      ? input.canonicalSharedAthleteId.trim() || null
+      : null;
+  const resolutionSource = retirementSharedAthleteId
+    ? "explicit_ui_context"
+    : "unresolved_local_only";
+  const parentWriterLinks = dedupeActiveParentWeeklyLinksByInviteToken(
+    activeParentWeeklyLinksWithSecret(coachLinks),
+  );
+  const shouldAttemptRemoteRetirement =
+    Boolean(retirementSharedAthleteId) && parentWriterLinks.length > 0;
+
+  if (__DEV__) {
+    console.log("[CANONICAL_RETIREMENT_RESOLUTION]", {
+      athleteId: trimmedId,
+      canonicalSharedAthleteId: retirementSharedAthleteId,
+      remoteRetirementEligible: shouldAttemptRemoteRetirement,
+      writerSessionPresent: parentWriterLinks.length > 0,
+      remoteDeleteAttempted: shouldAttemptRemoteRetirement,
+      resolutionSource,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  let workerDeleteRequestFired = false;
+  let retirementEndpointUrl: string | null = null;
+  let remoteDeleteSucceeded = false;
+  let remoteDeleteIdempotent = false;
+  let remoteDeleteAttemptCount = 0;
+  let remoteDeleteSuccessCount = 0;
+  let remoteDeleteFailureCount = 0;
+
+  if (shouldAttemptRemoteRetirement) {
+    for (const link of parentWriterLinks) {
+      const weeklySync = link.weeklySync;
+      const token = weeklySync.linkToken.trim();
+      const parentWriterSecret = weeklySync.parentWriterSecret?.trim() ?? "";
+      if (!token || !parentWriterSecret) continue;
+      const endpointUrl = `${weeklySync.apiBaseUrl.replace(/\/+$/, "")}/v1/sessions/${encodeURIComponent(
+        token,
+      )}/athletes/${encodeURIComponent(retirementSharedAthleteId!)}`;
+      retirementEndpointUrl = endpointUrl;
+      if (__DEV__) {
+        console.log("[CANONICAL_RETIREMENT_REQUEST]", {
+          sharedAthleteId: retirementSharedAthleteId,
+          writerTokenTail: normalizeInviteLinkToken(token).slice(-8),
+          endpointUrl,
+          requestPhase: "start",
+          responseCode: null,
+          retryFailureState: null,
+          timestamp: new Date().toISOString(),
+        });
+      }
+      try {
+        workerDeleteRequestFired = true;
+        remoteDeleteAttemptCount += 1;
+        const deleteResult = await coachSyncDeleteSessionAthlete(
+          token,
+          retirementSharedAthleteId!,
+          parentWriterSecret,
+          weeklySync.apiBaseUrl,
+        );
+        remoteDeleteSuccessCount += 1;
+        remoteDeleteIdempotent = remoteDeleteIdempotent || deleteResult.idempotent;
+        if (__DEV__) {
+          console.log("[CANONICAL_RETIREMENT_REQUEST]", {
+            sharedAthleteId: retirementSharedAthleteId,
+            writerTokenTail: normalizeInviteLinkToken(token).slice(-8),
+            endpointUrl,
+            requestPhase: "end",
+            responseCode: "ok_or_already_retired",
+            retryFailureState: null,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      } catch (error) {
+        remoteDeleteFailureCount += 1;
+        if (__DEV__) {
+          console.log("[CANONICAL_RETIREMENT_REQUEST]", {
+            sharedAthleteId: retirementSharedAthleteId,
+            writerTokenTail: normalizeInviteLinkToken(token).slice(-8),
+            endpointUrl,
+            requestPhase: "end",
+            responseCode: error instanceof Error && "status" in error
+              ? (error as { status?: unknown }).status ?? null
+              : null,
+            retryFailureState: "remote_retirement_failed_local_delete_continues",
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          });
+        }
+      }
+    }
+    remoteDeleteSucceeded =
+      remoteDeleteAttemptCount > 0 &&
+      remoteDeleteFailureCount === 0 &&
+      remoteDeleteSuccessCount === remoteDeleteAttemptCount;
+  } else if (__DEV__) {
+    console.log("[CANONICAL_RETIREMENT_SKIPPED]", {
+      athleteId: trimmedId,
+      canonicalSharedAthleteId: retirementSharedAthleteId,
+      writerSessionPresent: parentWriterLinks.length > 0,
+      reason: retirementSharedAthleteId
+        ? "writer_session_missing"
+        : "canonical_shared_athlete_id_missing",
+      localOnlyAthlete: !retirementSharedAthleteId,
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[CANONICAL_RETIREMENT_REQUEST]", {
+      sharedAthleteId: retirementSharedAthleteId,
+      writerTokenTail: null,
+      endpointUrl: null,
+      requestPhase: "skipped",
+      responseCode: null,
+      retryFailureState: null,
+      skipReason: "no_parent_writer_session_for_athlete",
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  if (retirementSharedAthleteId && remoteDeleteSucceeded) {
+    const kidsById = await getKidsById();
+    const affectedKidIds = Object.values(kidsById)
+      .filter((kid) => (kid.sharedAthleteId ?? "").trim() === retirementSharedAthleteId)
+      .map((kid) => kid.id);
+    let clearedLinkageCount = 0;
+    for (const kidId of affectedKidIds) {
+      const cleared = await clearKidSharedAthleteLink(kidId);
+      if (cleared) clearedLinkageCount += 1;
+    }
+    if (__DEV__) {
+      console.log("[CANONICAL_LINKAGE_RETIREMENT]", {
+        canonicalSharedAthleteId: retirementSharedAthleteId,
+        affectedKidIds,
+        clearedLinkageCount,
+        remoteDeleteSucceeded,
+        remoteDeleteIdempotent,
+        skippedBecauseRemoteFailed: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } else if (retirementSharedAthleteId && __DEV__) {
+    console.log("[CANONICAL_LINKAGE_RETIREMENT]", {
+      canonicalSharedAthleteId: retirementSharedAthleteId,
+      affectedKidIds: [],
+      clearedLinkageCount: 0,
+      remoteDeleteSucceeded,
+      remoteDeleteIdempotent,
+      skippedBecauseRemoteFailed: shouldAttemptRemoteRetirement && !remoteDeleteSucceeded,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   try {
-    await AsyncStorage.setItem(StorageKeys.parentAthletes, JSON.stringify(next));
+    const raw = JSON.stringify(next);
+    logKeyWrite({
+      key: StorageKeys.parentAthletes,
+      raw,
+      source: "athleteStore.deleteAthlete",
+      extra: {
+        deletedAthleteId: trimmedId,
+        remainingAthleteCount: next.length,
+      },
+    });
+    await AsyncStorage.setItem(StorageKeys.parentAthletes, raw);
   } catch {
     return false;
+  }
+
+  if (__DEV__) {
+    console.log("[REMOTE_DELETE_PROPAGATION]", {
+      sharedAthleteId: retirementSharedAthleteId ?? trimmedId,
+      localDeletionSuccess: true,
+      workerDeleteRequestFired,
+      endpointUrl: retirementEndpointUrl,
+      responseCode: null,
+      responsePayload: null,
+      retryFailureState: null,
+      source: "athleteStore.deleteAthlete",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[PARENT_ATHLETE_DELETE_AUDIT]", {
+      athleteId: trimmedId,
+      sharedAthleteId: retirementSharedAthleteId,
+      linkedInviteIds: [],
+      deletedLocally: true,
+      publishedDeletionEvent: workerDeleteRequestFired,
+      retiredInviteIds: [],
+      removedSharedAthleteId: Boolean(retirementSharedAthleteId),
+      removedWriterLinks: false,
+      workerDeleteEndpointCalled: workerDeleteRequestFired,
+      source: "athleteStore.deleteAthlete",
+      athleteName: target?.name ?? null,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   const current = await getActiveAthleteId();
@@ -636,6 +878,11 @@ export async function deleteAthlete(id: string): Promise<boolean> {
 export async function getActiveAthleteId(): Promise<string | null> {
   try {
     const raw = await AsyncStorage.getItem(StorageKeys.parentActiveAthleteId);
+    logKeyRead({
+      key: StorageKeys.parentActiveAthleteId,
+      raw,
+      source: "athleteStore.getActiveAthleteId",
+    });
     const trimmed = typeof raw === "string" ? raw.trim() : "";
     return trimmed ? trimmed : null;
   } catch {
@@ -690,12 +937,29 @@ export async function setActiveAthleteId(
 
   try {
     if (athleteId == null) {
+      logKeyWrite({
+        key: StorageKeys.parentActiveAthleteId,
+        raw: null,
+        source: "athleteStore.setActiveAthleteId",
+        extra: { operation: "removeItem" },
+      });
       await AsyncStorage.removeItem(StorageKeys.parentActiveAthleteId);
     } else {
       const trimmed = athleteId.trim();
       if (!trimmed) {
+        logKeyWrite({
+          key: StorageKeys.parentActiveAthleteId,
+          raw: null,
+          source: "athleteStore.setActiveAthleteId",
+          extra: { operation: "removeItem_empty" },
+        });
         await AsyncStorage.removeItem(StorageKeys.parentActiveAthleteId);
       } else {
+        logKeyWrite({
+          key: StorageKeys.parentActiveAthleteId,
+          raw: trimmed,
+          source: "athleteStore.setActiveAthleteId",
+        });
         await AsyncStorage.setItem(StorageKeys.parentActiveAthleteId, trimmed);
       }
     }

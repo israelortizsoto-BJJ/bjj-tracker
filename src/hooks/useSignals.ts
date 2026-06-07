@@ -10,6 +10,7 @@ import {
   hasBoundedAggregateVisibility,
   hasFullLocalMatchLineage,
   overlayCompetitionAggregateSignals,
+  overlayCompetitionTopologyMetricsSignals,
 } from "../domain/competition/overlayCompetitionAggregateSignals";
 import {
   hasTrainingProofVisibility,
@@ -24,6 +25,7 @@ import {
   peekCoachCompetitionAggregate,
   useCoachCompetitionAggregateVersion,
 } from "../storage/coachCompetitionAggregateStore";
+import { peekCoachCompetitionTopology } from "../storage/coachCompetitionTopologyStore";
 import {
   getCoachTrainingProof,
   peekCoachTrainingProof,
@@ -250,9 +252,24 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     });
 
     const localSessionCount = scopedSessions.length;
+    const topologyArtifactForProvenance =
+      deviceRole === "coach" && hasAthlete
+        ? peekCoachCompetitionTopology(trimmedAthlete)
+        : null;
 
     if (deviceRole !== "coach" || !hasAthlete) {
       if (__DEV__ && hasAthlete) {
+        console.log("[SIGNAL_PROVENANCE]", {
+          athleteId: trimmedAthlete,
+          sourceOfCompetitionMetrics: "fallback",
+          sourceOfTrainingMetrics: "sessions",
+          sourceOfFocus: declaredInput ? "declaredInput" : "none",
+          sourceOfRecognizedSkills: "sessions",
+          topologyUpdatedAt: null,
+          aggregateUpdatedAt: null,
+          proofUpdatedAt: null,
+          sessionCount: localSessionCount,
+        });
         console.log("[SUMMARY_PROOF_CONSUME]", {
           athleteId: trimmedAthlete,
           proofCount: null,
@@ -288,6 +305,8 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     const proofSessionCount = proof?.currentWeekSessionCount ?? null;
 
     const localMatchLineage = hasFullLocalMatchLineage(scopedCompetitions);
+    let sourceOfCompetitionMetrics: "aggregate" | "topology" | "fallback" =
+      localMatchLineage ? "topology" : "fallback";
     if (localMatchLineage) {
       if (__DEV__) {
         console.log("[COMP_AGG_TRACE] overlay_skipped_local_matches", {
@@ -297,9 +316,38 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     } else {
       const aggregate = effectiveCoachAggregate;
       if (!aggregate) {
+        const topologyMatchCount =
+          topologyArtifactForProvenance?.competitions.reduce(
+            (sum, competition) => sum + competition.matches.length,
+            0,
+          ) ?? 0;
+        if (topologyArtifactForProvenance && topologyMatchCount > 0) {
+          sourceOfCompetitionMetrics = "topology";
+          withCoachOverlays = overlayCompetitionTopologyMetricsSignals(
+            withCoachOverlays,
+            topologyArtifactForProvenance,
+          );
+          if (__DEV__) {
+            console.log("[TOPOLOGY_SUMMARY_METRICS]", {
+              sharedAthleteId: trimmedAthlete,
+              fallbackReason: "aggregate_missing",
+              topologyWins: withCoachOverlays.competition.wins,
+              topologyLosses: withCoachOverlays.competition.losses,
+              topologyTotalMatches: withCoachOverlays.competition.totalMatches,
+              topologyUnresolved:
+                topologyMatchCount -
+                (withCoachOverlays.competition.wins + withCoachOverlays.competition.losses),
+              aggregateWins: null,
+              aggregateLosses: null,
+              aggregateTotalMatches: null,
+            });
+          }
+        }
         if (__DEV__) {
           console.log("[COMP_AGG_TRACE] overlay_missing", {
             sharedAthleteId: trimmedAthlete,
+            topologyFallbackApplied:
+              Boolean(topologyArtifactForProvenance) && topologyMatchCount > 0,
           });
           console.log("[COMP_AGGREGATE_TRACE]", {
             stage: "useSignals_overlay_skipped",
@@ -312,14 +360,26 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
               winRate: computed.competition.winRate,
               submissionRate: computed.competition.submissionRate,
             },
+            topologyFallbackValues:
+              topologyArtifactForProvenance && topologyMatchCount > 0
+                ? {
+                    totalMatches: withCoachOverlays.competition.totalMatches,
+                    wins: withCoachOverlays.competition.wins,
+                    losses: withCoachOverlays.competition.losses,
+                    winRate: withCoachOverlays.competition.winRate,
+                    submissionRate: withCoachOverlays.competition.submissionRate,
+                  }
+                : null,
           });
           console.log("[COACH_SUMMARY_AGGREGATE_TRACE]", {
             stage: "aggregate_overlay_application",
             sharedAthleteId: trimmedAthlete,
-            applied: false,
+            applied: Boolean(topologyArtifactForProvenance) && topologyMatchCount > 0,
             reason: "overlay_missing",
             localRecord: computed.competition.record,
             finalRecord: withCoachOverlays.competition.record,
+            topologyFallbackApplied:
+              Boolean(topologyArtifactForProvenance) && topologyMatchCount > 0,
             coachAggregateVersion,
           });
         }
@@ -364,6 +424,7 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
           });
         }
       } else {
+        sourceOfCompetitionMetrics = "aggregate";
         if (__DEV__) {
           console.log("[COMP_AGG_TRACE] overlay_applied", {
             sharedAthleteId: trimmedAthlete,
@@ -421,6 +482,17 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     if (!proof) {
       overlayReason = "overlay_missing";
       if (__DEV__) {
+        console.log("[SIGNAL_PROVENANCE]", {
+          athleteId: trimmedAthlete,
+          sourceOfCompetitionMetrics,
+          sourceOfTrainingMetrics: "sessions",
+          sourceOfFocus: declaredInput ? "declaredInput" : "none",
+          sourceOfRecognizedSkills: "sessions",
+          topologyUpdatedAt: topologyArtifactForProvenance?.updatedAt ?? null,
+          aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
+          proofUpdatedAt: null,
+          sessionCount: localSessionCount,
+        });
         console.log("[SUMMARY_PROOF_CONSUME]", {
           athleteId: trimmedAthlete,
           proofCount: null,
@@ -449,6 +521,17 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     if (!hasTrainingProofVisibility(proof, trimmedAthlete)) {
       overlayReason = "overlay_hidden_visibility";
       if (__DEV__) {
+        console.log("[SIGNAL_PROVENANCE]", {
+          athleteId: trimmedAthlete,
+          sourceOfCompetitionMetrics,
+          sourceOfTrainingMetrics: "sessions",
+          sourceOfFocus: declaredInput ? "declaredInput" : "none",
+          sourceOfRecognizedSkills: "sessions",
+          topologyUpdatedAt: topologyArtifactForProvenance?.updatedAt ?? null,
+          aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
+          proofUpdatedAt: proof.updatedAt,
+          sessionCount: localSessionCount,
+        });
         console.log("[SUMMARY_PROOF_CONSUME]", {
           athleteId: trimmedAthlete,
           proofCount: proofSessionCount,
@@ -485,6 +568,17 @@ export function useSignals(input: SignalInput = {}): SignalOutput {
     const withTrainingProof = overlayTrainingProofSignals(withCoachOverlays, proof);
 
     if (__DEV__) {
+      console.log("[SIGNAL_PROVENANCE]", {
+        athleteId: trimmedAthlete,
+        sourceOfCompetitionMetrics,
+        sourceOfTrainingMetrics: "proof",
+        sourceOfFocus: declaredInput ? "declaredInput" : "none",
+        sourceOfRecognizedSkills: "proof",
+        topologyUpdatedAt: topologyArtifactForProvenance?.updatedAt ?? null,
+        aggregateUpdatedAt: effectiveCoachAggregate?.updatedAt ?? null,
+        proofUpdatedAt: proof.updatedAt,
+        sessionCount: localSessionCount,
+      });
       console.log("[SUMMARY_PROOF_CONSUME]", {
         athleteId: trimmedAthlete,
         proofCount: proofSessionCount,

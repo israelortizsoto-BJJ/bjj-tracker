@@ -20,6 +20,11 @@ import {
   createCompetitionTopologyTraceId,
   logCompetitionTopologyTrace,
 } from "../dev/competitionTopologyTrace";
+import {
+  logCacheProvenance,
+  logKeyRead,
+  logKeyWrite,
+} from "../dev/persistenceAudit";
 import { normalizePublishableSystemKey } from "../lib/taxonomy/publishableSystemKey";
 import {
   CoachWeeklySyncApiError,
@@ -189,6 +194,17 @@ function capEntriesByKid(all: KidWeeklyFocusEntry[]): KidWeeklyFocusEntry[] {
 
 async function getKidWeeklyFocusEntriesRaw(): Promise<KidWeeklyFocusEntry[]> {
   const raw = await AsyncStorage.getItem(StorageKeys.kidWeeklyFocusEntries);
+  logKeyRead({
+    key: StorageKeys.kidWeeklyFocusEntries,
+    raw,
+    source: "coachKidStore.getKidWeeklyFocusEntriesRaw",
+  });
+  logCacheProvenance({
+    key: StorageKeys.kidWeeklyFocusEntries,
+    raw,
+    source: "coachKidStore.getKidWeeklyFocusEntriesRaw",
+    readKind: "diskRead",
+  });
   const parsed = safeParseOrDefault<KidWeeklyFocusEntry[] | null>(raw, null);
   return parsed && Array.isArray(parsed) ? parsed : [];
 }
@@ -196,6 +212,12 @@ async function getKidWeeklyFocusEntriesRaw(): Promise<KidWeeklyFocusEntry[]> {
 async function setKidWeeklyFocusEntriesRaw(
   entries: KidWeeklyFocusEntry[],
 ): Promise<void> {
+  logKeyWrite({
+    key: StorageKeys.kidWeeklyFocusEntries,
+    raw: JSON.stringify(entries),
+    source: "coachKidStore.setKidWeeklyFocusEntriesRaw",
+    extra: { entryCount: entries.length },
+  });
   await AsyncStorage.setItem(
     StorageKeys.kidWeeklyFocusEntries,
     JSON.stringify(entries),
@@ -218,7 +240,23 @@ export async function clearFamilyCompetitionSelectedKidId(): Promise<void> {
 
 export async function getKidsById(): Promise<KidsById> {
   const raw = await AsyncStorage.getItem(StorageKeys.coachKidsById);
+  logKeyRead({
+    key: StorageKeys.coachKidsById,
+    raw,
+    source: "coachKidStore.getKidsById",
+  });
   const kids = safeParseOrDefault<KidsById>(raw, {});
+  logCacheProvenance({
+    key: StorageKeys.coachKidsById,
+    raw,
+    source: "coachKidStore.getKidsById",
+    readKind: "diskRead",
+    athleteIds: Object.keys(kids),
+    sharedAthleteIds: Object.values(kids)
+      .map((kid) => (kid?.sharedAthleteId ?? "").trim())
+      .filter(Boolean),
+    entityCounts: { kidCount: Object.keys(kids).length },
+  });
   logAthleteLineageTraceFromKidsById({
     operation: "restore",
     source: "hydration_pipeline",
@@ -235,7 +273,14 @@ export async function setKidsById(kidsById: KidsById): Promise<void> {
     kidsById,
     route: "coachKidStore.setKidsById",
   });
-  await AsyncStorage.setItem(StorageKeys.coachKidsById, JSON.stringify(kidsById));
+  const raw = JSON.stringify(kidsById);
+  logKeyWrite({
+    key: StorageKeys.coachKidsById,
+    raw,
+    source: "coachKidStore.setKidsById",
+    extra: { kidCount: Object.keys(kidsById).length },
+  });
+  await AsyncStorage.setItem(StorageKeys.coachKidsById, raw);
 }
 
 /** Drop sync-session athlete id only; keeps name and other pilot data. */
@@ -412,6 +457,33 @@ export async function unlinkParentAthleteFromCoachSession(opts: {
     throw new CoachWeeklySyncApiError("This athlete is not linked for coach sharing.", 0);
   }
 
+  if (__DEV__) {
+    console.log("[REMOTE_DELETE_PROPAGATION]", {
+      sharedAthleteId,
+      localDeletionSuccess: false,
+      workerDeleteRequestFired: true,
+      endpointUrl: null,
+      responseCode: null,
+      responsePayload: null,
+      retryFailureState: null,
+      source: "coachKidStore.unlinkParentAthleteFromCoachSession.before_worker_delete",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[PARENT_ATHLETE_DELETE_AUDIT]", {
+      athleteId: kidId,
+      sharedAthleteId,
+      linkedInviteIds: [normalizeInviteLinkToken(linkToken)].filter(Boolean),
+      deletedLocally: false,
+      publishedDeletionEvent: true,
+      retiredInviteIds: [],
+      removedSharedAthleteId: false,
+      removedWriterLinks: false,
+      workerDeleteEndpointCalled: true,
+      source: "coachKidStore.unlinkParentAthleteFromCoachSession.before_worker_delete",
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   await coachSyncDeleteSessionAthlete(
     linkToken,
     sharedAthleteId,
@@ -421,6 +493,32 @@ export async function unlinkParentAthleteFromCoachSession(opts: {
 
   await clearKidSharedAthleteLink(kidId);
   await stripWorkerSyncLinkageForKid(kidId);
+  if (__DEV__) {
+    console.log("[REMOTE_DELETE_PROPAGATION]", {
+      sharedAthleteId,
+      localDeletionSuccess: true,
+      workerDeleteRequestFired: true,
+      endpointUrl: null,
+      responseCode: null,
+      responsePayload: null,
+      retryFailureState: null,
+      source: "coachKidStore.unlinkParentAthleteFromCoachSession.after_local_unlink",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[PARENT_ATHLETE_DELETE_AUDIT]", {
+      athleteId: kidId,
+      sharedAthleteId,
+      linkedInviteIds: [normalizeInviteLinkToken(linkToken)].filter(Boolean),
+      deletedLocally: true,
+      publishedDeletionEvent: true,
+      retiredInviteIds: [],
+      removedSharedAthleteId: true,
+      removedWriterLinks: false,
+      workerDeleteEndpointCalled: true,
+      source: "coachKidStore.unlinkParentAthleteFromCoachSession.after_local_unlink",
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
 
 export type WriterSessionSnapshotOk = {
@@ -432,6 +530,15 @@ export type WriterSessionSnapshotOk = {
   writerLinkUpdatedAt?: string;
   writerLinkCreatedAt?: string;
 };
+
+function sharedAthleteIdsFromKids(kidsById: KidsById): string[] {
+  return Object.values(kidsById)
+    .map((kid) => (kid?.sharedAthleteId ?? "").trim())
+    .filter(Boolean)
+    .sort();
+}
+
+let previousCoachHydrateRemoteAthleteIds: string[] | null = null;
 
 function sortWriterSessionSnapshotsNewestFirst(
   snaps: WriterSessionSnapshotOk[],
@@ -896,8 +1003,10 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
   }
 
   const kids = await getKidsById();
+  const existingLocalAthleteIds = sharedAthleteIdsFromKids(kids);
   const nowIso = new Date().toISOString();
   const next = mergeWriterSessionRosterIntoKidsDraft(kids, successfulSnapshots, nowIso);
+  const afterMergeAthleteIds = sharedAthleteIdsFromKids(next);
 
   await setKidsById(next);
 
@@ -914,6 +1023,7 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
 
   const current = await getKidsById();
   const toDelete = new Set<KidId>();
+  const preserveReasons: Record<string, string> = {};
 
   if (allFetched) {
     for (const k of Object.values(current)) {
@@ -921,6 +1031,7 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
       const sid = k.sharedAthleteId?.trim();
       if (!sid || remoteUnionIds.has(sid)) continue;
       toDelete.add(k.id);
+      preserveReasons[sid] = "not_preserved_all_writers_fetched_missing_from_remote_union";
     }
   } else {
     for (const snap of successfulSnapshots) {
@@ -936,9 +1047,78 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
         const t = normalizeInviteLinkToken(k.sharedFromInviteTokenNorm);
         if (t === snap.linkTokenNorm) {
           toDelete.add(k.id);
+          preserveReasons[sid] = "not_preserved_fetched_invite_missing_from_that_remote_session";
+        } else if (!preserveReasons[sid]) {
+          preserveReasons[sid] = t
+            ? "preserved_partial_fetch_different_invite_not_authoritative"
+            : "preserved_partial_fetch_missing_invite_token";
         }
       }
     }
+  }
+
+  const prunedAthleteIds = Object.values(current)
+    .filter((kid) => toDelete.has(kid.id))
+    .map((kid) => (kid.sharedAthleteId ?? "").trim())
+    .filter(Boolean)
+    .sort();
+  const prunedAthleteSet = new Set(prunedAthleteIds);
+  const currentSharedAthleteIds = sharedAthleteIdsFromKids(current);
+  const preservedAthleteIds = currentSharedAthleteIds
+    .filter((id) => !prunedAthleteSet.has(id))
+    .sort();
+  const missingRemoteButPreservedIds = preservedAthleteIds
+    .filter((id) => !remoteUnionIds.has(id))
+    .sort();
+  for (const id of missingRemoteButPreservedIds) {
+    if (!preserveReasons[id]) {
+      preserveReasons[id] = allFetched
+        ? "preserved_no_delete_candidate_detected"
+        : "preserved_partial_writer_fetch_not_authoritative";
+    }
+  }
+  const newlyAddedAthleteIds = afterMergeAthleteIds
+    .filter((id) => !existingLocalAthleteIds.includes(id))
+    .sort();
+  if (__DEV__) {
+    console.log("[CANONICAL_RETIREMENT_HYDRATION]", {
+      payloadAthleteIds: [...remoteUnionIds].sort(),
+      removedAthleteIdsComparedToPreviousHydrate: [],
+      pruneResults: {
+        prunedAthleteIds,
+        preservedAthleteIds,
+        missingRemoteButPreservedIds,
+      },
+      source: "reconcileCoachKidRosterFromWriterSessions",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[REMOTE_RECONCILE_DECISION]", {
+      remoteIds: [...remoteUnionIds].sort(),
+      localIds: currentSharedAthleteIds,
+      prunedIds: prunedAthleteIds,
+      preservedIds: preservedAthleteIds,
+      preserveReasons,
+      remoteMissingButLocalPreserved: missingRemoteButPreservedIds,
+      reconcileSource: "reconcileCoachKidRosterFromWriterSessions",
+      writerSessionFetchSucceeded: successfulSnapshots.length > 0,
+      allWriterSessionsFetched: allFetched,
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[COACH_RECONCILE_PRUNING]", {
+      existingLocalAthleteIds,
+      incomingRemoteAthleteIds: [...remoteUnionIds].sort(),
+      preservedAthleteIds,
+      prunedAthleteIds,
+      newlyAddedAthleteIds,
+      missingRemoteButPreservedIds,
+      preserveReasons,
+      reconcileSource: "reconcileCoachKidRosterFromWriterSessions",
+      writerSessionFetchSucceeded: successfulSnapshots.length > 0,
+      allWriterSessionsFetched: allFetched,
+      totalActiveWriterCount,
+      successfulSnapshotCount: successfulSnapshots.length,
+      timestamp: new Date().toISOString(),
+    });
   }
 
   for (const oid of toDelete) {
@@ -1354,8 +1534,33 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
 
   const links = await getCoachLinks();
   const writerLinks = dedupeActiveCoachWriterLinks(links);
+  const knownLocalSharedAthleteIds = sharedAthleteIdsFromKids(await getKidsById());
 
   if (!isCoachSyncConfigured()) {
+    if (__DEV__) {
+      console.log("[REMOTE_HYDRATION_PROVENANCE]", {
+        source: "local_fallback",
+        fetchSuccess: false,
+        fetchFailure: false,
+        payloadAthleteIds: [],
+        payloadTimestamps: {},
+        stalePayloadIndicators: {
+          reusedLocalRosterIds: knownLocalSharedAthleteIds,
+        },
+        failureReason: "coach_sync_not_configured",
+        timestamp: new Date().toISOString(),
+      });
+      console.log("[LOCAL_FALLBACK_REPLAY]", {
+        fetchFailed: false,
+        reconcileSkipped: true,
+        reusedLocalRosterIds: knownLocalSharedAthleteIds,
+        localRosterCount: knownLocalSharedAthleteIds.length,
+        remoteRosterCount: 0,
+        failureReason: "coach_sync_not_configured",
+        source: "coachKidStore.refreshCoachWriterSessionsAndReconcileStores",
+        timestamp: new Date().toISOString(),
+      });
+    }
     console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
       earlyExit: "coachSyncNotConfigured",
       writerLinkCount: writerLinks.length,
@@ -1372,6 +1577,62 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
     const tokenKey = normalizeInviteLinkToken(weeklySync.linkToken);
     try {
       const session = await coachSyncFetchSession(weeklySync.linkToken, weeklySync.apiBaseUrl);
+      const returnedAthleteIds = session.athletes
+        .map((athlete) => athlete.id.trim())
+        .filter(Boolean);
+      const returnedAthleteIdSet = new Set(returnedAthleteIds);
+      if (__DEV__) {
+        console.log("[REMOTE_HYDRATION_PROVENANCE]", {
+          source: "remote",
+          fetchSuccess: true,
+          fetchFailure: false,
+          payloadAthleteIds: returnedAthleteIds,
+          payloadTimestamps: {
+            weeklyUpdatedAt: session.weekly?.updatedAt ?? null,
+            aggregateUpdatedAtByAthlete: Object.fromEntries(
+              Object.entries(session.competitionAggregateByAthleteId ?? {}).map(([id, artifact]) => [
+                id,
+                artifact.updatedAt,
+              ]),
+            ),
+            topologyUpdatedAtByAthlete: Object.fromEntries(
+              Object.entries(session.competitionTopologyByAthleteId ?? {}).map(([id, artifact]) => [
+                id,
+                artifact.updatedAt,
+              ]),
+            ),
+            proofUpdatedAtByAthlete: Object.fromEntries(
+              Object.entries(session.trainingProofByAthleteId ?? {}).map(([id, artifact]) => [
+                id,
+                artifact.updatedAt,
+              ]),
+            ),
+          },
+          stalePayloadIndicators: {
+            missingPreviouslyKnownAthleteIds: knownLocalSharedAthleteIds.filter(
+              (id) => !returnedAthleteIdSet.has(id),
+            ),
+          },
+          writerTokenTail: tokenKey.slice(-8),
+          timestamp: new Date().toISOString(),
+        });
+        console.log("[WRITER_SESSION_HYDRATE_AUDIT]", {
+          writerTokenTail: tokenKey.slice(-8),
+          linkedInviteIds: [tokenKey],
+          sharedAthleteIds: returnedAthleteIds,
+          returnedAthleteIds,
+          returnedCompetitionCounts: session.competitions?.length ?? 0,
+          returnedWeeklyCounts: Object.keys(session.weeklyByAthleteId ?? {}).length,
+          returnedTrainingProofCounts: Object.keys(session.trainingProofByAthleteId ?? {}).length,
+          returnedTopologyCounts: Object.keys(session.competitionTopologyByAthleteId ?? {}).length,
+          returnedAggregateCounts: Object.keys(session.competitionAggregateByAthleteId ?? {}).length,
+          missingPreviouslyKnownAthleteIds: knownLocalSharedAthleteIds.filter(
+            (id) => !returnedAthleteIdSet.has(id),
+          ),
+          payloadByteSize: JSON.stringify(session).length,
+          timestamp: new Date().toISOString(),
+        });
+      }
       if (__DEV__) {
         logHydrationPipelineWatchAthletes({
           stage: "2_weekly_sync_ingestion",
@@ -1406,7 +1667,38 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
         .filter(Boolean);
       names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
       inviteSessionAthletesByToken[tokenKey] = { names, fetchFailed: false };
-    } catch {
+    } catch (error) {
+      if (__DEV__) {
+        console.log("[REMOTE_HYDRATION_PROVENANCE]", {
+          source: "local_fallback",
+          fetchSuccess: false,
+          fetchFailure: true,
+          payloadAthleteIds: [],
+          payloadTimestamps: {},
+          stalePayloadIndicators: {
+            reusedLocalRosterIds: knownLocalSharedAthleteIds,
+          },
+          failureReason: error instanceof Error ? error.message : String(error),
+          writerTokenTail: tokenKey.slice(-8),
+          timestamp: new Date().toISOString(),
+        });
+        console.log("[WRITER_SESSION_HYDRATE_AUDIT]", {
+          writerTokenTail: tokenKey.slice(-8),
+          linkedInviteIds: [tokenKey],
+          sharedAthleteIds: [],
+          returnedAthleteIds: [],
+          returnedCompetitionCounts: 0,
+          returnedWeeklyCounts: 0,
+          returnedTrainingProofCounts: 0,
+          returnedTopologyCounts: 0,
+          returnedAggregateCounts: 0,
+          missingPreviouslyKnownAthleteIds: knownLocalSharedAthleteIds,
+          payloadByteSize: 0,
+          fetchFailed: true,
+          failureReason: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        });
+      }
       inviteSessionAthletesByToken[tokenKey] = { names: [], fetchFailed: true };
     }
   }
@@ -1427,6 +1719,23 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
   const athleteIdsUnion = [
     ...new Set(perSession.flatMap((p) => p.athleteIds)),
   ];
+  if (__DEV__) {
+    const sortedUnion = [...athleteIdsUnion].sort();
+    const removedComparedToPrevious =
+      previousCoachHydrateRemoteAthleteIds?.filter((id) => !sortedUnion.includes(id)) ?? [];
+    console.log("[CANONICAL_RETIREMENT_HYDRATION]", {
+      payloadAthleteIds: sortedUnion,
+      removedAthleteIdsComparedToPreviousHydrate: removedComparedToPrevious,
+      pruneResults: null,
+      source: "refreshCoachWriterSessionsAndReconcileStores.remote_payload_union",
+      successfulSnapshotCount: successfulSnapshots.length,
+      writerLinkCount: writerLinks.length,
+      timestamp: new Date().toISOString(),
+    });
+    if (successfulSnapshots.length > 0) {
+      previousCoachHydrateRemoteAthleteIds = sortedUnion;
+    }
+  }
   console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
     writerLinkCount: writerLinks.length,
     sessionsFetchedOkCount: successfulSnapshots.length,
@@ -1499,6 +1808,43 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       reason: "refreshCoachWriterSessionsAndReconcileStores_complete",
     });
   } else if (writerLinks.length > 0) {
+    if (__DEV__) {
+      console.log("[REMOTE_HYDRATION_PROVENANCE]", {
+        source: "local_fallback",
+        fetchSuccess: false,
+        fetchFailure: true,
+        payloadAthleteIds: [],
+        payloadTimestamps: {},
+        stalePayloadIndicators: {
+          reusedLocalRosterIds: knownLocalSharedAthleteIds,
+        },
+        failureReason: "writer_links_present_but_no_successful_session_fetches",
+        timestamp: new Date().toISOString(),
+      });
+      console.log("[LOCAL_FALLBACK_REPLAY]", {
+        fetchFailed: true,
+        reconcileSkipped: true,
+        reusedLocalRosterIds: knownLocalSharedAthleteIds,
+        localRosterCount: knownLocalSharedAthleteIds.length,
+        remoteRosterCount: 0,
+        failureReason: "writer_links_present_but_no_successful_session_fetches",
+        source: "coachKidStore.refreshCoachWriterSessionsAndReconcileStores",
+        timestamp: new Date().toISOString(),
+      });
+    }
+    logCacheProvenance({
+      key: StorageKeys.coachWeeklySyncCacheByToken,
+      source: "coachKidStore.refreshCoachWriterSessionsAndReconcileStores",
+      readKind: "memoryRead",
+      entityCounts: {
+        writerLinkCount: writerLinks.length,
+        sessionsFetchedOkCount: successfulSnapshots.length,
+      },
+      extra: {
+        reconcilePreservedLocalTruth: true,
+        reason: "writerLinksButNoSuccessfulSessionFetches",
+      },
+    });
     console.log("[COMP_SYNC_TRACE] refreshCoachWriterSessionsAndReconcileStores", {
       skipReconcile: "writerLinksButNoSuccessfulSessionFetches",
       writerLinkCount: writerLinks.length,

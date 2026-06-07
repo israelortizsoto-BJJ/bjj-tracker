@@ -1253,10 +1253,46 @@ export async function coachSyncDeleteSessionAthlete(
   athleteId: string,
   parentWriterSecret: string,
   apiBaseUrlOverride?: string | null,
-): Promise<void> {
+): Promise<{ status: number; idempotent: boolean }> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
   const athleteEnc = encodeURIComponent(athleteId);
+  if (__DEV__) {
+    console.log("[CANONICAL_RETIREMENT_REQUEST]", {
+      sharedAthleteId: athleteId,
+      writerTokenTail: linkToken.trim().toLowerCase().slice(-8),
+      endpointUrl: joinUrl(base, `/v1/sessions/${enc}/athletes/${athleteEnc}`),
+      requestPhase: "client_start",
+      responseCode: null,
+      retryFailureState: null,
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[REMOTE_DELETE_PROPAGATION]", {
+      sharedAthleteId: athleteId,
+      localDeletionSuccess: false,
+      workerDeleteRequestFired: true,
+      endpointUrl: joinUrl(base, `/v1/sessions/${enc}/athletes/${athleteEnc}`),
+      responseCode: null,
+      responsePayload: null,
+      retryFailureState: null,
+      source: "coachWeeklySyncApi.coachSyncDeleteSessionAthlete.request",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[PARENT_ATHLETE_DELETE_AUDIT]", {
+      athleteId,
+      sharedAthleteId: athleteId,
+      linkedInviteIds: [linkToken.trim().toLowerCase()].filter(Boolean),
+      deletedLocally: false,
+      publishedDeletionEvent: true,
+      retiredInviteIds: [],
+      removedSharedAthleteId: false,
+      removedWriterLinks: false,
+      workerDeleteEndpointCalled: true,
+      source: "coachWeeklySyncApi.coachSyncDeleteSessionAthlete.request",
+      baseUrl: base,
+      timestamp: new Date().toISOString(),
+    });
+  }
   const res = await fetch(joinUrl(base, `/v1/sessions/${enc}/athletes/${athleteEnc}`), {
     method: "DELETE",
     headers: {
@@ -1265,8 +1301,44 @@ export async function coachSyncDeleteSessionAthlete(
     },
   });
   const payload = await parseJsonOrText(res);
+  if (__DEV__) {
+    console.log("[CANONICAL_RETIREMENT_REQUEST]", {
+      sharedAthleteId: athleteId,
+      writerTokenTail: linkToken.trim().toLowerCase().slice(-8),
+      endpointUrl: joinUrl(base, `/v1/sessions/${enc}/athletes/${athleteEnc}`),
+      requestPhase: "client_end",
+      responseCode: res.status,
+      retryFailureState: res.ok || res.status === 404 ? null : "delete_request_failed",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[REMOTE_DELETE_PROPAGATION]", {
+      sharedAthleteId: athleteId,
+      localDeletionSuccess: false,
+      workerDeleteRequestFired: true,
+      endpointUrl: joinUrl(base, `/v1/sessions/${enc}/athletes/${athleteEnc}`),
+      responseCode: res.status,
+      responsePayload: payload,
+      retryFailureState: res.ok || res.status === 404 ? null : "delete_request_failed",
+      source: "coachWeeklySyncApi.coachSyncDeleteSessionAthlete.response",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[PARENT_ATHLETE_DELETE_AUDIT]", {
+      athleteId,
+      sharedAthleteId: athleteId,
+      linkedInviteIds: [linkToken.trim().toLowerCase()].filter(Boolean),
+      deletedLocally: false,
+      publishedDeletionEvent: res.ok || res.status === 404,
+      retiredInviteIds: [],
+      removedSharedAthleteId: res.ok,
+      removedWriterLinks: false,
+      workerDeleteEndpointCalled: true,
+      workerStatus: res.status,
+      source: "coachWeeklySyncApi.coachSyncDeleteSessionAthlete.response",
+      timestamp: new Date().toISOString(),
+    });
+  }
   if (res.status === 404) {
-    return;
+    return { status: res.status, idempotent: true };
   }
   if (!res.ok) {
     const msg =
@@ -1275,6 +1347,7 @@ export async function coachSyncDeleteSessionAthlete(
         : `HTTP ${res.status}`;
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
+  return { status: res.status, idempotent: false };
 }
 
 export async function coachSyncPublishWeekly(

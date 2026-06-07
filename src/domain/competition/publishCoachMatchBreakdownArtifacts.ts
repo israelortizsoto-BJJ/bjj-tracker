@@ -8,6 +8,7 @@ import { buildCoachMatchBreakdownArtifacts } from "./buildCoachMatchBreakdownArt
 export function schedulePublishCoachMatchBreakdownArtifacts(input: {
   sharedAthleteId: string;
   kidId?: string | null;
+  updatedAtOverride?: string | null;
 }): void {
   const sharedAthleteId = input.sharedAthleteId.trim();
   if (!sharedAthleteId) return;
@@ -40,7 +41,9 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         return;
       }
 
-      const artifactSet = await buildCoachMatchBreakdownArtifacts(sharedAthleteId);
+      const artifactSet = await buildCoachMatchBreakdownArtifacts(sharedAthleteId, {
+        updatedAtOverride: input.updatedAtOverride ?? null,
+      });
       console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
         stage: "coach_publish_request",
         sharedAthleteId,

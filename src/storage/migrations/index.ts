@@ -2,6 +2,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logMigrationReplay } from "../../dev/persistenceAudit";
 import { SUMMARY_IDENTITY_ACCOUNT_SCOPE } from "../../types/summaryIdentityScope";
 import { STORAGE_VERSION, StorageKeys } from "../storageKeys";
 
@@ -28,6 +29,11 @@ export async function ensureStorageUpToDate(): Promise<void> {
       for (const legacyKey of legacyCandidates) {
         const legacy = await AsyncStorage.getItem(legacyKey);
         if (legacy) {
+          logMigrationReplay({
+            fromKey: legacyKey,
+            toKey: StorageKeys.sessions,
+            raw: legacy,
+          });
           await AsyncStorage.setItem(StorageKeys.sessions, legacy);
           break;
         }
@@ -42,6 +48,11 @@ export async function ensureStorageUpToDate(): Promise<void> {
       for (const legacyKey of legacyProfileCandidates) {
         const legacy = await AsyncStorage.getItem(legacyKey);
         if (legacy) {
+          logMigrationReplay({
+            fromKey: legacyKey,
+            toKey: StorageKeys.profile,
+            raw: legacy,
+          });
           await AsyncStorage.setItem(StorageKeys.profile, legacy);
           break;
         }

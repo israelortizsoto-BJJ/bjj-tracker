@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useSyncExternalStore } from "react";
 
+import {
+  logCacheProvenance,
+  logKeyRead,
+  logKeyWrite,
+} from "../dev/persistenceAudit";
 import type { SyncedCompetitionAggregateArtifact } from "../types/coachWeeklySync";
 import { StorageKeys } from "./storageKeys";
 
@@ -66,6 +71,16 @@ export function peekCoachCompetitionAggregate(
   const athleteId = sharedAthleteId.trim();
   if (!athleteId || !aggregatesMemory) return null;
   const artifact = aggregatesMemory[athleteId] ?? null;
+  logCacheProvenance({
+    key: StorageKeys.coachCompetitionAggregatesByAthleteId,
+    source: "coachCompetitionAggregateStore.peekCoachCompetitionAggregate",
+    readKind: "memoryRead",
+    athleteIds: athleteId ? [athleteId] : [],
+    sharedAthleteIds: athleteId ? [athleteId] : [],
+    updatedAt: artifact?.updatedAt ?? null,
+    entityCounts: { memoryEntryCount: Object.keys(aggregatesMemory).length },
+    extra: { hit: Boolean(artifact) },
+  });
   if (!artifact || artifact.sharedAthleteId.trim() !== athleteId) return null;
   return artifact;
 }
@@ -125,18 +140,41 @@ function summarizeAggregate(artifact: SyncedCompetitionAggregateArtifact | null)
 }
 
 async function readStore(): Promise<AggregateByAthleteId> {
-  const map = safeParseStore(
-    await AsyncStorage.getItem(StorageKeys.coachCompetitionAggregatesByAthleteId),
-  );
+  const raw = await AsyncStorage.getItem(StorageKeys.coachCompetitionAggregatesByAthleteId);
+  logKeyRead({
+    key: StorageKeys.coachCompetitionAggregatesByAthleteId,
+    raw,
+    source: "coachCompetitionAggregateStore.readStore",
+  });
+  const map = safeParseStore(raw);
+  const artifacts = Object.values(map);
+  const updatedAts = artifacts.map((artifact) => artifact.updatedAt).sort();
+  logCacheProvenance({
+    key: StorageKeys.coachCompetitionAggregatesByAthleteId,
+    raw,
+    source: "coachCompetitionAggregateStore.readStore",
+    readKind: "diskRead",
+    athleteIds: Object.keys(map),
+    sharedAthleteIds: Object.keys(map),
+    updatedAt: updatedAts[updatedAts.length - 1] ?? null,
+    entityCounts: { artifactCount: artifacts.length },
+  });
   syncAggregatesMemory(map);
   return map;
 }
 
 async function writeStore(map: AggregateByAthleteId): Promise<void> {
   syncAggregatesMemory(map);
+  const raw = JSON.stringify(map);
+  logKeyWrite({
+    key: StorageKeys.coachCompetitionAggregatesByAthleteId,
+    raw,
+    source: "coachCompetitionAggregateStore.writeStore",
+    extra: { artifactCount: Object.keys(map).length },
+  });
   await AsyncStorage.setItem(
     StorageKeys.coachCompetitionAggregatesByAthleteId,
-    JSON.stringify(map),
+    raw,
   );
 }
 

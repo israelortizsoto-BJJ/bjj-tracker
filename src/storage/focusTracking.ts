@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logKeyRead, logKeyWrite } from "../dev/persistenceAudit";
+
 const KEY = "bjj.focus.active.v1";
 
 export type ActiveFocusPayload = {
@@ -19,6 +21,11 @@ function normalizeFocus(raw: unknown): ActiveFocusPayload | null {
 async function readMap(): Promise<FocusMap> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
+    logKeyRead({
+      key: KEY,
+      raw,
+      source: "focusTracking.readMap",
+    });
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
@@ -37,10 +44,23 @@ async function readMap(): Promise<FocusMap> {
 
 async function writeMap(next: FocusMap): Promise<void> {
   if (Object.keys(next).length === 0) {
+    logKeyWrite({
+      key: KEY,
+      raw: null,
+      source: "focusTracking.writeMap",
+      extra: { operation: "removeItem" },
+    });
     await AsyncStorage.removeItem(KEY);
     return;
   }
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  const raw = JSON.stringify(next);
+  logKeyWrite({
+    key: KEY,
+    raw,
+    source: "focusTracking.writeMap",
+    extra: { athleteCount: Object.keys(next).length },
+  });
+  await AsyncStorage.setItem(KEY, raw);
 }
 
 export async function setActiveFocus(

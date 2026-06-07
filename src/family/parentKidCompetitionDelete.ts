@@ -10,11 +10,16 @@ import {
 } from "../dev/competitionMutationDevLog";
 import { schedulePublishParentCompetitionAggregate } from "../domain/competition/publishParentCompetitionAggregate";
 import { schedulePublishParentCompetitionTopology } from "../domain/competition/publishParentCompetitionTopology";
+import { schedulePublishCoachMatchBreakdownArtifacts } from "../domain/competition/publishCoachMatchBreakdownArtifacts";
 import {
   deleteKidCompetitionEntry,
   getKidCompetitionEntryById,
   getWorkerCompetitionIdForEntry,
 } from "../storage/kidCompetitionStore";
+import {
+  deleteCoachMatchBreakdownOverlaysForCompetition,
+  listCoachMatchBreakdownOverlaysForAthlete,
+} from "../storage/coachMatchBreakdownOverlayStore";
 import type { KidId, KidsById } from "../types/coachKid";
 import type { CoachLink } from "../types/coachShare";
 
@@ -454,6 +459,32 @@ export async function deleteParentKidCompetitionEntry(
   });
   await deleteKidCompetitionEntry(entryId);
   if (athleteForRemote) {
+    const artifactCountBefore = (await listCoachMatchBreakdownOverlaysForAthlete(athleteForRemote))
+      .filter((overlay) => Boolean(overlay.coachNote?.trim())).length;
+    const retirementUpdatedAt = new Date().toISOString();
+    if (workerCompetitionId) {
+      await deleteCoachMatchBreakdownOverlaysForCompetition({
+        sharedAthleteId: athleteForRemote,
+        sharedCompetitionId: workerCompetitionId,
+      });
+    }
+    const artifactCountAfter = (await listCoachMatchBreakdownOverlaysForAthlete(athleteForRemote))
+      .filter((overlay) => Boolean(overlay.coachNote?.trim())).length;
+    if (__DEV__) {
+      console.log("[OVERLAY_RETIREMENT_REPUBLISH]", {
+        artifactCountBefore,
+        artifactCountAfter,
+        publishedEmptyArtifactSet: artifactCountAfter === 0,
+        updatedAt: retirementUpdatedAt,
+        sharedAthleteId: athleteForRemote,
+        sharedCompetitionId: workerCompetitionId || null,
+      });
+    }
+    schedulePublishCoachMatchBreakdownArtifacts({
+      sharedAthleteId: athleteForRemote,
+      kidId,
+      updatedAtOverride: retirementUpdatedAt,
+    });
     console.log("[COMP_AGGREGATE_PUBLISH_TRIGGER_TRACE]", {
       mutationType: "delete",
       sharedAthleteId: athleteForRemote,

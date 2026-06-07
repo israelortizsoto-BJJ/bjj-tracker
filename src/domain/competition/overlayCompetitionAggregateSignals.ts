@@ -3,7 +3,10 @@ import type {
   SignalOutput,
 } from "../../lib/signals/computeSignals";
 import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
-import type { SyncedCompetitionAggregateArtifact } from "../../types/coachWeeklySync";
+import type {
+  SyncedCompetitionAggregateArtifact,
+  SyncedCompetitionTopologyArtifact,
+} from "../../types/coachWeeklySync";
 import { formatSecondsAsMmSs } from "./matchDurationFormat";
 
 export type CompetitionAggregateMetricsOverlay = Pick<
@@ -72,6 +75,81 @@ function buildMetricsOverlay(
     fastestSubmission: formatSecondsAsMmSs(artifact.fastestSubmissionSeconds),
     averageMatchTime: formatSecondsAsMmSs(artifact.averageMatchSeconds),
     winStyle: artifact.dominantWinStyle,
+  };
+}
+
+function resolveWinStyle(input: {
+  submissionWins: number;
+  pointsStyleWins: number;
+}): CompetitionAggregateMetricsOverlay["winStyle"] {
+  const categorizedWins = input.submissionWins + input.pointsStyleWins;
+  if (categorizedWins === 0) return null;
+  if (input.submissionWins > input.pointsStyleWins) return "submission-heavy";
+  if (input.pointsStyleWins > input.submissionWins) return "points-heavy";
+  return "mixed";
+}
+
+export function deriveCompetitionAggregateMetricsFromTopology(
+  topology: SyncedCompetitionTopologyArtifact,
+): CompetitionAggregateMetricsOverlay | null {
+  const matches = topology.competitions.flatMap((competition) => competition.matches);
+  if (matches.length === 0) return null;
+
+  const completed = matches.filter(
+    (match) => match.result === "win" || match.result === "loss",
+  );
+  const wins = completed.filter((match) => match.result === "win").length;
+  const losses = completed.filter((match) => match.result === "loss").length;
+  const winningMatches = completed.filter((match) => match.result === "win");
+  const submissionWins = winningMatches.filter(
+    (match) => match.finishType === "submission",
+  ).length;
+  const pointsStyleWins = winningMatches.filter(
+    (match) => match.finishType === "points" || match.finishType === "ref_decision",
+  ).length;
+  const submissionWinTimes = winningMatches
+    .filter((match) => match.finishType === "submission")
+    .map((match) => match.durationSeconds)
+    .filter((seconds): seconds is number => typeof seconds === "number" && Number.isFinite(seconds));
+  const timedMatchSeconds = completed
+    .map((match) => match.durationSeconds)
+    .filter((seconds): seconds is number => typeof seconds === "number" && Number.isFinite(seconds));
+
+  return {
+    totalMatches: matches.length,
+    wins,
+    losses,
+    winRate: completed.length === 0 ? null : Math.round((wins / completed.length) * 100),
+    submissionRate: wins === 0 ? null : Math.round((submissionWins / wins) * 100),
+    fastestSubmission:
+      submissionWinTimes.length === 0
+        ? null
+        : formatSecondsAsMmSs(Math.min(...submissionWinTimes)),
+    averageMatchTime:
+      timedMatchSeconds.length === 0
+        ? null
+        : formatSecondsAsMmSs(
+            timedMatchSeconds.reduce((sum, seconds) => sum + seconds, 0) /
+              timedMatchSeconds.length,
+          ),
+    winStyle: resolveWinStyle({ submissionWins, pointsStyleWins }),
+  };
+}
+
+export function overlayCompetitionTopologyMetricsSignals(
+  signals: SignalOutput,
+  topology: SyncedCompetitionTopologyArtifact,
+): SignalOutput {
+  const metrics = deriveCompetitionAggregateMetricsFromTopology(topology);
+  if (!metrics) return signals;
+  return {
+    ...signals,
+    competition: {
+      ...signals.competition,
+      ...metrics,
+      competitionCount: topology.competitions.length,
+      record: { wins: metrics.wins, losses: metrics.losses },
+    },
   };
 }
 

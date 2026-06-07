@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import type { SyncedTrainingProofArtifact } from "../types/coachWeeklySync";
+import {
+  logCacheProvenance,
+  logKeyRead,
+  logKeyWrite,
+} from "../dev/persistenceAudit";
 import { StorageKeys } from "./storageKeys";
 
 type ProofByAthleteId = Record<string, SyncedTrainingProofArtifact>;
@@ -19,6 +24,16 @@ export function peekCoachTrainingProof(
   const athleteId = sharedAthleteId.trim();
   if (!athleteId || !proofMemory) return null;
   const artifact = proofMemory[athleteId] ?? null;
+  logCacheProvenance({
+    key: StorageKeys.coachTrainingProofByAthleteId,
+    source: "coachTrainingProofStore.peekCoachTrainingProof",
+    readKind: "memoryRead",
+    athleteIds: athleteId ? [athleteId] : [],
+    sharedAthleteIds: athleteId ? [athleteId] : [],
+    updatedAt: artifact?.updatedAt ?? null,
+    entityCounts: { memoryEntryCount: Object.keys(proofMemory).length },
+    extra: { hit: Boolean(artifact) },
+  });
   if (!artifact || artifact.sharedAthleteId.trim() !== athleteId) return null;
   return artifact;
 }
@@ -80,16 +95,38 @@ function normalizeProofMap(raw: unknown): ProofByAthleteId {
 }
 
 async function readStore(): Promise<ProofByAthleteId> {
-  const map = safeParseStore(
-    await AsyncStorage.getItem(StorageKeys.coachTrainingProofByAthleteId),
-  );
+  const raw = await AsyncStorage.getItem(StorageKeys.coachTrainingProofByAthleteId);
+  logKeyRead({
+    key: StorageKeys.coachTrainingProofByAthleteId,
+    raw,
+    source: "coachTrainingProofStore.readStore",
+  });
+  const map = safeParseStore(raw);
+  const updatedAts = Object.values(map).map((artifact) => artifact.updatedAt).sort();
+  logCacheProvenance({
+    key: StorageKeys.coachTrainingProofByAthleteId,
+    raw,
+    source: "coachTrainingProofStore.readStore",
+    readKind: "diskRead",
+    athleteIds: Object.keys(map),
+    sharedAthleteIds: Object.keys(map),
+    updatedAt: updatedAts[updatedAts.length - 1] ?? null,
+    entityCounts: { artifactCount: Object.keys(map).length },
+  });
   syncProofMemory(map);
   return map;
 }
 
 async function writeStore(map: ProofByAthleteId): Promise<void> {
   syncProofMemory(map);
-  await AsyncStorage.setItem(StorageKeys.coachTrainingProofByAthleteId, JSON.stringify(map));
+  const raw = JSON.stringify(map);
+  logKeyWrite({
+    key: StorageKeys.coachTrainingProofByAthleteId,
+    raw,
+    source: "coachTrainingProofStore.writeStore",
+    extra: { artifactCount: Object.keys(map).length },
+  });
+  await AsyncStorage.setItem(StorageKeys.coachTrainingProofByAthleteId, raw);
 }
 
 /** Read-only coach projection: bounded training proof for `sharedAthleteId`. */

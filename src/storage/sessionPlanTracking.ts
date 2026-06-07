@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logKeyRead, logKeyWrite } from "../dev/persistenceAudit";
 import type {
   GeneratedSessionPlan,
   SessionPlanExposureLevel,
@@ -53,6 +54,11 @@ function normalizePayload(raw: unknown): ActiveSessionPlanPayload | null {
 async function readMap(): Promise<PlanMap> {
   try {
     const raw = await AsyncStorage.getItem(KEY);
+    logKeyRead({
+      key: KEY,
+      raw,
+      source: "sessionPlanTracking.readMap",
+    });
     if (!raw) return {};
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
@@ -71,10 +77,23 @@ async function readMap(): Promise<PlanMap> {
 
 async function writeMap(next: PlanMap): Promise<void> {
   if (Object.keys(next).length === 0) {
+    logKeyWrite({
+      key: KEY,
+      raw: null,
+      source: "sessionPlanTracking.writeMap",
+      extra: { operation: "removeItem" },
+    });
     await AsyncStorage.removeItem(KEY);
     return;
   }
-  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  const raw = JSON.stringify(next);
+  logKeyWrite({
+    key: KEY,
+    raw,
+    source: "sessionPlanTracking.writeMap",
+    extra: { athleteCount: Object.keys(next).length },
+  });
+  await AsyncStorage.setItem(KEY, raw);
 }
 
 export async function setActiveSessionPlan(

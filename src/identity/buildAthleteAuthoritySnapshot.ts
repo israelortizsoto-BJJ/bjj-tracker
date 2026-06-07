@@ -1,4 +1,5 @@
 import { isCoachSyncConfigured } from "../config/coachSync";
+import { logAuthorityBootstrap } from "../dev/persistenceAudit";
 import {
   ensureOperatingAthletesFromCoachLinkedKids,
   getActiveAthleteId,
@@ -104,6 +105,31 @@ async function buildSnapshotCore(
     isCoachSyncConfigured() &&
     refreshResult.writerLinks.length > 0 &&
     refreshResult.successfulSnapshots.length === 0;
+
+  if (__DEV__ && coachSessionRefreshDegraded) {
+    console.log("[REMOTE_HYDRATION_PROVENANCE]", {
+      source: "local_fallback",
+      fetchSuccess: false,
+      fetchFailure: true,
+      payloadAthleteIds: [],
+      payloadTimestamps: {},
+      stalePayloadIndicators: {
+        reusedLocalRosterIds: [...linkedIdSet],
+      },
+      failureReason: "coach_writer_sessions_configured_but_no_successful_snapshots",
+      timestamp: new Date().toISOString(),
+    });
+    console.log("[LOCAL_FALLBACK_REPLAY]", {
+      fetchFailed: true,
+      reconcileSkipped: true,
+      reusedLocalRosterIds: [...linkedIdSet],
+      localRosterCount: linkedIdSet.size,
+      remoteRosterCount: 0,
+      failureReason: "coach_writer_sessions_configured_but_no_successful_snapshots",
+      source: "buildAthleteAuthoritySnapshot",
+      timestamp: new Date().toISOString(),
+    });
+  }
 
   let resolvedId = "";
   let authorityBootstrapState: AthleteAuthorityBootstrapState = "ready";
@@ -262,6 +288,29 @@ async function buildSnapshotCore(
     coachOperatingAthleteChoices,
     meta: observability,
   };
+
+  if (__DEV__) {
+    const reconcileAttempted =
+      parentRole === "coach" && !skipCoachWriterSessionRefresh && isCoachSyncConfigured();
+    logAuthorityBootstrap({
+      role: parentRole,
+      parentAthleteIds: sorted.map((a) => a.id.trim()).filter(Boolean),
+      coachSharedAthleteIds: [...linkedIdSet],
+      storedActiveAthleteId: storedNorm || null,
+      resolvedActiveAthleteId: resolvedId.trim() || null,
+      writerSessionFetchSuccess: refreshResult.successfulSnapshots.length > 0,
+      reconcileAttempted,
+      reconcileSucceeded: reconcileAttempted && refreshResult.successfulSnapshots.length > 0,
+      staleCoachRosterPreserved:
+        reconcileAttempted &&
+        refreshResult.writerLinks.length > 0 &&
+        refreshResult.successfulSnapshots.length === 0 &&
+        linkedIdSet.size > 0,
+      writerLinkCount: refreshResult.writerLinks.length,
+      successfulSnapshotCount: refreshResult.successfulSnapshots.length,
+      authorityBootstrapState,
+    });
+  }
 
   if (__DEV__) {
     const writerSessions = refreshResult.successfulSnapshots.map((snap) => ({
