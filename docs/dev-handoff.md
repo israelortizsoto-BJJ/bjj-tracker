@@ -2,6 +2,694 @@
 
 
 
+## Date Range: 2026-06-06 → 2026-06-07
+
+## Branch
+
+`rollback-pre-lineage-regression`
+
+## Latest Stable Commit
+
+```bash
+10c6825 Stabilize canonical athlete retirement and overlay lineage cleanup
+```
+
+---
+
+# PRIMARY OBJECTIVE OF THIS WORK CYCLE
+
+Stabilize the complete canonical athlete lifecycle:
+
+```txt
+create
+→ link
+→ hydrate
+→ sync
+→ topology projection
+→ overlay projection
+→ delete
+→ remote retirement
+→ cold-start recovery
+→ re-link
+→ re-delete
+```
+
+WITHOUT:
+
+* authority rewrites
+* heuristic lineage recovery
+* topology ownership mutations
+* hydration hacks
+* bootstrap suppression
+* multi-owner regressions
+
+This was a major repo-integrity stabilization pass.
+
+---
+
+# HIGH-LEVEL ARCHITECTURAL THEMES
+
+## 1. Competition substrate divergence discovered
+
+Critical finding:
+
+Coach Summary and Coach Compete were reading from DIFFERENT competition substrates.
+
+### Coach Compete
+
+Used:
+
+```txt
+projectCompetitionCompeteView(...)
+→ peekCoachCompetitionTopology(...)
+```
+
+This was already topology-driven and healthy.
+
+### Coach Summary
+
+Used:
+
+```txt
+useSignals(...)
+→ overlayCompetitionAggregateSignals(...)
+```
+
+This depended on:
+
+* aggregate overlays
+* bounded aggregate visibility
+
+Topology existed but was NOT used as a metric source.
+
+Result:
+
+* Coach Compete showed matches correctly
+* Coach Summary metrics disappeared when aggregate artifacts were absent
+
+---
+
+# FIX — TOPOLOGY FALLBACK FOR SUMMARY
+
+## Files
+
+* `src/domain/competition/overlayCompetitionAggregateSignals.ts`
+* `src/hooks/useSignals.ts`
+
+## Behavior Added
+
+Coach Summary now derives bounded metrics directly from hydrated topology IF aggregate artifacts are absent.
+
+### Allowed metric subset only
+
+* wins
+* losses
+* totalMatches
+* winRate
+* submissionRate
+* fastestSubmission
+* averageMatchTime
+* winStyle
+
+### Safety constraints
+
+Fallback only runs when:
+
+```txt
+deviceRole === "coach"
+topology exists
+topology contains matches
+aggregate artifact absent
+```
+
+### Explicitly NOT changed
+
+* parent summary
+* topology ownership
+* hydration
+* worker schema
+* aggregate publishing
+* authority
+* overlays
+
+## Result
+
+Coach Summary metrics stabilized and survived:
+
+* fast switching
+* hard close/open
+* topology replay
+
+---
+
+# ATHLETE DELETE FAILURE INVESTIGATION
+
+This became the dominant stabilization effort of the cycle.
+
+---
+
+# INITIAL SYMPTOM
+
+Deleting athletes:
+
+* appeared to work
+* switched active athlete
+* coach app removed athlete
+* BUT parent app resurrected athlete after cold start
+
+This triggered a multi-stage forensic investigation.
+
+---
+
+# ROOT CAUSE #1 — WRONG ID TYPE DURING RETIREMENT
+
+## Finding
+
+Delete flow passed:
+
+```txt
+pa_*
+```
+
+Worker retirement required:
+
+```txt
+shared_ath_*
+```
+
+### Failure chain
+
+Summary:
+
+```ts
+deleteAthlete(activeAthleteId)
+```
+
+Delete pipeline incorrectly assumed:
+
+```txt
+input id === canonical shared id
+```
+
+Remote retirement gate therefore failed:
+
+```txt
+retirementSharedAthleteId === null
+```
+
+DELETE request never fired.
+
+---
+
+# FIX — EXPLICIT CANONICAL RETIREMENT HANDOFF
+
+## Files
+
+* `src/storage/athleteStore.ts`
+* `src/features/summary/SummaryScreen.tsx`
+
+## Change
+
+Delete flow now accepts:
+
+```ts
+deleteAthlete({
+  athleteId,
+  canonicalSharedAthleteId,
+})
+```
+
+### Canonical resolution priority
+
+1. already canonical `shared_ath_*`
+2. `activeKidId -> kid.sharedAthleteId`
+3. `summaryLinkedKidId -> kid.sharedAthleteId`
+4. else null
+
+### Logs added
+
+```txt
+[DELETE_CANONICAL_HANDOFF]
+[CANONICAL_RETIREMENT_RESOLUTION]
+[CANONICAL_RETIREMENT_SKIPPED]
+```
+
+## Result
+
+Remote retirement finally executed correctly.
+
+---
+
+# ROOT CAUSE #2 — STALE OVERLAY ARTIFACT REPLAY
+
+## Symptom
+
+Deleted competitions:
+
+* disappeared locally
+* but stale overlay lineage rehydrated later
+
+## Finding
+
+Overlay artifact builder:
+
+```txt
+listCoachMatchBreakdownOverlaysForAthlete(...)
+```
+
+had:
+
+* no prune path
+* no delete-by-lineage
+* no overlay retirement publish
+
+Worker behavior was actually correct:
+PUT overwrote full artifact set.
+
+Problem:
+smaller artifact set was never republished.
+
+---
+
+# FIX — OVERLAY RETIREMENT PROPAGATION
+
+## Files
+
+* `coachMatchBreakdownOverlayStore.ts`
+* `buildCoachMatchBreakdownArtifacts.ts`
+* `publishCoachMatchBreakdownArtifacts.ts`
+* `parentKidCompetitionDelete.ts`
+
+## Added
+
+Exact prune semantics:
+
+```txt
+sharedAthleteId + sharedCompetitionId
+```
+
+Optional:
+
+```txt
+matchLineageKeys[]
+```
+
+No:
+
+* name matching
+* fuzzy scans
+* authority rewrites
+
+### Retirement sequence
+
+1. prune local overlays
+2. publish reduced artifact set
+3. force fresh updatedAt
+4. empty sets publish valid empty artifacts
+
+## Result
+
+Deleted competition overlays stopped replaying.
+
+---
+
+# ROOT CAUSE #3 — BOOTSTRAP ATHLETE RESURRECTION
+
+This was the largest repo-level finding.
+
+---
+
+# Symptom
+
+Athlete:
+
+* deleted successfully
+* disappeared
+* coach linkage removed
+* BUT resurrected after cold start
+
+---
+
+# Forensic Discovery
+
+Bootstrap projection recreated deleted athletes.
+
+## Resurrection source
+
+```txt
+ensureOperatingAthletesFromCoachLinkedKids(...)
+```
+
+inside:
+
+```txt
+buildAthleteAuthoritySnapshot(...)
+```
+
+### Recovery logic
+
+If:
+
+```txt
+kid.sharedAthleteId exists
+AND parent athlete missing
+```
+
+bootstrap recreated:
+
+```ts
+{
+  id: sharedAthleteId,
+  name: kid.name
+}
+```
+
+and persisted it back into parent athletes.
+
+---
+
+# WHY DELETE LOST
+
+Delete removed:
+
+```txt
+parentAthletes
+```
+
+BUT:
+
+```txt
+coachKidsById.sharedAthleteId
+```
+
+survived.
+
+Bootstrap trusted linked kid lineage and rebuilt athlete.
+
+---
+
+# FIX — STALE LINEAGE RETIREMENT CLEANUP
+
+## Files
+
+* `src/storage/athleteStore.ts`
+* `src/services/coachWeeklySyncApi.ts`
+
+## Critical sequencing rule
+
+Local linkage cleanup only occurs AFTER:
+
+* remote delete success
+  OR
+* idempotent 404 success
+
+### Exact cleanup behavior
+
+```txt
+kid.sharedAthleteId === canonicalSharedAthleteId
+→ clearKidSharedAthleteLink(kidId)
+```
+
+### Explicitly NOT changed
+
+* bootstrap semantics
+* hydration
+* reconcile
+* topology
+* authority
+
+### Logs added
+
+```txt
+[CANONICAL_LINKAGE_RETIREMENT]
+[BOOTSTRAP_RECOVERY_SOURCE]
+```
+
+---
+
+# RESULT — MAJOR QA SUCCESS
+
+Confirmed stable:
+
+## Athlete lifecycle
+
+* create
+* link
+* hydrate
+* topology sync
+* overlay sync
+* delete
+* remote retirement
+* hard close/open
+* cold start
+* re-link
+* re-delete
+
+ALL PASSED.
+
+Most important proof:
+
+```txt
+deleted athletes no longer resurrect after bootstrap
+```
+
+This is the most important stabilization achievement of the cycle.
+
+---
+
+# RUNTIME FORENSIC INSTRUMENTATION ADDED
+
+## Files
+
+* `src/hooks/useActiveAthlete.ts`
+* `src/features/summary/SummaryScreen.tsx`
+
+## Runtime logs
+
+```txt
+[ACTIVE_ROSTER_RUNTIME]
+[ACTIVE_ATHLETE_RUNTIME]
+[SUMMARY_SWITCHER_RUNTIME]
+[SUMMARY_RENDER_RUNTIME]
+```
+
+Purpose:
+
+* roster state tracing
+* active athlete mutation tracing
+* runtime resurrection tracing
+* delete timing tracing
+
+Instrumentation-heavy pass enabled full lifecycle isolation.
+
+---
+
+# FINAL QA RESULTS (END OF DAY)
+
+## PASSED
+
+### Coach Summary Metrics
+
+* topology fallback working
+* metrics survive reboot
+* metrics survive athlete switching
+
+### Competition Delete
+
+* deletes propagate correctly
+* overlays retire correctly
+* stale overlays do not replay
+
+### Athlete Delete
+
+* canonical retirement works
+* linkage cleanup works
+* bootstrap resurrection fixed
+
+### Re-Link QA
+
+* re-link into retired lineage stable
+* no duplicate authority
+* no stale topology corruption
+
+### Hard Close/Open QA
+
+* no athlete resurrection
+* no stale competition replay
+
+---
+
+# REMAINING SMALL ISSUE
+
+## Stale "Existing child profiles" candidates
+
+Deleted athletes still appear inside:
+
+```txt
+Link athletes
+→ Existing child profiles
+```
+
+BUT:
+
+* not active
+* not bootstrapped
+* not linked
+* not hydrated
+* not in summary
+* not in coach roster
+
+This is now believed to be:
+
+```txt
+stale local candidate projection
+```
+
+NOT:
+
+* authority corruption
+* bootstrap corruption
+* topology replay
+
+This is now a bounded UI/projection cleanup task.
+
+---
+
+# CURRENT STABLE STATE
+
+## Branch
+
+```bash
+rollback-pre-lineage-regression
+```
+
+## HEAD
+
+```bash
+10c6825 Stabilize canonical athlete retirement and overlay lineage cleanup
+```
+
+## Working tree
+
+Clean.
+
+---
+
+# IMPORTANT ARCHITECTURAL DECISIONS LOCKED
+
+## DO NOT:
+
+* reintroduce heuristic recovery
+* name-match lineage
+* roster-scan for canonical ids
+* mutate bootstrap authority
+* widen delete semantics
+* add hydration hacks
+* make coach authoritative
+
+## KEEP:
+
+* explicit canonical lineage
+* exact id matching
+* bounded retirement
+* topology ownership separation
+* overlay ownership separation
+
+---
+
+# TOMORROW’S PLAN (6/7)
+
+## PRIMARY QA GOAL
+
+Fresh coach app onboarding.
+
+### Reason
+
+Today validated:
+
+```txt
+dirty-state lifecycle resilience
+```
+
+Tomorrow validates:
+
+```txt
+clean-device bootstrap onboarding
+```
+
+---
+
+# TOMORROW QA PLAN
+
+## Phase 1
+
+Preserve tonight’s stable repo checkpoint.
+
+Run:
+
+```bash
+git status -sb
+git log --oneline --decorate -5
+```
+
+---
+
+# Phase 2 — Fresh Coach App
+
+On Mac:
+
+1. fully quit app
+2. delete app/container
+3. rebuild clean coach app
+4. reconnect via onboarding flow
+
+Goal:
+
+* zero stale persistence
+* fresh bootstrap
+* first-install hydrate validation
+
+---
+
+# Phase 3 — Fresh Lifecycle QA
+
+Validate:
+
+* invite accept
+* weekly hydrate
+* training proof hydrate
+* competition hydrate
+* topology metrics
+* summary metrics
+* overlay hydrate
+* hard close/open persistence
+
+Then:
+
+* delete athlete
+* confirm no resurrection
+
+---
+
+# KEY STRATEGIC NOTE
+
+This repo is no longer in:
+
+```txt
+chaotic authority collapse
+```
+
+It is now in:
+
+```txt
+bounded lifecycle stabilization + residual projection cleanup
+```
+
+That is a major engineering transition.
+
+The repo integrity floor is substantially healthier tonight than at the start of this cycle.
+
+
 
 
 ## Date: 2026-06-02
