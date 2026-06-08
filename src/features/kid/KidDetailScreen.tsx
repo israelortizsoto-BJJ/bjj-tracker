@@ -1975,6 +1975,7 @@ export default function KidDetailScreen() {
 
         <View
           style={{
+            display: "none",
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: UI.familyLaneBorder,
@@ -2395,10 +2396,10 @@ export default function KidDetailScreen() {
           style={{
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            borderColor: UI.coachLaneBorder,
-            backgroundColor: UI.coachLaneBg,
-            padding: 12,
-            gap: 14,
+            borderColor: "#d8e0ea",
+            backgroundColor: "#f5f7fa",
+            padding: 14,
+            gap: 16,
           }}
         >
           <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
@@ -2413,21 +2414,19 @@ export default function KidDetailScreen() {
               <Text style={{ fontSize: 11, fontWeight: "800", color: "#1f2937" }}>COACH ONLY</Text>
             </View>
             <Text style={{ fontSize: 12, color: UI.textSecondary, flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Not published to families.
+              Athlete interpretation and private coach memory.
             </Text>
           </View>
 
           <View
-            style={{
-              paddingVertical: 18,
+          style={{
+              paddingVertical: 20,
               paddingHorizontal: 16,
               borderRadius: CARD_RADIUS,
               borderWidth: 1,
-              borderColor: "#bfdbfe",
-              borderLeftWidth: 5,
-              borderLeftColor: "#1d4ed8",
-              backgroundColor: "#f8fafc",
-              gap: 12,
+              borderColor: "#d5deea",
+              backgroundColor: "#ffffff",
+              gap: 13,
             }}
           >
             <Text
@@ -2435,18 +2434,18 @@ export default function KidDetailScreen() {
                 fontSize: 11,
                 letterSpacing: 1,
                 fontWeight: "800",
-                color: "#1e3a8a",
+                color: "#334155",
                 textTransform: "uppercase",
               }}
             >
               What matters next
             </Text>
             {standingIsActive ? (
-              <Text style={{ fontSize: 18, fontWeight: "800", color: UI.textPrimary, lineHeight: 24 }}>
+              <Text style={{ fontSize: 19, fontWeight: "900", color: UI.textPrimary, lineHeight: 25 }}>
                 {standingPrimary}
               </Text>
             ) : (
-              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "600" }}>
+              <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 23, fontWeight: "700" }}>
                 Capture the main takeaway and next focus for this kid.
               </Text>
             )}
@@ -2456,7 +2455,7 @@ export default function KidDetailScreen() {
               </Text>
             ) : null}
             <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-              AI can help draft this and save time
+              Standing guidance carried forward across weeks.
             </Text>
             <Pressable
               onPress={() =>
@@ -2468,32 +2467,29 @@ export default function KidDetailScreen() {
                 paddingHorizontal: 16,
                 borderRadius: 12,
                 borderWidth: 1,
-                borderColor: "#1d4ed8",
-                backgroundColor: pressed ? "#1d4ed8" : "#2563eb",
+                borderColor: "#cbd5e1",
+                backgroundColor: pressed ? "#eef2f6" : "#ffffff",
                 alignSelf: "flex-start",
               })}
             >
-              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>Edit Note</Text>
+              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>Review note</Text>
             </Pressable>
           </View>
 
         <View
           style={{
-            marginTop: 4,
-            paddingLeft: 12,
-            borderLeftWidth: 3,
-            borderLeftColor: "#c7d2fe",
+            marginTop: 2,
             gap: 0,
           }}
         >
         <View
           style={{
-            padding: 14,
+            padding: 15,
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: "#eef2f6",
-            gap: 10,
+            borderColor: "#d8e0ea",
+            backgroundColor: "#ffffff",
+            gap: 11,
             opacity: canEditOutcome ? 1 : 0.65,
           }}
         >
@@ -2502,7 +2498,7 @@ export default function KidDetailScreen() {
               {"How it's going"}
             </Text>
             <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-              AI support stays anchored to your coach-owned check-ins.
+              Coach observation memory for the current focus.
             </Text>
           </View>
 
@@ -2549,7 +2545,7 @@ export default function KidDetailScreen() {
               </View>
 
               <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-                Notes start empty; each save adds an entry below.
+                Each save becomes part of this athlete's coaching memory.
               </Text>
 
               <TextInput
@@ -2597,9 +2593,9 @@ export default function KidDetailScreen() {
             </>
           )}
 
-          <View style={{ marginTop: 12, gap: 9 }}>
+          <View style={{ marginTop: 14, gap: 10 }}>
             <Text style={{ fontSize: 11, letterSpacing: 0.5, fontWeight: "800", color: UI.textSecondary }}>
-              This week
+              Observation thread
             </Text>
 
             {thisWeekReflections.length === 0 ? (
@@ -2646,7 +2642,7 @@ export default function KidDetailScreen() {
                           paddingVertical: 11,
                           paddingHorizontal: 12,
                           gap: 5,
-                          backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
+                          backgroundColor: pressed ? "#eef2ff" : "#f8fafc",
                           borderRadius: 12,
                           borderWidth: 1,
                           borderColor: UI.border,
@@ -2691,13 +2687,13 @@ export default function KidDetailScreen() {
 
         <View style={{ height: 16 }} />
 
-        {false ? (
+        {true ? (
         <View
           style={{
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
-            borderColor: UI.familyLaneBorder,
-            backgroundColor: UI.familyLaneBg,
+            borderColor: "rgba(16, 185, 129, 0.24)",
+            backgroundColor: "#f7faf8",
             padding: 12,
             gap: 12,
           }}
@@ -2708,13 +2704,13 @@ export default function KidDetailScreen() {
                 paddingHorizontal: 10,
                 paddingVertical: 4,
                 borderRadius: 999,
-                backgroundColor: "#a7f3d0",
+                backgroundColor: "#dff7e8",
               }}
             >
-              <Text style={{ fontSize: 11, fontWeight: "800", color: "#065f46" }}>FAMILY / PUBLISH</Text>
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#166534" }}>PARENT REINFORCEMENT</Text>
             </View>
-            <Text style={{ fontSize: 12, color: "#047857", flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Publishing updates the shared weekly note for this invite. Private check-ins stay coach-only.
+            <Text style={{ fontSize: 12, color: "#47705c", flex: 1, minWidth: 140, lineHeight: 17 }}>
+              Review what families will receive after your coach-only interpretation is clear.
             </Text>
           </View>
 
@@ -2723,8 +2719,8 @@ export default function KidDetailScreen() {
               padding: 12,
               borderRadius: CARD_RADIUS,
               borderWidth: 1,
-              borderColor: UI.familyLaneBorder,
-              backgroundColor: "#d1fae5",
+              borderColor: "rgba(16, 185, 129, 0.2)",
+              backgroundColor: "#edf8f1",
               gap: 10,
             }}
           >
@@ -2734,7 +2730,7 @@ export default function KidDetailScreen() {
                   fontSize: 12,
                   letterSpacing: 0.4,
                   fontWeight: "800",
-                  color: "#065f46",
+                  color: "#166534",
                   flex: 1,
                   minWidth: 140,
                 }}
@@ -2840,8 +2836,8 @@ export default function KidDetailScreen() {
               padding: 12,
               borderRadius: CARD_RADIUS,
               borderWidth: 1,
-              borderColor: UI.familyLaneBorder,
-              backgroundColor: "#ecfdf5",
+              borderColor: "rgba(16, 185, 129, 0.2)",
+              backgroundColor: "#f2fbf5",
               gap: 8,
             }}
           >
@@ -2850,7 +2846,7 @@ export default function KidDetailScreen() {
                 fontSize: 12,
                 letterSpacing: 0.4,
                 fontWeight: "800",
-                color: "#065f46",
+                color: "#166534",
               }}
             >
               Why this matters
@@ -2883,13 +2879,16 @@ export default function KidDetailScreen() {
               padding: 16,
               borderRadius: CARD_RADIUS,
               borderWidth: 1,
-              borderColor: UI.border,
-              backgroundColor: UI.bgCard,
-              gap: 8,
+              borderColor: "#e2e8f0",
+              backgroundColor: "#ffffff",
+              gap: 9,
             }}
           >
             <Text style={{ fontSize: 13, letterSpacing: 0.3, fontWeight: "800", color: UI.textPrimary }}>
-              Weekly focus
+              Current direction review
+            </Text>
+            <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
+              Review the weekly intent here; full authoring stays on the weekly focus screen.
             </Text>
             {recommendedFocusArea ? (
               <View style={{ gap: 10 }}>
@@ -2914,8 +2913,8 @@ export default function KidDetailScreen() {
                       paddingHorizontal: 12,
                       borderRadius: 10,
                       borderWidth: 1,
-                      borderColor: UI.familyLaneBorder,
-                      backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                      borderColor: "rgba(16, 185, 129, 0.28)",
+                      backgroundColor: pressed ? "#dff7e8" : "#f2fbf5",
                     })}
                   >
                     <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
@@ -2994,8 +2993,8 @@ export default function KidDetailScreen() {
                   paddingHorizontal: 12,
                   borderRadius: 10,
                   borderWidth: 1,
-                  borderColor: UI.familyLaneBorder,
-                  backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                  borderColor: "rgba(16, 185, 129, 0.28)",
+                  backgroundColor: pressed ? "#dff7e8" : "#f2fbf5",
                 })}
               >
                 <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
@@ -3060,7 +3059,7 @@ export default function KidDetailScreen() {
                 paddingVertical: 14,
                 paddingHorizontal: 14,
                 borderRadius: 12,
-                borderWidth: 2,
+                borderWidth: 1,
                 borderColor: UI.publishAccent,
                 backgroundColor: pressed ? UI.publishAccentPressed : UI.publishAccent,
                 alignSelf: "stretch",

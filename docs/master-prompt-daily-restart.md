@@ -62,6 +62,119 @@ Keep me focused on:
 - the narrowest high-value slice
 - validation after each slice
 
+## Current Product Doctrine Truth
+
+MatMind is NOT evolving into:
+
+* a statistics dashboard
+* a KPI platform
+* a training ledger
+* a chart-heavy analytics system
+* “AI coaching”
+
+MatMind IS evolving into:
+
+# an interpreted athlete development platform
+
+Core moat:
+
+* coach-guided developmental understanding over time
+* longitudinal coaching intelligence
+* interpreted progression
+* proof-backed meaning
+* athlete evolution understanding
+
+Core governing principle:
+
+“Proof supports meaning.
+Meaning leads the experience.”
+
+This means:
+
+* metrics support developmental understanding
+* proof validates progression
+* progression understanding matters more than data density
+* restraint is part of the premium experience
+
+The best performance apps do NOT make users feel like they are managing data.
+They make users feel like they are understanding progress.
+
+MatMind should increasingly make:
+
+* coaches feel they are understanding athlete development
+* parents feel they are understanding athlete progress
+
+NOT:
+
+* reviewing dashboards
+* managing statistics
+* browsing proof archives
+
+Protected anti-patterns:
+
+* metric sprawl
+* dashboard chaos
+* fake AI insight spam
+* chart overload
+* duplicated proof surfaces
+* AI pretending to replace coach interpretation
+* feature accumulation without semantic clarity
+
+Current platform surface philosophy:
+
+Summary
+
+* progress understanding
+* developmental framing
+* athlete identity evolution
+* coach-guided reinforcement
+
+Coach Athlete Review
+
+* coach interpretation workspace
+* longitudinal observation
+* weekly direction oversight
+* parent reinforcement oversight
+
+Training
+
+* proof generation
+* systems exposure
+* repetition and consistency evidence
+
+Compete
+
+* pressure validation
+* execution proof
+* interpreted pressure memory
+
+Weekly Focus
+
+* directional authoring
+
+Match Breakdown
+
+* longitudinal interpreted competition memory
+
+Longitudinal Intelligence Layer
+
+* recurring patterns
+* athlete evolution
+* strategic identity
+* recurring coach observations
+* voice-note memory
+* progression understanding over time
+
+Non-negotiable:
+Do NOT let the product drift into:
+“well-designed sports analytics dashboard.”
+
+The moat is:
+
+# interpreted athlete development over time.
+
+
+
 ## Current product architecture truth
 The product is now understood in layers:
 

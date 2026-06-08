@@ -233,6 +233,118 @@ matter more than:
 * isolated screen behavior.
 
 ⸻
+## Current Product Doctrine Truth
+
+MatMind is NOT evolving into:
+
+* a statistics dashboard
+* a KPI platform
+* a training ledger
+* a chart-heavy analytics system
+* “AI coaching”
+
+MatMind IS evolving into:
+
+# an interpreted athlete development platform
+
+Core moat:
+
+* coach-guided developmental understanding over time
+* longitudinal coaching intelligence
+* interpreted progression
+* proof-backed meaning
+* athlete evolution understanding
+
+Core governing principle:
+
+“Proof supports meaning.
+Meaning leads the experience.”
+
+This means:
+
+* metrics support developmental understanding
+* proof validates progression
+* progression understanding matters more than data density
+* restraint is part of the premium experience
+
+The best performance apps do NOT make users feel like they are managing data.
+They make users feel like they are understanding progress.
+
+MatMind should increasingly make:
+
+* coaches feel they are understanding athlete development
+* parents feel they are understanding athlete progress
+
+NOT:
+
+* reviewing dashboards
+* managing statistics
+* browsing proof archives
+
+Protected anti-patterns:
+
+* metric sprawl
+* dashboard chaos
+* fake AI insight spam
+* chart overload
+* duplicated proof surfaces
+* AI may assist interpretation.
+* AI must not become the authority of meaning.
+* feature accumulation without semantic clarity
+
+Current platform surface philosophy:
+
+Summary
+
+* progress understanding
+* developmental framing
+* athlete identity evolution
+* coach-guided reinforcement
+
+Coach Athlete Review
+
+* coach interpretation workspace
+* longitudinal observation
+* weekly direction oversight
+* parent reinforcement oversight
+
+Training
+
+* proof generation
+* systems exposure
+* repetition and consistency evidence
+
+Compete
+
+* pressure validation
+* execution proof
+* interpreted pressure memory
+
+Weekly Focus
+* Weekly systems support direction.
+* Longitudinal systems support understanding over time.
+* directional authoring
+
+Match Breakdown
+
+* longitudinal interpreted competition memory
+
+Longitudinal Intelligence Layer
+
+* recurring patterns
+* athlete evolution
+* strategic identity
+* recurring coach observations
+* voice-note memory
+* progression understanding over time
+
+Non-negotiable:
+Do NOT let the product drift into:
+“well-designed sports analytics dashboard.”
+
+The moat is:
+
+# interpreted athlete development over time.
 
 Current Architecture Priority
 
@@ -778,6 +890,95 @@ For canonical docs/process/prompt updates:
 * avoid manual editing unless tiny and low-risk
 
 ⸻
+
+## Current Product Implementation Philosophy
+
+We are now operating in:
+
+# semantic-governed implementation mode
+
+Meaning:
+future product work should align to doctrine before implementation.
+
+We no longer optimize only for:
+
+* runtime correctness
+* operational ownership
+* hydration correctness
+* sync stability
+
+We ALSO optimize for:
+
+* semantic clarity
+* workflow cognition
+* developmental framing
+* longitudinal intelligence alignment
+* proof vs meaning hierarchy
+* calm operational UX
+
+Implementation slices should increasingly answer:
+
+* What should the coach psychologically understand?
+* What should the parent psychologically understand?
+* Does this feature reinforce athlete development understanding?
+* Does this increase clarity or increase dashboard noise?
+* Does proof support meaning?
+* Or is proof dominating the experience?
+
+Current semantic distinctions:
+
+Coach side:
+
+* understanding athlete development
+
+Parent side:
+
+* understanding athlete progress
+
+Important:
+These are NOT the same cognition models.
+
+Protected doctrine:
+
+* review ≠ authoring
+* weekly ≠ longitudinal
+* proof ≠ interpretation
+* hidden ≠ deleted
+* meaning should lead before metrics
+* longitudinal interpretation should precede reinforcement
+
+When implementing:
+prefer:
+
+* small semantic hierarchy shifts
+* workflow clarity
+* restrained interpretation
+* calm progression framing
+
+Avoid:
+
+* adding more cards
+* adding more metrics
+* adding more charts
+* adding more AI summaries
+* adding more dashboard density
+
+The product should increasingly feel:
+
+* calm
+* developmental
+* coach-guided
+* longitudinal
+* progression-oriented
+
+NOT:
+
+* analytical
+* admin-heavy
+* KPI-driven
+* metric-first
+* over-quantified
+
 
 Current Coding Philosophy
 
