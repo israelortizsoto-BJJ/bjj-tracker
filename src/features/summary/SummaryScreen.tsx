@@ -2421,11 +2421,6 @@ export default function SummaryScreen() {
         semanticLead
         eyebrow="Summary / Identity"
         title="A mirror of the athlete"
-        subtitle={
-          activeAthleteName?.trim()
-            ? `Active context · ${activeAthleteName.trim()}`
-            : null
-        }
         athlete={{
           name: activeAthleteName || "Athlete",
           initials: initialsFromName(activeAthleteName),
@@ -2711,8 +2706,8 @@ const styles = StyleSheet.create({
     marginTop: -2,
   },
   identityScoreRow: {
-    marginTop: 10,
-    paddingVertical: 7,
+    marginTop: 8,
+    paddingVertical: 5,
     paddingHorizontal: 2,
     borderRadius: 8,
   },
@@ -2723,11 +2718,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   selectorSection: {
-    marginBottom: 22,
-    paddingTop: 4,
+    marginBottom: 18,
+    paddingTop: 2,
   },
   skillsSection: {
-    marginTop: 18,
+    marginTop: 13,
+    paddingTop: 1,
   },
   skillsHeaderRow: {
     flexDirection: "row",
@@ -2736,7 +2732,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   skillsHeaderRowExpanded: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   skillsTitle: {
     color: "#a9b0b8",
@@ -2747,7 +2743,7 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   skillsChevron: {
-    color: "#777f89",
+    color: "#a9b0b8",
     fontSize: 12,
     fontWeight: "700",
     paddingVertical: 2,
@@ -2756,20 +2752,20 @@ const styles = StyleSheet.create({
   skillsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
+    gap: 7,
   },
   skillChip: {
     borderWidth: 1,
-    borderColor: "rgba(236, 241, 245, 0.12)",
+    borderColor: "rgba(236, 241, 245, 0.1)",
     borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#181b1f",
+    paddingVertical: 5,
+    backgroundColor: "#171b20",
   },
   skillText: {
-    color: "#d1d5db",
+    color: "#c7cdd5",
     fontSize: 12,
-    fontWeight: "700",
+    fontWeight: "800",
   },
   skillsEmpty: {
     color: "#666",

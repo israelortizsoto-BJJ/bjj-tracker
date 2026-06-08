@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   primaryGrid: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 14,
+    marginBottom: 12,
   },
   primaryMetric: {
     width: "48%",
@@ -348,14 +348,17 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
+    rowGap: 10,
   },
   secondaryMetric: {
     width: "48%",
-    backgroundColor: "#181b1f",
+    backgroundColor: "#161a1f",
     borderRadius: 8,
-    padding: 15,
-    minHeight: 96,
-    marginBottom: 14,
+    paddingHorizontal: 13,
+    paddingVertical: 12,
+    minHeight: 88,
+    borderWidth: 1,
+    borderColor: "rgba(236, 241, 245, 0.1)",
     justifyContent: "center",
   },
   emptyState: {
@@ -377,21 +380,21 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   itemLabel: {
-    color: "#9ca3af",
+    color: "#aeb5bf",
     fontSize: 12,
-    marginBottom: 8,
-    fontWeight: "700",
+    marginBottom: 7,
+    fontWeight: "800",
   },
   itemValue: {
     color: "#ffffff",
     fontSize: 21,
-    fontWeight: "800",
+    fontWeight: "900",
     marginBottom: 4,
   },
   itemValueSmall: {
     color: "#ffffff",
     fontSize: 18,
-    fontWeight: "800",
+    fontWeight: "900",
     marginBottom: 4,
   },
   itemSubtext: {

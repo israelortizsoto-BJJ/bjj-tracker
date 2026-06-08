@@ -294,17 +294,17 @@ const INSIGHT_STYLES = {
 const INSIGHT_CARD_CONTAINER = {
   width: CARD_W,
   marginRight: GAP,
-  padding: 14,
+  padding: 15,
   borderRadius: CARD_RADIUS,
   borderWidth: 1,
-  borderColor: UI.border,
-  backgroundColor: UI.bgCard,
+  borderColor: "rgba(226, 232, 240, 0.13)",
+  backgroundColor: "#171b20",
 } as const;
 
 const styles = StyleSheet.create({
   trainingIdentityBlock: {
     marginBottom: 0,
-    paddingVertical: 9,
+    paddingVertical: 7,
     paddingHorizontal: 2,
     borderRadius: CARD_RADIUS,
   },
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   trainingTrendLabel: {
-    marginTop: 4,
+    marginTop: 3,
     fontSize: 11,
     color: "#6b7c86",
     textTransform: "uppercase",
@@ -1122,10 +1122,9 @@ const renderNewSessionCTA = () => (
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
-    contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 20, gap: 12 }}
+    contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 18, gap: 10 }}
     >
       <OperatingHeader
-        density="compact"
         surfaceTone="soft"
         mode="athlete"
         eyebrow="Training / Execution"
@@ -1168,7 +1167,7 @@ const renderNewSessionCTA = () => (
         ) : null}
       </View>
 
-      <Text style={[SECTION_LABEL, { marginTop: 0, marginBottom: -6 }]}>
+      <Text style={[SECTION_LABEL, { marginTop: -2, marginBottom: -5 }]}>
         LOG TRAINING
       </Text>
 
@@ -1564,7 +1563,7 @@ const renderNewSessionCTA = () => (
 
 {/* Insights */}
 {isLoadingSessions ? null : (
-  <View style={{ marginTop: 10, marginBottom: 6 }} pointerEvents="box-none">
+  <View style={{ marginTop: 14, marginBottom: 8 }} pointerEvents="box-none">
     <View style={{ position: "relative" }}>
       <ScrollView
         horizontal
@@ -1585,7 +1584,7 @@ const renderNewSessionCTA = () => (
             : undefined
         }
         contentContainerStyle={{
-          paddingVertical: 8,
+          paddingVertical: 10,
           paddingLeft: SIDE_PAD,
           paddingRight: SIDE_PAD,
         }}

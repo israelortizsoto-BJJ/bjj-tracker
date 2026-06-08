@@ -171,8 +171,8 @@ export function MedalCollection({
 
 const styles = StyleSheet.create({
   card: {
-    marginTop: 18,
-    marginBottom: 8,
+    marginTop: 14,
+    marginBottom: 10,
     paddingVertical: 16,
     paddingHorizontal: 16,
     borderWidth: 1,
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     backgroundColor: FEED.panel,
   },
   headerBlock: {
-    marginBottom: 4,
+    marginBottom: 3,
   },
   eyebrow: {
     color: FEED.muted,
@@ -191,16 +191,17 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   sectionTitle: {
-    marginTop: 6,
+    marginTop: 5,
     color: FEED.text,
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: "900",
     letterSpacing: 0,
   },
   subtitle: {
-    marginTop: 6,
+    marginTop: 4,
     color: FEED.muted,
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: "600",
   },
   emptyMessage: {
@@ -211,29 +212,31 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   yearGroup: {
-    marginTop: 14,
+    marginTop: 13,
   },
   yearLabel: {
     color: FEED.text,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "900",
+    letterSpacing: 0.2,
   },
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    marginTop: 12,
+    gap: 9,
+    marginTop: 15,
   },
   medalTile: {
     width: "23%",
-    minHeight: 100,
+    minHeight: 104,
     alignItems: "center",
     justifyContent: "center",
-    padding: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: FEED.line,
+    borderColor: "rgba(236, 241, 245, 0.14)",
     borderRadius: FEED.radius,
-    backgroundColor: "#181b1f",
+    backgroundColor: "#161a1f",
   },
   medalTileIdle: {
     opacity: 1,
@@ -244,7 +247,7 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.94 }],
   },
   tileDate: {
-    marginTop: 5,
+    marginTop: 7,
     color: FEED.muted,
     fontSize: 9,
     fontWeight: "800",

@@ -185,7 +185,7 @@ const FEED = {
 };
 
 const CARD_RADIUS = 16;
-const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: "#6b7280", fontWeight: "600" as const };
+const SECTION_LABEL = { fontSize: 11, letterSpacing: 1.2, color: FEED.muted, fontWeight: "800" as const };
 
 /**
  * Parent weekly: resolve family-competition kid only within kids coherent with the active redeemed weekly invite token.
@@ -325,13 +325,13 @@ function Section({
   const surface =
     tone === "family"
       ? { backgroundColor: FEED.panel, borderColor: FEED.line }
-      : { backgroundColor: UI.bgCard, borderColor: UI.border };
+      : { backgroundColor: FEED.panel, borderColor: FEED.line };
   return (
     <View
       style={{
         marginTop: 18,
         padding: 18,
-        borderRadius: CARD_RADIUS,
+        borderRadius: FEED.radius,
         borderWidth: 1,
         borderColor: surface.borderColor,
         backgroundColor: surface.backgroundColor,
@@ -414,16 +414,16 @@ function CoachThisWeekShell() {
         enableOnAndroid
         extraScrollHeight={80}
         keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: UI.screenBg }}
+        style={{ flex: 1, backgroundColor: FEED.bg }}
         contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
       >
         <View>
           <Text
-            style={{ fontSize: 26, fontWeight: "700", color: UI.textPrimary, marginBottom: 8 }}
+            style={{ fontSize: 26, fontWeight: "800", color: FEED.text, marginBottom: 8 }}
           >
             Coach home
           </Text>
-          <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, marginBottom: 22 }}>
+          <Text style={{ fontSize: 15, color: FEED.muted, lineHeight: 22, marginBottom: 22 }}>
             Open your kids roster to manage athletes and weekly focus.
           </Text>
           <Pressable
@@ -433,13 +433,13 @@ function CoachThisWeekShell() {
               paddingHorizontal: 18,
               borderRadius: CARD_RADIUS,
               borderWidth: 1,
-              borderColor: UI.primaryFill,
-              backgroundColor: pressed ? UI.primaryFillPressed : UI.primaryFill,
+              borderColor: "rgba(214, 255, 63, 0.45)",
+              backgroundColor: pressed ? FEED.accentPressed : FEED.accent,
               alignSelf: "stretch",
               alignItems: "center",
             })}
           >
-            <Text style={{ fontSize: 16, fontWeight: "700", color: UI.primaryTextOnFill }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: FEED.accentDark }}>
               Open kids roster
             </Text>
           </Pressable>
@@ -1489,16 +1489,16 @@ function ParentThisWeekScreen() {
     );
   }, [assignmentsById, completionReceiptsQueue, currentAssignment, setStateIfJsonChanged]);
 
-  const cardButtonStyle = (pressed: boolean): { marginTop: number; paddingVertical: number; paddingHorizontal: number; borderRadius: number; borderWidth: number; borderColor: string; backgroundColor: string; alignSelf: "flex-start" } => ({
-    marginTop: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    borderRadius: CARD_RADIUS,
-    borderWidth: 1,
-    borderColor: UI.border,
-    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-    alignSelf: "flex-start",
-  });
+	  const cardButtonStyle = (pressed: boolean): { marginTop: number; paddingVertical: number; paddingHorizontal: number; borderRadius: number; borderWidth: number; borderColor: string; backgroundColor: string; alignSelf: "flex-start" } => ({
+	    marginTop: 12,
+	    paddingVertical: 14,
+	    paddingHorizontal: 18,
+	    borderRadius: FEED.radius,
+	    borderWidth: 1,
+	    borderColor: FEED.lineStrong,
+	    backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
+	    alignSelf: "flex-start",
+	  });
 
   const handleRemovePilotPreviewItem = useCallback(
     async (id: string) => {
@@ -2139,7 +2139,6 @@ function ParentThisWeekScreen() {
             mode="athlete"
             eyebrow="Coach Direction"
             title="This week’s direction"
-            subtitle={weeklyConnectionStatusLabel}
             onTitleLongPress={
               __DEV__
                 ? () => {
@@ -2150,7 +2149,7 @@ function ParentThisWeekScreen() {
             athlete={{
               name: parentWeeklyHeroAthleteName || "Athlete",
               initials: initialsFromName(parentWeeklyHeroAthleteName || ""),
-              meta: weeklyDirectionSubtitle,
+              meta: isLinked ? "Linked athlete" : "Device athlete",
             }}
             actions={[
               {
@@ -2177,18 +2176,13 @@ function ParentThisWeekScreen() {
               <>
                 <View
                   style={{
-                    marginTop: 16,
-                    marginBottom: -2,
+                    marginTop: 12,
+                    marginBottom: -4,
                     paddingHorizontal: 2,
                   }}
                 >
-                  <Text style={{ fontSize: 12, letterSpacing: 1, fontWeight: "800", color: FEED.muted }}>
-                    Athlete
-                  </Text>
-                </View>
                 <Text
                   style={{
-                    marginTop: 8,
                     paddingHorizontal: 2,
                     fontSize: 14,
                     color: FEED.muted,
@@ -2199,59 +2193,98 @@ function ParentThisWeekScreen() {
                 </Text>
                 <View
                   style={{
-                    marginTop: 12,
+                    marginTop: 10,
                     flexDirection: "row",
                     flexWrap: "wrap",
                     gap: 8,
+                    alignItems: "center",
                   }}
                 >
                 {operatingAthleteRoster.map((athRow) => {
                   const athleteSelectedForThisWeek = athRow.id === activeParentAthleteId;
+                  const athleteName = athRow.name.trim() || "Athlete";
                   return (
                     <Pressable
                       key={athRow.id}
                       onPress={() => void handleSelectParentAthleteForThisWeek(athRow)}
                       accessibilityRole="button"
                       accessibilityState={{ selected: athleteSelectedForThisWeek }}
-                      accessibilityLabel={`Training and competition for ${athRow.name.trim() || "this athlete"}`}
+                      accessibilityLabel={`Training and competition for ${athleteName}`}
                       style={({ pressed }) => ({
-                        paddingVertical: 8,
-                        paddingHorizontal: 12,
-                        borderRadius: FEED.radius,
+                        minHeight: 38,
+                        paddingVertical: 6,
+                        paddingHorizontal: 10,
+                        borderRadius: 8,
                         borderWidth: 1,
-                        borderColor: athleteSelectedForThisWeek ? FEED.lineStrong : FEED.line,
+                        borderColor: athleteSelectedForThisWeek
+                          ? "rgba(214, 255, 63, 0.75)"
+                          : FEED.line,
                         backgroundColor: athleteSelectedForThisWeek
-                          ? (pressed ? FEED.panel3 : FEED.panel2)
+                          ? (pressed ? FEED.panel3 : FEED.panel)
                           : (pressed ? FEED.panel3 : FEED.panel),
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
                       })}
                     >
+                      <View
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 8,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderWidth: 1,
+                          borderColor: athleteSelectedForThisWeek
+                            ? "rgba(214, 255, 63, 0.7)"
+                            : FEED.line,
+                          backgroundColor: FEED.panel2,
+                        }}
+                      >
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: "900",
+                            color: athleteSelectedForThisWeek ? FEED.accent : FEED.muted,
+                          }}
+                        >
+                          {initialsFromName(athleteName)}
+                        </Text>
+                      </View>
                       <Text
+                        numberOfLines={1}
                         style={{
                           fontSize: 13,
                           fontWeight: "800",
                           color: athleteSelectedForThisWeek ? FEED.text : FEED.muted,
+                          flexShrink: 1,
                         }}
                       >
-                        {athRow.name.trim() || "Athlete"}
+                        {athleteName}
                       </Text>
                     </Pressable>
                   );
                 })}
                 </View>
+                </View>
               </>
             ) : null}
 
-            <View
-              style={{
-                marginTop: tokens.layout.sectionGap,
-                padding: 16,
-                borderRadius: FEED.radius,
-                borderWidth: 1,
-                borderColor: FEED.lineStrong,
-                backgroundColor: FEED.panel,
-                overflow: "hidden",
-                ...tokens.elevation.card,
-              }}
+	            <View
+	              style={{
+	                marginTop: tokens.space[5],
+	                paddingVertical: 18,
+	                paddingHorizontal: 16,
+	                borderRadius: FEED.radius,
+	                borderWidth: 1,
+	                borderColor: "rgba(236, 241, 245, 0.13)",
+	                borderTopWidth: 1,
+	                borderTopColor: "rgba(214, 255, 63, 0.28)",
+	                backgroundColor: FEED.panel,
+	                overflow: "hidden",
+	                ...tokens.elevation.card,
+	              }}
             >
               {isDev() &&
               role === "parent" &&
@@ -2292,47 +2325,48 @@ function ParentThisWeekScreen() {
                 style={[
                   tokens.type.label,
                   {
-                    marginBottom: tokens.space[2],
-                    color: FEED.muted,
-                  },
-                ]}
-              >
+	                    marginBottom: tokens.space[2],
+	                    color: FEED.accent,
+	                    letterSpacing: 1.1,
+	                  },
+	                ]}
+	              >
                 {weeklyNoteHeroEyebrow.toUpperCase()}
               </Text>
               <Text
                 style={{
-                  color: FEED.text,
-                  fontSize: 20,
-                  lineHeight: 25,
-                  fontWeight: "900",
-                }}
-              >
+	                  color: FEED.text,
+	                  fontSize: 21,
+	                  lineHeight: 26,
+	                  fontWeight: "900",
+	                }}
+	              >
                 {focusTitle}
               </Text>
               <Text
                 style={{
                   marginTop: 10,
-                  color: FEED.muted,
-                  fontSize: 14,
-                  lineHeight: 21,
-                }}
-              >
+	                  color: "#c1c7cf",
+	                  fontSize: 14,
+	                  lineHeight: 22,
+	                }}
+	              >
                 {focusNotes}
               </Text>
 
               {useWeeklySyncHero && weeklySyncDoc?.recommendedFocusArea ? (
                 <Text
                   style={{
-                    marginTop: 12,
-                    color: FEED.faint,
-                    fontSize: 12,
-                    lineHeight: 17,
-                  }}
-                >
-                  Suggested focus from recent competitions:{" "}
-                  <Text style={{ fontWeight: "700", color: FEED.muted }}>
-                    {weeklySyncDoc.recommendedFocusArea}
-                  </Text>
+	                    marginTop: 12,
+	                    color: FEED.muted,
+	                    fontSize: 12,
+	                    lineHeight: 18,
+	                  }}
+	                >
+	                  Suggested focus from recent competitions:{" "}
+	                  <Text style={{ fontWeight: "800", color: FEED.accent }}>
+	                    {weeklySyncDoc.recommendedFocusArea}
+	                  </Text>
                 </Text>
               ) : null}
 
@@ -2461,40 +2495,52 @@ function ParentThisWeekScreen() {
               ) : null}
 
               {useWeeklySyncHero && weeklySyncDoc ? (
-                weeklyAcknowledged ? (
-                  <Text
-                    style={[
-                      tokens.type.caption,
-                      {
-                        marginTop: tokens.space[4],
-                        color: FEED.text,
-                        fontWeight: "700",
-                      },
-                    ]}
-                  >
-                    Acknowledged
-                  </Text>
-                ) : (
-                  <Pressable
+	                weeklyAcknowledged ? (
+	                  <View
+	                    style={{
+	                      alignSelf: "flex-start",
+	                      marginTop: tokens.space[4],
+	                      paddingVertical: 8,
+	                      paddingHorizontal: 11,
+	                      borderRadius: FEED.radius,
+	                      borderWidth: 1,
+	                      borderColor: "rgba(214, 255, 63, 0.35)",
+	                      backgroundColor: "rgba(214, 255, 63, 0.08)",
+	                    }}
+	                  >
+	                    <Text
+	                      style={[
+	                        tokens.type.caption,
+	                        {
+	                          color: FEED.accent,
+	                          fontWeight: "900",
+	                        },
+	                      ]}
+	                    >
+	                      ✓ Acknowledged
+	                    </Text>
+	                  </View>
+	                ) : (
+	                  <Pressable
                     onPress={handleAcknowledgeWeekly}
                     accessibilityRole="button"
                     accessibilityLabel="Acknowledge this weekly note"
                     style={({ pressed }) => ({
                       marginTop: tokens.space[4],
-                      paddingVertical: tokens.space[3],
-                      paddingHorizontal: tokens.space[4],
-                      borderRadius: FEED.radius,
-                      borderWidth: 1,
-                      borderColor: FEED.lineStrong,
-                      backgroundColor: pressed
-                        ? FEED.panel3
-                        : FEED.panel2,
-                      alignSelf: "flex-start",
-                    })}
-                  >
-                    <Text style={[tokens.type.title, { color: FEED.text }]}>
-                      You got it
-                    </Text>
+	                      paddingVertical: 11,
+	                      paddingHorizontal: 15,
+	                      borderRadius: FEED.radius,
+	                      borderWidth: 1,
+	                      borderColor: "rgba(214, 255, 63, 0.45)",
+	                      backgroundColor: pressed
+	                        ? FEED.accentPressed
+	                        : FEED.accent,
+	                      alignSelf: "flex-start",
+	                    })}
+	                  >
+	                    <Text style={[tokens.type.title, { color: FEED.accentDark }]}>
+	                      You got it
+	                    </Text>
                   </Pressable>
                 )
               ) : null}
@@ -2506,22 +2552,22 @@ function ParentThisWeekScreen() {
               // attached to the hero (small top gap, eyebrow-style label, softer
               // surface) so it reads as a continuation, not a duplicate CTA.
               <View
-                style={{
-                  marginTop: tokens.space[2],
-                  paddingVertical: tokens.space[3],
-                  paddingHorizontal: tokens.layout.cardPadding,
-                  borderRadius: FEED.radius,
-                  borderWidth: 1,
-                  borderColor: FEED.line,
-                  backgroundColor: FEED.panel,
-                }}
+	                style={{
+	                  marginTop: tokens.space[3],
+	                  paddingVertical: tokens.space[4],
+	                  paddingHorizontal: tokens.layout.cardPadding,
+	                  borderRadius: FEED.radius,
+	                  borderWidth: 1,
+	                  borderColor: "rgba(214, 255, 63, 0.22)",
+	                  backgroundColor: FEED.panel,
+	                }}
               >
                 <Text
                   style={[
                     tokens.type.label,
-                    { color: FEED.muted },
-                  ]}
-                >
+	                    { color: FEED.accent, letterSpacing: 1.1 },
+	                  ]}
+	                >
                   MISSION LINK
                 </Text>
                 <Pressable
@@ -2530,23 +2576,23 @@ function ParentThisWeekScreen() {
                   accessibilityLabel="Open this week’s technique link"
                   style={({ pressed }) => ({
                     marginTop: tokens.space[3],
-                    paddingVertical: tokens.space[3],
-                    paddingHorizontal: tokens.space[4],
-                    borderRadius: FEED.radius,
-                    borderWidth: 1,
-                    borderColor: FEED.lineStrong,
-                    backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
-                    alignSelf: "stretch",
-                    alignItems: "center",
+	                    paddingVertical: 13,
+	                    paddingHorizontal: tokens.space[4],
+	                    borderRadius: FEED.radius,
+	                    borderWidth: 1,
+	                    borderColor: "rgba(214, 255, 63, 0.45)",
+	                    backgroundColor: pressed ? FEED.accentPressed : FEED.accent,
+	                    alignSelf: "stretch",
+	                    alignItems: "center",
                     justifyContent: "center",
                   })}
                 >
                   <Text
-                    style={[
-                      tokens.type.title,
-                      { color: FEED.text },
-                    ]}
-                  >
+	                    style={[
+	                      tokens.type.title,
+	                      { color: FEED.accentDark },
+	                    ]}
+	                  >
                     ▶ Open this week’s link
                   </Text>
                 </Pressable>
@@ -2577,45 +2623,47 @@ function ParentThisWeekScreen() {
               accessibilityLabel={
                 "Open Family Huddle. Reflect on this week together with your athlete."
               }
-              style={({ pressed }) => ({
-                marginTop: tokens.layout.sectionGap,
-                paddingVertical: tokens.space[4],
-                paddingHorizontal: tokens.space[4],
-                borderRadius: FEED.radius,
-                borderWidth: 1,
-                borderColor: FEED.line,
-                backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
-                alignSelf: "stretch",
-                alignItems: "flex-start",
-              })}
+	              style={({ pressed }) => ({
+	                marginTop: tokens.space[5],
+	                paddingVertical: tokens.space[4],
+	                paddingHorizontal: tokens.space[4],
+	                borderRadius: FEED.radius,
+	                borderWidth: 1,
+	                borderColor: FEED.lineStrong,
+	                backgroundColor: pressed ? FEED.panel3 : FEED.panel,
+	                alignSelf: "stretch",
+	                alignItems: "flex-start",
+	              })}
             >
               <Text
                 style={[
-                  tokens.type.label,
-                  { color: FEED.muted },
-                ]}
-              >
+	                  tokens.type.label,
+	                  { color: FEED.muted, letterSpacing: 1.1 },
+	                ]}
+	              >
                 FAMILY HUDDLE · REFLECT TOGETHER
               </Text>
               <Text
                 style={[
                   tokens.type.h2,
-                  {
-                    marginTop: tokens.space[2],
-                    color: FEED.text,
-                  },
-                ]}
+	                  {
+	                    marginTop: tokens.space[2],
+	                    color: FEED.text,
+	                    fontSize: 19,
+	                  },
+	                ]}
               >
                 Walk through this week with your athlete
               </Text>
               <Text
                 style={[
                   tokens.type.body,
-                  {
-                    marginTop: tokens.space[2],
-                    color: FEED.muted,
-                  },
-                ]}
+	                  {
+	                    marginTop: tokens.space[2],
+	                    color: FEED.muted,
+	                    lineHeight: 22,
+	                  },
+	                ]}
               >
                 Revisit the focus together, ask what felt right at training, and look for small ways to
                 reinforce it before next class.
@@ -2720,9 +2768,9 @@ function ParentThisWeekScreen() {
             ) : null}
 
             {!isLinked || (isLinked && currentAssignment?.status === "assigned") ? (
-              <View style={{ marginTop: 16, gap: tokens.space[3] }}>
-                {!isLinked ? (
-                  <Pressable
+	              <View style={{ marginTop: tokens.space[5], gap: tokens.space[3] }}>
+	                {!isLinked ? (
+	                  <Pressable
                     onPress={() => router.push("/this-week/join")}
                     accessibilityRole="button"
                     style={({ pressed }) => ({
@@ -2730,19 +2778,19 @@ function ParentThisWeekScreen() {
                       paddingHorizontal: tokens.space[5],
                       borderRadius: FEED.radius,
                       borderWidth: 1,
-                      borderColor: FEED.lineStrong,
-                      backgroundColor: pressed
-                        ? FEED.panel3
-                        : FEED.panel2,
-                      alignSelf: "stretch",
-                      alignItems: "center",
-                    })}
+	                      borderColor: "rgba(214, 255, 63, 0.35)",
+	                      backgroundColor: pressed
+	                        ? FEED.accentPressed
+	                        : FEED.accent,
+	                      alignSelf: "stretch",
+	                      alignItems: "center",
+	                    })}
                   >
                     <Text
-                      style={[
-                        tokens.type.title,
-                        { color: FEED.text },
-                      ]}
+	                      style={[
+	                        tokens.type.title,
+	                        { color: FEED.accentDark },
+	                      ]}
                     >
                       Connect with your coach
                     </Text>
@@ -2758,19 +2806,19 @@ function ParentThisWeekScreen() {
                       paddingHorizontal: tokens.space[5],
                       borderRadius: FEED.radius,
                       borderWidth: 1,
-                      borderColor: FEED.lineStrong,
-                      backgroundColor: pressed
-                        ? FEED.panel3
-                        : FEED.panel,
+	                      borderColor: "rgba(214, 255, 63, 0.32)",
+	                      backgroundColor: pressed
+	                        ? "rgba(214, 255, 63, 0.12)"
+	                        : "rgba(214, 255, 63, 0.06)",
                       alignSelf: "stretch",
                       alignItems: "center",
                     })}
                   >
                     <Text
-                      style={[
-                        tokens.type.title,
-                        { color: FEED.text },
-                      ]}
+	                      style={[
+	                        tokens.type.title,
+	                        { color: FEED.accent },
+	                      ]}
                     >
                       Mark weekly focus complete
                     </Text>
@@ -2791,13 +2839,13 @@ function ParentThisWeekScreen() {
               </View>
             ) : null}
 
-            {isLinked && hasCompletionSummary ? (
-              <Section title="Nice work">
-                <Text style={{ fontSize: 16, fontWeight: "600", marginBottom: 4, color: UI.textPrimary }}>
-                  {completionAssignmentTitle}
-                </Text>
-                {completionPack || completionModule ? (
-                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
+	            {isLinked && hasCompletionSummary ? (
+	              <Section title="Nice work">
+	                <Text style={{ fontSize: 16, fontWeight: "800", marginBottom: 4, color: FEED.text }}>
+	                  {completionAssignmentTitle}
+	                </Text>
+	                {completionPack || completionModule ? (
+	                  <Text style={{ fontSize: 14, color: FEED.muted, lineHeight: 22 }}>
                     {completionModule?.title
                       ? `${completionModule.title}${
                           completionPack?.title
@@ -2807,24 +2855,24 @@ function ParentThisWeekScreen() {
                       : completionPack?.title}
                   </Text>
                 ) : null}
-                <View style={{ marginTop: 10 }}>
-                  <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                    Logged:{" "}
-                    <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
+	                <View style={{ marginTop: 10 }}>
+	                  <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                    Logged:{" "}
+	                    <Text style={{ fontWeight: "700", color: FEED.text }}>
                       {completionCompletedAtDate
                         ? completionCompletedAtDate.toLocaleDateString()
                         : "—"}
                     </Text>
                   </Text>
-                  <Text style={{ fontSize: 14, marginTop: 2, color: UI.textSecondary }}>
-                    Saved on this phone for now
-                  </Text>
+	                  <Text style={{ fontSize: 14, marginTop: 2, color: FEED.faint }}>
+	                    Saved on this phone for now
+	                  </Text>
                 </View>
               </Section>
             ) : null}
 
-            <View style={{ gap: 8, marginBottom: 10 }}>
-              <Pressable
+	            <View style={{ gap: 8, marginBottom: 10, marginTop: tokens.space[2] }}>
+	              <Pressable
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 pressRetentionOffset={12}
                 onPress={() => {
@@ -2837,8 +2885,8 @@ function ParentThisWeekScreen() {
                   paddingHorizontal: 14,
                   borderRadius: FEED.radius,
                   borderWidth: 1,
-                  borderColor: FEED.line,
-                  backgroundColor: FEED.panel,
+	                  borderColor: linkRefreshExpanded ? FEED.lineStrong : FEED.line,
+	                  backgroundColor: linkRefreshExpanded ? FEED.panel2 : FEED.panel,
                   flexDirection: "row",
                   alignItems: "center",
                   opacity: (!isLinked || linkRefreshExpanded) ? 1 : 0.92,
@@ -2851,9 +2899,9 @@ function ParentThisWeekScreen() {
                       width: 8,
                       height: 8,
                       borderRadius: 999,
-                      backgroundColor: isLinked
-                        ? FEED.muted
-                        : FEED.faint,
+	                      backgroundColor: isLinked
+	                        ? FEED.accent
+	                        : FEED.faint,
                     }}
                   />
                   <Text style={{ color: FEED.text, fontWeight: "800", fontSize: 14 }}>
@@ -2928,39 +2976,39 @@ function ParentThisWeekScreen() {
 
             {showCoachOperationalTools ? (
               <>
-                <Section title="Coach tools">
-                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                    Coach tools on this device — use Profile → Switch role if this phone is for a parent.
-                  </Text>
+	                <Section title="Coach tools">
+	                  <Text style={{ fontSize: 14, color: FEED.muted, lineHeight: 22 }}>
+	                    Coach tools on this device — use Profile → Switch role if this phone is for a parent.
+	                  </Text>
                   <Pressable
                     onPress={() => router.push("/coach/kids")}
                     style={({ pressed }) => cardButtonStyle(pressed)}
                   >
-                    <Text style={{ fontSize: 16, color: UI.textPrimary, fontWeight: "700" }}>
-                      Kids roster
-                    </Text>
-                    <Text style={{ marginTop: 4, fontSize: 13, color: UI.textSecondary }}>
-                      Roster + kid-specific weekly focus
-                    </Text>
+	                    <Text style={{ fontSize: 16, color: FEED.text, fontWeight: "800" }}>
+	                      Kids roster
+	                    </Text>
+	                    <Text style={{ marginTop: 4, fontSize: 13, color: FEED.muted }}>
+	                      Roster + kid-specific weekly focus
+	                    </Text>
                   </Pressable>
                   <Pressable
                     onPress={() => router.push("/this-week/create-pack")}
                     style={({ pressed }) => cardButtonStyle(pressed)}
                   >
-                    <Text style={{ fontSize: 15, color: UI.textSecondary, fontWeight: "600" }}>
-                      Template preview
-                    </Text>
-                    <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-                      Coach-side preview only; use Kids roster for kid weekly focus.
-                    </Text>
+	                    <Text style={{ fontSize: 15, color: FEED.muted, fontWeight: "700" }}>
+	                      Template preview
+	                    </Text>
+	                    <Text style={{ marginTop: 4, fontSize: 12, color: FEED.faint }}>
+	                      Coach-side preview only; use Kids roster for kid weekly focus.
+	                    </Text>
                   </Pressable>
                 </Section>
 
                 {pilotPreviewItems.length > 0 ? (
-                  <Section title="Weekly focus preview">
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                      Saved on this device only — not shared with families until you publish from a kid’s weekly focus.
-                    </Text>
+	                  <Section title="Weekly focus preview">
+	                    <Text style={{ fontSize: 14, color: FEED.muted, lineHeight: 22 }}>
+	                      Saved on this device only — not shared with families until you publish from a kid’s weekly focus.
+	                    </Text>
 
                     <View style={{ marginTop: 12, gap: 10 }}>
                       {pilotPreviewItems.slice(0, 3).map((item) => {
@@ -2971,16 +3019,16 @@ function ParentThisWeekScreen() {
                             key={item.id}
                             style={{
                               padding: 12,
-                              borderRadius: 12,
-                              borderWidth: 1,
-                              borderColor: UI.border,
-                              backgroundColor: UI.bgCard,
+	                              borderRadius: FEED.radius,
+	                              borderWidth: 1,
+	                              borderColor: FEED.line,
+	                              backgroundColor: FEED.panel2,
                             }}
                           >
                             <Text
                               style={{
                                 fontSize: 12,
-                                color: UI.textSecondary,
+	                                color: FEED.muted,
                                 letterSpacing: 0.6,
                                 fontWeight: "600",
                               }}
@@ -2992,7 +3040,7 @@ function ParentThisWeekScreen() {
                                 fontSize: 16,
                                 fontWeight: "700",
                                 marginTop: 6,
-                                color: UI.textPrimary,
+	                                color: FEED.text,
                               }}
                             >
                               {item.title}
@@ -3001,7 +3049,7 @@ function ParentThisWeekScreen() {
                               <Text
                                 style={{
                                   fontSize: 14,
-                                  color: UI.textSecondary,
+	                                  color: FEED.muted,
                                   marginTop: 6,
                                   lineHeight: 20,
                                 }}
@@ -3017,9 +3065,9 @@ function ParentThisWeekScreen() {
                                 justifyContent: "space-between",
                               }}
                             >
-                              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                                Added:{" "}
-                                <Text style={{ fontWeight: "500", color: UI.textPrimary }}>
+	                              <Text style={{ fontSize: 12, color: FEED.faint }}>
+	                                Added:{" "}
+	                                <Text style={{ fontWeight: "700", color: FEED.text }}>
                                   {new Date(item.createdAt).toLocaleDateString()}
                                 </Text>
                               </Text>
@@ -3038,15 +3086,15 @@ function ParentThisWeekScreen() {
                                       paddingHorizontal: 10,
                                       borderRadius: 999,
                                       borderWidth: 1,
-                                      borderColor: UI.border,
-                                      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+	                                      borderColor: FEED.lineStrong,
+	                                      backgroundColor: pressed ? FEED.panel3 : FEED.panel,
                                     })}
                                   >
                                     <Text
                                       style={{
                                         fontSize: 11,
                                         fontWeight: "700",
-                                        color: UI.textPrimary,
+	                                        color: FEED.text,
                                       }}
                                     >
                                       YT
@@ -3060,14 +3108,14 @@ function ParentThisWeekScreen() {
                                     paddingHorizontal: 10,
                                     borderRadius: 999,
                                     borderWidth: 1,
-                                    borderColor: UI.border,
-                                    backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+	                                    borderColor: FEED.lineStrong,
+	                                    backgroundColor: pressed ? FEED.panel3 : FEED.panel,
                                   })}
                                 >
                                   <Text
                                     style={{
                                       fontSize: 13,
-                                      color: UI.textPrimary,
+	                                      color: FEED.text,
                                       fontWeight: "600",
                                     }}
                                   >
@@ -3079,9 +3127,9 @@ function ParentThisWeekScreen() {
                           </View>
                         );
                       })}
-                      <Text style={{ fontSize: 12, color: UI.textSecondary }}>
-                        {pilotPreviewItems.length}/3 items saved
-                      </Text>
+	                      <Text style={{ fontSize: 12, color: FEED.faint }}>
+	                        {pilotPreviewItems.length}/3 items saved
+	                      </Text>
                     </View>
 
                     <View style={{ marginTop: 14, gap: 10 }}>
@@ -3090,56 +3138,56 @@ function ParentThisWeekScreen() {
                         style={({ pressed }) => ({
                           paddingVertical: 12,
                           paddingHorizontal: 14,
-                          borderRadius: CARD_RADIUS,
-                          borderWidth: 1,
-                          borderColor: UI.border,
-                          backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
-                          alignSelf: "flex-start",
-                        })}
-                      >
-                        <Text style={{ fontSize: 15, color: UI.textPrimary, fontWeight: "700" }}>
-                          Add Custom Focus
-                        </Text>
-                        <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary }}>
-                          Title required. Optional short note. Saved on this device only.
-                        </Text>
+	                          borderRadius: FEED.radius,
+	                          borderWidth: 1,
+	                          borderColor: FEED.lineStrong,
+	                          backgroundColor: pressed ? FEED.panel3 : FEED.panel2,
+	                          alignSelf: "flex-start",
+	                        })}
+	                      >
+	                        <Text style={{ fontSize: 15, color: FEED.text, fontWeight: "800" }}>
+	                          Add Custom Focus
+	                        </Text>
+	                        <Text style={{ marginTop: 4, fontSize: 12, color: FEED.muted }}>
+	                          Title required. Optional short note. Saved on this device only.
+	                        </Text>
                       </Pressable>
                     </View>
                   </Section>
                 ) : (
-                  <Section title="Weekly focus preview">
-                    <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 22 }}>
-                      Saved on this device only — not shared with families until you publish from a kid’s weekly focus.
-                    </Text>
-                    <Text style={{ marginTop: 10, fontSize: 14, color: UI.textSecondary }}>
-                      No preview items yet. Add a template from Coach tools or add a custom focus.
-                    </Text>
+	                  <Section title="Weekly focus preview">
+	                    <Text style={{ fontSize: 14, color: FEED.muted, lineHeight: 22 }}>
+	                      Saved on this device only — not shared with families until you publish from a kid’s weekly focus.
+	                    </Text>
+	                    <Text style={{ marginTop: 10, fontSize: 14, color: FEED.faint }}>
+	                      No preview items yet. Add a template from Coach tools or add a custom focus.
+	                    </Text>
                   </Section>
                 )}
               </>
             ) : null}
 
-            {showDebugStoragePanel ? (
-              <Section title="Debug Data">
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>Links: {coachLinks.length}</Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Coaches: {Object.keys(coachesById).length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Packs: {Object.keys(packsById).length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Enrollments: {packEnrollments.length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Assignments: {Object.keys(assignmentsById).length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Receipt queue: {completionReceiptsQueue.length}
-                </Text>
-                <Text style={{ fontSize: 14, color: UI.textSecondary }}>
-                  Weekly focus preview items: {pilotPreviewItems.length}
-                </Text>
+	            {showDebugStoragePanel ? (
+	              <Section title="Debug Data">
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>Links: {coachLinks.length}</Text>
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                  Coaches: {Object.keys(coachesById).length}
+	                </Text>
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                  Packs: {Object.keys(packsById).length}
+	                </Text>
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                  Enrollments: {packEnrollments.length}
+	                </Text>
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                  Assignments: {Object.keys(assignmentsById).length}
+	                </Text>
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                  Receipt queue: {completionReceiptsQueue.length}
+	                </Text>
+	                <Text style={{ fontSize: 14, color: FEED.muted }}>
+	                  Weekly focus preview items: {pilotPreviewItems.length}
+	                </Text>
               </Section>
             ) : null}
           </>
@@ -3171,14 +3219,14 @@ export default function CoachesScreen() {
       <>
         <Stack.Screen options={{ title: "This Week" }} />
         <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: UI.screenBg,
-          }}
-        >
-          <Text style={{ fontSize: 15, color: UI.textSecondary }}>Loading…</Text>
+	          style={{
+	            flex: 1,
+	            alignItems: "center",
+	            justifyContent: "center",
+	            backgroundColor: FEED.bg,
+	          }}
+	        >
+	          <Text style={{ fontSize: 15, color: FEED.muted }}>Loading…</Text>
         </View>
       </>
     );
