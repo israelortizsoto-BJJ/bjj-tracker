@@ -532,6 +532,7 @@ export default function KidDetailScreen() {
   const [coachRosterRowArchived, setCoachRosterRowArchived] = useState(false);
   /** Set when a header refresh completes successfully (ISO timestamp for display). */
   const [lastHeaderRefreshAtIso, setLastHeaderRefreshAtIso] = useState<string | null>(null);
+  const [householdUtilityExpanded, setHouseholdUtilityExpanded] = useState(false);
 
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -1899,6 +1900,7 @@ export default function KidDetailScreen() {
 
         <View style={{ height: 12 }} />
 
+        {false ? (
         <View
           style={{
             padding: 12,
@@ -1967,298 +1969,7 @@ export default function KidDetailScreen() {
             </Text>
           </Pressable>
         </View>
-
-        <View style={{ height: 16 }} />
-
-        <View
-          style={{
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.coachLaneBorder,
-            backgroundColor: UI.coachLaneBg,
-            padding: 12,
-            gap: 14,
-          }}
-        >
-          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
-            <View
-              style={{
-                paddingHorizontal: 10,
-                paddingVertical: 4,
-                borderRadius: 999,
-                backgroundColor: "#e5e7eb",
-              }}
-            >
-              <Text style={{ fontSize: 11, fontWeight: "800", color: "#1f2937" }}>COACH ONLY</Text>
-            </View>
-            <Text style={{ fontSize: 12, color: UI.textSecondary, flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Not published to families.
-            </Text>
-          </View>
-
-          <View
-            style={{
-              paddingVertical: 18,
-              paddingHorizontal: 16,
-              borderRadius: CARD_RADIUS,
-              borderWidth: 1,
-              borderColor: "#bfdbfe",
-              borderLeftWidth: 5,
-              borderLeftColor: "#1d4ed8",
-              backgroundColor: "#f8fafc",
-              gap: 12,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 11,
-                letterSpacing: 1,
-                fontWeight: "800",
-                color: "#1e3a8a",
-                textTransform: "uppercase",
-              }}
-            >
-              What matters next
-            </Text>
-            {standingIsActive ? (
-              <Text style={{ fontSize: 18, fontWeight: "800", color: UI.textPrimary, lineHeight: 24 }}>
-                {standingPrimary}
-              </Text>
-            ) : (
-              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "600" }}>
-                Capture the main takeaway and next focus for this kid.
-              </Text>
-            )}
-            {standingSecondaryMuted ? (
-              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-                {standingSecondaryMuted}
-              </Text>
-            ) : null}
-            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-              AI can help draft this and save time
-            </Text>
-            <Pressable
-              onPress={() =>
-                router.push(`${kidLaneBase}/what-matters-next` as Href)
-              }
-              style={({ pressed }) => ({
-                marginTop: 2,
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: "#1d4ed8",
-                backgroundColor: pressed ? "#1d4ed8" : "#2563eb",
-                alignSelf: "flex-start",
-              })}
-            >
-              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>Edit Note</Text>
-            </Pressable>
-          </View>
-
-        <View
-          style={{
-            marginTop: 4,
-            paddingLeft: 12,
-            borderLeftWidth: 3,
-            borderLeftColor: "#c7d2fe",
-            gap: 0,
-          }}
-        >
-        <View
-          style={{
-            padding: 14,
-            borderRadius: CARD_RADIUS,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: "#eef2f6",
-            gap: 10,
-            opacity: canEditOutcome ? 1 : 0.65,
-          }}
-        >
-          <Text style={{ fontSize: 11, letterSpacing: 0.6, fontWeight: "800", color: UI.textSecondary }}>
-            {"How it's going"}
-          </Text>
-
-          {!canEditOutcome ? (
-            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              {"Set this week's focus first to track outcome and notes."}
-            </Text>
-          ) : (
-            <>
-              <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "700" }}>
-                Applied in sparring
-              </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                {(["not_yet", "sometimes", "yes"] as const).map((o) => {
-                  const active = sparringDraft === o;
-                  return (
-                    <Pressable
-                      key={o}
-                      disabled={!canEditOutcome || savingOutcome}
-                      onPress={() => setSparringDraft(o)}
-                      style={({ pressed }) => ({
-                        flex: 1,
-                        paddingVertical: 10,
-                        borderRadius: 12,
-                        borderWidth: 1,
-                        borderColor: active ? "#1d4ed8" : UI.border,
-                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
-                        opacity: pressed ? 0.9 : 1,
-                      })}
-                    >
-                      <Text
-                        style={{
-                          textAlign: "center",
-                          fontSize: 12,
-                          color: UI.textPrimary,
-                          fontWeight: active ? "800" : "700",
-                        }}
-                      >
-                        {sparringApplicationLabel(o)}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-
-              <Text style={{ marginTop: 2, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
-                Notes start empty; each save adds an entry below.
-              </Text>
-
-              <TextInput
-                key={progressNotesInputKey}
-                value={notesDraft}
-                scrollEnabled={false}
-                onChangeText={setNotesDraft}
-                onFocus={bumpScrollToFocusedInput}
-                onContentSizeChange={bumpScrollToFocusedInput}
-                placeholder="Add check-in notes"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                style={{
-                  marginTop: 6,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  padding: 12,
-                  minHeight: 92,
-                  color: UI.textPrimary,
-                  textAlignVertical: "top",
-                }}
-              />
-
-              <Pressable
-                disabled={savingOutcome}
-                onPress={() => void onSaveOutcome()}
-                style={({ pressed }) => ({
-                  marginTop: 10,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#1d4ed8",
-                  backgroundColor: pressed ? "#1d4ed8" : "#1d4ed8",
-                  opacity: savingOutcome ? 0.6 : 1,
-                  alignSelf: "flex-start",
-                })}
-              >
-                <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
-                  Save check-in
-                </Text>
-              </Pressable>
-            </>
-          )}
-
-          <View style={{ marginTop: 10, gap: 8 }}>
-            <Text style={{ fontSize: 11, letterSpacing: 0.4, fontWeight: "700", color: UI.textSecondary }}>
-              This week
-            </Text>
-
-            {thisWeekReflections.length === 0 ? (
-              <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-                No saved check-ins yet.
-              </Text>
-            ) : (
-              <>
-                {thisWeekReflections.slice(0, 3).map((r) => {
-                  const outcomeText =
-                    typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
-                  const notesText = (r.coachNotes ?? "").trim();
-                  return (
-                    <Swipeable
-                      key={r.id}
-                      friction={1.1}
-                      rightThreshold={24}
-                      overshootRight
-                      dragOffsetFromRightEdge={10}
-                      renderRightActions={() => (
-                        <Pressable
-                          onPress={() => requestDeleteReflection(r.id)}
-                          accessibilityLabel="Delete check-in"
-                          style={({ pressed }) => ({
-                            justifyContent: "center",
-                            backgroundColor: pressed ? "#b91c1c" : UI.danger,
-                            borderRadius: 12,
-                            marginLeft: 8,
-                            paddingHorizontal: 20,
-                          })}
-                        >
-                          <Text style={{ fontSize: 12, fontWeight: "800", color: "#ffffff" }}>Delete</Text>
-                        </Pressable>
-                      )}
-                    >
-                      <Pressable
-                        onPress={() =>
-                          router.push(
-                            `${kidLaneBase}/progress-reflection?entryId=${encodeURIComponent(r.id)}` as Href,
-                          )
-                        }
-                        style={({ pressed }) => ({
-                          alignSelf: "stretch",
-                          paddingVertical: 10,
-                          paddingHorizontal: 12,
-                          gap: 4,
-                          backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
-                          borderRadius: 12,
-                          borderWidth: 1,
-                          borderColor: UI.border,
-                          overflow: "hidden",
-                        })}
-                      >
-                        {outcomeText ? (
-                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>{outcomeText}</Text>
-                        ) : null}
-                        {notesText ? (
-                          <Text style={{ fontSize: 12, color: UI.textSecondary }} numberOfLines={2}>
-                            {notesText}
-                          </Text>
-                        ) : null}
-                        {!outcomeText && !notesText ? (
-                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>(empty check-in)</Text>
-                        ) : null}
-                      </Pressable>
-                    </Swipeable>
-                  );
-                })}
-                {thisWeekReflections.length > 3 ? (
-                  <Pressable
-                    onPress={() => router.push(`${kidLaneBase}/history` as Href)}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
-                  >
-                    <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
-                      +{thisWeekReflections.length - 3} more in history
-                    </Text>
-                  </Pressable>
-                ) : null}
-              </>
-            )}
-          </View>
-        </View>
-        </View>
-
-        </View>
+        ) : null}
 
         <View style={{ height: 16 }} />
 
@@ -2516,14 +2227,14 @@ export default function KidDetailScreen() {
             {lastCompetitionWeekly ? (
               <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
                 Based on last competition
-                {typeof lastCompetitionWeekly.lastCompetitionResult !== "undefined"
-                  ? ` · ${getPlacementLabel(lastCompetitionWeekly.lastCompetitionResult)}`
+                {typeof lastCompetitionWeekly!.lastCompetitionResult !== "undefined"
+                  ? ` · ${getPlacementLabel(lastCompetitionWeekly!.lastCompetitionResult)}`
                   : ""}
-                {lastCompetitionWeekly.lastCompetitionName
-                  ? ` · ${lastCompetitionWeekly.lastCompetitionName}`
+                {lastCompetitionWeekly!.lastCompetitionName
+                  ? ` · ${lastCompetitionWeekly!.lastCompetitionName}`
                   : ""}
-                {lastCompetitionWeekly.lastCompetitionMatchSummary
-                  ? ` · ${lastCompetitionWeekly.lastCompetitionMatchSummary}`
+                {lastCompetitionWeekly!.lastCompetitionMatchSummary
+                  ? ` · ${lastCompetitionWeekly!.lastCompetitionMatchSummary}`
                   : ""}
               </Text>
             ) : null}
@@ -2557,7 +2268,7 @@ export default function KidDetailScreen() {
 
             {focusTitle && currentWeekEntry?.familyResourceUrl?.trim() ? (
               <Pressable
-                onPress={() => void openHttpsUrl(currentWeekEntry!.familyResourceUrl)}
+                onPress={() => void openHttpsUrl(currentWeekEntry!.familyResourceUrl!)}
                 style={({ pressed }) => ({
                   alignSelf: "flex-start",
                   paddingVertical: 8,
@@ -2570,7 +2281,7 @@ export default function KidDetailScreen() {
               >
                 <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
                   {(() => {
-                    const n = familyResourceUrlForLinking(currentWeekEntry!.familyResourceUrl);
+                    const n = familyResourceUrlForLinking(currentWeekEntry!.familyResourceUrl!);
                     const primary =
                       n != null
                         ? defaultFamilyLinkButtonLabel(n, currentWeekEntry!.familyResourceLabel)
@@ -2582,8 +2293,8 @@ export default function KidDetailScreen() {
                   style={{ marginTop: 2, fontSize: 11, color: UI.textSecondary }}
                   numberOfLines={1}
                 >
-                  {familyResourceUrlForLinking(currentWeekEntry.familyResourceUrl) ??
-                    currentWeekEntry.familyResourceUrl.trim()}
+                  {familyResourceUrlForLinking(currentWeekEntry!.familyResourceUrl!) ??
+                    currentWeekEntry!.familyResourceUrl!.trim()}
                 </Text>
               </Pressable>
             ) : null}
@@ -2680,11 +2391,733 @@ export default function KidDetailScreen() {
 
         <View style={{ height: 16 }} />
 
-        <Text style={{ fontSize: 15, fontWeight: "800", color: UI.textPrimary, marginBottom: 4 }}>
-          This week in action
-        </Text>
+        <View
+          style={{
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.coachLaneBorder,
+            backgroundColor: UI.coachLaneBg,
+            padding: 12,
+            gap: 14,
+          }}
+        >
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: "#e5e7eb",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#1f2937" }}>COACH ONLY</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: UI.textSecondary, flex: 1, minWidth: 140, lineHeight: 17 }}>
+              Not published to families.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              paddingVertical: 18,
+              paddingHorizontal: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: "#bfdbfe",
+              borderLeftWidth: 5,
+              borderLeftColor: "#1d4ed8",
+              backgroundColor: "#f8fafc",
+              gap: 12,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: "800",
+                color: "#1e3a8a",
+                textTransform: "uppercase",
+              }}
+            >
+              What matters next
+            </Text>
+            {standingIsActive ? (
+              <Text style={{ fontSize: 18, fontWeight: "800", color: UI.textPrimary, lineHeight: 24 }}>
+                {standingPrimary}
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "600" }}>
+                Capture the main takeaway and next focus for this kid.
+              </Text>
+            )}
+            {standingSecondaryMuted ? (
+              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                {standingSecondaryMuted}
+              </Text>
+            ) : null}
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+              AI can help draft this and save time
+            </Text>
+            <Pressable
+              onPress={() =>
+                router.push(`${kidLaneBase}/what-matters-next` as Href)
+              }
+              style={({ pressed }) => ({
+                marginTop: 2,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#1d4ed8",
+                backgroundColor: pressed ? "#1d4ed8" : "#2563eb",
+                alignSelf: "flex-start",
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>Edit Note</Text>
+            </Pressable>
+          </View>
 
         <View
+          style={{
+            marginTop: 4,
+            paddingLeft: 12,
+            borderLeftWidth: 3,
+            borderLeftColor: "#c7d2fe",
+            gap: 0,
+          }}
+        >
+        <View
+          style={{
+            padding: 14,
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.border,
+            backgroundColor: "#eef2f6",
+            gap: 10,
+            opacity: canEditOutcome ? 1 : 0.65,
+          }}
+        >
+          <View style={{ gap: 3 }}>
+            <Text style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: "800", color: UI.textPrimary }}>
+              {"How it's going"}
+            </Text>
+            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+              AI support stays anchored to your coach-owned check-ins.
+            </Text>
+          </View>
+
+          {!canEditOutcome ? (
+            <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+              {"Set this week's focus first to track outcome and notes."}
+            </Text>
+          ) : (
+            <>
+              <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "700" }}>
+                Applied in sparring
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {(["not_yet", "sometimes", "yes"] as const).map((o) => {
+                  const active = sparringDraft === o;
+                  return (
+                    <Pressable
+                      key={o}
+                      disabled={!canEditOutcome || savingOutcome}
+                      onPress={() => setSparringDraft(o)}
+                      style={({ pressed }) => ({
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: active ? "#1d4ed8" : UI.border,
+                        backgroundColor: active ? "#edf2ff" : UI.bgCard,
+                        opacity: pressed ? 0.9 : 1,
+                      })}
+                    >
+                      <Text
+                        style={{
+                          textAlign: "center",
+                          fontSize: 12,
+                          color: UI.textPrimary,
+                          fontWeight: active ? "800" : "700",
+                        }}
+                      >
+                        {sparringApplicationLabel(o)}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                Notes start empty; each save adds an entry below.
+              </Text>
+
+              <TextInput
+                key={progressNotesInputKey}
+                value={notesDraft}
+                scrollEnabled={false}
+                onChangeText={setNotesDraft}
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
+                placeholder="Add check-in notes"
+                placeholderTextColor={UI.textSecondary}
+                multiline
+                style={{
+                  marginTop: 6,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.bgCard,
+                  padding: 12,
+                  minHeight: 92,
+                  color: UI.textPrimary,
+                  textAlignVertical: "top",
+                }}
+              />
+
+              <Pressable
+                disabled={savingOutcome}
+                onPress={() => void onSaveOutcome()}
+                style={({ pressed }) => ({
+                  marginTop: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#1d4ed8",
+                  backgroundColor: pressed ? "#1d4ed8" : "#1d4ed8",
+                  opacity: savingOutcome ? 0.6 : 1,
+                  alignSelf: "flex-start",
+                })}
+              >
+                <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
+                  Save check-in
+                </Text>
+              </Pressable>
+            </>
+          )}
+
+          <View style={{ marginTop: 12, gap: 9 }}>
+            <Text style={{ fontSize: 11, letterSpacing: 0.5, fontWeight: "800", color: UI.textSecondary }}>
+              This week
+            </Text>
+
+            {thisWeekReflections.length === 0 ? (
+              <Text style={{ fontSize: 13, color: UI.textSecondary }}>
+                No saved check-ins yet.
+              </Text>
+            ) : (
+              <>
+                {thisWeekReflections.slice(0, 3).map((r) => {
+                  const outcomeText =
+                    typeof r.coachOutcome !== "undefined" ? outcomeLabel(r.coachOutcome) : null;
+                  const notesText = (r.coachNotes ?? "").trim();
+                  return (
+                    <Swipeable
+                      key={r.id}
+                      friction={1.1}
+                      rightThreshold={24}
+                      overshootRight
+                      dragOffsetFromRightEdge={10}
+                      renderRightActions={() => (
+                        <Pressable
+                          onPress={() => requestDeleteReflection(r.id)}
+                          accessibilityLabel="Delete check-in"
+                          style={({ pressed }) => ({
+                            justifyContent: "center",
+                            backgroundColor: pressed ? "#b91c1c" : UI.danger,
+                            borderRadius: 12,
+                            marginLeft: 8,
+                            paddingHorizontal: 20,
+                          })}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: "800", color: "#ffffff" }}>Delete</Text>
+                        </Pressable>
+                      )}
+                    >
+                      <Pressable
+                        onPress={() =>
+                          router.push(
+                            `${kidLaneBase}/progress-reflection?entryId=${encodeURIComponent(r.id)}` as Href,
+                          )
+                        }
+                        style={({ pressed }) => ({
+                          alignSelf: "stretch",
+                          paddingVertical: 11,
+                          paddingHorizontal: 12,
+                          gap: 5,
+                          backgroundColor: pressed ? "#eef2ff" : UI.rowMutedBg,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          overflow: "hidden",
+                        })}
+                      >
+                        <Text style={{ fontSize: 10, color: UI.textSecondary, fontWeight: "700" }} numberOfLines={1}>
+                          {new Date(r.createdAt).toLocaleString()}
+                        </Text>
+                        {outcomeText ? (
+                          <Text style={{ fontSize: 12, color: UI.textPrimary, fontWeight: "800" }}>{outcomeText}</Text>
+                        ) : null}
+                        {notesText ? (
+                          <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }} numberOfLines={2}>
+                            {notesText}
+                          </Text>
+                        ) : null}
+                        {!outcomeText && !notesText ? (
+                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>(empty check-in)</Text>
+                        ) : null}
+                      </Pressable>
+                    </Swipeable>
+                  );
+                })}
+                {thisWeekReflections.length > 3 ? (
+                  <Pressable
+                    onPress={() => router.push(`${kidLaneBase}/history` as Href)}
+                    style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
+                  >
+                    <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
+                      +{thisWeekReflections.length - 3} more in history
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </>
+            )}
+          </View>
+        </View>
+        </View>
+
+        </View>
+
+        <View style={{ height: 16 }} />
+
+        {false ? (
+        <View
+          style={{
+            borderRadius: CARD_RADIUS,
+            borderWidth: 1,
+            borderColor: UI.familyLaneBorder,
+            backgroundColor: UI.familyLaneBg,
+            padding: 12,
+            gap: 12,
+          }}
+        >
+          <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+            <View
+              style={{
+                paddingHorizontal: 10,
+                paddingVertical: 4,
+                borderRadius: 999,
+                backgroundColor: "#a7f3d0",
+              }}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#065f46" }}>FAMILY / PUBLISH</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: "#047857", flex: 1, minWidth: 140, lineHeight: 17 }}>
+              Publishing updates the shared weekly note for this invite. Private check-ins stay coach-only.
+            </Text>
+          </View>
+
+          <View
+            style={{
+              padding: 12,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.familyLaneBorder,
+              backgroundColor: "#d1fae5",
+              gap: 10,
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Text
+                style={{
+                  fontSize: 12,
+                  letterSpacing: 0.4,
+                  fontWeight: "800",
+                  color: "#065f46",
+                  flex: 1,
+                  minWidth: 140,
+                }}
+              >
+                Shared family note
+              </Text>
+              <View
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 999,
+                  backgroundColor:
+                    feedbackStatus === "acknowledged"
+                      ? "#d1fae5"
+                      : feedbackStatus === "viewed"
+                        ? "#ecfdf5"
+                        : "#f3f4f6",
+                  borderWidth: 1,
+                  borderColor:
+                    feedbackStatus === "acknowledged"
+                      ? UI.familyLaneBorder
+                      : feedbackStatus === "viewed"
+                        ? "#bbf7d0"
+                        : UI.border,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "800",
+                    color:
+                      feedbackStatus === "acknowledged"
+                        ? "#047857"
+                        : feedbackStatus === "viewed"
+                          ? "#065f46"
+                          : UI.textSecondary,
+                    includeFontPadding: false,
+                  }}
+                >
+                  {feedbackStatusLabel}
+                </Text>
+              </View>
+            </View>
+            {familyHuddleSourceMapRows.map((row, index) => (
+              <View key={`${row.heading}-${index}`} style={{ gap: 4 }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}
+                >
+                  <Text
+                    style={{
+                      flex: 1,
+                      fontSize: 13,
+                      fontWeight: "800",
+                      color: UI.textPrimary,
+                    }}
+                    numberOfLines={2}
+                  >
+                    {row.heading}
+                  </Text>
+                  <View
+                    style={{
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 999,
+                      backgroundColor: "#ecfdf5",
+                      borderWidth: 1,
+                      borderColor: UI.familyLaneBorder,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 10,
+                        fontWeight: "800",
+                        color: "#047857",
+                        includeFontPadding: false,
+                      }}
+                    >
+                      {row.badge}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }} numberOfLines={3}>
+                  {row.status}
+                </Text>
+              </View>
+            ))}
+          </View>
+
+          <WeeklySuggestionCard
+            suggestionText={suggestion.message}
+            visible={showSuggestion}
+            onUse={handleUseSuggestion}
+            onEdit={handleEdit}
+          />
+
+          <View
+            style={{
+              padding: 12,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.familyLaneBorder,
+              backgroundColor: "#ecfdf5",
+              gap: 8,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 12,
+                letterSpacing: 0.4,
+                fontWeight: "800",
+                color: "#065f46",
+              }}
+            >
+              Why this matters
+            </Text>
+            <TextInput
+              value={weeklyWhyThisMatters}
+              onChangeText={(text) => {
+                setWeeklyWhyThisMatters(text);
+                setHasUserEditedWeekly(true);
+              }}
+              onFocus={handleEdit}
+              placeholder="Add a parent-facing weekly note"
+              placeholderTextColor={UI.textSecondary}
+              multiline
+              style={{
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.familyLaneBorder,
+                backgroundColor: UI.bgCard,
+                color: UI.textPrimary,
+                minHeight: 80,
+                padding: 12,
+                textAlignVertical: "top",
+              }}
+            />
+          </View>
+
+          <View
+            style={{
+              padding: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: UI.border,
+              backgroundColor: UI.bgCard,
+              gap: 8,
+            }}
+          >
+            <Text style={{ fontSize: 13, letterSpacing: 0.3, fontWeight: "800", color: UI.textPrimary }}>
+              Weekly focus
+            </Text>
+            {recommendedFocusArea ? (
+              <View style={{ gap: 10 }}>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    color: UI.textSecondary,
+                    lineHeight: 16,
+                    fontStyle: "italic",
+                  }}
+                >
+                  Suggested focus from recent competitions:{" "}
+                  <Text style={{ fontStyle: "normal", fontWeight: "700", color: UI.textSecondary }}>
+                    {recommendedFocusArea}
+                  </Text>
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  <Pressable
+                    onPress={handleUseRecommendedFocusArea}
+                    style={({ pressed }) => ({
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: UI.familyLaneBorder,
+                      backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                    })}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
+                      Use suggested focus
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={openSuggestedFocusModal}
+                    style={({ pressed }) => ({
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: UI.coachLaneBorder,
+                      backgroundColor: pressed ? UI.bgCardActive : UI.bgCard,
+                    })}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
+                      Edit focus
+                    </Text>
+                  </Pressable>
+                </View>
+                <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+                  Inserts copy into Why this matters above—you save when ready; nothing publishes on its own.
+                </Text>
+              </View>
+            ) : null}
+            {lastCompetitionWeekly ? (
+              <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                Based on last competition
+                {typeof lastCompetitionWeekly!.lastCompetitionResult !== "undefined"
+                  ? ` · ${getPlacementLabel(lastCompetitionWeekly!.lastCompetitionResult)}`
+                  : ""}
+                {lastCompetitionWeekly!.lastCompetitionName
+                  ? ` · ${lastCompetitionWeekly!.lastCompetitionName}`
+                  : ""}
+                {lastCompetitionWeekly!.lastCompetitionMatchSummary
+                  ? ` · ${lastCompetitionWeekly!.lastCompetitionMatchSummary}`
+                  : ""}
+              </Text>
+            ) : null}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, flex: 1, minWidth: 0 }}>
+                {focusTitle ?? "No focus saved yet"}
+              </Text>
+              {focusTitle && currentWeekEntry && isUsableYoutubeUrl(currentWeekEntry!.youtubeUrl) ? (
+                <Pressable
+                  onPress={() => void openYoutubeUrl(currentWeekEntry!.youtubeUrl)}
+                  style={({ pressed }) => ({
+                    paddingVertical: 6,
+                    paddingHorizontal: 10,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: UI.border,
+                    backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                  })}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: "700", color: UI.textPrimary }}>
+                    YT video
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {focusTitle && currentWeekEntry?.youtubeUrl?.trim() ? (
+              <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
+                Reference link — coach only, not published.
+              </Text>
+            ) : null}
+
+            {focusTitle && currentWeekEntry?.familyResourceUrl?.trim() ? (
+              <Pressable
+                onPress={() => void openHttpsUrl(currentWeekEntry!.familyResourceUrl!)}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: UI.familyLaneBorder,
+                  backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                })}
+              >
+                <Text style={{ fontSize: 12, fontWeight: "800", color: "#065f46" }}>
+                  {(() => {
+                    const n = familyResourceUrlForLinking(currentWeekEntry!.familyResourceUrl!);
+                    const primary =
+                      n != null
+                        ? defaultFamilyLinkButtonLabel(n ?? "", currentWeekEntry!.familyResourceLabel)
+                        : (currentWeekEntry!.familyResourceLabel ?? "").trim() || "Family link";
+                    return `${primary} · open`;
+                  })()}
+                </Text>
+                <Text
+                  style={{ marginTop: 2, fontSize: 11, color: UI.textSecondary }}
+                  numberOfLines={1}
+                >
+                  {familyResourceUrlForLinking(currentWeekEntry!.familyResourceUrl!) ??
+                    currentWeekEntry!.familyResourceUrl!.trim()}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {focusTitle ? (
+              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                Week of <Text style={{ fontWeight: "700" }}>{weekStartYMD}</Text>
+              </Text>
+            ) : (
+              <Text style={{ fontSize: 12, color: UI.textSecondary }}>
+                Edit weekly focus, then publish.
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() =>
+                currentWeekEntry
+                  ? router.push(
+                      `${kidLaneBase}/weekly-focus?entryId=${encodeURIComponent(currentWeekEntry.id)}` as Href,
+                    )
+                  : router.push(`${kidLaneBase}/weekly-focus` as Href)
+              }
+              style={({ pressed }) => ({
+                marginTop: 6,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#1d4ed8",
+                backgroundColor: pressed ? "#1e40af" : "#1d4ed8",
+                alignSelf: "stretch",
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800", textAlign: "center" }}>
+                {currentWeekEntry ? "Edit weekly focus & family link" : "Set this week's focus"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              disabled={!currentWeekEntry || publishingWeekly}
+              onPress={() => void onPublishWeeklyToFamilies()}
+              style={({ pressed }) => ({
+                marginTop: 10,
+                paddingVertical: 14,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 2,
+                borderColor: UI.publishAccent,
+                backgroundColor: pressed ? UI.publishAccentPressed : UI.publishAccent,
+                alignSelf: "stretch",
+                opacity: !currentWeekEntry || publishingWeekly ? 0.55 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 15, color: "#ffffff", fontWeight: "900", textAlign: "center" }}>
+                {publishingWeekly ? "Publishing…" : "Publish to family phones"}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setReadTogetherPreviewStep(0);
+                setReadTogetherPreviewOpen(true);
+              }}
+              disabled={!currentWeekEntry}
+              style={({ pressed }) => ({
+                marginTop: 8,
+                paddingVertical: 12,
+                paddingHorizontal: 14,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: UI.familyLaneBorder,
+                backgroundColor: pressed ? "#d1fae5" : "#ecfdf5",
+                alignSelf: "stretch",
+                opacity: !currentWeekEntry ? 0.5 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 14, color: "#065f46", fontWeight: "800", textAlign: "center" }}>
+                Preview Family Huddle
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={() => router.push(`${kidLaneBase}/history` as Href)}
+              style={({ pressed }) => ({
+                paddingVertical: 4,
+                alignSelf: "flex-start",
+                opacity: pressed ? 0.65 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>History</Text>
+            </Pressable>
+          </View>
+        </View>
+        ) : null}
+
+        {false ? (
+        <>
+          <View style={{ height: 16 }} />
+
+          <Text style={{ fontSize: 15, fontWeight: "800", color: UI.textPrimary, marginBottom: 4 }}>
+            This week in action
+          </Text>
+
+          <View
           style={{
             padding: 14,
             borderRadius: CARD_RADIUS,
@@ -2874,11 +3307,15 @@ export default function KidDetailScreen() {
               ) : null}
             </View>
           )}
-        </View>
+          </View>
+        </>
+        ) : null}
 
-        <View style={{ height: 14 }} />
+        {false ? (
+        <>
+          <View style={{ height: 14 }} />
 
-        <View
+          <View
           style={{
             padding: 14,
             borderRadius: CARD_RADIUS,
@@ -3108,13 +3545,101 @@ export default function KidDetailScreen() {
               })}
             </View>
           ) : null}
-        </View>
+          </View>
+        </>
+        ) : null}
 
         {!ready ? (
           <Text style={{ marginTop: 14, fontSize: 13, color: UI.textSecondary }}>
             Loading…
           </Text>
         ) : null}
+
+        <View
+          style={{
+            marginTop: 18,
+            padding: 12,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "rgba(148, 163, 184, 0.22)",
+            backgroundColor: "rgba(248, 250, 252, 0.62)",
+            gap: householdUtilityExpanded ? 10 : 0,
+          }}
+        >
+          <Pressable
+            onPress={() => setHouseholdUtilityExpanded((value) => !value)}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+              opacity: pressed ? 0.72 : 1,
+            })}
+          >
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={{ fontSize: 11, letterSpacing: 0.5, fontWeight: "800", color: UI.textSecondary }}>
+                Roster / Household
+              </Text>
+              <Text style={{ marginTop: 2, fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+                Utility settings for roster organization.
+              </Text>
+            </View>
+            <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "800" }}>
+              {householdUtilityExpanded ? "Hide" : "Edit"}
+            </Text>
+          </Pressable>
+
+          {householdUtilityExpanded ? (
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 16 }}>
+                {isThisWeekKidDetail
+                  ? "Groups this athlete in your list for your own organization only."
+                  : "Groups this athlete on your roster view only — does not change coaching data."}
+              </Text>
+              <TextInput
+                value={householdDraft}
+                onChangeText={(t) => {
+                  setHouseholdSavedAck(false);
+                  setHouseholdDraft(t);
+                }}
+                placeholder="No household"
+                placeholderTextColor={UI.textSecondary}
+                autoCapitalize="words"
+                editable={ready}
+                style={{
+                  paddingVertical: 10,
+                  paddingHorizontal: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: UI.rowMutedBg,
+                  color: UI.textPrimary,
+                }}
+              />
+              <Pressable
+                disabled={!ready || savingHousehold || !householdDirty}
+                onPress={() => void onSaveHousehold()}
+                style={({ pressed }) => ({
+                  alignSelf: "flex-start",
+                  paddingVertical: 10,
+                  paddingHorizontal: 14,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: UI.border,
+                  backgroundColor: pressed ? "#edf2ff" : UI.bgCard,
+                  opacity: !ready || savingHousehold || !householdDirty ? 0.55 : 1,
+                })}
+              >
+                <Text style={{ fontSize: 13, color: UI.textPrimary, fontWeight: "800" }}>
+                  {savingHousehold
+                    ? "Saving…"
+                    : householdSavedAck && !householdDirty
+                      ? "Saved"
+                      : "Save household"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
 
         {isCoachKidDetail && ready && !coachRosterRowArchived ? (
           <View

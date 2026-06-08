@@ -7,6 +7,12 @@ import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
 const HIDDEN = { href: null, headerShown: false } as const;
 
 const TAB_SCREEN_BASE = { headerShown: false } as const;
+const TAB_BAR_COLORS = {
+  background: "#080b0e",
+  border: "rgba(236, 241, 245, 0.1)",
+  active: "#c7f36b",
+  inactive: "#777f89",
+} as const;
 
 /**
  * Tab bar: `href: null` hides routes that stay linkable (learn, profile, hoisted stacks).
@@ -43,7 +49,22 @@ export default function TabLayout() {
   }, [loading, role]);
 
   return (
-      <Tabs screenOptions={{ headerShown: false }}>
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: TAB_BAR_COLORS.active,
+        tabBarInactiveTintColor: TAB_BAR_COLORS.inactive,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: "700",
+        },
+        tabBarStyle: {
+          backgroundColor: TAB_BAR_COLORS.background,
+          borderTopColor: TAB_BAR_COLORS.border,
+          borderTopWidth: 1,
+        },
+      }}
+    >
       <Tabs.Screen name="summary" options={{ title: "Summary", ...TAB_SCREEN_BASE }} />
       <Tabs.Screen name="this-week" options={thisWeekTabOptions} />
       <Tabs.Screen name="coach" options={coachTabOptions} />
