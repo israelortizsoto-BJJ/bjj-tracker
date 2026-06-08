@@ -15,6 +15,7 @@ import {
   Modal,
   PanResponder,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -1122,6 +1123,14 @@ const renderNewSessionCTA = () => (
     keyboardShouldPersistTaps="handled"
     keyboardDismissMode="on-drag"
     directionalLockEnabled
+    refreshControl={
+      <RefreshControl
+        refreshing={isLoadingSessions}
+        onRefresh={refresh}
+        tintColor={UI.accent}
+        colors={[UI.accent]}
+      />
+    }
     contentContainerStyle={{ paddingHorizontal: 18, paddingVertical: 18, gap: 10 }}
     >
       <OperatingHeader

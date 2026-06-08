@@ -1889,14 +1889,37 @@ export default function KidDetailScreen() {
           </Text>
         </Pressable>
 
-        <Text style={{ fontSize: 22, fontWeight: "800", color: UI.textPrimary, marginBottom: 6 }}>
-          {kidName}
-        </Text>
-        <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          {isThisWeekKidDetail
-            ? "This athlete's detail lives in This Week. Notes you keep here stay on your device. The green section is what you can share when you publish to your coach's linked invite."
-            : "This is your coaching space. Private notes stay here. The green section below is what you can publish to linked parent phones."}
-        </Text>
+        {!isThisWeekKidDetail ? (
+          <View style={{ gap: 5 }}>
+            <Text
+              style={{
+                fontSize: 11,
+                letterSpacing: 0.9,
+                fontWeight: "900",
+                color: UI.textSecondary,
+                textTransform: "uppercase",
+              }}
+            >
+              Coach workspace
+            </Text>
+            <Text style={{ fontSize: 24, fontWeight: "900", color: UI.textPrimary, lineHeight: 29 }}>
+              {kidName}
+            </Text>
+            <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+              Current tendencies, intended evolution, and family reinforcement.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Text style={{ fontSize: 22, fontWeight: "800", color: UI.textPrimary, marginBottom: 6 }}>
+              {kidName}
+            </Text>
+            <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+              This athlete's detail lives in This Week. Notes you keep here stay on your device. The green
+              section is what you can share when you publish to your coach's linked invite.
+            </Text>
+          </>
+        )}
 
         <View style={{ height: 12 }} />
 
@@ -2414,7 +2437,7 @@ export default function KidDetailScreen() {
               <Text style={{ fontSize: 11, fontWeight: "800", color: "#1f2937" }}>COACH ONLY</Text>
             </View>
             <Text style={{ fontSize: 12, color: UI.textSecondary, flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Athlete interpretation and private coach memory.
+              Current tendency, intended evolution, and coach memory.
             </Text>
           </View>
 
@@ -2429,40 +2452,42 @@ export default function KidDetailScreen() {
               gap: 13,
             }}
           >
-            <Text
-              style={{
-                fontSize: 11,
-                letterSpacing: 1,
-                fontWeight: "800",
-                color: "#334155",
-                textTransform: "uppercase",
+            <View style={{ gap: 3 }}>
+              <Text
+                style={{
+                  fontSize: 11,
+                  letterSpacing: 1,
+                  fontWeight: "800",
+                  color: "#334155",
+                  textTransform: "uppercase",
               }}
             >
-              What matters next
-            </Text>
+                Direction of growth
+              </Text>
+              <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                The shift you keep shaping through class, rounds, and competition.
+              </Text>
+            </View>
             {standingIsActive ? (
-              <Text style={{ fontSize: 19, fontWeight: "900", color: UI.textPrimary, lineHeight: 25 }}>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: UI.textPrimary, lineHeight: 23 }}>
                 {standingPrimary}
               </Text>
             ) : (
-              <Text style={{ fontSize: 16, color: UI.textSecondary, lineHeight: 23, fontWeight: "700" }}>
-                Capture the main takeaway and next focus for this kid.
+              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "700" }}>
+                Name what they are now and where you are guiding them next.
               </Text>
             )}
             {standingSecondaryMuted ? (
-              <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+              <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 19 }}>
                 {standingSecondaryMuted}
               </Text>
             ) : null}
-            <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-              Standing guidance carried forward across weeks.
-            </Text>
             <Pressable
               onPress={() =>
                 router.push(`${kidLaneBase}/what-matters-next` as Href)
               }
               style={({ pressed }) => ({
-                marginTop: 2,
+                marginTop: 1,
                 paddingVertical: 12,
                 paddingHorizontal: 16,
                 borderRadius: 12,
@@ -2472,7 +2497,7 @@ export default function KidDetailScreen() {
                 alignSelf: "flex-start",
               })}
             >
-              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>Review note</Text>
+              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>Review guidance</Text>
             </Pressable>
           </View>
 
@@ -2484,32 +2509,41 @@ export default function KidDetailScreen() {
         >
         <View
           style={{
-            padding: 15,
+            paddingVertical: 20,
+            paddingHorizontal: 16,
             borderRadius: CARD_RADIUS,
             borderWidth: 1,
             borderColor: "#d8e0ea",
             backgroundColor: "#ffffff",
-            gap: 11,
+            gap: 13,
             opacity: canEditOutcome ? 1 : 0.65,
           }}
         >
           <View style={{ gap: 3 }}>
-            <Text style={{ fontSize: 12, letterSpacing: 0.5, fontWeight: "800", color: UI.textPrimary }}>
-              {"How it's going"}
+            <Text
+              style={{
+                fontSize: 11,
+                letterSpacing: 1,
+                fontWeight: "800",
+                color: "#334155",
+                textTransform: "uppercase",
+              }}
+            >
+              Behavior under pressure
             </Text>
             <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-              Coach observation memory for the current focus.
+              Notice what stays with them when pace rises, grips tighten, or rounds get messy.
             </Text>
           </View>
 
           {!canEditOutcome ? (
             <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-              {"Set this week's focus first to track outcome and notes."}
+              {"Set this week's focus first to notice behavior under real resistance."}
             </Text>
           ) : (
             <>
               <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "700" }}>
-                Applied in sparring
+                What is practiced shows up
               </Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 {(["not_yet", "sometimes", "yes"] as const).map((o) => {
@@ -2545,7 +2579,7 @@ export default function KidDetailScreen() {
               </View>
 
               <Text style={{ marginTop: 4, fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-                Each save becomes part of this athlete's coaching memory.
+                Capture commitment, hesitation, composure, or old habits as they show up.
               </Text>
 
               <TextInput
@@ -2555,7 +2589,7 @@ export default function KidDetailScreen() {
                 onChangeText={setNotesDraft}
                 onFocus={bumpScrollToFocusedInput}
                 onContentSizeChange={bumpScrollToFocusedInput}
-                placeholder="Add check-in notes"
+                placeholder="Add what you saw on the mat"
                 placeholderTextColor={UI.textSecondary}
                 multiline
                 style={{
@@ -2587,7 +2621,7 @@ export default function KidDetailScreen() {
                 })}
               >
                 <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
-                  Save check-in
+                  Carry forward
                 </Text>
               </Pressable>
             </>
@@ -2595,12 +2629,12 @@ export default function KidDetailScreen() {
 
           <View style={{ marginTop: 14, gap: 10 }}>
             <Text style={{ fontSize: 11, letterSpacing: 0.5, fontWeight: "800", color: UI.textSecondary }}>
-              Observation thread
+              Kept patterns
             </Text>
 
             {thisWeekReflections.length === 0 ? (
               <Text style={{ fontSize: 13, color: UI.textSecondary }}>
-                No saved check-ins yet.
+                No patterns carried forward yet.
               </Text>
             ) : (
               <>
@@ -2661,7 +2695,7 @@ export default function KidDetailScreen() {
                           </Text>
                         ) : null}
                         {!outcomeText && !notesText ? (
-                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>(empty check-in)</Text>
+                          <Text style={{ fontSize: 12, color: UI.textSecondary }}>(no pattern text)</Text>
                         ) : null}
                       </Pressable>
                     </Swipeable>
@@ -2673,7 +2707,7 @@ export default function KidDetailScreen() {
                     style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1, alignSelf: "flex-start" })}
                   >
                     <Text style={{ fontSize: 12, color: UI.textSecondary, fontWeight: "600" }}>
-                      +{thisWeekReflections.length - 3} more in history
+                      +{thisWeekReflections.length - 3} more carried forward
                     </Text>
                   </Pressable>
                 ) : null}
@@ -2710,7 +2744,7 @@ export default function KidDetailScreen() {
               <Text style={{ fontSize: 11, fontWeight: "800", color: "#166534" }}>PARENT REINFORCEMENT</Text>
             </View>
             <Text style={{ fontSize: 12, color: "#47705c", flex: 1, minWidth: 140, lineHeight: 17 }}>
-              Review what families will receive after your coach-only interpretation is clear.
+              Family support for the direction you are helping this athlete grow toward.
             </Text>
           </View>
 
@@ -2735,7 +2769,7 @@ export default function KidDetailScreen() {
                   minWidth: 140,
                 }}
               >
-                Shared family note
+                Family-facing framing
               </Text>
               <View
                 style={{
@@ -2849,7 +2883,7 @@ export default function KidDetailScreen() {
                 color: "#166534",
               }}
             >
-              Why this matters
+              At-home reinforcement
             </Text>
             <TextInput
               value={weeklyWhyThisMatters}
@@ -2858,7 +2892,7 @@ export default function KidDetailScreen() {
                 setHasUserEditedWeekly(true);
               }}
               onFocus={handleEdit}
-              placeholder="Add a parent-facing weekly note"
+              placeholder="Add parent-friendly context for the direction of growth"
               placeholderTextColor={UI.textSecondary}
               multiline
               style={{
@@ -2885,10 +2919,10 @@ export default function KidDetailScreen() {
             }}
           >
             <Text style={{ fontSize: 13, letterSpacing: 0.3, fontWeight: "800", color: UI.textPrimary }}>
-              Current direction review
+              This week's evolution cycle
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
-              Review the weekly intent here; full authoring stays on the weekly focus screen.
+              Weekly support for the behavior you want to become more natural.
             </Text>
             {recommendedFocusArea ? (
               <View style={{ gap: 10 }}>
@@ -2938,7 +2972,7 @@ export default function KidDetailScreen() {
                   </Pressable>
                 </View>
                 <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}>
-                  Inserts copy into Why this matters above—you save when ready; nothing publishes on its own.
+                  Moves this wording into the reinforcement note above; nothing sends until you choose it.
                 </Text>
               </View>
             ) : null}
@@ -3781,8 +3815,7 @@ export default function KidDetailScreen() {
               Edit focus
             </Text>
             <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18 }}>
-              Starts from the system suggestion. Applies to Why this matters above—you control when notes are saved
-              elsewhere.
+              Starts from the system suggestion. Moves into the current evolution cycle; nothing sends until you choose it.
             </Text>
             <TextInput
               value={suggestedFocusDraft}
