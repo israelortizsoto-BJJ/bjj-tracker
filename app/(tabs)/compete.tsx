@@ -509,7 +509,11 @@ export default function CompetitionTab() {
                 <Text style={styles.emptyLine}>No upcoming competitions.</Text>
               ) : (
                 upcomingEntries.map((entry) => (
-                  <CompetitionCard key={entry.id} entry={entry} onOpenEntry={openCompetitionEntry} />
+                  <CompetitionCard
+                    key={`${entry.id}@${competitionVersion}`}
+                    entry={entry}
+                    onOpenEntry={openCompetitionEntry}
+                  />
                 ))
               )}
             </View>
@@ -545,7 +549,7 @@ export default function CompetitionTab() {
                         <View style={styles.monthBody}>
                           {group.entries.map((entry) => (
                             <CompetitionCard
-                              key={entry.id}
+                              key={`${entry.id}@${competitionVersion}`}
                               entry={entry}
                               onOpenEntry={openCompetitionEntry}
                             />

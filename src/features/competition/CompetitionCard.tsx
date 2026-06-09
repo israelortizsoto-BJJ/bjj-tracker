@@ -1,5 +1,5 @@
 import { useFocusEffect } from "@react-navigation/native";
-import { useCallback, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { isCompetitionMatchUiAvailableForEventDate } from "../../_domain/dateKey";
@@ -15,6 +15,10 @@ import {
 } from "../../domain/competition/projectCompetitionCompeteView";
 import { getCoachMatchBreakdownArtifactSet } from "../../storage/coachMatchBreakdownArtifactStore";
 import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
+import {
+  getCompetitionVersion,
+  subscribeCompetition,
+} from "../../storage/kidCompetitionStore";
 import { competeMedalTierFromKidEntry, type KidCompetitionMedalTier } from "../../types/coachKid";
 import { CompetitionMedalMark, type CompeteKidEntryMerged } from "./MedalGallery";
 import { MatchCard } from "./MatchCard";
@@ -43,6 +47,11 @@ export function CompetitionCard({
   onOpenEntry: (entry: CompeteKidEntryMerged) => void;
 }) {
   const { role: deviceRole } = useDeviceRole();
+  const competitionVersion = useSyncExternalStore(
+    subscribeCompetition,
+    getCompetitionVersion,
+    getCompetitionVersion,
+  );
   const sharedAthleteId = entry.sharedAthleteId ?? "";
   const sharedCompetitionId = entry.sharedCompetitionId ?? "";
   const topologyArtifact = peekCoachCompetitionTopology(sharedAthleteId);
@@ -163,6 +172,7 @@ export function CompetitionCard({
         active = false;
       };
     }, [
+      competitionVersion,
       deviceRole,
       matchLineageSignature,
       overlayHydrationKey,
