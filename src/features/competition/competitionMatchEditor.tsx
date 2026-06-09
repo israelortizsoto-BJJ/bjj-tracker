@@ -1,5 +1,7 @@
 import { Audio } from "expo-av";
+import { File } from "expo-file-system";
 import * as FileSystem from "expo-file-system/legacy";
+import { fetch as expoFetch } from "expo/fetch";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -363,12 +365,10 @@ export function MatchBlock({
       throw new Error("Invalid audio file for transcription");
     }
 
+    const audioFile = new File(normalizedUri);
+    const uploadBlob = audioFile.slice(0, fileSize, mimeType);
     const formData = new FormData();
-    formData.append("file", {
-      uri: normalizedUri,
-      name: filename,
-      type: mimeType,
-    } as unknown as Blob);
+    formData.append("file", uploadBlob, filename);
     console.log(
       "[TRANSCRIBE_RUNTIME_TRACE]",
       JSON.stringify({
@@ -384,10 +384,16 @@ export function MatchBlock({
       url: "https://api.openai.com/v1/audio/transcriptions",
       model: "whisper-1",
     });
+    logTranscribeRuntime("expo_file_upload_start", {
+      stage: "expo_file_upload_start",
+      filename,
+      mimeType,
+      fileSize,
+    });
 
     let res: Response;
     try {
-      res = await fetch("https://api.openai.com/v1/audio/transcriptions", {
+      res = await expoFetch("https://api.openai.com/v1/audio/transcriptions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -418,6 +424,12 @@ export function MatchBlock({
 
     logTranscribeRuntime("fetch_response", {
       stage: "openai_request",
+      status: res.status,
+      ok: res.ok,
+      statusText: res.statusText,
+    });
+    logTranscribeRuntime("expo_file_upload_response", {
+      stage: "expo_file_upload_response",
       status: res.status,
       ok: res.ok,
       statusText: res.statusText,
