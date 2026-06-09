@@ -422,17 +422,61 @@ export async function writeCoachCompetitionTopology(
       invalidateTriggered: false,
     });
   }
-  if (existing && artifact.updatedAt.localeCompare(existing.updatedAt) <= 0) {
+  const updatedAtComparison = existing
+    ? artifact.updatedAt.localeCompare(existing.updatedAt)
+    : 1;
+  const payloadEqual = existing ? JSON.stringify(artifact) === JSON.stringify(existing) : false;
+  if (existing && updatedAtComparison === 0) {
+    console.log("[TOPOLOGY_EQUALITY_ARBITRATION]", {
+      sharedAthleteId: athleteId,
+      incomingUpdatedAt: artifact.updatedAt,
+      existingUpdatedAt: existing.updatedAt,
+      payloadEqual,
+      incomingCompetitionIds: artifact.competitions.map(
+        (competition) => competition.sharedCompetitionId,
+      ),
+      incomingMatchCounts: artifact.competitions.map((competition) => ({
+        sharedCompetitionId: competition.sharedCompetitionId,
+        matchCount: competition.matches.length,
+      })),
+      overwriteDecision: payloadEqual ? "skip_idempotent_replay" : "overwrite_equal_timestamp",
+    });
+    if (payloadEqual) {
+      if (__DEV__) {
+        logCoachTopologyAcceptanceTrace({
+          artifact,
+          existing,
+          overwriteAccepted: true,
+          rejectionReason: "equal_timestamp_idempotent_replay",
+          equalitySkipped: true,
+          cacheWritePerformed: false,
+          invalidateTriggered: false,
+        });
+        logCoachTopologyMatchTrace("coach_topology_store_write", artifact, {
+          incomingUpdatedAt: artifact.updatedAt,
+          existingUpdatedAt: existing.updatedAt,
+          accepted: true,
+          overwriteReason: "equal_timestamp_idempotent_replay",
+        });
+        console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_skipped_stale", {
+          sharedAthleteId: athleteId,
+          existingUpdatedAt: existing.updatedAt,
+          incomingUpdatedAt: artifact.updatedAt,
+          reason: "equal_timestamp_idempotent_replay",
+          traceId: competitionTopologyTraceId ?? null,
+        });
+      }
+      return "hydrate_skipped_stale";
+    }
+  }
+  if (existing && updatedAtComparison < 0) {
     if (__DEV__) {
       logCoachTopologyAcceptanceTrace({
         artifact,
         existing,
         overwriteAccepted: false,
-        rejectionReason:
-          artifact.updatedAt === existing.updatedAt
-            ? "incoming_equal_updatedAt_rejected"
-            : "incoming_older_updatedAt_rejected",
-        equalitySkipped: artifact.updatedAt === existing.updatedAt,
+        rejectionReason: "incoming_older_updatedAt_rejected",
+        equalitySkipped: false,
         cacheWritePerformed: false,
         invalidateTriggered: false,
       });
@@ -440,10 +484,7 @@ export async function writeCoachCompetitionTopology(
         incomingUpdatedAt: artifact.updatedAt,
         existingUpdatedAt: existing.updatedAt,
         accepted: false,
-        overwriteReason:
-          artifact.updatedAt === existing.updatedAt
-            ? "equal_or_replay_rejected_by_newest_wins"
-            : "incoming_older_rejected",
+        overwriteReason: "incoming_older_rejected",
       });
       console.log("[COMP_TOPOLOGY_HYDRATE] hydrate_skipped_stale", {
         sharedAthleteId: athleteId,
