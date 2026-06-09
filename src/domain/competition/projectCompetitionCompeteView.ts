@@ -123,6 +123,20 @@ export function projectCompetitionCompeteView(input: {
     return { ...shell, matches: [...fallbackMatches] };
   }
 
+  if (topology.matches.length < fallbackMatches.length) {
+    console.log("[COMPETE_PROJECTION_TRACE]", {
+      arbitration: "fallback_cardinality_guard",
+      sharedCompetitionId: shell.id,
+      topologyMatchCount: topology.matches.length,
+      fallbackMatchCount: fallbackMatches.length,
+    });
+
+    return {
+      ...shell,
+      matches: [...fallbackMatches],
+    };
+  }
+
   const overlaysByLineageKey = new Map<string, CompetitionMatchOverlayAnnotation>();
   for (const overlay of input.overlayAnnotations ?? []) {
     const matchLineageKey = overlay.matchLineageKey.trim();
