@@ -366,9 +366,8 @@ export function MatchBlock({
     }
 
     const audioFile = new File(normalizedUri);
-    const uploadBlob = audioFile.slice(0, fileSize, mimeType);
     const formData = new FormData();
-    formData.append("file", uploadBlob, filename);
+    formData.append("file", audioFile, filename);
     console.log(
       "[TRANSCRIBE_RUNTIME_TRACE]",
       JSON.stringify({
