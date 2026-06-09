@@ -582,7 +582,10 @@ export function MatchBlock({
         ...transcribeRuntimeErrorFields(error),
       });
       console.error("Transcription failed", error);
-      onCoachNoteChange("Could not transcribe. Try again.");
+      const errorMessage = transcribeRuntimeErrorFields(error).errorMessage.trim();
+      onCoachNoteChange(
+        `Could not transcribe.\n${errorMessage.length > 0 ? errorMessage : "Unknown transcription error"}`,
+      );
       setRecordingState("done");
     } finally {
       await Audio.setAudioModeAsync({
