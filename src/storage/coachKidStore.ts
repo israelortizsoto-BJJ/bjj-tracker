@@ -1325,6 +1325,24 @@ export async function reconcileCoachCompetitionTopologyFromWriterSessions(opts: 
       continue;
     }
 
+    for (const competition of artifact.competitions) {
+      console.log("[COACH_TOPOLOGY_TRACE]", {
+        stage: "worker_get_topology",
+        sharedAthleteId,
+        sharedCompetitionId: competition.sharedCompetitionId,
+        topologyMatchCount: competition.matches.length,
+        totalMatchCount: artifact.competitions.reduce(
+          (sum, item) => sum + item.matches.length,
+          0,
+        ),
+        incomingUpdatedAt: artifact.updatedAt,
+        existingUpdatedAt: null,
+        projectedMatchCount: null,
+        fallbackMatchCount: null,
+        traceId: competitionTopologyTraceId,
+      });
+    }
+
     const result = await writeCoachCompetitionTopology(artifact, competitionTopologyTraceId);
     if (__DEV__) {
       for (const competition of artifact.competitions) {

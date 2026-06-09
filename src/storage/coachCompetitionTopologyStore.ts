@@ -402,6 +402,23 @@ export async function writeCoachCompetitionTopology(
     (sum, competition) => sum + competition.matches.length,
     0,
   );
+  const logCoachTopologyDecision = (
+    stage: "coach_topology_store_write" | "coach_topology_store_reject",
+    extra: Record<string, unknown>,
+  ) => {
+    for (const competition of artifact.competitions) {
+      console.log("[COACH_TOPOLOGY_TRACE]", {
+        stage,
+        sharedAthleteId: athleteId,
+        sharedCompetitionId: competition.sharedCompetitionId,
+        topologyMatchCount: competition.matches.length,
+        totalMatchCount,
+        incomingUpdatedAt: artifact.updatedAt,
+        existingUpdatedAt: existing?.updatedAt ?? null,
+        ...extra,
+      });
+    }
+  };
   logCompetitionTopologyTrace("[COMP_TOPOLOGY_HYDRATE]", "cache_write_received", {
     traceId: competitionTopologyTraceId ?? null,
     sharedAthleteId: athleteId,
@@ -442,6 +459,12 @@ export async function writeCoachCompetitionTopology(
       overwriteDecision: payloadEqual ? "skip_idempotent_replay" : "overwrite_equal_timestamp",
     });
     if (payloadEqual) {
+      logCoachTopologyDecision("coach_topology_store_write", {
+        projectedMatchCount: null,
+        fallbackMatchCount: null,
+        writeResult: "idempotent_replay",
+        overwriteDecision: "skip_idempotent_replay",
+      });
       if (__DEV__) {
         logCoachTopologyAcceptanceTrace({
           artifact,
@@ -470,6 +493,12 @@ export async function writeCoachCompetitionTopology(
     }
   }
   if (existing && updatedAtComparison < 0) {
+    logCoachTopologyDecision("coach_topology_store_reject", {
+      projectedMatchCount: null,
+      fallbackMatchCount: null,
+      rejectionReason: "incoming_older_updatedAt_rejected",
+      overwriteDecision: "reject_older",
+    });
     if (__DEV__) {
       logCoachTopologyAcceptanceTrace({
         artifact,
@@ -498,6 +527,12 @@ export async function writeCoachCompetitionTopology(
 
   map[athleteId] = artifact;
   await writeStore(map);
+  logCoachTopologyDecision("coach_topology_store_write", {
+    projectedMatchCount: null,
+    fallbackMatchCount: null,
+    writeResult: "hydrate_store_overwrite",
+    overwriteDecision: existing ? "overwrite" : "first_write",
+  });
   if (__DEV__) {
     logCoachTopologyAcceptanceTrace({
       artifact,

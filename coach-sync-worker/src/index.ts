@@ -2930,8 +2930,11 @@ export default {
             sharedAthleteId: artifact.sharedAthleteId,
             competitionCount: artifact.competitions.length,
             totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+            totalMatchCount: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
             lineageKeyCount: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
             updatedAt: artifact.updatedAt,
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: null,
             timestamp: new Date().toISOString(),
           });
         }
@@ -2951,6 +2954,7 @@ export default {
 
         const existing = rec.competitionTopologyByAthleteId[artifact.sharedAthleteId];
         if (existing && artifact.updatedAt.localeCompare(existing.updatedAt) < 0) {
+          const totalMatchCount = artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0);
           logCoachTopologyMatchTrace("worker_put_topology", artifact, {
             incomingUpdatedAt: artifact.updatedAt,
             existingUpdatedAt: existing.updatedAt,
@@ -2962,6 +2966,7 @@ export default {
             sharedAthleteId: artifact.sharedAthleteId,
             incomingUpdatedAt: artifact.updatedAt,
             existingUpdatedAt: existing.updatedAt,
+            totalMatchCount,
             ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
           });
           return error("Competition topology artifact is stale", 409);
@@ -2971,6 +2976,7 @@ export default {
           artifact.updatedAt === existing.updatedAt &&
           JSON.stringify(artifact) !== JSON.stringify(existing)
         ) {
+          const totalMatchCount = artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0);
           logCoachTopologyMatchTrace("worker_put_topology", artifact, {
             incomingUpdatedAt: artifact.updatedAt,
             existingUpdatedAt: existing.updatedAt,
@@ -2981,11 +2987,15 @@ export default {
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifact.sharedAthleteId,
             updatedAt: artifact.updatedAt,
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
+            totalMatchCount,
             ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
           });
           return error("Competition topology timestamp conflict", 409);
         }
         if (existing && JSON.stringify(artifact) === JSON.stringify(existing)) {
+          const totalMatchCount = artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0);
           logCoachTopologyMatchTrace("worker_put_topology", artifact, {
             incomingUpdatedAt: artifact.updatedAt,
             existingUpdatedAt: existing.updatedAt,
@@ -2997,7 +3007,10 @@ export default {
             sharedAthleteId: artifact.sharedAthleteId,
             competitionCount: artifact.competitions.length,
             totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+            totalMatchCount,
             updatedAt: artifact.updatedAt,
+            incomingUpdatedAt: artifact.updatedAt,
+            existingUpdatedAt: existing.updatedAt,
             writeMode: "idempotent_replay",
             traceId: competitionTopologyTraceId,
           });
@@ -3011,12 +3024,16 @@ export default {
             [artifact.sharedAthleteId]: artifact,
           },
         };
+        const totalMatchCount = artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0);
         console.log("[COMP_TOPOLOGY_TRACE] worker_store_ok", {
           tokenSuffix: token.slice(-8),
           sharedAthleteId: artifact.sharedAthleteId,
           competitionCount: artifact.competitions.length,
           totalMatches: artifact.competitions.reduce((sum, c) => sum + c.matches.length, 0),
+          totalMatchCount,
           updatedAt: artifact.updatedAt,
+          incomingUpdatedAt: artifact.updatedAt,
+          existingUpdatedAt: existing?.updatedAt ?? null,
           writeMode: existing ? "newer_overwrite" : "first_write",
           ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
         });

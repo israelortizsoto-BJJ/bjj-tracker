@@ -88,6 +88,17 @@ export function projectCompetitionCompeteView(input: {
       : null;
 
   if (!topology) {
+    console.log("[COACH_TOPOLOGY_TRACE]", {
+      stage: "coach_compete_projection",
+      sharedAthleteId: sharedAthleteId || null,
+      sharedCompetitionId: sharedCompetitionId || null,
+      projectedMatchCount: fallbackMatches.length,
+      topologyMatchCount: 0,
+      fallbackMatchCount: fallbackMatches.length,
+      incomingUpdatedAt: topologyArtifact?.updatedAt ?? null,
+      existingUpdatedAt: null,
+      projectionSource: "fallback_missing_topology",
+    });
     console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
       stage: "coach_compete_projection",
       sharedCompetitionId: sharedCompetitionId || null,
@@ -124,6 +135,17 @@ export function projectCompetitionCompeteView(input: {
   }
 
   if (topology.matches.length < fallbackMatches.length) {
+    console.log("[COACH_TOPOLOGY_TRACE]", {
+      stage: "coach_compete_projection",
+      sharedAthleteId,
+      sharedCompetitionId,
+      projectedMatchCount: fallbackMatches.length,
+      topologyMatchCount: topology.matches.length,
+      fallbackMatchCount: fallbackMatches.length,
+      incomingUpdatedAt: topologyArtifact?.updatedAt ?? null,
+      existingUpdatedAt: null,
+      projectionSource: "fallback_cardinality_guard",
+    });
     console.log("[COMPETE_PROJECTION_TRACE]", {
       arbitration: "fallback_cardinality_guard",
       sharedCompetitionId: shell.id,
@@ -170,6 +192,17 @@ export function projectCompetitionCompeteView(input: {
     firstFiveMatchResults: matches.slice(0, 5).map((match) => match.matchResult),
     accepted: true,
     overwriteReason: "topology_projection_used",
+  });
+  console.log("[COACH_TOPOLOGY_TRACE]", {
+    stage: "coach_compete_projection",
+    sharedAthleteId,
+    sharedCompetitionId,
+    projectedMatchCount: matches.length,
+    topologyMatchCount: topology.matches.length,
+    fallbackMatchCount: fallbackMatches.length,
+    incomingUpdatedAt: topologyArtifact?.updatedAt ?? null,
+    existingUpdatedAt: null,
+    projectionSource: "topology_projection_used",
   });
   if (__DEV__) {
     console.log("[COMP_PROJECTION_TRACE] projection_topology_used", {

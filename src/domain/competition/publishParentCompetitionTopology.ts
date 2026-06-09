@@ -63,7 +63,23 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
         (sum, competition) => sum + competition.matches.length,
         0,
       );
+      console.log("[COMP_TOPOLOGY_TRACE]", {
+        stage: "build_ok",
+        ...(traceId ? { traceId } : {}),
+        sharedAthleteId: trimmed,
+        totalCompetitionCount: artifact.competitions.length,
+        totalMatchCount: totalMatches,
+        updatedAt: artifact.updatedAt,
+      });
       const putPath = `/v1/sessions/${encodeURIComponent(target.linkToken)}/competition-topology`;
+      console.log("[COMP_TOPOLOGY_TRACE]", {
+        stage: "put_request_payload",
+        ...(traceId ? { traceId } : {}),
+        sharedAthleteId: trimmed,
+        totalCompetitionCount: artifact.competitions.length,
+        totalMatchCount: totalMatches,
+        updatedAt: artifact.updatedAt,
+      });
       console.log("[COMP_TOPOLOGY_TRACE] publish_attempt", {
         ...(traceId ? { traceId } : {}),
         sharedAthleteId: trimmed,
@@ -110,6 +126,14 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
         totalMatches,
         updatedAt: artifact.updatedAt,
       });
+      console.log("[COMP_TOPOLOGY_TRACE]", {
+        stage: "put_http_ok",
+        ...(traceId ? { traceId } : {}),
+        sharedAthleteId: trimmed,
+        totalCompetitionCount: artifact.competitions.length,
+        totalMatchCount: totalMatches,
+        updatedAt: artifact.updatedAt,
+      });
     } catch (error) {
       logCompSave("ERROR", {
         sharedAthleteId: trimmed,
@@ -124,6 +148,16 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
       console.log("[COMP_TOPOLOGY_TRACE] publish_failed", {
         traceId,
         sharedAthleteId: trimmed,
+        error: error instanceof Error ? error.message : String(error),
+        httpStatus: status,
+      });
+      console.log("[COMP_TOPOLOGY_TRACE]", {
+        stage: "put_http_failed",
+        traceId,
+        sharedAthleteId: trimmed,
+        totalCompetitionCount: null,
+        totalMatchCount: null,
+        updatedAt: null,
         error: error instanceof Error ? error.message : String(error),
         httpStatus: status,
       });
