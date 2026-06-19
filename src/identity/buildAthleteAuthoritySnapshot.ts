@@ -10,6 +10,7 @@ import {
 import {
   getKidsById,
   refreshCoachWriterSessionsAndReconcileStores,
+  EMPTY_HYDRATION_RECONCILE_OUTCOME,
   type CoachWriterSessionRefreshResult,
 } from "../storage/coachKidStore";
 import type { DeviceRole } from "../storage/deviceRoleStore";
@@ -64,10 +65,17 @@ async function buildSnapshotCore(
   observability?: BuildAthleteAuthoritySnapshotOptions["observability"],
   skipCoachWriterSessionRefresh = false,
 ): Promise<AthleteAuthoritySnapshot> {
+  const reconcileAttempted =
+    parentRole === "coach" && !skipCoachWriterSessionRefresh;
   const refreshResult: CoachWriterSessionRefreshResult =
-    parentRole === "coach" && !skipCoachWriterSessionRefresh
+    reconcileAttempted
       ? await refreshCoachWriterSessionsAndReconcileStores()
-      : { successfulSnapshots: [], writerLinks: [], inviteSessionAthletesByToken: {} };
+      : {
+          successfulSnapshots: [],
+          writerLinks: [],
+          inviteSessionAthletesByToken: {},
+          hydrationOutcome: EMPTY_HYDRATION_RECONCILE_OUTCOME,
+        };
 
   const loadedKids = await getKidsById();
 
@@ -279,6 +287,8 @@ async function buildSnapshotCore(
     parentActiveAthleteId: storedNorm,
     coachSessionRefreshDegraded,
     linkedSharedAthleteIds: [...linkedIdSet].sort((a, b) => a.localeCompare(b)),
+    writerSessionRefresh: refreshResult,
+    reconcileAttempted,
     meta: observability,
   };
 

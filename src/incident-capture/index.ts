@@ -31,3 +31,22 @@ export {
   type ProjectWorkerSessionLinkInput,
   type ProjectWorkerSessionSnapshotContext,
 } from "./projectWorkerSessionSnapshot";
+export {
+  HYDRATION_SNAPSHOT_CONTRACT_VERSION,
+  type HydrationCacheLinkEvidence,
+  type HydrationEarlyExitReason,
+  type HydrationReconcileOutcome,
+  type HydrationSkipReconcileReason,
+  type HydrationSnapshot,
+  type HydrationSnapshotCaptureMode,
+  type HydrationTriggerClass,
+} from "./hydrationSnapshotContract";
+export {
+  captureHydrationSnapshot,
+  type CaptureHydrationSnapshotOptions,
+} from "./captureHydrationSnapshot";
+export {
+  hydrationTriggerClassFromSourceTrigger,
+  projectHydrationSnapshot,
+  type ProjectHydrationSnapshotContext,
+} from "./projectHydrationSnapshot";

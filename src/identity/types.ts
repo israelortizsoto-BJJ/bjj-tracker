@@ -1,4 +1,5 @@
 import type { ParentAthlete } from "../storage/athleteStore";
+import type { CoachWriterSessionRefreshResult } from "../storage/coachKidStore";
 import type { KidsById } from "../types/coachKid";
 import type { DeviceRole } from "../storage/deviceRoleStore";
 
@@ -33,6 +34,10 @@ export type AthleteAuthoritySnapshot = {
   parentActiveAthleteId: string;
   coachSessionRefreshDegraded: boolean;
   linkedSharedAthleteIds: string[];
+  /** Coach reconcile pass output when invoked; empty shell when skipped or parent role. */
+  writerSessionRefresh?: CoachWriterSessionRefreshResult;
+  /** Whether this snapshot pass invoked coach reconcile (coach && !skipCoachWriterSessionRefresh). */
+  reconcileAttempted?: boolean;
   meta?: AthleteAuthoritySnapshotMeta;
 };
 

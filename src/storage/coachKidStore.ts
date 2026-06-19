@@ -1535,10 +1535,50 @@ export type CoachInviteSessionAthletesByTokenEntry = {
   fetchFailed: boolean;
 };
 
+export type HydrationEarlyExitReason = "coachSyncNotConfigured" | "noWriterLinks";
+
+export type HydrationSkipReconcileReason = "writerLinksButNoSuccessfulSessionFetches";
+
+export type HydrationReconcileOutcome = {
+  reconcileAttempted: boolean;
+  reconcileCompleted: boolean;
+  earlyExitReason?: HydrationEarlyExitReason;
+  skipReconcileReason?: HydrationSkipReconcileReason;
+  reconcileFinishedAt?: string;
+  stageRosterCompleted?: boolean;
+  stageShellsCompleted?: boolean;
+  stageAggregateCompleted?: boolean;
+  stageTopologyCompleted?: boolean;
+  stageTrainingProofCompleted?: boolean;
+  stageBreakdownCompleted?: boolean;
+  stageBreakdownPruneCompleted?: boolean;
+};
+
+export const EMPTY_HYDRATION_RECONCILE_OUTCOME: HydrationReconcileOutcome = {
+  reconcileAttempted: false,
+  reconcileCompleted: false,
+};
+
+function completedHydrationReconcileOutcome(reconcileFinishedAt: string): HydrationReconcileOutcome {
+  return {
+    reconcileAttempted: true,
+    reconcileCompleted: true,
+    reconcileFinishedAt,
+    stageRosterCompleted: true,
+    stageShellsCompleted: true,
+    stageAggregateCompleted: true,
+    stageTopologyCompleted: true,
+    stageTrainingProofCompleted: true,
+    stageBreakdownCompleted: true,
+    stageBreakdownPruneCompleted: true,
+  };
+}
+
 export type CoachWriterSessionRefreshResult = {
   successfulSnapshots: WriterSessionSnapshotOk[];
   writerLinks: CoachLink[];
   inviteSessionAthletesByToken: Record<string, CoachInviteSessionAthletesByTokenEntry>;
+  hydrationOutcome: HydrationReconcileOutcome;
 };
 
 /**
@@ -1587,7 +1627,16 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       perSession: [] as { tokenNorm: string; competitionsCount: number; athleteIds: string[] }[],
       athleteIdsUnion: [] as string[],
     });
-    return { successfulSnapshots, writerLinks, inviteSessionAthletesByToken };
+    return {
+      successfulSnapshots,
+      writerLinks,
+      inviteSessionAthletesByToken,
+      hydrationOutcome: {
+        reconcileAttempted: true,
+        reconcileCompleted: false,
+        earlyExitReason: "coachSyncNotConfigured",
+      },
+    };
   }
 
   for (const link of writerLinks) {
@@ -1822,9 +1871,16 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
         athleteIdsUnion,
       });
     }
+    const reconcileFinishedAt = new Date().toISOString();
     bumpCoachSyncHydrationVersion({
       reason: "refreshCoachWriterSessionsAndReconcileStores_complete",
     });
+    return {
+      successfulSnapshots,
+      writerLinks,
+      inviteSessionAthletesByToken,
+      hydrationOutcome: completedHydrationReconcileOutcome(reconcileFinishedAt),
+    };
   } else if (writerLinks.length > 0) {
     if (__DEV__) {
       console.log("[REMOTE_HYDRATION_PROVENANCE]", {
@@ -1868,9 +1924,28 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       writerLinkCount: writerLinks.length,
       sessionsFetchedOkCount: successfulSnapshots.length,
     });
+    return {
+      successfulSnapshots,
+      writerLinks,
+      inviteSessionAthletesByToken,
+      hydrationOutcome: {
+        reconcileAttempted: true,
+        reconcileCompleted: false,
+        skipReconcileReason: "writerLinksButNoSuccessfulSessionFetches",
+      },
+    };
   }
 
-  return { successfulSnapshots, writerLinks, inviteSessionAthletesByToken };
+  return {
+    successfulSnapshots,
+    writerLinks,
+    inviteSessionAthletesByToken,
+    hydrationOutcome: {
+      reconcileAttempted: true,
+      reconcileCompleted: false,
+      earlyExitReason: "noWriterLinks",
+    },
+  };
 }
 
 /**
