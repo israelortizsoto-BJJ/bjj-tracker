@@ -7,9 +7,12 @@ Protected systems remain locked until evidence proves ownership.
 
 Reference:
 master-prompt-developer.md
+
+GOVERNING INCIDENT RESPONSE DOCUMENT
+
+docs/architecture/matmind-incident-capture-architecture-v1.md
+
 → DEBUG DOCTRINE
-
-
 OVERLAY FORENSIC TOOLKIT
 
 Document:
@@ -56,6 +59,702 @@ If missing after worker_store_artifact_set
 
 If present through worker_get_artifact_set
 → parent hydration/render issue
+
+# EOD DEV HANDOFF — 6/18/2026
+
+## Branch
+
+```bash
+rollback-pre-lineage-regression
+```
+
+## Latest Commit
+
+```bash
+7d22614 Add end-to-end overlay forensic trace instrumentation
+```
+
+## Git Status at Close
+
+```bash
+git push origin rollback-pre-lineage-regression
+
+3f310f7..7d22614
+rollback-pre-lineage-regression -> rollback-pre-lineage-regression
+```
+
+---
+
+# PRIMARY OBJECTIVE
+
+Continue investigation of:
+
+```text
+Coach Match Breakdown
+Coach → Worker → Parent hydration
+```
+
+for canonical competition overlay architecture.
+
+NO architecture mutations performed today.
+
+Focus was:
+
+```text
+Evidence collection
+Forensic instrumentation
+Pipeline proof
+```
+
+NOT fixing behavior.
+
+---
+
+# MAJOR DISCOVERY #1
+
+## Worker Snapshot Shows Divergence
+
+Session token inspected:
+
+```text
+s:47dd1b8126ad0a0749b3b456deb1c218547c6d75c350727b
+```
+
+Worker snapshot:
+
+```json
+coachMatchBreakdownArtifacts
+```
+
+contained:
+
+```text
+Israel athlete:
+19 artifacts
+
+Luca athlete:
+0 artifacts
+```
+
+Evidence:
+
+```json
+shared_ath_c1dcd2cdbe8eaad87807a0ac670943ec
+
+artifacts: []
+```
+
+This was the first major signal that:
+
+```text
+Parent-visible Luca coach notes
+may not be coming from current worker hydration
+```
+
+---
+
+# MAJOR DISCOVERY #2
+
+## Existing Parent Notes Are Potentially Stale
+
+QA performed:
+
+Coach side:
+
+Changed existing Luca coach breakdowns.
+
+Examples:
+
+```text
+24-0
+```
+
+changed to:
+
+```text
+TEST 6/18 1150pm
+```
+
+and
+
+```text
+test hydration 6/18 11:50
+```
+
+Coach app:
+
+```text
+Save successful
+Hydration visible locally
+```
+
+Parent TestFlight:
+
+```text
+Still showed old values
+```
+
+Result:
+
+Strong evidence that:
+
+```text
+Current Luca notes shown on Parent
+are not proving active hydration.
+```
+
+They may be:
+
+```text
+Historical cache
+Historical projection
+Legacy locally materialized data
+```
+
+rather than live worker-fed hydration.
+
+This is NOT yet proven.
+
+But it is now a lead hypothesis.
+
+---
+
+# MAJOR DISCOVERY #3
+
+## Historical Symptom Reappeared
+
+New competition created.
+
+Observed sequence:
+
+```text
+Parent creates competition
+↓
+Competition missing
+↓
+Hard close app
+↓
+Hard close app again
+↓
+Competition appears
+↓
+Only 1 match visible
+↓
+Coach breakdown edited
+↓
+2nd match appears
+```
+
+This is EXTREMELY IMPORTANT.
+
+We have seen this exact family of symptoms before.
+
+Historically:
+
+```text
+Topology incomplete
+↓
+Unrelated event occurs
+↓
+Missing matches appear
+```
+
+Examples previously observed:
+
+```text
+coach save
+app restart
+athlete switch
+competition reopen
+```
+
+This symptom survives despite the topology stabilization work.
+
+---
+
+# CRITICAL QUESTION ASKED TODAY
+
+Israel asked:
+
+```text
+Why do these recurring discoveries
+not seem to exist in the handoff notes?
+```
+
+Answer:
+
+Because many investigations were documented as:
+
+```text
+bug
+theory
+fix
+```
+
+rather than:
+
+```text
+observable system behavior
+debugging signals
+forensic methodology
+```
+
+We repeatedly found ourselves:
+
+```text
+Searching docs
+Searching grep
+Remembering history
+```
+
+instead of:
+
+```text
+Interrogating instrumentation
+```
+
+This led to a major shift in strategy.
+
+---
+
+# STRATEGIC DECISION
+
+STOP CHASING INDIVIDUAL BUGS.
+
+Start building:
+
+```text
+Competition Forensics Layer
+```
+
+The app has reached sufficient complexity that:
+
+```text
+Observability
+>
+Memory
+```
+
+---
+
+# MAJOR DISCOVERY #4
+
+## Missing Publish Entry Point Investigation
+
+Today we proved:
+
+Worker PUT path exists:
+
+```text
+coach-sync-worker/src/index.ts
+```
+
+and correctly stores:
+
+```text
+coachMatchBreakdownArtifacts
+```
+
+We also proved:
+
+```text
+schedulePublishCoachMatchBreakdownArtifacts
+```
+
+is only referenced by:
+
+```text
+coach competition edit flow
+competition delete cleanup
+```
+
+Key discovery:
+
+```text
+Coach overlay publication is NOT globally wired everywhere.
+```
+
+Only specific save paths trigger publication.
+
+---
+
+# MAJOR DISCOVERY #5
+
+## Found Real Overlay Save Pipeline
+
+Cursor investigation located:
+
+```text
+app/(tabs)/coach/kid/[kidId]/competition/edit.tsx
+```
+
+Actual save sequence:
+
+```text
+Save
+↓
+upsertMatchBreakdownOverlay
+↓
+writeCoachMatchBreakdownOverlay
+↓
+schedulePublishCoachMatchBreakdownArtifacts
+↓
+buildCoachMatchBreakdownArtifacts
+↓
+coachSyncPutCoachMatchBreakdownArtifacts
+↓
+Worker PUT
+```
+
+This was a significant breakthrough.
+
+Before this we were still hunting for the true publish entry point.
+
+---
+
+# FORENSIC TOOLING BUILT TODAY
+
+Commit:
+
+```bash
+7d22614
+Add end-to-end overlay forensic trace instrumentation
+```
+
+---
+
+## New Trace System
+
+```text
+[OVERLAY_FORENSIC]
+```
+
+Added throughout:
+
+```text
+Local Overlay Write
+Artifact Build
+Publish Scheduling
+HTTP Publish
+Worker Store
+Worker Read
+```
+
+---
+
+## New Trace ID
+
+Every coach save now generates:
+
+```text
+traceId
+```
+
+Example:
+
+```text
+abc123-1718718721234
+```
+
+Threaded through:
+
+```text
+Coach Save
+↓
+Overlay Store
+↓
+Artifact Build
+↓
+Publish
+↓
+HTTP
+↓
+Worker PUT
+```
+
+via:
+
+```text
+X-Overlay-Forensic-Trace-Id
+```
+
+header.
+
+Purpose:
+
+Stop guessing.
+
+Track a single coach note end-to-end.
+
+---
+
+# WHY THIS MATTERS
+
+For months we have debugged by:
+
+```text
+grep
+logs
+memory
+theories
+```
+
+instead of:
+
+```text
+trace
+evidence
+localization
+```
+
+The new forensic chain allows us to prove:
+
+```text
+Coach
+↓
+Overlay Store
+↓
+Artifact Builder
+↓
+Publish
+↓
+Worker
+```
+
+without speculation.
+
+---
+
+# IMPORTANT LESSON LEARNED
+
+Israel correctly challenged the process.
+
+Observation:
+
+```text
+We keep remembering symptoms
+instead of measuring them.
+```
+
+This led to the new debugging doctrine.
+
+---
+
+# NEW DEBUG DOCTRINE
+
+Add to top of future handoffs.
+
+```text
+Never patch based on theory.
+
+First prove:
+
+1. Canonical truth
+2. Hydration truth
+3. Topology truth
+4. Projection truth
+5. Overlay truth
+6. Render truth
+
+If a layer cannot be observed:
+
+BUILD OBSERVABILITY FIRST.
+
+Do not modify architecture
+until the failing layer is proven.
+```
+
+---
+
+# WHAT WE NOW BELIEVE
+
+Most likely current failure categories:
+
+## Possibility A
+
+```text
+Coach
+↓
+Worker
+
+publish failure
+```
+
+Worker never receives Luca artifacts.
+
+---
+
+## Possibility B
+
+```text
+Coach
+↓
+Worker
+
+success
+
+Worker
+↓
+Parent
+
+hydration failure
+```
+
+Parent never materializes latest artifacts.
+
+---
+
+## Possibility C
+
+```text
+Topology hydration bug
+
+masked by overlay-triggered refresh
+```
+
+because:
+
+```text
+Coach save
+↓
+Second match appears
+```
+
+should never happen architecturally.
+
+---
+
+# WHAT WE SHOULD NOT DO TOMORROW
+
+Do NOT:
+
+```text
+Patch hydration
+Patch topology
+Patch overlays
+Refactor architecture
+Add new fallback paths
+```
+
+without forensic proof.
+
+---
+
+# STARTING POINT FOR 6/19
+
+## Step 1
+
+Use new forensic instrumentation.
+
+Follow one Luca save.
+
+Capture:
+
+```text
+overlay_write_complete
+overlay_list_for_publish
+artifact_build_input
+artifact_build_output
+publish_schedule_payload
+publish_http_request
+publish_http_success
+worker_store_artifact_set
+```
+
+Goal:
+
+Determine whether failure is:
+
+```text
+Coach → Worker
+```
+
+or
+
+```text
+Worker → Parent
+```
+
+---
+
+## Step 2
+
+Build Competition Forensics v1.
+
+High ROI.
+
+Not bug fixes.
+
+Instrumentation.
+
+Desired future command:
+
+```text
+dumpCompetitionSnapshot()
+```
+
+Output:
+
+```text
+Canonical
+Hydration
+Topology
+Projection
+Overlay
+Render
+```
+
+with match counts at every layer.
+
+---
+
+## Step 3
+
+Investigate historical symptom:
+
+```text
+Competition appears
+↓
+1 match
+↓
+Coach save
+↓
+2 matches
+```
+
+NOT as a bug.
+
+As a:
+
+```text
+Forensic trace exercise
+```
+
+to identify which recompute path is being triggered.
+
+---
+
+# END OF DAY STATUS
+
+Architecture remains stable.
+
+No architecture mutations.
+
+No new fallbacks.
+
+No new topology mutations.
+
+Major progress achieved in:
+
+```text
+observability
+forensics
+pipeline visibility
+```
+
+The biggest win of the day was realizing that future debugging must be evidence-driven and instrumentation-first rather than grep-driven and memory-driven.
+
+
 # EOD DEV HANDOFF
 
 ## Dates: 2026-06-16 → 2026-06-17
