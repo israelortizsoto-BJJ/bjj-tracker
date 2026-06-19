@@ -50,3 +50,32 @@ export {
   projectHydrationSnapshot,
   type ProjectHydrationSnapshotContext,
 } from "./projectHydrationSnapshot";
+export {
+  INCIDENT_BUNDLE_CONTRACT_VERSION,
+  type IncidentBundleArtifactsV1,
+  type IncidentBundleDeviceRole,
+  type IncidentBundleEnvelopeV1,
+  type IncidentBundleExportSource,
+  type IncidentBundlePlatform,
+  type IncidentBundleV1,
+} from "./incidentBundleContract";
+export { generateIncidentCorrelationId } from "./generateIncidentCorrelationId";
+export {
+  resolveIncidentBundleDeviceContext,
+  type IncidentBundleDeviceContext,
+  type ResolveIncidentBundleDeviceContextOptions,
+} from "./resolveIncidentBundleDeviceContext";
+export {
+  assembleIncidentBundleEnvelope,
+  type AssembleIncidentBundleEnvelopeInput,
+} from "./assembleIncidentBundleEnvelope";
+export { validateIncidentBundle } from "./validateIncidentBundle";
+export {
+  captureIncidentBundle,
+  type CaptureIncidentBundleDeps,
+  type CaptureIncidentBundleOptions,
+} from "./captureIncidentBundle";
+export {
+  exportIncidentBundleJson,
+  type ExportIncidentBundleJsonResult,
+} from "./exportIncidentBundleJson";
