@@ -97,11 +97,32 @@ export async function readCoachMatchBreakdownOverlay(
 
 export async function listCoachMatchBreakdownOverlaysForAthlete(
   sharedAthleteId: string,
+  traceId?: string | null,
 ): Promise<CoachMatchBreakdownOverlay[]> {
   const athleteId = sharedAthleteId.trim();
   if (!athleteId) return [];
   const map = await readStore();
-  return Object.values(map).filter((overlay) => overlay.sharedAthleteId.trim() === athleteId);
+  const matching = Object.values(map).filter(
+    (overlay) => overlay.sharedAthleteId.trim() === athleteId,
+  );
+  const storedAthleteIds = [
+    ...new Set(
+      Object.values(map)
+        .map((overlay) => overlay.sharedAthleteId.trim())
+        .filter(Boolean),
+    ),
+  ];
+  console.log("[OVERLAY_FORENSIC]", {
+    stage: "overlay_list_for_publish",
+    traceId: traceId?.trim() || null,
+    timestamp: new Date().toISOString(),
+    sourceFile: "coachMatchBreakdownOverlayStore.ts",
+    sharedAthleteId: athleteId,
+    requestedSharedAthleteId: athleteId,
+    matchingOverlayCount: matching.length,
+    storedAthleteIds,
+  });
+  return matching;
 }
 
 export async function deleteCoachMatchBreakdownOverlaysForCompetition(input: {
@@ -167,6 +188,7 @@ export async function writeCoachMatchBreakdownOverlay(input: {
   identity: CoachMatchBreakdownOverlayIdentity;
   patch: CoachMatchBreakdownOverlayPatch;
   updatedAt: string;
+  traceId?: string | null;
 }): Promise<CoachMatchBreakdownOverlay | null> {
   const key = overlayCompositeKey(input.identity);
   const updatedAt = trimmed(input.updatedAt);
@@ -236,6 +258,23 @@ export async function writeCoachMatchBreakdownOverlay(input: {
 
   map[key] = overlay;
   await writeStore(map);
+  const storeOverlayCountForAthlete = Object.values(map).filter(
+    (row) => row.sharedAthleteId.trim() === sharedAthleteId,
+  ).length;
+  const coachNote = overlay.coachNote?.trim() ?? "";
+  console.log("[OVERLAY_FORENSIC]", {
+    stage: "overlay_write_complete",
+    traceId: input.traceId?.trim() || null,
+    timestamp: new Date().toISOString(),
+    sourceFile: "coachMatchBreakdownOverlayStore.ts",
+    sharedAthleteId,
+    sharedCompetitionId,
+    matchLineageKey,
+    coachNotePresent: Boolean(coachNote),
+    coachNoteLength: coachNote.length,
+    storeOverlayCountForAthlete,
+    compositeKey: key,
+  });
   logCompOverlayMaterialize({
     sharedAthleteId,
     canonicalPayloadIds: [sharedCompetitionId],

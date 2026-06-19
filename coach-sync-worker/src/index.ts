@@ -385,6 +385,7 @@ const MAX_TOPOLOGY_PAYLOAD_CHARS = 256_000;
 const MAX_TOPOLOGY_ID_CHARS = 200;
 const MAX_TOPOLOGY_URI_CHARS = 2_000;
 const MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE = 2048;
+const OVERLAY_FORENSIC_TRACE_HEADER = "X-Overlay-Forensic-Trace-Id";
 const MAX_COACH_BREAKDOWN_TEXT_CHARS = 8_000;
 const MAX_COACH_BREAKDOWN_PAYLOAD_CHARS = 256_000;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
@@ -1619,6 +1620,8 @@ export default {
         if (!TOKEN_RE.test(token)) {
           return error("Invalid token", 400);
         }
+        const overlayForensicTraceId =
+          request.headers.get(OVERLAY_FORENSIC_TRACE_HEADER)?.trim().slice(0, 160) || null;
         const rec = await readSession(env.SESSIONS, token);
         if (!rec) {
           return json({ ok: true, alreadyRetired: true }, 200);
@@ -1656,6 +1659,19 @@ export default {
         const apiCoachMatchBreakdownArtifactList = coachMatchBreakdownArtifactList(
           apiCoachMatchBreakdownArtifacts,
         );
+        for (const [athleteId, artifactSet] of Object.entries(apiCoachMatchBreakdownArtifacts)) {
+          console.log("[OVERLAY_FORENSIC]", {
+            stage: "worker_get_artifact_set",
+            traceId: overlayForensicTraceId,
+            timestamp: new Date().toISOString(),
+            sourceFile: "coach-sync-worker/src/index.ts",
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: athleteId,
+            sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+            matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+            artifactCount: artifactSet.artifacts.length,
+          });
+        }
         const aggregateArtifacts = Object.values(rec.competitionAggregateByAthleteId ?? {});
         console.log("[COMP_AGGREGATE_TRACE]", {
           stage: "worker_get_payload",
@@ -2782,6 +2798,8 @@ export default {
         if (!TOKEN_RE.test(token)) {
           return error("Invalid token", 400);
         }
+        const overlayForensicTraceId =
+          request.headers.get(OVERLAY_FORENSIC_TRACE_HEADER)?.trim().slice(0, 160) || null;
         const auth = request.headers.get("Authorization") ?? "";
         const m = /^Bearer\s+(.+)$/.exec(auth.trim());
         const secret = m?.[1]?.trim() ?? "";
@@ -2874,6 +2892,18 @@ export default {
           lineageIds: artifactSet.artifacts.map((artifact) => artifact.matchLineageKey),
           updatedAt: artifactSet.updatedAt,
           writeMode: existing ? "newer_or_equal_overwrite" : "first_write",
+        });
+        console.log("[OVERLAY_FORENSIC]", {
+          stage: "worker_store_artifact_set",
+          traceId: overlayForensicTraceId,
+          timestamp: new Date().toISOString(),
+          sourceFile: "coach-sync-worker/src/index.ts",
+          tokenSuffix: token.slice(-8),
+          sharedAthleteId: artifactSet.sharedAthleteId,
+          sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+          matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+          artifactCount: artifactSet.artifacts.length,
+          updatedAt: artifactSet.updatedAt,
         });
         await writeSession(env.SESSIONS, token, next);
         console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {

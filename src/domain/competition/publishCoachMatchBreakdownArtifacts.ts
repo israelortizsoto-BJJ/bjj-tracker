@@ -1,5 +1,6 @@
 import { dedupeActiveCoachWriterLinks } from "../../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken } from "../../coachShare/inviteLinkToken";
+import { createOverlayForensicTraceId } from "../../dev/overlayForensicTrace";
 import { coachSyncPutCoachMatchBreakdownArtifacts } from "../../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../storage/coachShareStore";
 import { getKidsById } from "../../storage/coachKidStore";
@@ -9,11 +10,13 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
   sharedAthleteId: string;
   kidId?: string | null;
   updatedAtOverride?: string | null;
+  traceId?: string | null;
 }): void {
   const sharedAthleteId = input.sharedAthleteId.trim();
   if (!sharedAthleteId) return;
 
   void (async () => {
+    let traceId = input.traceId?.trim() || "";
     try {
       const [links, kidsById] = await Promise.all([getCoachLinks(), getKidsById()]);
       const writerLinks = dedupeActiveCoachWriterLinks(links);
@@ -41,8 +44,36 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         return;
       }
 
+      if (!traceId) {
+        traceId = createOverlayForensicTraceId(sharedAthleteId);
+      }
+      const resolvedWriterTokenSuffix = target.weeklySync.linkToken.trim().slice(-8);
+      console.log("[OVERLAY_FORENSIC]", {
+        stage: "publish_schedule_begin",
+        traceId,
+        timestamp: new Date().toISOString(),
+        sourceFile: "publishCoachMatchBreakdownArtifacts.ts",
+        sharedAthleteId,
+        kidId: input.kidId ?? null,
+        resolvedWriterTokenSuffix,
+      });
       const artifactSet = await buildCoachMatchBreakdownArtifacts(sharedAthleteId, {
         updatedAtOverride: input.updatedAtOverride ?? null,
+        traceId,
+      });
+      console.log("[OVERLAY_FORENSIC]", {
+        stage: "publish_schedule_payload",
+        traceId,
+        timestamp: new Date().toISOString(),
+        sourceFile: "publishCoachMatchBreakdownArtifacts.ts",
+        sharedAthleteId,
+        sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+        matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+        artifactCount: artifactSet.artifacts.length,
+        sharedCompetitionIds: [
+          ...new Set(artifactSet.artifacts.map((artifact) => artifact.sharedCompetitionId)),
+        ],
+        lineageIds: artifactSet.artifacts.map((artifact) => artifact.matchLineageKey),
       });
       console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
         stage: "coach_publish_request",
@@ -72,6 +103,7 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         target.weeklySync.writerSecret,
         artifactSet,
         target.weeklySync.apiBaseUrl,
+        traceId,
       );
 
       console.log("[COACH_OVERLAY_SYNC_TRACE]", {

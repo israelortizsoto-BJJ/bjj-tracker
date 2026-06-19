@@ -1,5 +1,6 @@
 import { getCoachSyncApiBaseUrl, logSyncBaseUrlTrace } from "../config/coachSync";
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
+import { OVERLAY_FORENSIC_TRACE_HEADER } from "../dev/overlayForensicTrace";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import {
   IdentityDuplicateRiskBlockedError,
@@ -642,6 +643,7 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
   writerSecret: string,
   body: CoachWeeklySyncPutCoachMatchBreakdownArtifactsBody,
   apiBaseUrlOverride?: string | null,
+  traceId?: string | null,
 ): Promise<void> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
@@ -661,12 +663,27 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
     sharedCompetitionIds: [...new Set(body.artifacts.map((artifact) => artifact.sharedCompetitionId))],
     lineageIds: body.artifacts.map((artifact) => artifact.matchLineageKey),
   });
+  const tokenSuffix = linkToken.trim().slice(-8);
+  const overlayTraceId = traceId?.trim() || null;
+  console.log("[OVERLAY_FORENSIC]", {
+    stage: "publish_http_request",
+    traceId: overlayTraceId,
+    timestamp: new Date().toISOString(),
+    sourceFile: "coachWeeklySyncApi.ts",
+    tokenSuffix,
+    sharedAthleteId: body.sharedAthleteId,
+    sharedCompetitionId: body.artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: body.artifacts[0]?.matchLineageKey ?? null,
+    artifactCount: body.artifacts.length,
+    updatedAt: body.updatedAt,
+  });
   const res = await fetch(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${writerSecret}`,
+      ...(overlayTraceId ? { [OVERLAY_FORENSIC_TRACE_HEADER]: overlayTraceId } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -682,6 +699,18 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
       sharedAthleteId: body.sharedAthleteId,
       artifactCount: body.artifacts.length,
     });
+    console.log("[OVERLAY_FORENSIC]", {
+      stage: "publish_http_failure",
+      traceId: overlayTraceId,
+      timestamp: new Date().toISOString(),
+      sourceFile: "coachWeeklySyncApi.ts",
+      status: res.status,
+      error: msg,
+      sharedAthleteId: body.sharedAthleteId,
+      sharedCompetitionId: body.artifacts[0]?.sharedCompetitionId ?? null,
+      matchLineageKey: body.artifacts[0]?.matchLineageKey ?? null,
+      artifactCount: body.artifacts.length,
+    });
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
   console.log("[COACH_OVERLAY_SYNC_TRACE]", {
@@ -690,6 +719,17 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
     path,
     httpStatus: res.status,
     sharedAthleteId: body.sharedAthleteId,
+    artifactCount: body.artifacts.length,
+  });
+  console.log("[OVERLAY_FORENSIC]", {
+    stage: "publish_http_success",
+    traceId: overlayTraceId,
+    timestamp: new Date().toISOString(),
+    sourceFile: "coachWeeklySyncApi.ts",
+    status: res.status,
+    sharedAthleteId: body.sharedAthleteId,
+    sharedCompetitionId: body.artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: body.artifacts[0]?.matchLineageKey ?? null,
     artifactCount: body.artifacts.length,
   });
 }

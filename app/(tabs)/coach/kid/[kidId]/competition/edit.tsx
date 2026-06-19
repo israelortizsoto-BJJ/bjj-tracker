@@ -61,6 +61,7 @@ import {
   logCompPublishGuard,
   logCompSave,
 } from "@/src/dev/competitionMutationDevLog";
+import { createOverlayForensicTraceId } from "@/src/dev/overlayForensicTrace";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
 import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
 import type { CoachMatchBreakdownOverlay } from "@/src/types/coachMatchBreakdownOverlay";
@@ -727,6 +728,7 @@ export default function KidCompetitionEditScreen() {
           path: "overlay",
           overlayCount: matches.length,
         });
+        const overlayForensicTraceId = createOverlayForensicTraceId(overlayScope.sharedAthleteId);
         for (const [sequenceIndex, match] of matches.entries()) {
           console.log("[OVERLAY_SERIAL_SAVE]", {
             matchId: match.id,
@@ -741,6 +743,7 @@ export default function KidCompetitionEditScreen() {
             patch: {
               coachNote: match.coachNote?.trim() || null,
             },
+            traceId: overlayForensicTraceId,
           });
         }
         logSaveLifecycleTrace("mutation_complete", {
@@ -773,6 +776,7 @@ export default function KidCompetitionEditScreen() {
         schedulePublishCoachMatchBreakdownArtifacts({
           sharedAthleteId: overlayScope.sharedAthleteId,
           kidId,
+          traceId: overlayForensicTraceId,
         });
         if (__DEV__) {
           console.log("[COMP_EDITOR_TRACE] editor_overlay_saved", {

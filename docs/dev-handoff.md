@@ -1,4 +1,1424 @@
 # BJJ Tracker - Dev Handoff Notes
+# DEBUGGING REMINDER
+
+Facts before fixes.
+Trace before mutation.
+Protected systems remain locked until evidence proves ownership.
+
+Reference:
+master-prompt-developer.md
+→ DEBUG DOCTRINE
+
+
+OVERLAY FORENSIC TOOLKIT
+
+Document:
+
+Primary tag:
+[OVERLAY_FORENSIC]
+
+Primary correlation key:
+traceId
+
+Primary investigation flow:
+
+1. overlay_write_complete
+2. overlay_list_for_publish
+3. artifact_build_input
+4. artifact_build_output
+5. publish_schedule_payload
+6. publish_http_request
+7. publish_http_success
+8. worker_store_artifact_set
+9. worker_get_artifact_set
+
+And explicitly document:
+
+If a coach note does not hydrate:
+
+Step 1:
+Search traceId from overlay_write_complete
+
+Step 2:
+Determine first missing stage
+
+If missing after overlay_write_complete
+→ local overlay storage issue
+
+If missing after artifact_build_input
+→ artifact filtering issue
+
+If missing after publish_http_request
+→ network transport issue
+
+If missing after worker_store_artifact_set
+→ worker persistence issue
+
+If present through worker_get_artifact_set
+→ parent hydration/render issue
+# EOD DEV HANDOFF
+
+## Dates: 2026-06-16 → 2026-06-17
+
+### Branch
+
+```txt
+rollback-pre-lineage-regression
+```
+
+---
+
+# EXECUTIVE SUMMARY
+
+The competition platform remains on the strongest architectural floor it has ever had.
+
+The following systems remain stable:
+
+```txt
+canonical authority
+topology replay
+overlay isolation
+lineage ownership
+competition persistence
+hydration orchestration
+coach local review storage
+save lifecycle
+navigation lifecycle
+```
+
+The active issue is now isolated to:
+
+```txt
+Coach Match Breakdown
+Parent Hydration / Render Lane
+```
+
+This is no longer an architecture problem.
+
+This is now a bounded transport + hydrate + attach investigation.
+
+---
+
+# MAJOR ACCOMPLISHMENTS
+
+## 1. Replay-Safe Competition Topology Remains Stable
+
+No evidence found of:
+
+```txt
+authority corruption
+overlay corruption
+lineage corruption
+competition mutation corruption
+```
+
+Competition system continues operating as:
+
+```txt
+governed replay-safe distributed topology architecture
+```
+
+This remains a major milestone.
+
+---
+
+## 2. Coach Overlay Ownership Doctrine Confirmed
+
+Ownership remains:
+
+### Parent
+
+Owns:
+
+```txt
+competition facts
+results
+matches
+placements
+scores
+canonical competition record
+```
+
+### Coach
+
+Owns:
+
+```txt
+analysis
+match breakdown
+transcript
+coaching observations
+overlay interpretation
+```
+
+This separation remains intact.
+
+No regression observed.
+
+---
+
+## 3. Match Breakdown Persistence Stabilized
+
+Prior work successfully stabilized:
+
+```txt
+save lifecycle
+overlay lineage
+attachment identity
+bounded coach ownership
+```
+
+Evidence suggests:
+
+Coach device is saving correctly.
+
+Current suspicion is no longer:
+
+```txt
+save failure
+```
+
+Current suspicion is:
+
+```txt
+post-save transport / hydrate failure
+```
+
+---
+
+## 4. Developer Operating Doctrine Upgraded
+
+Master prompt updated with:
+
+```txt
+DEBUG DOCTRINE
+```
+
+Key additions:
+
+```txt
+facts before fixes
+trace before mutation
+prove failure layer first
+repo truth > memory
+protected systems locked
+small blast radius
+```
+
+This should significantly reduce future drift.
+
+---
+
+# CURRENT ACTIVE ISSUE
+
+## Symptom
+
+Coach creates:
+
+```txt
+match breakdown
+transcript
+analysis
+```
+
+Coach side displays correctly.
+
+Parent side does NOT consistently display breakdown content.
+
+---
+
+# CURRENT HYPOTHESIS
+
+The breakdown is disappearing somewhere within:
+
+```txt
+coach publish
+↓
+worker persistence
+↓
+worker GET payload
+↓
+parent hydrate
+↓
+artifact normalization
+↓
+artifact store
+↓
+merge attachment
+↓
+parent render
+```
+
+The failure has NOT yet been proven.
+
+Only bounded.
+
+---
+
+# FAILURE ZONES
+
+## Candidate A
+
+Worker persistence succeeds.
+
+Worker GET response omits:
+
+```txt
+coachMatchBreakdownArtifacts
+```
+
+Result:
+
+Parent never receives artifact.
+
+---
+
+## Candidate B
+
+GET response contains artifact.
+
+Hydrate layer strips artifact.
+
+Result:
+
+Artifact arrives.
+
+Artifact never reaches store.
+
+---
+
+## Candidate C
+
+Artifact reaches store.
+
+Attachment logic fails.
+
+Result:
+
+Artifact exists.
+
+Never attaches to match.
+
+---
+
+## Candidate D
+
+Artifact attaches correctly.
+
+Render layer hides it.
+
+Result:
+
+Data exists.
+
+UI never shows it.
+
+---
+
+# IMPORTANT DISCIPLINE
+
+DO NOT:
+
+```txt
+change authority
+change topology
+change replay
+change lineage
+change ownership
+change hydration architecture
+```
+
+until exact failure layer is proven.
+
+The system is healthy enough now that broad mutation would create more risk than value.
+
+---
+
+# NEXT RESTART PLAN
+
+## PHASE 1
+
+Begin with questions.
+
+NO CODING.
+
+NO CURSOR.
+
+NO CODEX.
+
+Gather evidence first.
+
+---
+
+# QUESTIONS TO ANSWER
+
+## Question 1
+
+When breakdown is saved:
+
+```txt
+Does coach still see it after:
+- app restart?
+- cold boot?
+- athlete switch?
+```
+
+If yes:
+
+```txt
+local persistence works
+```
+
+---
+
+## Question 2
+
+Does worker actually receive artifact?
+
+Need proof from:
+
+```txt
+publish payload
+```
+
+Questions:
+
+```txt
+Is coachMatchBreakdownArtifacts present?
+How many artifacts?
+Expected lineage keys?
+```
+
+---
+
+## Question 3
+
+Does worker persist artifact?
+
+Need proof from:
+
+```txt
+worker storage
+```
+
+Questions:
+
+```txt
+Artifact count?
+Artifact payload?
+Stored lineage?
+```
+
+---
+
+## Question 4
+
+Does parent GET receive artifact?
+
+Need proof from:
+
+```txt
+GET payload
+```
+
+Questions:
+
+```txt
+Artifact present?
+Artifact count?
+Artifact lineage?
+```
+
+---
+
+## Question 5
+
+Does hydrate normalize artifact?
+
+Need proof from:
+
+```txt
+parent hydrate logs
+```
+
+Questions:
+
+```txt
+Artifact count before normalize?
+Artifact count after normalize?
+```
+
+---
+
+## Question 6
+
+Does merge attach artifact?
+
+Need proof from:
+
+```txt
+mergeCoachBreakdownIntoMatches
+```
+
+Questions:
+
+```txt
+Artifacts available?
+Lineage match found?
+Attachment success?
+```
+
+---
+
+## Question 7
+
+Does render receive breakdown?
+
+Need proof from:
+
+```txt
+MatchCard
+Competition Summary
+Competition Detail
+```
+
+Questions:
+
+```txt
+Breakdown present in props?
+Rendered?
+Suppressed?
+```
+
+---
+
+# FIRST RESTART OBJECTIVE
+
+At next startup we should be able to answer:
+
+```txt
+What is the FIRST layer where the artifact disappears?
+```
+
+NOT:
+
+```txt
+How do we fix it?
+```
+
+That distinction is critical.
+
+---
+
+# SUCCESS CONDITION
+
+By next session we should produce:
+
+```txt
+Coach Save
+✓
+
+Worker Persist
+✓
+
+Worker GET
+✓
+
+Parent Hydrate
+✓
+
+Store
+✓
+
+Merge
+✓
+
+Render
+✗
+```
+
+or
+
+```txt
+Coach Save
+✓
+
+Worker Persist
+✓
+
+Worker GET
+✗
+```
+
+or similar.
+
+Once the first failing layer is proven, the actual fix should become small, surgical, and low-risk.
+
+---
+
+# MORNING RESTART REMINDER
+
+```txt
+FACTS BEFORE FIXES
+
+Trace before mutation.
+
+Identify the first failing layer.
+
+Do not modify protected systems until evidence proves ownership.
+```
+
+That should be the opening frame for the next engineering session.
+
+
+# 2026-06-08 → 2026-06-09
+
+## Branch
+
+```text
+rollback-pre-lineage-regression
+```
+
+Latest key commits:
+
+```text
+3f310f7 Add topology publication and hydration proof instrumentation
+1cc0ee4 Use Expo File directly for transcription multipart uploads
+2238e4a Expose transcription runtime exceptions for release QA
+7a41616 Replace transcription upload transport with Expo file upload pipeline
+44eb493 Align topology arbitration semantics with aggregate synchronization
+```
+
+Repo status at close:
+
+```text
+working tree clean
+```
+
+---
+
+# PRIMARY OBJECTIVE
+
+Validate end-to-end competition review workflow:
+
+```text
+Parent Competition
+↓
+Coach Match Breakdown
+↓
+Voice Recording
+↓
+Transcription
+↓
+Coach Hydration
+↓
+Parent Hydration
+```
+
+while continuing topology publication investigation.
+
+---
+
+# MAJOR WIN #1
+
+## Coach Transcription Pipeline — RESOLVED
+
+### Original Symptoms
+
+Coach recording produced:
+
+```text
+Could not transcribe.
+Try again.
+```
+
+No useful diagnostics.
+
+---
+
+## Investigation Chain
+
+### Phase 1
+
+Runtime exception exposure added.
+
+Discovered:
+
+```text
+Creating blobs from 'ArrayBuffer'
+and 'ArrayBufferView'
+are not supported
+```
+
+---
+
+### Phase 2
+
+Repo investigation traced failure to:
+
+```ts
+audioFile.slice(...)
+```
+
+inside:
+
+```text
+competitionMatchEditor.tsx
+```
+
+which internally became:
+
+```text
+File.slice()
+↓
+bytesSync()
+↓
+Uint8Array
+↓
+Blob(Uint8Array)
+```
+
+and failed on TestFlight.
+
+---
+
+### Phase 3
+
+Transport repaired.
+
+Removed:
+
+```ts
+audioFile.slice(...)
+```
+
+Removed manual Blob construction.
+
+Moved to:
+
+```ts
+formData.append("file", audioFile)
+```
+
+using Expo File.
+
+---
+
+### Phase 4
+
+Authentication failure exposed.
+
+New runtime error:
+
+```text
+Incorrect API key provided:
+sk-YOUR_OPENAI_KEY
+```
+
+---
+
+### Root Cause
+
+EAS Production environment contained:
+
+```text
+EXPO_PUBLIC_OPENAI_API_KEY=sk-YOUR_OPENAI_KEY
+```
+
+Placeholder value.
+
+Not a real key.
+
+---
+
+### Resolution
+
+Created real OpenAI key.
+
+Updated:
+
+```text
+EXPO_PUBLIC_OPENAI_API_KEY
+```
+
+inside EAS Production environment.
+
+Rebuilt TestFlight.
+
+---
+
+## Final Validation
+
+Successfully verified:
+
+```text
+Record Audio
+↓
+Upload
+↓
+Whisper
+↓
+Transcript
+↓
+Save
+↓
+Coach Hydration
+↓
+Parent Hydration
+```
+
+Examples validated on device.
+
+### Status
+
+```text
+RESOLVED
+```
+
+---
+
+# MAJOR WIN #2
+
+## Coach Breakdown Sync — VERIFIED
+
+Verified:
+
+```text
+Coach Match Breakdown
+↓
+Competition Card
+↓
+Parent App
+↓
+Coach App
+```
+
+Hydrates correctly.
+
+Voice → Transcript → Match Breakdown path operational.
+
+---
+
+# MAJOR WIN #3
+
+## Competition Summary Parity
+
+Validated:
+
+Parent:
+
+```text
+15-5
+```
+
+Coach:
+
+```text
+15-5
+```
+
+Aggregate publication healthy.
+
+### Status
+
+```text
+PASS
+```
+
+---
+
+# TOPOLOGY INVESTIGATION
+
+## Original Reproduction
+
+Comp 9
+
+Parent:
+
+```text
+2 matches
+```
+
+Coach:
+
+```text
+Competition appears
+Record updates
+Only Match 1 visible
+```
+
+Parent:
+
+```text
+Open competition
+Press Save
+(no meaningful edits)
+```
+
+Coach:
+
+```text
+Match 2 immediately appears
+```
+
+---
+
+## Investigation Findings
+
+Repo evidence disproved:
+
+```text
+Topology builder reading stale detail
+before persistence completes
+```
+
+because:
+
+```ts
+await setCompetitionDetailForEntry(...)
+```
+
+completes before topology scheduling.
+
+---
+
+## Important Discovery
+
+Topology publication is:
+
+```text
+fire-and-forget
+```
+
+Save flow does not wait for:
+
+```text
+Topology PUT success
+```
+
+---
+
+## Worker Arbitration Mismatch
+
+Coach store:
+
+```text
+Equal timestamp
+Different payload
+↓
+ACCEPT
+```
+
+Worker:
+
+```text
+Equal timestamp
+Different payload
+↓
+409 REJECT
+```
+
+Found in:
+
+```text
+coach-sync-worker/src/index.ts
+```
+
+This creates divergence between:
+
+```text
+Worker acceptance
+Coach acceptance
+```
+
+---
+
+## Instrumentation Added
+
+Commit:
+
+```text
+3f310f7
+```
+
+Added:
+
+### Parent
+
+```text
+[COMP_TOPOLOGY_TRACE]
+```
+
+* build_ok
+* put_request_payload
+* put_http_ok
+* put_http_failed
+
+---
+
+### Worker
+
+```text
+[COMP_TOPOLOGY_TRACE]
+```
+
+* worker_request_received
+* worker_store_ok
+* worker_reject_stale
+* worker_reject_equal_timestamp_conflict
+
+---
+
+### Coach
+
+```text
+[COACH_TOPOLOGY_TRACE]
+```
+
+* worker_get_topology
+* coach_topology_store_write
+* coach_topology_store_reject
+* coach_compete_projection
+
+---
+
+# LATE-DAY QA RESULTS
+
+## Comp 10
+
+Hydrated correctly.
+
+No intervention.
+
+---
+
+## Comp 11
+
+Hydrated correctly.
+
+Both matches visible.
+
+Transcription successful.
+
+Coach hydration successful.
+
+Parent hydration successful.
+
+---
+
+## Comp 12+
+
+Hydrated correctly.
+
+Observation:
+
+Sometimes user must:
+
+```text
+Navigate away
+↓
+Return to Compete
+```
+
+before newest data appears.
+
+This now looks more like:
+
+```text
+Mounted screen refresh
+Projection invalidation
+Recompute timing
+```
+
+than:
+
+```text
+Data loss
+```
+
+---
+
+# CURRENT SYSTEM HEALTH
+
+## Competition
+
+```text
+GOOD
+```
+
+---
+
+## Topology
+
+```text
+MOSTLY STABLE
+```
+
+Need more runtime evidence.
+
+---
+
+## Coach Review
+
+```text
+GOOD
+```
+
+---
+
+## Parent ↔ Coach Sync
+
+```text
+GOOD
+```
+
+---
+
+## Transcription
+
+```text
+GOOD
+```
+
+---
+
+# PRODUCT STRATEGY DISCUSSION
+
+## Future Coach Video Architecture
+
+Decision direction:
+
+Do NOT store coach video inside canonical competition records.
+
+Avoid:
+
+```text
+Competition
+└── Match
+     └── Video
+```
+
+because it reintroduces authority complexity.
+
+---
+
+## Proposed Future Architecture
+
+### Canonical Competition
+
+Parent-owned facts:
+
+```text
+Results
+Matches
+Placement
+Time
+Submission
+Opponent
+```
+
+---
+
+### Coach Review Overlay
+
+Coach-owned:
+
+```text
+Breakdowns
+Transcripts
+Observations
+```
+
+---
+
+### Match Study Library
+
+Future coach-owned domain:
+
+```text
+Video
+Transcript
+Tags
+AI Findings
+Recommendations
+```
+
+References competitions.
+
+Does not live inside competitions.
+
+---
+
+## Future App Placement
+
+No new tab.
+
+Compete remains:
+
+```text
+What happened?
+```
+
+Coach becomes:
+
+```text
+What should we do next?
+```
+
+Future Coach tab evolves into:
+
+```text
+Weekly
+Signals
+Match Studies
+Pattern Engine
+Recommendations
+```
+
+---
+
+# PREMIUM TIER VISION
+
+## Coach Tags Moments
+
+Coach watches video.
+
+Adds structured tags:
+
+Examples:
+
+```text
+Head Position Lost
+Good Entry
+Guard Retention Failure
+Triangle Finish
+```
+
+with timestamps.
+
+---
+
+## AI Findings
+
+AI summarizes:
+
+```text
+What happened
+```
+
+from tags + transcript.
+
+---
+
+## Pattern Engine
+
+Across many matches:
+
+```text
+Recurring weaknesses
+Recurring strengths
+Recurring positions
+Recurring mistakes
+```
+
+Example:
+
+```text
+Inside-control collapse
+appears in 67% of losses.
+```
+
+---
+
+## Opportunity Ranking
+
+AI identifies:
+
+```text
+Highest-impact weakness
+```
+
+not simply most frequent weakness.
+
+---
+
+## Recommendation Engine
+
+Outputs:
+
+```text
+Training focus
+Drill priorities
+Competition preparation
+```
+
+based on historical patterns.
+
+---
+
+# NEXT QA PHASE (2026-06-10)
+
+## Real Athlete Stress Test
+
+Keep existing athlete:
+
+```text
+Israel
+```
+
+intact.
+
+Do NOT delete.
+
+Acts as:
+
+```text
+Known-good baseline
+```
+
+---
+
+Add:
+
+```text
+Luca
+```
+
+Real athlete.
+
+---
+
+Add:
+
+```text
+iOS
+```
+
+Real athlete.
+
+---
+
+Purpose:
+
+```text
+3-athlete stress test
+```
+
+Validate:
+
+* athlete isolation
+* competition hydration
+* coach notes
+* transcriptions
+* summary parity
+* fast switching
+* close/reopen behavior
+
+---
+
+## QA Focus
+
+### Athlete Isolation
+
+Verify:
+
+```text
+Luca data
+never appears under iOS
+
+iOS data
+never appears under Luca
+```
+
+---
+
+### Fast Switching
+
+```text
+Israel
+↓
+Luca
+↓
+iOS
+↓
+Israel
+```
+
+Check:
+
+* Summary
+* Compete
+* Coach notes
+
+---
+
+### Hard Close Validation
+
+Parent:
+
+```text
+close
+reopen
+```
+
+Coach:
+
+```text
+close
+reopen
+```
+
+Verify:
+
+* competitions
+* summaries
+* coach notes
+* transcriptions
+
+---
+
+# END OF DAY STATUS
+
+## Architecture Confidence
+
+```text
+HIGHER
+```
+
+## Transcription
+
+```text
+PASS
+```
+
+## Competition Review Workflow
+
+```text
+PASS
+```
+
+## Coach Hydration
+
+```text
+PASS
+```
+
+## Parent Hydration
+
+```text
+PASS
+```
+
+## Remaining Investigation
+
+```text
+Compete mounted-screen refresh behavior
+and topology publication proof traces
+```
+
+No active evidence of data corruption.
+
+System is in the strongest state observed since beginning the topology stabilization effort.
 
 
 

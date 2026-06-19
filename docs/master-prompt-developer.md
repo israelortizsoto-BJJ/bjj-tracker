@@ -34,7 +34,167 @@ WITHOUT architecture mutation
 
 
 Operating Note
+==================================================
+DEBUG DOCTRINE (NON-NEGOTIABLE)
+==================================================
+OBSERVABILITY FIRST
 
+Before investigating a bug:
+
+1. Determine whether production diagnostics can answer it.
+2. Determine whether existing trace signals can answer it.
+3. Determine whether worker payload inspection can answer it.
+
+Only after exhausting observability:
+
+- inspect code
+- propose fixes
+- modify architecture
+
+Never spend hours proving code paths if a runtime signal can answer the question directly.
+
+FACTS BEFORE FIXES
+
+The repository has repeatedly demonstrated that:
+
+local runtime bugs
+can appear identical to:
+
+- sync bugs
+- hydration bugs
+- authority bugs
+- topology bugs
+- overlay bugs
+
+until proven otherwise.
+
+Because of this:
+
+NEVER PATCH BEFORE PROVING.
+
+--------------------------------------------------
+RULE 1 — PROVE THE FAILURE LAYER
+--------------------------------------------------
+
+Before modifying code:
+
+identify the exact layer failing.
+
+Example:
+
+UI
+→ projection
+→ merge
+→ hydrate
+→ storage
+→ sync
+→ worker
+
+Do not investigate multiple layers simultaneously.
+
+--------------------------------------------------
+RULE 2 — TRACE BEFORE MUTATION
+--------------------------------------------------
+
+For any bug:
+
+1. reproduce
+2. capture evidence
+3. isolate layer
+4. prove ownership
+5. identify root cause
+6. THEN modify code
+
+No speculative fixes.
+
+--------------------------------------------------
+RULE 3 — PROTECTED SYSTEMS ARE LOCKED
+--------------------------------------------------
+
+Do not modify:
+
+- canonical authority
+- hydration orchestration
+- replay systems
+- topology systems
+- lineage systems
+- sync systems
+- athlete isolation
+
+unless evidence explicitly proves the bug exists there.
+
+--------------------------------------------------
+RULE 4 — REPO TRUTH > MEMORY
+--------------------------------------------------
+
+Never assume:
+
+- callsites
+- ownership
+- save paths
+- hydrate paths
+- delete paths
+- projection paths
+
+Verify every time.
+
+Search repository first.
+
+--------------------------------------------------
+RULE 5 — SMALL BLAST RADIUS
+--------------------------------------------------
+
+Fix the narrowest proven layer.
+
+Avoid:
+
+- rewrites
+- architecture changes
+- cleanup passes
+- opportunistic refactors
+
+during active debugging.
+
+--------------------------------------------------
+RULE 6 — VALIDATE AFTER EVERY CHANGE
+--------------------------------------------------
+
+After each change:
+
+- prove bug still exists OR
+- prove bug resolved
+
+Never stack multiple speculative fixes.
+
+--------------------------------------------------
+RULE 7 — STOP WHEN EVIDENCE CHANGES
+--------------------------------------------------
+
+If investigation disproves the current theory:
+
+stop.
+
+Update the model.
+
+Re-scope investigation.
+
+Do not continue implementing against a disproven assumption.
+
+--------------------------------------------------
+SUCCESS CRITERIA
+--------------------------------------------------
+
+Evidence
+→ Root Cause
+→ Surgical Fix
+→ Validation
+
+NOT:
+
+Assumption
+→ Patch
+→ More Patches
+→ Architecture Damage
 Use terminal-first updates for:
 
 * prompt files
