@@ -26,20 +26,10 @@ import type {
   BuildAthleteAuthoritySnapshotOptions,
 } from "./types";
 
-export type LinkedKidForParentAthleteOptions = Record<string, never>;
-
-export function linkedKidIdForParentAthlete(
-  kidsById: KidsById,
-  athleteId: string,
-): string | null {
-  const aid = typeof athleteId === "string" ? athleteId.trim() : "";
-  if (!aid) return null;
-  for (const k of Object.values(kidsById)) {
-    if (!k?.id) continue;
-    if ((k.sharedAthleteId ?? "").trim() === aid) return k.id;
-  }
-  return null;
-}
+export {
+  linkedKidIdForParentAthlete,
+  type LinkedKidForParentAthleteOptions,
+} from "./linkedKidIdForParentAthlete";
 
 export function traceAthleteAuthoritySnapshotDev(_payload: Record<string, unknown>): void {}
 
@@ -286,6 +276,9 @@ async function buildSnapshotCore(
     loadedKids,
     authorityBootstrapState,
     coachOperatingAthleteChoices,
+    parentActiveAthleteId: storedNorm,
+    coachSessionRefreshDegraded,
+    linkedSharedAthleteIds: [...linkedIdSet].sort((a, b) => a.localeCompare(b)),
     meta: observability,
   };
 

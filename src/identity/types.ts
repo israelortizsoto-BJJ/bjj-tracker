@@ -29,6 +29,10 @@ export type AthleteAuthoritySnapshot = {
   loadedKids: KidsById;
   authorityBootstrapState: AthleteAuthorityBootstrapState;
   coachOperatingAthleteChoices: ParentAthlete[];
+  /** Persisted `StorageKeys.parentActiveAthleteId` at snapshot read time (pre-resolution). */
+  parentActiveAthleteId: string;
+  coachSessionRefreshDegraded: boolean;
+  linkedSharedAthleteIds: string[];
   meta?: AthleteAuthoritySnapshotMeta;
 };
 
