@@ -105,3 +105,10 @@ export {
   exportIncidentBundleJson,
   type ExportIncidentBundleJsonResult,
 } from "./exportIncidentBundleJson";
+export {
+  formatIncidentCaptureStageReadout,
+  isRecentIncompleteCapture,
+  loadIncidentCaptureDebugRecord,
+  type IncidentCaptureDebugRecord,
+  type IncidentCaptureStage,
+} from "./incidentCaptureDebug";

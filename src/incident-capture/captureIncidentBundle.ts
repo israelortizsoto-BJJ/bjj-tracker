@@ -18,6 +18,7 @@ import type {
   IncidentBundleDeviceContext,
   resolveIncidentBundleDeviceContext,
 } from "./resolveIncidentBundleDeviceContext";
+import type { PersistCaptureStage } from "./incidentCaptureDebug";
 import { validateIncidentBundle } from "./validateIncidentBundle";
 
 export type CaptureIncidentBundleOptions = {
@@ -51,6 +52,7 @@ export type CaptureIncidentBundleDeps = {
       Parameters<typeof resolveIncidentBundleDeviceContext>[0]["readBuildNumber"]
     >;
   }>;
+  persistCaptureStage?: PersistCaptureStage;
 };
 
 function assertCaptureInputs(options: CaptureIncidentBundleOptions): void {
@@ -150,29 +152,48 @@ async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
   return productionDepsPromise;
 }
 
+async function resolvePersistCaptureStage(
+  deps: CaptureIncidentBundleDeps,
+): Promise<PersistCaptureStage> {
+  if (deps.persistCaptureStage) return deps.persistCaptureStage;
+  const { persistIncidentCaptureStage } = await import("./incidentCaptureDebug");
+  return async (stage, correlationId) => {
+    await persistIncidentCaptureStage(stage, correlationId);
+  };
+}
+
 async function captureParentArtifacts(
   options: CaptureIncidentBundleOptions,
   capturedAt: string,
   deps: CaptureIncidentBundleDeps,
+  persist: PersistCaptureStage,
 ): Promise<IncidentBundleV1["artifacts"]> {
+  const correlationId = options.incidentCorrelationId.trim();
+
+  await persist("pre_authority", correlationId);
   const authority = await deps.captureAuthoritySnapshot({
     deviceRole: "parent",
     sourceTrigger: "export",
     skipCoachWriterSessionRefresh: true,
     capturedAt,
   });
+  await persist("post_authority", correlationId);
 
+  await persist("pre_hydration", correlationId);
   const hydration = await deps.captureHydrationSnapshot({
     deviceRole: "parent",
     captureMode: "read_only_state",
     sourceTrigger: "export",
     capturedAt,
   });
+  await persist("post_hydration", correlationId);
 
+  await persist("pre_worker", correlationId);
   const workerSession = await deps.captureWorkerSessionSnapshot({
     deviceRole: "parent",
     capturedAt,
   });
+  await persist("post_worker", correlationId);
 
   return { authority, hydration, workerSession };
 }
@@ -181,7 +202,11 @@ async function captureCoachArtifacts(
   options: CaptureIncidentBundleOptions,
   capturedAt: string,
   deps: CaptureIncidentBundleDeps,
+  persist: PersistCaptureStage,
 ): Promise<IncidentBundleV2["artifacts"]> {
+  const correlationId = options.incidentCorrelationId.trim();
+
+  await persist("pre_authority", correlationId);
   const substrate = await deps.buildAthleteAuthoritySnapshot({
     parentRole: "coach",
     observability: { sourceTrigger: "export", role: "coach" },
@@ -193,7 +218,9 @@ async function captureCoachArtifacts(
     capturedAt,
     sourceTrigger: "export",
   });
+  await persist("post_authority", correlationId);
 
+  await persist("pre_hydration", correlationId);
   const hydration = await deps.captureHydrationSnapshot({
     deviceRole: "coach",
     captureMode: "shared_authority_reconcile",
@@ -203,17 +230,22 @@ async function captureCoachArtifacts(
     sourceTrigger: "export",
     capturedAt,
   });
+  await persist("post_hydration", correlationId);
 
+  await persist("pre_worker", correlationId);
   const workerSession = await deps.captureWorkerSessionSnapshot({
     deviceRole: "coach",
     capturedAt,
   });
+  await persist("post_worker", correlationId);
 
+  await persist("pre_topology", correlationId);
   const topology = await deps.captureTopologySnapshot({
     authority,
     sourceTrigger: "export",
     capturedAt,
   });
+  await persist("post_topology", correlationId);
 
   return { authority, hydration, workerSession, topology };
 }
@@ -238,6 +270,8 @@ export async function captureIncidentBundle(
 
   const capturedAt = options.capturedAt ?? new Date().toISOString();
   const platform = options.platform ?? resolvedDeps.resolvePlatform();
+  const correlationId = options.incidentCorrelationId.trim();
+  const persist = await resolvePersistCaptureStage(resolvedDeps);
 
   const contextDeps = await resolvedDeps.readProductionContextDeps();
   const deviceContext: IncidentBundleDeviceContext = await resolvedDeps.resolveDeviceContext({
@@ -249,27 +283,42 @@ export async function captureIncidentBundle(
   const envelope = assembleIncidentBundleEnvelope({
     ...deviceContext,
     capturedAt,
-    incidentCorrelationId: options.incidentCorrelationId.trim(),
+    incidentCorrelationId: correlationId,
   });
 
   if (options.deviceRole === "parent") {
-    const artifacts = await captureParentArtifacts(options, capturedAt, resolvedDeps);
+    const artifacts = await captureParentArtifacts(options, capturedAt, resolvedDeps, persist);
+
+    await persist("pre_bundle_assembly", correlationId);
     const bundle: IncidentBundleV1 = {
       ...envelope,
       artifacts,
     };
+    await persist("post_bundle_assembly", correlationId);
+
+    await persist("pre_validation", correlationId);
     resolvedDeps.validateBundle(bundle);
+    await persist("post_validation", correlationId);
+
+    await persist("capture_complete", correlationId);
     return bundle;
   }
 
-  const artifacts = await captureCoachArtifacts(options, capturedAt, resolvedDeps);
+  const artifacts = await captureCoachArtifacts(options, capturedAt, resolvedDeps, persist);
+
+  await persist("pre_bundle_assembly", correlationId);
   const bundle: IncidentBundleV2 = {
     ...envelope,
     bundleVersion: INCIDENT_BUNDLE_V2_CONTRACT_VERSION,
     deviceRole: "coach",
     artifacts,
   };
+  await persist("post_bundle_assembly", correlationId);
 
+  await persist("pre_validation", correlationId);
   resolvedDeps.validateBundle(bundle);
+  await persist("post_validation", correlationId);
+
+  await persist("capture_complete", correlationId);
   return bundle;
 }

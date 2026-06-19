@@ -166,6 +166,7 @@ function coachDeps(
       getAppVariant: () => "dev" as const,
       readBuildNumber: () => "4",
     }),
+    persistCaptureStage: async () => {},
     ...overrides,
   };
 }

@@ -18,7 +18,11 @@ import {
 import {
   captureIncidentBundle,
   exportIncidentBundleJson,
+  formatIncidentCaptureStageReadout,
   generateIncidentCorrelationId,
+  isRecentIncompleteCapture,
+  loadIncidentCaptureDebugRecord,
+  type IncidentCaptureDebugRecord,
 } from "../../../src/incident-capture";
 
 import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
@@ -204,7 +208,9 @@ export default function DevSettingsScreen() {
   const [incidentCorrelationId, setIncidentCorrelationId] = useState("");
   const [isExportingIncidentBundle, setIsExportingIncidentBundle] = useState(false);
   const [lastExportStage, setLastExportStage] = useState<IncidentExportDebugRecord | null>(null);
+  const [lastCaptureStage, setLastCaptureStage] = useState<IncidentCaptureDebugRecord | null>(null);
   const postCrashAlertShownRef = useRef(false);
+  const postCaptureCrashAlertShownRef = useRef(false);
 
   console.log("[DEV SETTINGS DEBUG]", {
     isDev: isDev(),
@@ -240,6 +246,20 @@ export default function DevSettingsScreen() {
         );
       }
 
+      const captureDebug = await loadIncidentCaptureDebugRecord();
+      setLastCaptureStage(captureDebug);
+      if (
+        captureDebug &&
+        isRecentIncompleteCapture(captureDebug) &&
+        !postCaptureCrashAlertShownRef.current
+      ) {
+        postCaptureCrashAlertShownRef.current = true;
+        Alert.alert(
+          "Capture may have crashed",
+          `Last completed stage: ${captureDebug.stage}\nCorrelation ID: ${captureDebug.correlationId}`,
+        );
+      }
+
       setReady(true);
     })();
   }, [canShowDevSettings]);
@@ -263,6 +283,7 @@ export default function DevSettingsScreen() {
         deviceRole: role,
         incidentCorrelationId: correlationId,
       });
+      setLastCaptureStage(await loadIncidentCaptureDebugRecord());
       setLastExportStage(await persistIncidentExportStage("post_capture", { correlationId }));
 
       await persistIncidentExportStage("pre_stringify", { correlationId });
@@ -544,6 +565,9 @@ export default function DevSettingsScreen() {
           </Text>
           <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.7 }}>
             Last export stage: {formatIncidentExportStageReadout(lastExportStage)}
+          </Text>
+          <Text style={{ marginTop: 6, fontSize: 13, opacity: 0.7 }}>
+            Last capture stage: {formatIncidentCaptureStageReadout(lastCaptureStage)}
           </Text>
           <Text style={{ marginTop: 12, fontSize: 14 }}>Correlation ID</Text>
           <TextInput
