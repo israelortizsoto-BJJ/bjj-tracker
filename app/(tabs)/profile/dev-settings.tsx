@@ -1,7 +1,8 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Stack, router, type Href } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import * as FileSystem from "expo-file-system/legacy";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Button,
@@ -41,6 +42,75 @@ import {
 } from "../../../src/dev/seedCoachKids";
 import { useDeviceRole } from "../../../src/deviceRole/DeviceRoleProvider";
 import type { DeviceRole } from "../../../src/storage/deviceRoleStore";
+
+const INCIDENT_EXPORT_DEBUG_STORAGE_KEY = "mm:v1:incidentExportDebug";
+const INCIDENT_EXPORT_CRASH_ALERT_WINDOW_MS = 5 * 60 * 1000;
+
+type IncidentExportStage =
+  | "pre_capture"
+  | "post_capture"
+  | "pre_stringify"
+  | "post_stringify"
+  | "pre_clipboard"
+  | "post_clipboard"
+  | "pre_filesystem"
+  | "post_filesystem"
+  | "filesystem_skipped_no_cache"
+  | "pre_share"
+  | "post_share"
+  | "export_complete";
+
+type IncidentExportDebugRecord = {
+  stage: IncidentExportStage;
+  at: string;
+  correlationId: string;
+  jsonBytes?: number;
+};
+
+async function loadIncidentExportDebugRecord(): Promise<IncidentExportDebugRecord | null> {
+  try {
+    const raw = await AsyncStorage.getItem(INCIDENT_EXPORT_DEBUG_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<IncidentExportDebugRecord>;
+    if (typeof parsed.stage !== "string" || typeof parsed.at !== "string") return null;
+    return {
+      stage: parsed.stage as IncidentExportStage,
+      at: parsed.at,
+      correlationId: typeof parsed.correlationId === "string" ? parsed.correlationId : "",
+      ...(typeof parsed.jsonBytes === "number" ? { jsonBytes: parsed.jsonBytes } : {}),
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function persistIncidentExportStage(
+  stage: IncidentExportStage,
+  options: { correlationId: string; jsonBytes?: number },
+): Promise<IncidentExportDebugRecord> {
+  const record: IncidentExportDebugRecord = {
+    stage,
+    at: new Date().toISOString(),
+    correlationId: options.correlationId,
+    ...(options.jsonBytes !== undefined ? { jsonBytes: options.jsonBytes } : {}),
+  };
+  await AsyncStorage.setItem(INCIDENT_EXPORT_DEBUG_STORAGE_KEY, JSON.stringify(record));
+  return record;
+}
+
+function formatIncidentExportStageReadout(record: IncidentExportDebugRecord | null): string {
+  if (!record) return "none";
+  const bytes =
+    record.jsonBytes !== undefined ? `, ${record.jsonBytes.toLocaleString()} bytes` : "";
+  return `${record.stage} (${record.at}${bytes})`;
+}
+
+function isRecentIncompleteExport(record: IncidentExportDebugRecord): boolean {
+  if (record.stage === "export_complete") return false;
+  const atMs = Date.parse(record.at);
+  if (Number.isNaN(atMs)) return false;
+  return Date.now() - atMs < INCIDENT_EXPORT_CRASH_ALERT_WINDOW_MS;
+}
 
 function FlagRow({
   label,
@@ -133,6 +203,8 @@ export default function DevSettingsScreen() {
   const [flags, setFlags] = useState<DevFlags>(DEFAULT_DEV_FLAGS);
   const [incidentCorrelationId, setIncidentCorrelationId] = useState("");
   const [isExportingIncidentBundle, setIsExportingIncidentBundle] = useState(false);
+  const [lastExportStage, setLastExportStage] = useState<IncidentExportDebugRecord | null>(null);
+  const postCrashAlertShownRef = useRef(false);
 
   console.log("[DEV SETTINGS DEBUG]", {
     isDev: isDev(),
@@ -149,6 +221,25 @@ export default function DevSettingsScreen() {
       const loaded = await loadDevFlags();
       setFlags(loaded);
       setIncidentCorrelationId(generateIncidentCorrelationId());
+
+      const exportDebug = await loadIncidentExportDebugRecord();
+      setLastExportStage(exportDebug);
+      if (
+        exportDebug &&
+        isRecentIncompleteExport(exportDebug) &&
+        !postCrashAlertShownRef.current
+      ) {
+        postCrashAlertShownRef.current = true;
+        const bytesLine =
+          exportDebug.jsonBytes !== undefined
+            ? `\nJSON size: ${exportDebug.jsonBytes.toLocaleString()} bytes`
+            : "";
+        Alert.alert(
+          "Export may have crashed",
+          `Last completed stage: ${exportDebug.stage}\nAt: ${exportDebug.at}\nCorrelation ID: ${exportDebug.correlationId}${bytesLine}`,
+        );
+      }
+
       setReady(true);
     })();
   }, [canShowDevSettings]);
@@ -163,26 +254,60 @@ export default function DevSettingsScreen() {
       return;
     }
 
+    const correlationId = incidentCorrelationId.trim();
+
     setIsExportingIncidentBundle(true);
     try {
+      await persistIncidentExportStage("pre_capture", { correlationId });
       const bundle = await captureIncidentBundle({
         deviceRole: role,
-        incidentCorrelationId: incidentCorrelationId.trim(),
+        incidentCorrelationId: correlationId,
       });
+      setLastExportStage(await persistIncidentExportStage("post_capture", { correlationId }));
+
+      await persistIncidentExportStage("pre_stringify", { correlationId });
       const { json, filename } = exportIncidentBundleJson(bundle);
+      const jsonBytes = json.length;
+      setLastExportStage(
+        await persistIncidentExportStage("post_stringify", { correlationId, jsonBytes }),
+      );
+
+      await persistIncidentExportStage("pre_clipboard", { correlationId, jsonBytes });
       await Clipboard.setStringAsync(json);
+      setLastExportStage(
+        await persistIncidentExportStage("post_clipboard", { correlationId, jsonBytes }),
+      );
 
       if (FileSystem.cacheDirectory) {
         const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+        await persistIncidentExportStage("pre_filesystem", { correlationId, jsonBytes });
         await FileSystem.writeAsStringAsync(fileUri, json, {
           encoding: FileSystem.EncodingType.UTF8,
         });
+        setLastExportStage(
+          await persistIncidentExportStage("post_filesystem", { correlationId, jsonBytes }),
+        );
         try {
+          await persistIncidentExportStage("pre_share", { correlationId, jsonBytes });
           await Share.share({ url: fileUri, title: filename });
+          setLastExportStage(
+            await persistIncidentExportStage("post_share", { correlationId, jsonBytes }),
+          );
         } catch {
           // Clipboard is the primary delivery path.
         }
+      } else {
+        setLastExportStage(
+          await persistIncidentExportStage("filesystem_skipped_no_cache", {
+            correlationId,
+            jsonBytes,
+          }),
+        );
       }
+
+      setLastExportStage(
+        await persistIncidentExportStage("export_complete", { correlationId, jsonBytes }),
+      );
 
       Alert.alert(
         "Incident bundle exported",
@@ -416,6 +541,9 @@ export default function DevSettingsScreen() {
           </Text>
           <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.7 }}>
             Device role: {role ?? "not selected"}
+          </Text>
+          <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.7 }}>
+            Last export stage: {formatIncidentExportStageReadout(lastExportStage)}
           </Text>
           <Text style={{ marginTop: 12, fontSize: 14 }}>Correlation ID</Text>
           <TextInput
