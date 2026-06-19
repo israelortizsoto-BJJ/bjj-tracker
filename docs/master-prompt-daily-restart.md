@@ -20,6 +20,168 @@ Why:
 - keeps changes explicit
 - improves operating discipline
 - supports better product-quality work
+# BUILD / TESTFLIGHT DOCTRINE
+
+## Purpose
+
+Prevent accidental dev builds, wrong bundle IDs, and repeated release investigation.
+
+---
+
+## Before Every TestFlight Build
+
+Verify branch:
+
+```bash
+git branch --show-current
+```
+
+Verify clean repo:
+
+```bash
+git status -sb
+```
+
+Verify intended release commit:
+
+```bash
+git log --oneline --decorate -5
+```
+
+---
+
+## Verify Production Profile Resolution
+
+Never assume production config.
+
+Always prove it.
+
+Run:
+
+```bash
+APP_VARIANT=prod EXPO_PUBLIC_APP_VARIANT=prod npx expo config --type public
+```
+
+Must show:
+
+```text
+ios.bundleIdentifier:
+com.ortizdigitalstudio.matmind
+
+CFBundleDisplayName:
+MatMind Jiu Jitsu
+
+appVariant:
+prod
+```
+
+If not:
+
+```text
+STOP BUILD
+```
+
+Do not investigate TestFlight failures until production config resolves correctly.
+
+---
+
+## EAS CLI Rule
+
+Do not rely on globally installed EAS.
+
+Preferred:
+
+```bash
+npx eas-cli --version
+```
+
+Builds should be executed with:
+
+```bash
+npx eas-cli build ...
+```
+
+This avoids machine-specific PATH issues.
+
+---
+
+## Internal Feedback / Black Belt Builds
+
+Use:
+
+```bash
+npx eas-cli build \
+  --platform ios \
+  --profile testflight-internal
+```
+
+This provides:
+
+```text
+Production Bundle ID
+Production App
+Coach Share Enabled
+Internal Validation Lane
+```
+
+and is the default path for MatMind QA and Black Belt validation.
+
+---
+
+## Production App Store Builds
+
+Use:
+
+```bash
+npx eas-cli build \
+  --platform ios \
+  --profile production
+```
+
+Only when preparing broad TestFlight/App Store releases.
+
+---
+
+## Data Preservation Rule
+
+When validating TestFlight builds:
+
+```text
+Upgrade Existing App
+```
+
+Do NOT:
+
+```text
+Delete App
+Reset Storage
+Remove Athletes
+Clear Competitions
+```
+
+Historical state is valuable forensic evidence.
+
+---
+
+## Release Goal
+
+The purpose of a build is not:
+
+```text
+Ship Features
+```
+
+The purpose is:
+
+```text
+Validate Behavior
+Capture Evidence
+Localize Failures
+```
+
+before architectural changes occur.
+
+
 
 ## Current build-system truth
 The current operating model is:
