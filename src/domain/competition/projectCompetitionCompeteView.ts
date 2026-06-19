@@ -15,6 +15,47 @@ export type CompetitionCompeteView = KidCompetitionEntry & {
   matches: CompetitionDetailMatchSnapshot[];
 };
 
+export type CompetitionProjectionSource =
+  | "topology_projection_used"
+  | "fallback_missing_topology"
+  | "fallback_cardinality_guard";
+
+function resolveTopologyCompetitionRow(input: {
+  shell: KidCompetitionEntry;
+  topologyArtifact: SyncedCompetitionTopologyArtifact | null;
+}) {
+  const sharedAthleteId = input.shell.sharedAthleteId?.trim() ?? "";
+  const sharedCompetitionId = input.shell.sharedCompetitionId?.trim() ?? "";
+  if (
+    !sharedAthleteId ||
+    !sharedCompetitionId ||
+    input.topologyArtifact?.sharedAthleteId !== sharedAthleteId
+  ) {
+    return null;
+  }
+  return (
+    input.topologyArtifact.competitions.find(
+      (competition) => competition.sharedCompetitionId === sharedCompetitionId,
+    ) ?? null
+  );
+}
+
+/** Pure card-scoped projection arbitration for incident capture and Compete render. */
+export function deriveCompetitionProjectionSource(input: {
+  shell: KidCompetitionEntry;
+  topologyArtifact: SyncedCompetitionTopologyArtifact | null;
+  fallbackMatches: readonly CompetitionDetailMatchSnapshot[];
+}): CompetitionProjectionSource {
+  const topology = resolveTopologyCompetitionRow(input);
+  if (!topology) {
+    return "fallback_missing_topology";
+  }
+  if (topology.matches.length < input.fallbackMatches.length) {
+    return "fallback_cardinality_guard";
+  }
+  return "topology_projection_used";
+}
+
 function outcomeFromFinishType(
   finishType: SyncedCompetitionTopologyFinishType,
 ): CompetitionDetailMatchSnapshot["outcome"] {
@@ -80,14 +121,14 @@ export function projectCompetitionCompeteView(input: {
   const { shell, topologyArtifact, fallbackMatches } = input;
   const sharedAthleteId = shell.sharedAthleteId?.trim() ?? "";
   const sharedCompetitionId = shell.sharedCompetitionId?.trim() ?? "";
-  const topology =
-    sharedAthleteId && sharedCompetitionId && topologyArtifact?.sharedAthleteId === sharedAthleteId
-      ? topologyArtifact.competitions.find(
-          (competition) => competition.sharedCompetitionId === sharedCompetitionId,
-        ) ?? null
-      : null;
+  const topology = resolveTopologyCompetitionRow({ shell, topologyArtifact });
+  const projectionSource = deriveCompetitionProjectionSource({
+    shell,
+    topologyArtifact,
+    fallbackMatches,
+  });
 
-  if (!topology) {
+  if (projectionSource === "fallback_missing_topology") {
     console.log("[COACH_TOPOLOGY_TRACE]", {
       stage: "coach_compete_projection",
       sharedAthleteId: sharedAthleteId || null,
@@ -97,7 +138,7 @@ export function projectCompetitionCompeteView(input: {
       fallbackMatchCount: fallbackMatches.length,
       incomingUpdatedAt: topologyArtifact?.updatedAt ?? null,
       existingUpdatedAt: null,
-      projectionSource: "fallback_missing_topology",
+      projectionSource,
     });
     console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
       stage: "coach_compete_projection",
@@ -134,7 +175,10 @@ export function projectCompetitionCompeteView(input: {
     return { ...shell, matches: [...fallbackMatches] };
   }
 
-  if (topology.matches.length < fallbackMatches.length) {
+  if (projectionSource === "fallback_cardinality_guard") {
+    if (!topology) {
+      return { ...shell, matches: [...fallbackMatches] };
+    }
     console.log("[COACH_TOPOLOGY_TRACE]", {
       stage: "coach_compete_projection",
       sharedAthleteId,
@@ -144,12 +188,12 @@ export function projectCompetitionCompeteView(input: {
       fallbackMatchCount: fallbackMatches.length,
       incomingUpdatedAt: topologyArtifact?.updatedAt ?? null,
       existingUpdatedAt: null,
-      projectionSource: "fallback_cardinality_guard",
+      projectionSource,
     });
     console.log("[COMPETE_PROJECTION_TRACE]", {
-      arbitration: "fallback_cardinality_guard",
+      arbitration: projectionSource,
       sharedCompetitionId: shell.id,
-      topologyMatchCount: topology.matches.length,
+      topologyMatchCount: topology?.matches.length ?? 0,
       fallbackMatchCount: fallbackMatches.length,
     });
 
@@ -157,6 +201,10 @@ export function projectCompetitionCompeteView(input: {
       ...shell,
       matches: [...fallbackMatches],
     };
+  }
+
+  if (!topology) {
+    return { ...shell, matches: [...fallbackMatches] };
   }
 
   const overlaysByLineageKey = new Map<string, CompetitionMatchOverlayAnnotation>();
@@ -202,7 +250,7 @@ export function projectCompetitionCompeteView(input: {
     fallbackMatchCount: fallbackMatches.length,
     incomingUpdatedAt: topologyArtifact?.updatedAt ?? null,
     existingUpdatedAt: null,
-    projectionSource: "topology_projection_used",
+    projectionSource,
   });
   if (__DEV__) {
     console.log("[COMP_PROJECTION_TRACE] projection_topology_used", {

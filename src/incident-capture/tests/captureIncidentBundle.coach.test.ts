@@ -9,6 +9,7 @@ import {
   type CaptureIncidentBundleDeps,
 } from "../captureIncidentBundle";
 import { HYDRATION_SNAPSHOT_CONTRACT_VERSION } from "../hydrationSnapshotContract";
+import { TOPOLOGY_SNAPSHOT_CONTRACT_VERSION } from "../topologySnapshotContract";
 import { WORKER_SESSION_SNAPSHOT_CONTRACT_VERSION } from "../workerSessionSnapshotContract";
 
 const CAPTURED_AT = "2026-06-19T12:00:00.000Z";
@@ -120,6 +121,32 @@ function coachDeps(
         slice: "coach",
       };
     },
+    captureTopologySnapshot: async (opts) => {
+      assert.equal(opts.authority.resolvedOperatingAthleteId, "ath_1");
+      assert.equal(opts.capturedAt, CAPTURED_AT);
+      assert.equal(opts.sourceTrigger, "export");
+      return {
+        contractVersion: TOPOLOGY_SNAPSHOT_CONTRACT_VERSION,
+        capturedAt: CAPTURED_AT,
+        deviceRole: "coach",
+        syncConfigured: true,
+        captureMode: "coach_substrate_probe",
+        sourceTrigger: "export",
+        athleteDomain: {
+          sharedAthleteId: "ath_1",
+          memoryLoaded: true,
+          peekOutcome: "hit",
+          peekArtifactUpdatedAt: "2026-06-19T11:00:00.000Z",
+          diskPresent: true,
+          diskArtifactUpdatedAt: "2026-06-19T11:00:00.000Z",
+          peekCompetitionCount: 1,
+          peekMatchCount: 2,
+          diskCompetitionCount: 1,
+          diskMatchCount: 2,
+          competitions: [],
+        },
+      };
+    },
     resolveDeviceContext: async () => ({
       deviceRole: "coach",
       platform: "ios",
@@ -158,10 +185,12 @@ describe("captureIncidentBundle coach", () => {
     );
 
     assert.equal(reconcileCallCount, 1);
+    assert.equal(bundle.bundleVersion, "2");
     assert.equal(bundle.deviceRole, "coach");
     assert.equal(bundle.artifacts.hydration.captureMode, "shared_authority_reconcile");
     assert.equal(bundle.artifacts.workerSession.slice, "coach");
     assert.equal(bundle.artifacts.authority.sourceTrigger, "export");
+    assert.equal(bundle.artifacts.topology.captureMode, "coach_substrate_probe");
     assert.equal(bundle.writerLinkCount, 1);
   });
 

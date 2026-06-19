@@ -5,10 +5,14 @@ import { assembleIncidentBundleEnvelope } from "./assembleIncidentBundleEnvelope
 import type { captureAuthoritySnapshot } from "./captureAuthoritySnapshot";
 import type { captureHydrationSnapshot } from "./captureHydrationSnapshot";
 import type { captureWorkerSessionSnapshot } from "./captureWorkerSessionSnapshot";
+import type { captureTopologySnapshot } from "./captureTopologySnapshot";
 import type {
+  IncidentBundle,
   IncidentBundlePlatform,
   IncidentBundleV1,
+  IncidentBundleV2,
 } from "./incidentBundleContract";
+import { INCIDENT_BUNDLE_V2_CONTRACT_VERSION } from "./incidentBundleContract";
 import type { projectAuthoritySnapshot } from "./projectAuthoritySnapshot";
 import type {
   IncidentBundleDeviceContext,
@@ -29,6 +33,7 @@ export type CaptureIncidentBundleDeps = {
   projectAuthoritySnapshot: typeof projectAuthoritySnapshot;
   captureHydrationSnapshot: typeof captureHydrationSnapshot;
   captureWorkerSessionSnapshot: typeof captureWorkerSessionSnapshot;
+  captureTopologySnapshot: typeof captureTopologySnapshot;
   resolveDeviceContext: typeof resolveIncidentBundleDeviceContext;
   validateBundle: typeof validateIncidentBundle;
   resolvePlatform: () => IncidentBundlePlatform;
@@ -63,6 +68,7 @@ const REQUIRED_DEP_KEYS: (keyof CaptureIncidentBundleDeps)[] = [
   "projectAuthoritySnapshot",
   "captureHydrationSnapshot",
   "captureWorkerSessionSnapshot",
+  "captureTopologySnapshot",
   "resolveDeviceContext",
   "validateBundle",
   "resolvePlatform",
@@ -87,6 +93,7 @@ async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
         { projectAuthoritySnapshot: projectAuthority },
         { captureHydrationSnapshot: captureHydration },
         { captureWorkerSessionSnapshot: captureWorkerSession },
+        { captureTopologySnapshot: captureTopology },
         { resolveIncidentBundleDeviceContext: resolveContext },
         { isCoachSyncConfigured },
         { getAppVariant },
@@ -99,6 +106,7 @@ async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
         import("./projectAuthoritySnapshot"),
         import("./captureHydrationSnapshot"),
         import("./captureWorkerSessionSnapshot"),
+        import("./captureTopologySnapshot"),
         import("./resolveIncidentBundleDeviceContext"),
         import("../config/coachSync"),
         import("../config/runtime"),
@@ -126,6 +134,7 @@ async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
         projectAuthoritySnapshot: projectAuthority,
         captureHydrationSnapshot: captureHydration,
         captureWorkerSessionSnapshot: captureWorkerSession,
+        captureTopologySnapshot: captureTopology,
         resolveDeviceContext: resolveContext,
         validateBundle: validateIncidentBundle,
         resolvePlatform,
@@ -172,7 +181,7 @@ async function captureCoachArtifacts(
   options: CaptureIncidentBundleOptions,
   capturedAt: string,
   deps: CaptureIncidentBundleDeps,
-): Promise<IncidentBundleV1["artifacts"]> {
+): Promise<IncidentBundleV2["artifacts"]> {
   const substrate = await deps.buildAthleteAuthoritySnapshot({
     parentRole: "coach",
     observability: { sourceTrigger: "export", role: "coach" },
@@ -200,17 +209,24 @@ async function captureCoachArtifacts(
     capturedAt,
   });
 
-  return { authority, hydration, workerSession };
+  const topology = await deps.captureTopologySnapshot({
+    authority,
+    sourceTrigger: "export",
+    capturedAt,
+  });
+
+  return { authority, hydration, workerSession, topology };
 }
 
 /**
- * Captures a production-safe Incident Bundle V1 (Tier 0 envelope + Tier 1 artifacts).
+ * Captures a production-safe Incident Bundle (Tier 0 envelope + Tier 1 artifacts).
+ * Parent exports V1; coach exports V2 with topology.
  * Fail-closed: any artifact failure aborts the entire export.
  */
 export async function captureIncidentBundle(
   options: CaptureIncidentBundleOptions,
   deps?: Partial<CaptureIncidentBundleDeps>,
-): Promise<IncidentBundleV1> {
+): Promise<IncidentBundle> {
   assertCaptureInputs(options);
 
   const resolvedDeps: CaptureIncidentBundleDeps = hasAllDeps(deps)
@@ -222,11 +238,6 @@ export async function captureIncidentBundle(
 
   const capturedAt = options.capturedAt ?? new Date().toISOString();
   const platform = options.platform ?? resolvedDeps.resolvePlatform();
-
-  const artifacts =
-    options.deviceRole === "parent"
-      ? await captureParentArtifacts(options, capturedAt, resolvedDeps)
-      : await captureCoachArtifacts(options, capturedAt, resolvedDeps);
 
   const contextDeps = await resolvedDeps.readProductionContextDeps();
   const deviceContext: IncidentBundleDeviceContext = await resolvedDeps.resolveDeviceContext({
@@ -241,8 +252,21 @@ export async function captureIncidentBundle(
     incidentCorrelationId: options.incidentCorrelationId.trim(),
   });
 
-  const bundle: IncidentBundleV1 = {
+  if (options.deviceRole === "parent") {
+    const artifacts = await captureParentArtifacts(options, capturedAt, resolvedDeps);
+    const bundle: IncidentBundleV1 = {
+      ...envelope,
+      artifacts,
+    };
+    resolvedDeps.validateBundle(bundle);
+    return bundle;
+  }
+
+  const artifacts = await captureCoachArtifacts(options, capturedAt, resolvedDeps);
+  const bundle: IncidentBundleV2 = {
     ...envelope,
+    bundleVersion: INCIDENT_BUNDLE_V2_CONTRACT_VERSION,
+    deviceRole: "coach",
     artifacts,
   };
 

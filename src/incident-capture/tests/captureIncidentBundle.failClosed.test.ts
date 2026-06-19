@@ -7,6 +7,7 @@ import {
   type CaptureIncidentBundleDeps,
 } from "../captureIncidentBundle";
 import { HYDRATION_SNAPSHOT_CONTRACT_VERSION } from "../hydrationSnapshotContract";
+import { TOPOLOGY_SNAPSHOT_CONTRACT_VERSION } from "../topologySnapshotContract";
 import { validateIncidentBundle } from "../validateIncidentBundle";
 import { WORKER_SESSION_SNAPSHOT_CONTRACT_VERSION } from "../workerSessionSnapshotContract";
 
@@ -52,6 +53,26 @@ function baseDeps(
       sessionsFetchedOkCount: 0,
       allSessionsFetched: false,
       links: [],
+    }),
+    captureTopologySnapshot: async () => ({
+      contractVersion: TOPOLOGY_SNAPSHOT_CONTRACT_VERSION,
+      capturedAt: CAPTURED_AT,
+      deviceRole: "coach",
+      syncConfigured: true,
+      captureMode: "coach_substrate_probe",
+      athleteDomain: {
+        sharedAthleteId: "ath_1",
+        memoryLoaded: false,
+        peekOutcome: "memory_not_loaded",
+        peekArtifactUpdatedAt: null,
+        diskPresent: false,
+        diskArtifactUpdatedAt: null,
+        peekCompetitionCount: 0,
+        peekMatchCount: 0,
+        diskCompetitionCount: 0,
+        diskMatchCount: 0,
+        competitions: [],
+      },
     }),
     resolveDeviceContext: async () => ({
       deviceRole: "parent",
@@ -131,6 +152,74 @@ describe("captureIncidentBundle fail-closed", () => {
           }),
         ),
       /worker capture failed/,
+    );
+  });
+
+  it("aborts when topology capture fails on coach export", async () => {
+    await assert.rejects(
+      () =>
+        captureIncidentBundle(
+          {
+            deviceRole: "coach",
+            incidentCorrelationId: CORRELATION_ID,
+            capturedAt: CAPTURED_AT,
+            platform: "ios",
+          },
+          baseDeps({
+            buildAthleteAuthoritySnapshot: async () => ({
+              sorted: [{ id: "ath_1", name: "Alice" }],
+              operatingAthleteRoster: [{ id: "ath_1", name: "Alice" }],
+              resolvedId: "ath_1",
+              loadedKids: {},
+              authorityBootstrapState: "ready",
+              coachOperatingAthleteChoices: [],
+              parentActiveAthleteId: "ath_1",
+              coachSessionRefreshDegraded: false,
+              linkedSharedAthleteIds: ["ath_1"],
+              writerSessionRefresh: {
+                successfulSnapshots: [],
+                writerLinks: [],
+                inviteSessionAthletesByToken: {},
+                hydrationOutcome: { reconcileAttempted: true, reconcileCompleted: true },
+              },
+              reconcileAttempted: true,
+            }),
+            projectAuthoritySnapshot: () => ({
+              contractVersion: AUTHORITY_SNAPSHOT_CONTRACT_VERSION,
+              capturedAt: CAPTURED_AT,
+              deviceRole: "coach",
+              resolvedOperatingAthleteId: "ath_1",
+              parentActiveAthleteId: "ath_1",
+              authorityBootstrapState: "ready",
+              coachSessionRefreshDegraded: false,
+              operatingAthleteRosterCount: 1,
+              linkedSharedAthleteIds: ["ath_1"],
+            }),
+            captureHydrationSnapshot: async () => ({
+              contractVersion: HYDRATION_SNAPSHOT_CONTRACT_VERSION,
+              capturedAt: CAPTURED_AT,
+              deviceRole: "coach",
+              syncConfigured: true,
+              captureMode: "shared_authority_reconcile",
+              hydrationVersion: 1,
+            }),
+            captureWorkerSessionSnapshot: async () => ({
+              contractVersion: WORKER_SESSION_SNAPSHOT_CONTRACT_VERSION,
+              capturedAt: CAPTURED_AT,
+              deviceRole: "coach",
+              syncConfigured: true,
+              captureMode: "get_only",
+              activeLinkCount: 1,
+              sessionsFetchedOkCount: 1,
+              allSessionsFetched: true,
+              links: [],
+            }),
+            captureTopologySnapshot: async () => {
+              throw new Error("topology capture failed");
+            },
+          }),
+        ),
+      /topology capture failed/,
     );
   });
 

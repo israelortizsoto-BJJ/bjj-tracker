@@ -8,6 +8,7 @@ import {
   type CaptureIncidentBundleDeps,
 } from "../captureIncidentBundle";
 import { HYDRATION_SNAPSHOT_CONTRACT_VERSION } from "../hydrationSnapshotContract";
+import { TOPOLOGY_SNAPSHOT_CONTRACT_VERSION } from "../topologySnapshotContract";
 import { WORKER_SESSION_SNAPSHOT_CONTRACT_VERSION } from "../workerSessionSnapshotContract";
 
 const CAPTURED_AT = "2026-06-19T12:00:00.000Z";
@@ -85,6 +86,9 @@ function baseDeps(
       assert.equal(opts.capturedAt, CAPTURED_AT);
       return workerArtifact("parent");
     },
+    captureTopologySnapshot: async () => {
+      throw new Error("captureTopologySnapshot should not run on parent export");
+    },
     resolveDeviceContext: async () => ({
       deviceRole: "parent",
       platform: "ios",
@@ -127,5 +131,7 @@ describe("captureIncidentBundle parent", () => {
     assert.equal(bundle.artifacts.hydration.captureMode, "read_only_state");
     assert.equal(bundle.artifacts.hydration.reconcileAttempted, false);
     assert.equal(bundle.artifacts.workerSession.slice, "parent");
+    assert.equal(bundle.bundleVersion, "1");
+    assert.equal("topology" in bundle.artifacts, false);
   });
 });

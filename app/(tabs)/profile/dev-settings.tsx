@@ -1,14 +1,24 @@
 import { Stack, router, type Href } from "expo-router";
+import * as Clipboard from "expo-clipboard";
+import * as FileSystem from "expo-file-system/legacy";
 import { useEffect, useState } from "react";
 import {
   Alert,
   Button,
   Pressable,
   ScrollView,
+  Share,
   Switch,
   Text,
+  TextInput,
   View,
 } from "react-native";
+
+import {
+  captureIncidentBundle,
+  exportIncidentBundleJson,
+  generateIncidentCorrelationId,
+} from "../../../src/incident-capture";
 
 import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
 import {
@@ -121,6 +131,8 @@ export default function DevSettingsScreen() {
   const { role, setRole: setDeviceRole } = useDeviceRole();
   const [ready, setReady] = useState(false);
   const [flags, setFlags] = useState<DevFlags>(DEFAULT_DEV_FLAGS);
+  const [incidentCorrelationId, setIncidentCorrelationId] = useState("");
+  const [isExportingIncidentBundle, setIsExportingIncidentBundle] = useState(false);
 
   console.log("[DEV SETTINGS DEBUG]", {
     isDev: isDev(),
@@ -136,9 +148,55 @@ export default function DevSettingsScreen() {
       }
       const loaded = await loadDevFlags();
       setFlags(loaded);
+      setIncidentCorrelationId(generateIncidentCorrelationId());
       setReady(true);
     })();
   }, [canShowDevSettings]);
+
+  async function exportIncidentBundle() {
+    if (!role) {
+      Alert.alert("Export failed", "Select a device role before exporting.");
+      return;
+    }
+    if (incidentCorrelationId.trim().length < 8) {
+      Alert.alert("Export failed", "Enter a correlation ID (at least 8 characters).");
+      return;
+    }
+
+    setIsExportingIncidentBundle(true);
+    try {
+      const bundle = await captureIncidentBundle({
+        deviceRole: role,
+        incidentCorrelationId: incidentCorrelationId.trim(),
+      });
+      const { json, filename } = exportIncidentBundleJson(bundle);
+      await Clipboard.setStringAsync(json);
+
+      if (FileSystem.cacheDirectory) {
+        const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(fileUri, json, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        try {
+          await Share.share({ url: fileUri, title: filename });
+        } catch {
+          // Clipboard is the primary delivery path.
+        }
+      }
+
+      Alert.alert(
+        "Incident bundle exported",
+        `Correlation ID: ${bundle.incidentCorrelationId}\n\nBundle JSON copied to clipboard.`,
+      );
+    } catch (error) {
+      Alert.alert(
+        "Export failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    } finally {
+      setIsExportingIncidentBundle(false);
+    }
+  }
 
   if (!canShowDevSettings) {
     return (
@@ -347,6 +405,44 @@ export default function DevSettingsScreen() {
     onPress={clearCoachKids}
   />
 </View>
+
+        <View style={{ marginTop: 18 }}>
+          <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+            INCIDENT CAPTURE
+          </Text>
+          <Text style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>
+            For cross-device incidents, export both devices within 5 minutes using
+            the same correlation ID.
+          </Text>
+          <Text style={{ marginTop: 10, fontSize: 13, opacity: 0.7 }}>
+            Device role: {role ?? "not selected"}
+          </Text>
+          <Text style={{ marginTop: 12, fontSize: 14 }}>Correlation ID</Text>
+          <TextInput
+            value={incidentCorrelationId}
+            onChangeText={setIncidentCorrelationId}
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{
+              marginTop: 6,
+              borderWidth: 1,
+              borderRadius: 8,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              fontSize: 14,
+            }}
+          />
+          <DevActionButton
+            title="New correlation ID"
+            subtitle="Generate a fresh UUID for a new incident"
+            onPress={() => setIncidentCorrelationId(generateIncidentCorrelationId())}
+          />
+          <DevActionButton
+            title={isExportingIncidentBundle ? "Exporting…" : "Export Incident Bundle"}
+            subtitle="Copies JSON to clipboard; share sheet when available"
+            onPress={exportIncidentBundle}
+          />
+        </View>
 
         <Pressable
           onPress={reset}

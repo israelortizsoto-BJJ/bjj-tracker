@@ -51,13 +51,39 @@ export {
   type ProjectHydrationSnapshotContext,
 } from "./projectHydrationSnapshot";
 export {
+  TOPOLOGY_SNAPSHOT_CONTRACT_VERSION,
+  MAX_COMPETITIONS_PER_ATHLETE,
+  MAX_MATCH_LINEAGE_KEYS_PER_COMPETITION,
+  type TopologyPeekOutcome,
+  type TopologyProjectionSource,
+  type TopologySnapshot,
+  type TopologySnapshotAthleteDomain,
+  type TopologySnapshotCaptureMode,
+  type TopologySnapshotCompetition,
+} from "./topologySnapshotContract";
+export {
+  captureTopologySnapshot,
+  type CaptureTopologySnapshotOptions,
+} from "./captureTopologySnapshot";
+export {
+  projectTopologySnapshot,
+  type ProjectTopologySnapshotAthleteContext,
+  type ProjectTopologySnapshotContext,
+  type TopologySnapshotCompetitionProbe,
+} from "./projectTopologySnapshot";
+export {
   INCIDENT_BUNDLE_CONTRACT_VERSION,
+  INCIDENT_BUNDLE_V2_CONTRACT_VERSION,
+  type IncidentBundle,
+  type IncidentBundleArtifactsCoachV2,
   type IncidentBundleArtifactsV1,
   type IncidentBundleDeviceRole,
   type IncidentBundleEnvelopeV1,
+  type IncidentBundleEnvelopeV2,
   type IncidentBundleExportSource,
   type IncidentBundlePlatform,
   type IncidentBundleV1,
+  type IncidentBundleV2,
 } from "./incidentBundleContract";
 export { generateIncidentCorrelationId } from "./generateIncidentCorrelationId";
 export {

@@ -18,6 +18,40 @@ type TopologyByAthleteId = Record<string, SyncedCompetitionTopologyArtifact>;
 /** In-process mirror for synchronous render-only projection reads. */
 let topologyMemory: TopologyByAthleteId | null = null;
 
+export type CoachCompetitionTopologyPeekOutcome =
+  | "hit"
+  | "miss"
+  | "memory_not_loaded"
+  | "empty_athlete_id";
+
+export type CoachCompetitionTopologyPeekResult = {
+  outcome: CoachCompetitionTopologyPeekOutcome;
+  artifact: SyncedCompetitionTopologyArtifact | null;
+};
+
+/** Read-only probe for incident capture — whether in-process topology memory is populated. */
+export function isCoachCompetitionTopologyMemoryLoaded(): boolean {
+  return topologyMemory !== null;
+}
+
+/** Structured peek outcome for incident capture. Does not read disk. */
+export function peekCoachCompetitionTopologyOutcome(
+  sharedAthleteId: string,
+): CoachCompetitionTopologyPeekResult {
+  const athleteId = sharedAthleteId.trim();
+  if (!athleteId) {
+    return { outcome: "empty_athlete_id", artifact: null };
+  }
+  if (!topologyMemory) {
+    return { outcome: "memory_not_loaded", artifact: null };
+  }
+  const artifact = topologyMemory[athleteId] ?? null;
+  if (!artifact) {
+    return { outcome: "miss", artifact: null };
+  }
+  return { outcome: "hit", artifact };
+}
+
 export type CoachCompetitionTopologyWriteResult =
   | "hydrate_store_overwrite"
   | "hydrate_skipped_stale"

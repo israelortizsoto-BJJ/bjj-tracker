@@ -1,4 +1,4 @@
-import type { IncidentBundleV1 } from "./incidentBundleContract";
+import type { IncidentBundle } from "./incidentBundleContract";
 
 export type ExportIncidentBundleJsonResult = {
   json: string;
@@ -6,7 +6,7 @@ export type ExportIncidentBundleJsonResult = {
 };
 
 /** Serializes a validated bundle to pretty JSON and a stable export filename. */
-export function exportIncidentBundleJson(bundle: IncidentBundleV1): ExportIncidentBundleJsonResult {
+export function exportIncidentBundleJson(bundle: IncidentBundle): ExportIncidentBundleJsonResult {
   const filename = `incident-bundle-${bundle.deviceRole}-${bundle.incidentCorrelationId}.json`;
   return {
     json: JSON.stringify(bundle, null, 2),
