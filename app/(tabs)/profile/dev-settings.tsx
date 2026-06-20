@@ -52,6 +52,7 @@ const INCIDENT_EXPORT_CRASH_ALERT_WINDOW_MS = 5 * 60 * 1000;
 
 type IncidentExportStage =
   | "pre_capture"
+  | "capture_call_boundary"
   | "post_capture"
   | "pre_stringify"
   | "post_stringify"
@@ -279,6 +280,9 @@ export default function DevSettingsScreen() {
     setIsExportingIncidentBundle(true);
     try {
       await persistIncidentExportStage("pre_capture", { correlationId });
+      setLastExportStage(
+        await persistIncidentExportStage("capture_call_boundary", { correlationId }),
+      );
       const bundle = await captureIncidentBundle({
         deviceRole: role,
         incidentCorrelationId: correlationId,

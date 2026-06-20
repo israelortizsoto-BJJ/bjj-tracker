@@ -18,7 +18,10 @@ import type {
   IncidentBundleDeviceContext,
   resolveIncidentBundleDeviceContext,
 } from "./resolveIncidentBundleDeviceContext";
-import type { PersistCaptureStage } from "./incidentCaptureDebug";
+import {
+  persistIncidentCaptureStage,
+  type PersistCaptureStage,
+} from "./incidentCaptureDebug";
 import { validateIncidentBundle } from "./validateIncidentBundle";
 
 export type CaptureIncidentBundleOptions = {
@@ -259,6 +262,11 @@ export async function captureIncidentBundle(
   options: CaptureIncidentBundleOptions,
   deps?: Partial<CaptureIncidentBundleDeps>,
 ): Promise<IncidentBundle> {
+  await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
+    "capture_function_entered",
+    options.incidentCorrelationId.trim(),
+  );
+
   assertCaptureInputs(options);
 
   const resolvedDeps: CaptureIncidentBundleDeps = hasAllDeps(deps)
@@ -287,6 +295,7 @@ export async function captureIncidentBundle(
   });
 
   if (options.deviceRole === "parent") {
+    await persist("capture_before_authority", correlationId);
     const artifacts = await captureParentArtifacts(options, capturedAt, resolvedDeps, persist);
 
     await persist("pre_bundle_assembly", correlationId);
@@ -304,6 +313,7 @@ export async function captureIncidentBundle(
     return bundle;
   }
 
+  await persist("capture_before_authority", correlationId);
   const artifacts = await captureCoachArtifacts(options, capturedAt, resolvedDeps, persist);
 
   await persist("pre_bundle_assembly", correlationId);

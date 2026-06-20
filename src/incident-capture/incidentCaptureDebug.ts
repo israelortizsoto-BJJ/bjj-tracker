@@ -3,6 +3,8 @@ export const INCIDENT_CAPTURE_DEBUG_STORAGE_KEY = "mm:v1:incidentCaptureDebug";
 export const INCIDENT_CAPTURE_CRASH_ALERT_WINDOW_MS = 5 * 60 * 1000;
 
 export type IncidentCaptureStage =
+  | "capture_function_entered"
+  | "capture_before_authority"
   | "pre_authority"
   | "post_authority"
   | "pre_hydration"

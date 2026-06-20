@@ -17,6 +17,8 @@ const CAPTURED_AT = "2026-06-19T12:00:00.000Z";
 const CORRELATION_ID = "corr-stage-order-001";
 
 const PARENT_EXPECTED_STAGES: IncidentCaptureStage[] = [
+  "capture_function_entered",
+  "capture_before_authority",
   "pre_authority",
   "post_authority",
   "pre_hydration",
@@ -31,6 +33,8 @@ const PARENT_EXPECTED_STAGES: IncidentCaptureStage[] = [
 ];
 
 const COACH_EXPECTED_STAGES: IncidentCaptureStage[] = [
+  "capture_function_entered",
+  "capture_before_authority",
   "pre_authority",
   "post_authority",
   "pre_hydration",
@@ -325,6 +329,10 @@ describe("captureIncidentBundle capture stages", () => {
       /authority failed/,
     );
 
-    assert.deepEqual(recorder.stages, ["pre_authority"]);
+    assert.deepEqual(recorder.stages, [
+      "capture_function_entered",
+      "capture_before_authority",
+      "pre_authority",
+    ]);
   });
 });
