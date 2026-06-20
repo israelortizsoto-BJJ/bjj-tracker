@@ -87,36 +87,57 @@ function hasAllDeps(deps?: Partial<CaptureIncidentBundleDeps>): deps is CaptureI
 
 let productionDepsPromise: Promise<CaptureIncidentBundleDeps> | null = null;
 
-async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
+async function loadProductionDeps(correlationId: string): Promise<CaptureIncidentBundleDeps> {
+  await persistIncidentCaptureStage("load_deps_entered", correlationId);
   if (!productionDepsPromise) {
     productionDepsPromise = (async () => {
+      await persistIncidentCaptureStage("load_deps_before_context", correlationId);
       const [
-        { Platform },
-        Constants,
-        { captureAuthoritySnapshot: captureAuthority },
-        { buildAthleteAuthoritySnapshot: buildAuthority },
-        { projectAuthoritySnapshot: projectAuthority },
-        { captureHydrationSnapshot: captureHydration },
-        { captureWorkerSessionSnapshot: captureWorkerSession },
-        { captureTopologySnapshot: captureTopology },
         { resolveIncidentBundleDeviceContext: resolveContext },
         { isCoachSyncConfigured },
         { getAppVariant },
         { getCoachLinks },
       ] = await Promise.all([
-        import("react-native"),
-        import("expo-constants"),
-        import("./captureAuthoritySnapshot"),
-        import("../identity/buildAthleteAuthoritySnapshot"),
-        import("./projectAuthoritySnapshot"),
-        import("./captureHydrationSnapshot"),
-        import("./captureWorkerSessionSnapshot"),
-        import("./captureTopologySnapshot"),
         import("./resolveIncidentBundleDeviceContext"),
         import("../config/coachSync"),
         import("../config/runtime"),
         import("../storage/coachShareStore"),
       ]);
+      await persistIncidentCaptureStage("load_deps_after_context", correlationId);
+
+      await persistIncidentCaptureStage("load_deps_before_platform", correlationId);
+      const [{ Platform }, Constants] = await Promise.all([
+        import("react-native"),
+        import("expo-constants"),
+      ]);
+      await persistIncidentCaptureStage("load_deps_after_platform", correlationId);
+
+      await persistIncidentCaptureStage("load_deps_before_authority", correlationId);
+      const [
+        { captureAuthoritySnapshot: captureAuthority },
+        { buildAthleteAuthoritySnapshot: buildAuthority },
+        { projectAuthoritySnapshot: projectAuthority },
+      ] = await Promise.all([
+        import("./captureAuthoritySnapshot"),
+        import("../identity/buildAthleteAuthoritySnapshot"),
+        import("./projectAuthoritySnapshot"),
+      ]);
+      await persistIncidentCaptureStage("load_deps_after_authority", correlationId);
+
+      await persistIncidentCaptureStage("load_deps_before_hydration", correlationId);
+      const { captureHydrationSnapshot: captureHydration } =
+        await import("./captureHydrationSnapshot");
+      await persistIncidentCaptureStage("load_deps_after_hydration", correlationId);
+
+      await persistIncidentCaptureStage("load_deps_before_worker", correlationId);
+      const [
+        { captureWorkerSessionSnapshot: captureWorkerSession },
+        { captureTopologySnapshot: captureTopology },
+      ] = await Promise.all([
+        import("./captureWorkerSessionSnapshot"),
+        import("./captureTopologySnapshot"),
+      ]);
+      await persistIncidentCaptureStage("load_deps_after_worker", correlationId);
 
       function readBuildNumber(): string {
         const expoConfig = Constants.default.expoConfig;
@@ -133,7 +154,7 @@ async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
         throw new Error(`captureIncidentBundle: unsupported platform ${Platform.OS}`);
       }
 
-      return {
+      const loadedDeps: CaptureIncidentBundleDeps = {
         captureAuthoritySnapshot: captureAuthority,
         buildAthleteAuthoritySnapshot: buildAuthority,
         projectAuthoritySnapshot: projectAuthority,
@@ -150,6 +171,8 @@ async function loadProductionDeps(): Promise<CaptureIncidentBundleDeps> {
           readBuildNumber,
         }),
       };
+      await persistIncidentCaptureStage("load_deps_complete", correlationId);
+      return loadedDeps;
     })();
   }
   return productionDepsPromise;
@@ -284,7 +307,7 @@ export async function captureIncidentBundle(
   const resolvedDeps: CaptureIncidentBundleDeps = hasAllDeps(deps)
     ? deps
     : {
-        ...(await loadProductionDeps()),
+        ...(await loadProductionDeps(options.incidentCorrelationId.trim())),
         ...deps,
       };
   await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
