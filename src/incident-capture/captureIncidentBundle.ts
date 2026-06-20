@@ -111,7 +111,10 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
       await persistIncidentCaptureStage("load_deps_platform_entered", correlationId);
       await persistIncidentCaptureStage("load_deps_before_platform_react_native", correlationId);
       await persistIncidentCaptureStage("load_deps_react_native_import_start", correlationId);
-      const reactNativeModule = await import("react-native");
+      const reactNativeImportPromise = import("react-native");
+      await persistIncidentCaptureStage("load_deps_react_native_import_promise_created", correlationId);
+      await persistIncidentCaptureStage("load_deps_react_native_before_import_await", correlationId);
+      const reactNativeModule = await reactNativeImportPromise;
       await persistIncidentCaptureStage("load_deps_react_native_import_resolved", correlationId);
       const { Platform } = reactNativeModule;
       await persistIncidentCaptureStage("load_deps_react_native_module_received", correlationId);

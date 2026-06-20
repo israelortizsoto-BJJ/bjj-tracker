@@ -20,6 +20,8 @@ export type IncidentCaptureStage =
   | "load_deps_platform_entered"
   | "load_deps_before_platform_react_native"
   | "load_deps_react_native_import_start"
+  | "load_deps_react_native_import_promise_created"
+  | "load_deps_react_native_before_import_await"
   | "load_deps_react_native_import_resolved"
   | "load_deps_react_native_module_received"
   | "load_deps_after_platform_react_native"
