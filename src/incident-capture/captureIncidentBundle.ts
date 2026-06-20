@@ -106,10 +106,13 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
       await persistIncidentCaptureStage("load_deps_after_context", correlationId);
 
       await persistIncidentCaptureStage("load_deps_before_platform", correlationId);
-      const [{ Platform }, Constants] = await Promise.all([
-        import("react-native"),
-        import("expo-constants"),
-      ]);
+      await persistIncidentCaptureStage("load_deps_platform_entered", correlationId);
+      await persistIncidentCaptureStage("load_deps_before_platform_react_native", correlationId);
+      const { Platform } = await import("react-native");
+      await persistIncidentCaptureStage("load_deps_after_platform_react_native", correlationId);
+      await persistIncidentCaptureStage("load_deps_before_platform_expo_constants", correlationId);
+      const Constants = await import("expo-constants");
+      await persistIncidentCaptureStage("load_deps_after_platform_expo_constants", correlationId);
       await persistIncidentCaptureStage("load_deps_after_platform", correlationId);
 
       await persistIncidentCaptureStage("load_deps_before_authority", correlationId);
