@@ -18,6 +18,12 @@ const CORRELATION_ID = "corr-stage-order-001";
 
 const PARENT_EXPECTED_STAGES: IncidentCaptureStage[] = [
   "capture_function_entered",
+  "capture_before_assert_inputs",
+  "capture_after_assert_inputs",
+  "capture_before_resolve_deps",
+  "capture_after_resolve_deps",
+  "capture_before_timestamp",
+  "capture_after_timestamp",
   "capture_before_authority",
   "pre_authority",
   "post_authority",
@@ -34,6 +40,12 @@ const PARENT_EXPECTED_STAGES: IncidentCaptureStage[] = [
 
 const COACH_EXPECTED_STAGES: IncidentCaptureStage[] = [
   "capture_function_entered",
+  "capture_before_assert_inputs",
+  "capture_after_assert_inputs",
+  "capture_before_resolve_deps",
+  "capture_after_resolve_deps",
+  "capture_before_timestamp",
+  "capture_after_timestamp",
   "capture_before_authority",
   "pre_authority",
   "post_authority",
@@ -331,6 +343,12 @@ describe("captureIncidentBundle capture stages", () => {
 
     assert.deepEqual(recorder.stages, [
       "capture_function_entered",
+      "capture_before_assert_inputs",
+      "capture_after_assert_inputs",
+      "capture_before_resolve_deps",
+      "capture_after_resolve_deps",
+      "capture_before_timestamp",
+      "capture_after_timestamp",
       "capture_before_authority",
       "pre_authority",
     ]);

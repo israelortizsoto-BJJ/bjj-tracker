@@ -4,6 +4,12 @@ export const INCIDENT_CAPTURE_CRASH_ALERT_WINDOW_MS = 5 * 60 * 1000;
 
 export type IncidentCaptureStage =
   | "capture_function_entered"
+  | "capture_before_assert_inputs"
+  | "capture_after_assert_inputs"
+  | "capture_before_resolve_deps"
+  | "capture_after_resolve_deps"
+  | "capture_before_timestamp"
+  | "capture_after_timestamp"
   | "capture_before_authority"
   | "pre_authority"
   | "post_authority"

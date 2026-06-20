@@ -267,19 +267,40 @@ export async function captureIncidentBundle(
     options.incidentCorrelationId.trim(),
   );
 
+  await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
+    "capture_before_assert_inputs",
+    options.incidentCorrelationId.trim(),
+  );
   assertCaptureInputs(options);
+  await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
+    "capture_after_assert_inputs",
+    options.incidentCorrelationId.trim(),
+  );
 
+  await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
+    "capture_before_resolve_deps",
+    options.incidentCorrelationId.trim(),
+  );
   const resolvedDeps: CaptureIncidentBundleDeps = hasAllDeps(deps)
     ? deps
     : {
         ...(await loadProductionDeps()),
         ...deps,
       };
+  await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
+    "capture_after_resolve_deps",
+    options.incidentCorrelationId.trim(),
+  );
 
+  await (deps?.persistCaptureStage ?? persistIncidentCaptureStage)(
+    "capture_before_timestamp",
+    options.incidentCorrelationId.trim(),
+  );
   const capturedAt = options.capturedAt ?? new Date().toISOString();
   const platform = options.platform ?? resolvedDeps.resolvePlatform();
   const correlationId = options.incidentCorrelationId.trim();
   const persist = await resolvePersistCaptureStage(resolvedDeps);
+  await persist("capture_after_timestamp", correlationId);
 
   const contextDeps = await resolvedDeps.readProductionContextDeps();
   const deviceContext: IncidentBundleDeviceContext = await resolvedDeps.resolveDeviceContext({
