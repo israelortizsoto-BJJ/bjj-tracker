@@ -27,9 +27,9 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_after_import_expression"
   | "load_deps_react_native_import_promise_created"
   | "load_deps_react_native_before_get_storage"
-  | "load_deps_react_native_gap_marker_1"
-  | "load_deps_react_native_gap_marker_2"
-  | "load_deps_react_native_gap_marker_3"
+  | "load_deps_react_native_after_storage_reference_read"
+  | "load_deps_react_native_after_correlation_reference_read"
+  | "load_deps_react_native_after_active_trace_assignment"
   | "load_deps_react_native_before_get_storage_call"
   | "load_deps_react_native_after_get_storage_call"
   | "load_deps_react_native_get_storage_function_entered"
@@ -240,34 +240,38 @@ export async function persistIncidentCaptureStage(
       "load_deps_react_native_before_get_storage",
       correlationId,
     );
+    const traceStorageReference = lastResolvedStorage;
     await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_gap_marker_1",
+      traceStorageReference,
+      "load_deps_react_native_after_storage_reference_read",
       correlationId,
     );
+    const traceCorrelationReference = correlationId;
     await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_gap_marker_2",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_gap_marker_3",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_before_get_storage_call",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_after_get_storage_call",
-      correlationId,
+      traceStorageReference,
+      "load_deps_react_native_after_correlation_reference_read",
+      traceCorrelationReference,
     );
   }
   if (traceReactNativeImportPromiseCreated) {
     activeGetStorageTraceCorrelationId = correlationId;
+    if (lastResolvedStorage) {
+      await writeRawCaptureStage(
+        lastResolvedStorage,
+        "load_deps_react_native_after_active_trace_assignment",
+        correlationId,
+      );
+      await writeRawCaptureStage(
+        lastResolvedStorage,
+        "load_deps_react_native_before_get_storage_call",
+        correlationId,
+      );
+      await writeRawCaptureStage(
+        lastResolvedStorage,
+        "load_deps_react_native_after_get_storage_call",
+        correlationId,
+      );
+    }
   }
   const storage = await getStorage();
   if (traceReactNativeImportPromiseCreated) {
