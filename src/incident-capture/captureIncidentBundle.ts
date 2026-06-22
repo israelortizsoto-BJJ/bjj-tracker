@@ -109,12 +109,29 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
       await persistIncidentCaptureStage("load_deps_before_platform", correlationId);
       await persistIncidentCaptureStage("load_deps_after_platform_boundary", correlationId);
       await persistIncidentCaptureStage("load_deps_platform_entered", correlationId);
+      await persistIncidentCaptureStage("load_deps_control_import_start", correlationId);
+      const controlImportPromise = import("./incidentBundleContract");
+      await persistIncidentCaptureStage("load_deps_control_import_promise_created", correlationId);
+      await controlImportPromise;
+      await persistIncidentCaptureStage("load_deps_control_import_resolved", correlationId);
       await persistIncidentCaptureStage("load_deps_before_platform_react_native", correlationId);
       await persistIncidentCaptureStage("load_deps_react_native_import_start", correlationId);
-      const reactNativeImportPromise = import("react-native");
+      await persistIncidentCaptureStage("load_deps_react_native_before_import_expression", correlationId);
+      const evaluatedReactNativeImportPromise = import("react-native");
+      await persistIncidentCaptureStage("load_deps_react_native_after_import_expression", correlationId);
+      const reactNativeImportPromise = evaluatedReactNativeImportPromise;
       await persistIncidentCaptureStage("load_deps_react_native_import_promise_created", correlationId);
       await persistIncidentCaptureStage("load_deps_react_native_before_import_await", correlationId);
-      const resolvedImport = await reactNativeImportPromise;
+      const resolvedImport = await reactNativeImportPromise.then(
+        async (module) => {
+          await persistIncidentCaptureStage("load_deps_react_native_import_fulfilled", correlationId);
+          return module;
+        },
+        async (error) => {
+          await persistIncidentCaptureStage("load_deps_react_native_import_rejected", correlationId);
+          throw error;
+        },
+      );
       await persistIncidentCaptureStage("load_deps_react_native_after_import_await", correlationId);
       await persistIncidentCaptureStage("load_deps_react_native_before_module_assignment", correlationId);
       const reactNativeModule = resolvedImport;
