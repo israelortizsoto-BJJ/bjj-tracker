@@ -27,6 +27,9 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_after_import_expression"
   | "load_deps_react_native_import_promise_created"
   | "load_deps_react_native_before_get_storage"
+  | "load_deps_react_native_before_get_storage_call"
+  | "load_deps_react_native_after_get_storage_call"
+  | "load_deps_react_native_get_storage_function_entered"
   | "load_deps_react_native_entered_get_storage"
   | "load_deps_react_native_before_async_storage_import"
   | "load_deps_react_native_after_async_storage_import"
@@ -108,6 +111,13 @@ export function __setIncidentCaptureDebugStorageForTests(
 }
 
 async function getStorage(): Promise<StorageAdapter> {
+  if (activeGetStorageTraceCorrelationId && lastResolvedStorage) {
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_get_storage_function_entered",
+      activeGetStorageTraceCorrelationId,
+    );
+  }
   if (storageOverride) {
     if (activeGetStorageTraceCorrelationId) {
       await writeRawCaptureStage(
@@ -225,6 +235,16 @@ export async function persistIncidentCaptureStage(
     await writeRawCaptureStage(
       lastResolvedStorage,
       "load_deps_react_native_before_get_storage",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_before_get_storage_call",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_after_get_storage_call",
       correlationId,
     );
   }

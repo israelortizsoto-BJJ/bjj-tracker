@@ -60,6 +60,9 @@ const LOAD_DEPS_STAGE_SEQUENCE = [
 
 const PERSIST_BOUNDARY_STAGE_SEQUENCE = [
   "load_deps_react_native_before_get_storage",
+  "load_deps_react_native_before_get_storage_call",
+  "load_deps_react_native_after_get_storage_call",
+  "load_deps_react_native_get_storage_function_entered",
   "load_deps_react_native_entered_get_storage",
   "load_deps_react_native_before_async_storage_import",
   "load_deps_react_native_after_async_storage_import",
