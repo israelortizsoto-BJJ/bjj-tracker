@@ -26,6 +26,8 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_before_import_expression"
   | "load_deps_react_native_after_import_expression"
   | "load_deps_react_native_import_promise_created"
+  | "load_deps_react_native_before_get_storage"
+  | "load_deps_react_native_after_get_storage"
   | "load_deps_react_native_import_promise_created_persist_entered"
   | "load_deps_react_native_import_promise_created_before_storage_write"
   | "load_deps_react_native_import_promise_created_after_storage_write"
@@ -88,6 +90,7 @@ type StorageAdapter = {
 };
 
 let storageOverride: StorageAdapter | null = null;
+let lastResolvedStorage: StorageAdapter | null = null;
 
 /** Test-only hook to avoid AsyncStorage in unit tests. */
 export function __setIncidentCaptureDebugStorageForTests(
@@ -97,9 +100,28 @@ export function __setIncidentCaptureDebugStorageForTests(
 }
 
 async function getStorage(): Promise<StorageAdapter> {
-  if (storageOverride) return storageOverride;
+  if (storageOverride) {
+    lastResolvedStorage = storageOverride;
+    return storageOverride;
+  }
   const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
+  lastResolvedStorage = AsyncStorage;
   return AsyncStorage;
+}
+
+async function writeRawCaptureStage(
+  storage: StorageAdapter,
+  stage: IncidentCaptureStage,
+  correlationId: string,
+): Promise<void> {
+  await storage.setItem(
+    INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
+    JSON.stringify({
+      stage,
+      at: new Date().toISOString(),
+      correlationId,
+    } satisfies IncidentCaptureDebugRecord),
+  );
 }
 
 export async function loadIncidentCaptureDebugRecord(): Promise<IncidentCaptureDebugRecord | null> {
@@ -128,44 +150,44 @@ export async function persistIncidentCaptureStage(
     at: new Date().toISOString(),
     correlationId,
   };
-  const storage = await getStorage();
   const traceReactNativeImportPromiseCreated =
     stage === "load_deps_react_native_import_promise_created";
-  if (traceReactNativeImportPromiseCreated) {
-    await storage.setItem(
-      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
-      JSON.stringify({
-        stage: "load_deps_react_native_import_promise_created_persist_entered",
-        at: new Date().toISOString(),
-        correlationId,
-      } satisfies IncidentCaptureDebugRecord),
+  if (traceReactNativeImportPromiseCreated && lastResolvedStorage) {
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_before_get_storage",
+      correlationId,
     );
-    await storage.setItem(
-      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
-      JSON.stringify({
-        stage: "load_deps_react_native_import_promise_created_before_storage_write",
-        at: new Date().toISOString(),
-        correlationId,
-      } satisfies IncidentCaptureDebugRecord),
+  }
+  const storage = await getStorage();
+  if (traceReactNativeImportPromiseCreated) {
+    await writeRawCaptureStage(
+      storage,
+      "load_deps_react_native_after_get_storage",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      storage,
+      "load_deps_react_native_import_promise_created_persist_entered",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      storage,
+      "load_deps_react_native_import_promise_created_before_storage_write",
+      correlationId,
     );
   }
   await storage.setItem(INCIDENT_CAPTURE_DEBUG_STORAGE_KEY, JSON.stringify(record));
   if (traceReactNativeImportPromiseCreated) {
-    await storage.setItem(
-      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
-      JSON.stringify({
-        stage: "load_deps_react_native_import_promise_created_after_storage_write",
-        at: new Date().toISOString(),
-        correlationId,
-      } satisfies IncidentCaptureDebugRecord),
+    await writeRawCaptureStage(
+      storage,
+      "load_deps_react_native_import_promise_created_after_storage_write",
+      correlationId,
     );
-    await storage.setItem(
-      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
-      JSON.stringify({
-        stage: "load_deps_react_native_import_promise_created_before_return",
-        at: new Date().toISOString(),
-        correlationId,
-      } satisfies IncidentCaptureDebugRecord),
+    await writeRawCaptureStage(
+      storage,
+      "load_deps_react_native_import_promise_created_before_return",
+      correlationId,
     );
   }
   return record;
