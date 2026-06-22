@@ -26,6 +26,11 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_before_import_expression"
   | "load_deps_react_native_after_import_expression"
   | "load_deps_react_native_import_promise_created"
+  | "load_deps_react_native_import_promise_created_persist_entered"
+  | "load_deps_react_native_import_promise_created_before_storage_write"
+  | "load_deps_react_native_import_promise_created_after_storage_write"
+  | "load_deps_react_native_import_promise_created_before_return"
+  | "load_deps_react_native_after_import_promise_created_await_resumed"
   | "load_deps_react_native_after_import_promise_created_persist"
   | "load_deps_react_native_before_microtask_marker_call"
   | "load_deps_react_native_before_microtask_yield"
@@ -124,7 +129,45 @@ export async function persistIncidentCaptureStage(
     correlationId,
   };
   const storage = await getStorage();
+  const traceReactNativeImportPromiseCreated =
+    stage === "load_deps_react_native_import_promise_created";
+  if (traceReactNativeImportPromiseCreated) {
+    await storage.setItem(
+      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
+      JSON.stringify({
+        stage: "load_deps_react_native_import_promise_created_persist_entered",
+        at: new Date().toISOString(),
+        correlationId,
+      } satisfies IncidentCaptureDebugRecord),
+    );
+    await storage.setItem(
+      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
+      JSON.stringify({
+        stage: "load_deps_react_native_import_promise_created_before_storage_write",
+        at: new Date().toISOString(),
+        correlationId,
+      } satisfies IncidentCaptureDebugRecord),
+    );
+  }
   await storage.setItem(INCIDENT_CAPTURE_DEBUG_STORAGE_KEY, JSON.stringify(record));
+  if (traceReactNativeImportPromiseCreated) {
+    await storage.setItem(
+      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
+      JSON.stringify({
+        stage: "load_deps_react_native_import_promise_created_after_storage_write",
+        at: new Date().toISOString(),
+        correlationId,
+      } satisfies IncidentCaptureDebugRecord),
+    );
+    await storage.setItem(
+      INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
+      JSON.stringify({
+        stage: "load_deps_react_native_import_promise_created_before_return",
+        at: new Date().toISOString(),
+        correlationId,
+      } satisfies IncidentCaptureDebugRecord),
+    );
+  }
   return record;
 }
 

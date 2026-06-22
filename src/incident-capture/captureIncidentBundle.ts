@@ -121,6 +121,10 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
       await persistIncidentCaptureStage("load_deps_react_native_after_import_expression", correlationId);
       const reactNativeImportPromise = evaluatedReactNativeImportPromise;
       await persistIncidentCaptureStage("load_deps_react_native_import_promise_created", correlationId);
+      await persistIncidentCaptureStage(
+        "load_deps_react_native_after_import_promise_created_await_resumed",
+        correlationId,
+      );
       await persistIncidentCaptureStage("load_deps_react_native_after_import_promise_created_persist", correlationId);
       await persistIncidentCaptureStage("load_deps_react_native_before_microtask_marker_call", correlationId);
       await persistIncidentCaptureStage("load_deps_react_native_before_microtask_yield", correlationId);
