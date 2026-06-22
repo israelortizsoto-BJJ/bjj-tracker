@@ -31,6 +31,9 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_after_correlation_reference_read"
   | "load_deps_react_native_after_active_trace_assignment"
   | "load_deps_react_native_before_get_storage_call"
+  | "load_deps_react_native_get_storage_call_gap_marker_1"
+  | "load_deps_react_native_get_storage_call_gap_marker_2"
+  | "load_deps_react_native_get_storage_call_gap_marker_3"
   | "load_deps_react_native_after_get_storage_call"
   | "load_deps_react_native_get_storage_function_entered"
   | "load_deps_react_native_entered_get_storage"
@@ -264,6 +267,21 @@ export async function persistIncidentCaptureStage(
       await writeRawCaptureStage(
         lastResolvedStorage,
         "load_deps_react_native_before_get_storage_call",
+        correlationId,
+      );
+      await writeRawCaptureStage(
+        lastResolvedStorage,
+        "load_deps_react_native_get_storage_call_gap_marker_1",
+        correlationId,
+      );
+      await writeRawCaptureStage(
+        lastResolvedStorage,
+        "load_deps_react_native_get_storage_call_gap_marker_2",
+        correlationId,
+      );
+      await writeRawCaptureStage(
+        lastResolvedStorage,
+        "load_deps_react_native_get_storage_call_gap_marker_3",
         correlationId,
       );
       await writeRawCaptureStage(
