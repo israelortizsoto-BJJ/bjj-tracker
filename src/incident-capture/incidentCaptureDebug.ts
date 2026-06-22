@@ -27,6 +27,9 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_after_import_expression"
   | "load_deps_react_native_import_promise_created"
   | "load_deps_react_native_before_get_storage"
+  | "load_deps_react_native_post_before_get_storage_marker_1"
+  | "load_deps_react_native_post_before_get_storage_marker_2"
+  | "load_deps_react_native_post_before_get_storage_marker_3"
   | "load_deps_react_native_after_storage_reference_read"
   | "load_deps_react_native_after_correlation_reference_read"
   | "load_deps_react_native_after_active_trace_assignment"
@@ -241,6 +244,21 @@ export async function persistIncidentCaptureStage(
     await writeRawCaptureStage(
       lastResolvedStorage,
       "load_deps_react_native_before_get_storage",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_post_before_get_storage_marker_1",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_post_before_get_storage_marker_2",
+      correlationId,
+    );
+    await writeRawCaptureStage(
+      lastResolvedStorage,
+      "load_deps_react_native_post_before_get_storage_marker_3",
       correlationId,
     );
     const traceStorageReference = lastResolvedStorage;
