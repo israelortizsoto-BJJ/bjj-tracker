@@ -4,7 +4,12 @@ import {
   type KidCompetitionEntryWithMatchDetail,
 } from "../storage/competitionStore";
 import { getCoachMatchBreakdownArtifactSet } from "../storage/coachMatchBreakdownArtifactStore";
-import type { SyncedCoachMatchBreakdownArtifactSet } from "../types/coachWeeklySync";
+import { peekCoachCompetitionTopology } from "../storage/coachCompetitionTopologyStore";
+import { projectCompetitionCompeteView } from "../domain/competition/projectCompetitionCompeteView";
+import type {
+  SyncedCoachMatchBreakdownArtifactSet,
+  SyncedCompetitionTopologyArtifact,
+} from "../types/coachWeeklySync";
 
 import type { CompetitionSnapshot } from "./competitionSnapshotContract";
 import { projectCompetitionSnapshot } from "./projectCompetitionSnapshot";
@@ -21,6 +26,7 @@ export type CaptureCompetitionSnapshotOptions = {
   getArtifactSet?: (
     sharedAthleteId: string,
   ) => Promise<SyncedCoachMatchBreakdownArtifactSet | null>;
+  getTopologyArtifact?: (sharedAthleteId: string) => SyncedCompetitionTopologyArtifact | null;
 };
 
 /**
@@ -34,11 +40,16 @@ export async function captureCompetitionSnapshot(
   const readEntries =
     options.getEntriesWithMatchDetail ?? getKidCompetitionEntriesWithMatchDetailForSharedAthlete;
   const readArtifactSet = options.getArtifactSet ?? getCoachMatchBreakdownArtifactSet;
+  const readTopologyArtifact = options.getTopologyArtifact ?? peekCoachCompetitionTopology;
 
   const [entries, artifactSet] = await Promise.all([
     sharedAthleteId ? readEntries(sharedAthleteId) : Promise.resolve([]),
     sharedAthleteId ? readArtifactSet(sharedAthleteId) : Promise.resolve(null),
   ]);
+  const topologyArtifact =
+    options.deviceRole === "coach" && sharedAthleteId
+      ? readTopologyArtifact(sharedAthleteId)
+      : null;
 
   return projectCompetitionSnapshot({
     capturedAt: options.capturedAt,
@@ -48,7 +59,15 @@ export async function captureCompetitionSnapshot(
     competitions: entries.map((entry) => ({
       sharedCompetitionId: entry.sharedCompetitionId ?? "",
       entryId: entry.id,
-      matches: entry.matches,
+      matches:
+        options.deviceRole === "coach"
+          ? projectCompetitionCompeteView({
+              shell: entry,
+              topologyArtifact,
+              overlayAnnotations: [],
+              fallbackMatches: entry.matches,
+            }).matches
+          : entry.matches,
     })),
   });
 }
