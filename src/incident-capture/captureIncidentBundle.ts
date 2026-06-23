@@ -115,42 +115,8 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
       await controlImportPromise;
       await persistIncidentCaptureStage("load_deps_control_import_resolved", correlationId);
       await persistIncidentCaptureStage("load_deps_before_platform_react_native", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_import_start", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_before_import_expression", correlationId);
-      const evaluatedReactNativeImportPromise = import("react-native");
-      await persistIncidentCaptureStage("load_deps_react_native_after_import_expression", correlationId);
-      const reactNativeImportPromise = evaluatedReactNativeImportPromise;
-      await persistIncidentCaptureStage("load_deps_react_native_import_promise_created", correlationId);
-      await persistIncidentCaptureStage(
-        "load_deps_react_native_after_import_promise_created_await_resumed",
-        correlationId,
-      );
-      await persistIncidentCaptureStage("load_deps_react_native_after_import_promise_created_persist", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_before_microtask_marker_call", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_before_microtask_yield", correlationId);
-      await Promise.resolve();
-      await persistIncidentCaptureStage("load_deps_react_native_after_microtask_yield", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_after_microtask_marker_call", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_after_promise_variable_assignment", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_before_before_import_await_persist", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_before_import_await", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_after_before_import_await_persist", correlationId);
-      const resolvedImport = await reactNativeImportPromise.then(
-        async (module) => {
-          await persistIncidentCaptureStage("load_deps_react_native_import_fulfilled", correlationId);
-          return module;
-        },
-        async (error) => {
-          await persistIncidentCaptureStage("load_deps_react_native_import_rejected", correlationId);
-          throw error;
-        },
-      );
-      await persistIncidentCaptureStage("load_deps_react_native_after_import_await", correlationId);
-      await persistIncidentCaptureStage("load_deps_react_native_before_module_assignment", correlationId);
-      const reactNativeModule = resolvedImport;
-      await persistIncidentCaptureStage("load_deps_react_native_after_module_assignment", correlationId);
+      const reactNativeModule = await import("react-native");
       const { Platform } = reactNativeModule;
-      await persistIncidentCaptureStage("load_deps_react_native_module_received", correlationId);
       await persistIncidentCaptureStage("load_deps_after_platform_react_native", correlationId);
       await persistIncidentCaptureStage("load_deps_before_platform_expo_constants", correlationId);
       const Constants = await import("expo-constants");
