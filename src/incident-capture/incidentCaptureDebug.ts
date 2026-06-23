@@ -26,31 +26,6 @@ export type IncidentCaptureStage =
   | "load_deps_react_native_before_import_expression"
   | "load_deps_react_native_after_import_expression"
   | "load_deps_react_native_import_promise_created"
-  | "load_deps_react_native_before_get_storage"
-  | "load_deps_react_native_post_before_get_storage_marker_1"
-  | "load_deps_react_native_post_before_get_storage_marker_2"
-  | "load_deps_react_native_post_before_get_storage_marker_3"
-  | "load_deps_react_native_after_storage_reference_read"
-  | "load_deps_react_native_after_correlation_reference_read"
-  | "load_deps_react_native_after_active_trace_assignment"
-  | "load_deps_react_native_before_get_storage_call"
-  | "load_deps_react_native_get_storage_call_gap_marker_1"
-  | "load_deps_react_native_get_storage_call_gap_marker_2"
-  | "load_deps_react_native_get_storage_call_gap_marker_3"
-  | "load_deps_react_native_after_get_storage_call"
-  | "load_deps_react_native_get_storage_function_entered"
-  | "load_deps_react_native_entered_get_storage"
-  | "load_deps_react_native_before_async_storage_import"
-  | "load_deps_react_native_after_async_storage_import"
-  | "load_deps_react_native_before_storage_resolution"
-  | "load_deps_react_native_after_storage_resolution"
-  | "load_deps_react_native_before_return_storage"
-  | "load_deps_react_native_after_return_storage_resumed"
-  | "load_deps_react_native_after_get_storage"
-  | "load_deps_react_native_import_promise_created_persist_entered"
-  | "load_deps_react_native_import_promise_created_before_storage_write"
-  | "load_deps_react_native_import_promise_created_after_storage_write"
-  | "load_deps_react_native_import_promise_created_before_return"
   | "load_deps_react_native_after_import_promise_created_await_resumed"
   | "load_deps_react_native_after_import_promise_created_persist"
   | "load_deps_react_native_before_microtask_marker_call"
@@ -109,8 +84,6 @@ type StorageAdapter = {
 };
 
 let storageOverride: StorageAdapter | null = null;
-let lastResolvedStorage: StorageAdapter | null = null;
-let activeGetStorageTraceCorrelationId: string | null = null;
 
 /** Test-only hook to avoid AsyncStorage in unit tests. */
 export function __setIncidentCaptureDebugStorageForTests(
@@ -120,96 +93,9 @@ export function __setIncidentCaptureDebugStorageForTests(
 }
 
 async function getStorage(): Promise<StorageAdapter> {
-  if (activeGetStorageTraceCorrelationId && lastResolvedStorage) {
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_get_storage_function_entered",
-      activeGetStorageTraceCorrelationId,
-    );
-  }
-  if (storageOverride) {
-    if (activeGetStorageTraceCorrelationId) {
-      await writeRawCaptureStage(
-        storageOverride,
-        "load_deps_react_native_entered_get_storage",
-        activeGetStorageTraceCorrelationId,
-      );
-      await writeRawCaptureStage(
-        storageOverride,
-        "load_deps_react_native_before_storage_resolution",
-        activeGetStorageTraceCorrelationId,
-      );
-    }
-    lastResolvedStorage = storageOverride;
-    if (activeGetStorageTraceCorrelationId) {
-      await writeRawCaptureStage(
-        storageOverride,
-        "load_deps_react_native_after_storage_resolution",
-        activeGetStorageTraceCorrelationId,
-      );
-      await writeRawCaptureStage(
-        storageOverride,
-        "load_deps_react_native_before_return_storage",
-        activeGetStorageTraceCorrelationId,
-      );
-    }
-    return storageOverride;
-  }
-  if (activeGetStorageTraceCorrelationId && lastResolvedStorage) {
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_entered_get_storage",
-      activeGetStorageTraceCorrelationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_before_async_storage_import",
-      activeGetStorageTraceCorrelationId,
-    );
-  }
-  const AsyncStorageModule = await import("@react-native-async-storage/async-storage");
-  if (activeGetStorageTraceCorrelationId && lastResolvedStorage) {
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_after_async_storage_import",
-      activeGetStorageTraceCorrelationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_before_storage_resolution",
-      activeGetStorageTraceCorrelationId,
-    );
-  }
-  const AsyncStorage = AsyncStorageModule.default;
-  lastResolvedStorage = AsyncStorage;
-  if (activeGetStorageTraceCorrelationId) {
-    await writeRawCaptureStage(
-      AsyncStorage,
-      "load_deps_react_native_after_storage_resolution",
-      activeGetStorageTraceCorrelationId,
-    );
-    await writeRawCaptureStage(
-      AsyncStorage,
-      "load_deps_react_native_before_return_storage",
-      activeGetStorageTraceCorrelationId,
-    );
-  }
+  if (storageOverride) return storageOverride;
+  const AsyncStorage = (await import("@react-native-async-storage/async-storage")).default;
   return AsyncStorage;
-}
-
-async function writeRawCaptureStage(
-  storage: StorageAdapter,
-  stage: IncidentCaptureStage,
-  correlationId: string,
-): Promise<void> {
-  await storage.setItem(
-    INCIDENT_CAPTURE_DEBUG_STORAGE_KEY,
-    JSON.stringify({
-      stage,
-      at: new Date().toISOString(),
-      correlationId,
-    } satisfies IncidentCaptureDebugRecord),
-  );
 }
 
 export async function loadIncidentCaptureDebugRecord(): Promise<IncidentCaptureDebugRecord | null> {
@@ -238,114 +124,8 @@ export async function persistIncidentCaptureStage(
     at: new Date().toISOString(),
     correlationId,
   };
-  const traceReactNativeImportPromiseCreated =
-    stage === "load_deps_react_native_import_promise_created";
-  if (traceReactNativeImportPromiseCreated && lastResolvedStorage) {
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_before_get_storage",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_post_before_get_storage_marker_1",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_post_before_get_storage_marker_2",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      lastResolvedStorage,
-      "load_deps_react_native_post_before_get_storage_marker_3",
-      correlationId,
-    );
-    const traceStorageReference = lastResolvedStorage;
-    await writeRawCaptureStage(
-      traceStorageReference,
-      "load_deps_react_native_after_storage_reference_read",
-      correlationId,
-    );
-    const traceCorrelationReference = correlationId;
-    await writeRawCaptureStage(
-      traceStorageReference,
-      "load_deps_react_native_after_correlation_reference_read",
-      traceCorrelationReference,
-    );
-  }
-  if (traceReactNativeImportPromiseCreated) {
-    activeGetStorageTraceCorrelationId = correlationId;
-    if (lastResolvedStorage) {
-      await writeRawCaptureStage(
-        lastResolvedStorage,
-        "load_deps_react_native_after_active_trace_assignment",
-        correlationId,
-      );
-      await writeRawCaptureStage(
-        lastResolvedStorage,
-        "load_deps_react_native_before_get_storage_call",
-        correlationId,
-      );
-      await writeRawCaptureStage(
-        lastResolvedStorage,
-        "load_deps_react_native_get_storage_call_gap_marker_1",
-        correlationId,
-      );
-      await writeRawCaptureStage(
-        lastResolvedStorage,
-        "load_deps_react_native_get_storage_call_gap_marker_2",
-        correlationId,
-      );
-      await writeRawCaptureStage(
-        lastResolvedStorage,
-        "load_deps_react_native_get_storage_call_gap_marker_3",
-        correlationId,
-      );
-      await writeRawCaptureStage(
-        lastResolvedStorage,
-        "load_deps_react_native_after_get_storage_call",
-        correlationId,
-      );
-    }
-  }
   const storage = await getStorage();
-  if (traceReactNativeImportPromiseCreated) {
-    activeGetStorageTraceCorrelationId = null;
-    await writeRawCaptureStage(
-      storage,
-      "load_deps_react_native_after_return_storage_resumed",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      storage,
-      "load_deps_react_native_after_get_storage",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      storage,
-      "load_deps_react_native_import_promise_created_persist_entered",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      storage,
-      "load_deps_react_native_import_promise_created_before_storage_write",
-      correlationId,
-    );
-  }
   await storage.setItem(INCIDENT_CAPTURE_DEBUG_STORAGE_KEY, JSON.stringify(record));
-  if (traceReactNativeImportPromiseCreated) {
-    await writeRawCaptureStage(
-      storage,
-      "load_deps_react_native_import_promise_created_after_storage_write",
-      correlationId,
-    );
-    await writeRawCaptureStage(
-      storage,
-      "load_deps_react_native_import_promise_created_before_return",
-      correlationId,
-    );
-  }
   return record;
 }
 
