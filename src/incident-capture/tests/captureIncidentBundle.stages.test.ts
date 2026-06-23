@@ -4,6 +4,7 @@ import { afterEach, describe, it } from "node:test";
 import type { AthleteAuthoritySnapshot } from "../../identity/types";
 import type { CoachWriterSessionRefreshResult } from "../../storage/coachKidStore";
 import { AUTHORITY_SNAPSHOT_CONTRACT_VERSION } from "../authoritySnapshotContract";
+import { COMPETITION_SNAPSHOT_CONTRACT_VERSION } from "../competitionSnapshotContract";
 import {
   captureIncidentBundle,
   type CaptureIncidentBundleDeps,
@@ -117,6 +118,17 @@ function workerArtifact(deviceRole: "parent" | "coach") {
   };
 }
 
+function competitionArtifact(deviceRole: "parent" | "coach") {
+  return {
+    contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+    capturedAt: CAPTURED_AT,
+    deviceRole,
+    sharedAthleteId: "ath_1",
+    visibleCompetitionCount: 0,
+    competitions: [],
+  };
+}
+
 function refreshResult(): CoachWriterSessionRefreshResult {
   return {
     successfulSnapshots: [],
@@ -158,6 +170,7 @@ function parentDeps(
 ): CaptureIncidentBundleDeps {
   return {
     captureAuthoritySnapshot: async () => authorityArtifact("parent"),
+    captureCompetitionSnapshot: async () => competitionArtifact("parent"),
     buildAthleteAuthoritySnapshot: async () => {
       throw new Error("buildAthleteAuthoritySnapshot should not run on parent export");
     },
@@ -199,6 +212,7 @@ function coachDeps(
     captureAuthoritySnapshot: async () => {
       throw new Error("captureAuthoritySnapshot must not run on coach export");
     },
+    captureCompetitionSnapshot: async () => competitionArtifact("coach"),
     buildAthleteAuthoritySnapshot: async () => substrate,
     projectAuthoritySnapshot: () => authorityArtifact("coach"),
     captureHydrationSnapshot: async () => hydrationArtifact("coach"),

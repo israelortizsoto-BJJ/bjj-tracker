@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import type { AthleteAuthoritySnapshot } from "../../identity/types";
 import { AUTHORITY_SNAPSHOT_CONTRACT_VERSION } from "../authoritySnapshotContract";
+import { COMPETITION_SNAPSHOT_CONTRACT_VERSION } from "../competitionSnapshotContract";
 import {
   captureIncidentBundle,
   type CaptureIncidentBundleDeps,
@@ -56,6 +57,17 @@ function workerArtifact(deviceRole: "parent" | "coach") {
   };
 }
 
+function competitionArtifact(deviceRole: "parent" | "coach") {
+  return {
+    contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+    capturedAt: CAPTURED_AT,
+    deviceRole,
+    sharedAthleteId: "ath_1",
+    visibleCompetitionCount: 0,
+    competitions: [],
+  };
+}
+
 function baseDeps(
   overrides: Partial<CaptureIncidentBundleDeps> = {},
 ): CaptureIncidentBundleDeps {
@@ -66,6 +78,13 @@ function baseDeps(
       assert.equal(opts.skipCoachWriterSessionRefresh, true);
       assert.equal(opts.capturedAt, CAPTURED_AT);
       return authorityArtifact("parent");
+    },
+    captureCompetitionSnapshot: async (opts) => {
+      assert.equal(opts.deviceRole, "parent");
+      assert.equal(opts.sharedAthleteId, "ath_1");
+      assert.equal(opts.sourceTrigger, "export");
+      assert.equal(opts.capturedAt, CAPTURED_AT);
+      return competitionArtifact("parent");
     },
     buildAthleteAuthoritySnapshot: async () => {
       throw new Error("buildAthleteAuthoritySnapshot should not run on parent export");
@@ -132,6 +151,7 @@ describe("captureIncidentBundle parent", () => {
     assert.equal(bundle.artifacts.hydration.captureMode, "read_only_state");
     assert.equal(bundle.artifacts.hydration.reconcileAttempted, false);
     assert.equal(bundle.artifacts.workerSession.slice, "parent");
+    assert.equal(bundle.artifacts.competition.sharedAthleteId, "ath_1");
     assert.equal(bundle.bundleVersion, "1");
     assert.equal("topology" in bundle.artifacts, false);
   });

@@ -8,6 +8,21 @@ export {
   type CaptureAuthoritySnapshotOptions,
 } from "./captureAuthoritySnapshot";
 export {
+  COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+  type CompetitionSnapshot,
+  type CompetitionSnapshotCompetition,
+  type CompetitionSnapshotFailureLayer,
+} from "./competitionSnapshotContract";
+export {
+  captureCompetitionSnapshot,
+  type CaptureCompetitionSnapshotOptions,
+} from "./captureCompetitionSnapshot";
+export {
+  projectCompetitionSnapshot,
+  type CompetitionSnapshotCompetitionInput,
+  type ProjectCompetitionSnapshotContext,
+} from "./projectCompetitionSnapshot";
+export {
   projectAuthoritySnapshot,
   type ProjectAuthoritySnapshotContext,
 } from "./projectAuthoritySnapshot";

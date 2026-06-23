@@ -3,6 +3,7 @@ import type { DeviceRole } from "../storage/deviceRoleStore";
 
 import { assembleIncidentBundleEnvelope } from "./assembleIncidentBundleEnvelope";
 import type { captureAuthoritySnapshot } from "./captureAuthoritySnapshot";
+import type { captureCompetitionSnapshot } from "./captureCompetitionSnapshot";
 import type { captureHydrationSnapshot } from "./captureHydrationSnapshot";
 import type { captureWorkerSessionSnapshot } from "./captureWorkerSessionSnapshot";
 import type { captureTopologySnapshot } from "./captureTopologySnapshot";
@@ -33,6 +34,7 @@ export type CaptureIncidentBundleOptions = {
 
 export type CaptureIncidentBundleDeps = {
   captureAuthoritySnapshot: typeof captureAuthoritySnapshot;
+  captureCompetitionSnapshot: typeof captureCompetitionSnapshot;
   buildAthleteAuthoritySnapshot: typeof buildAthleteAuthoritySnapshot;
   projectAuthoritySnapshot: typeof projectAuthoritySnapshot;
   captureHydrationSnapshot: typeof captureHydrationSnapshot;
@@ -69,6 +71,7 @@ function assertCaptureInputs(options: CaptureIncidentBundleOptions): void {
 
 const REQUIRED_DEP_KEYS: (keyof CaptureIncidentBundleDeps)[] = [
   "captureAuthoritySnapshot",
+  "captureCompetitionSnapshot",
   "buildAthleteAuthoritySnapshot",
   "projectAuthoritySnapshot",
   "captureHydrationSnapshot",
@@ -126,10 +129,12 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
       await persistIncidentCaptureStage("load_deps_before_authority", correlationId);
       const [
         { captureAuthoritySnapshot: captureAuthority },
+        { captureCompetitionSnapshot: captureCompetition },
         { buildAthleteAuthoritySnapshot: buildAuthority },
         { projectAuthoritySnapshot: projectAuthority },
       ] = await Promise.all([
         import("./captureAuthoritySnapshot"),
+        import("./captureCompetitionSnapshot"),
         import("../identity/buildAthleteAuthoritySnapshot"),
         import("./projectAuthoritySnapshot"),
       ]);
@@ -167,6 +172,7 @@ async function loadProductionDeps(correlationId: string): Promise<CaptureInciden
 
       const loadedDeps: CaptureIncidentBundleDeps = {
         captureAuthoritySnapshot: captureAuthority,
+        captureCompetitionSnapshot: captureCompetition,
         buildAthleteAuthoritySnapshot: buildAuthority,
         projectAuthoritySnapshot: projectAuthority,
         captureHydrationSnapshot: captureHydration,
@@ -232,7 +238,14 @@ async function captureParentArtifacts(
   });
   await persist("post_worker", correlationId);
 
-  return { authority, hydration, workerSession };
+  const competition = await deps.captureCompetitionSnapshot({
+    deviceRole: "parent",
+    sharedAthleteId: authority.resolvedOperatingAthleteId,
+    sourceTrigger: "export",
+    capturedAt,
+  });
+
+  return { authority, hydration, workerSession, competition };
 }
 
 async function captureCoachArtifacts(
@@ -276,6 +289,13 @@ async function captureCoachArtifacts(
   });
   await persist("post_worker", correlationId);
 
+  const competition = await deps.captureCompetitionSnapshot({
+    deviceRole: "coach",
+    sharedAthleteId: authority.resolvedOperatingAthleteId,
+    sourceTrigger: "export",
+    capturedAt,
+  });
+
   await persist("pre_topology", correlationId);
   const topology = await deps.captureTopologySnapshot({
     authority,
@@ -284,7 +304,7 @@ async function captureCoachArtifacts(
   });
   await persist("post_topology", correlationId);
 
-  return { authority, hydration, workerSession, topology };
+  return { authority, hydration, workerSession, competition, topology };
 }
 
 /**

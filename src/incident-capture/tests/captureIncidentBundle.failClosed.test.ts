@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { AUTHORITY_SNAPSHOT_CONTRACT_VERSION } from "../authoritySnapshotContract";
+import { COMPETITION_SNAPSHOT_CONTRACT_VERSION } from "../competitionSnapshotContract";
 import {
   captureIncidentBundle,
   type CaptureIncidentBundleDeps,
@@ -28,6 +29,14 @@ function baseDeps(
       coachSessionRefreshDegraded: false,
       operatingAthleteRosterCount: 1,
       linkedSharedAthleteIds: ["ath_1"],
+    }),
+    captureCompetitionSnapshot: async () => ({
+      contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+      capturedAt: CAPTURED_AT,
+      deviceRole: "parent",
+      sharedAthleteId: "ath_1",
+      visibleCompetitionCount: 0,
+      competitions: [],
     }),
     buildAthleteAuthoritySnapshot: async () => {
       throw new Error("not used in parent fail-closed tests");
@@ -214,6 +223,14 @@ describe("captureIncidentBundle fail-closed", () => {
               sessionsFetchedOkCount: 1,
               allSessionsFetched: true,
               links: [],
+            }),
+            captureCompetitionSnapshot: async () => ({
+              contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+              capturedAt: CAPTURED_AT,
+              deviceRole: "coach",
+              sharedAthleteId: "ath_1",
+              visibleCompetitionCount: 0,
+              competitions: [],
             }),
             captureTopologySnapshot: async () => {
               throw new Error("topology capture failed");

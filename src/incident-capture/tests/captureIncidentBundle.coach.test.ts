@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import type { AthleteAuthoritySnapshot } from "../../identity/types";
 import type { CoachWriterSessionRefreshResult } from "../../storage/coachKidStore";
 import { AUTHORITY_SNAPSHOT_CONTRACT_VERSION } from "../authoritySnapshotContract";
+import { COMPETITION_SNAPSHOT_CONTRACT_VERSION } from "../competitionSnapshotContract";
 import {
   captureIncidentBundle,
   type CaptureIncidentBundleDeps,
@@ -52,6 +53,17 @@ function coachSubstrate(): AthleteAuthoritySnapshot {
   };
 }
 
+function competitionArtifact(deviceRole: "parent" | "coach") {
+  return {
+    contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+    capturedAt: CAPTURED_AT,
+    deviceRole,
+    sharedAthleteId: "ath_1",
+    visibleCompetitionCount: 0,
+    competitions: [],
+  };
+}
+
 function coachDeps(
   overrides: Partial<CaptureIncidentBundleDeps> = {},
 ): CaptureIncidentBundleDeps {
@@ -61,6 +73,13 @@ function coachDeps(
   return {
     captureAuthoritySnapshot: async () => {
       throw new Error("captureAuthoritySnapshot must not run on coach export");
+    },
+    captureCompetitionSnapshot: async (opts) => {
+      assert.equal(opts.deviceRole, "coach");
+      assert.equal(opts.sharedAthleteId, "ath_1");
+      assert.equal(opts.sourceTrigger, "export");
+      assert.equal(opts.capturedAt, CAPTURED_AT);
+      return competitionArtifact("coach");
     },
     buildAthleteAuthoritySnapshot: async (opts) => {
       reconcileCallCount += 1;
@@ -191,6 +210,7 @@ describe("captureIncidentBundle coach", () => {
     assert.equal(bundle.artifacts.hydration.captureMode, "shared_authority_reconcile");
     assert.equal(bundle.artifacts.workerSession.slice, "coach");
     assert.equal(bundle.artifacts.authority.sourceTrigger, "export");
+    assert.equal(bundle.artifacts.competition.sharedAthleteId, "ath_1");
     assert.equal(bundle.artifacts.topology.captureMode, "coach_substrate_probe");
     assert.equal(bundle.writerLinkCount, 1);
   });

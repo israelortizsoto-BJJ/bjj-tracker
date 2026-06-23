@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { AUTHORITY_SNAPSHOT_CONTRACT_VERSION } from "../authoritySnapshotContract";
+import { COMPETITION_SNAPSHOT_CONTRACT_VERSION } from "../competitionSnapshotContract";
 import { HYDRATION_SNAPSHOT_CONTRACT_VERSION } from "../hydrationSnapshotContract";
 import type { IncidentBundleV1, IncidentBundleV2 } from "../incidentBundleContract";
 import { validateIncidentBundle } from "../validateIncidentBundle";
@@ -54,6 +55,14 @@ function validBundle(deviceRole: "parent" | "coach" = "parent"): IncidentBundleV
         captureMode: "read_only_state",
         hydrationVersion: 1,
       },
+      competition: {
+        contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+        capturedAt: CAPTURED_AT,
+        deviceRole,
+        sharedAthleteId: "ath_1",
+        visibleCompetitionCount: 0,
+        competitions: [],
+      },
     },
   };
 }
@@ -100,6 +109,14 @@ function validCoachV2Bundle(): IncidentBundleV2 {
         syncConfigured: true,
         captureMode: "shared_authority_reconcile",
         hydrationVersion: 1,
+      },
+      competition: {
+        contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
+        capturedAt: CAPTURED_AT,
+        deviceRole: "coach",
+        sharedAthleteId: "ath_1",
+        visibleCompetitionCount: 0,
+        competitions: [],
       },
       topology: {
         contractVersion: TOPOLOGY_SNAPSHOT_CONTRACT_VERSION,
@@ -155,10 +172,11 @@ describe("validateIncidentBundle", () => {
       authority: bundle.artifacts.authority,
       workerSession: bundle.artifacts.workerSession,
       hydration: bundle.artifacts.hydration,
+      competition: bundle.artifacts.competition,
     } as IncidentBundleV2["artifacts"];
     assert.throws(
       () => validateIncidentBundle(bundle),
-      /artifacts must contain exactly authority, workerSession, hydration, topology/,
+      /artifacts must contain exactly authority, workerSession, hydration, competition, topology/,
     );
   });
 

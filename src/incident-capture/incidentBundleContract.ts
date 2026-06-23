@@ -1,4 +1,5 @@
 import type { AuthoritySnapshot } from "./authoritySnapshotContract";
+import type { CompetitionSnapshot } from "./competitionSnapshotContract";
 import type { HydrationSnapshot } from "./hydrationSnapshotContract";
 import type { TopologySnapshot } from "./topologySnapshotContract";
 import type { WorkerSessionSnapshot } from "./workerSessionSnapshotContract";
@@ -19,6 +20,7 @@ export type IncidentBundleArtifactsV1 = {
   authority: AuthoritySnapshot;
   workerSession: WorkerSessionSnapshot;
   hydration: HydrationSnapshot;
+  competition: CompetitionSnapshot;
 };
 
 export type IncidentBundleArtifactsCoachV2 = IncidentBundleArtifactsV1 & {
