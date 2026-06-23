@@ -60,6 +60,870 @@ If missing after worker_store_artifact_set
 If present through worker_get_artifact_set
 → parent hydration/render issue
 
+# EOD DOCUMENTS — 6/20/2026 → 6/22/2026
+
+## MatMind / BJJ Tracker
+
+## Incident Capture Investigation Period
+
+## Status: Active Investigation / Forensics Doctrine Correction
+
+---
+
+# Executive Summary
+
+This period was dominated by investigation of the **TestFlight Incident Bundle export crash**.
+
+The final stabilization result was:
+
+```text
+Build 79:
+await import("react-native")
+→ terminated after load_deps_before_platform_react_native
+
+Build 80:
+require("react-native")
+→ reached capture_complete and export_complete
+```
+
+The proven failure boundary was the React Native dependency binding inside:
+
+```text
+loadProductionDeps()
+```
+
+The known-good implementation keeps Incident Capture's lazy dependency-loading shape but binds React Native with:
+
+```ts
+const { Platform } =
+  require("react-native") as typeof import("react-native");
+```
+
+This should remain localized to Incident Capture. It is a targeted compatibility result, not a general instruction to replace dynamic imports elsewhere.
+
+The most important process outcome was not only localization of the crash.
+
+The most important outcome was discovery that our forensic instrumentation had begun altering the execution path being measured.
+
+Builds 69–77 progressively added persistence-boundary tracing inside:
+
+```text
+persistIncidentCaptureStage()
+```
+
+By Build 77, the special-case instrumentation path had grown substantially beyond the original production implementation.
+
+Build 78 restored the original production-shaped execution path and immediately produced a different floor.
+
+That result strongly suggests we had crossed into:
+
+```text
+observer effect territory
+```
+
+where instrumentation itself was influencing observed behavior.
+
+This is now considered one of the most important engineering lessons of this investigation.
+
+Build 79 then restored the React Native corridor to production-shaped dynamic import execution and still terminated at:
+
+```text
+load_deps_before_platform_react_native
+```
+
+Build 80 changed only the React Native binding mechanism from dynamic `import("react-native")` to local `require("react-native")`; export completed successfully. That is the first TestFlight proof that Incident Capture export itself is viable again.
+
+---
+
+# Primary Objective
+
+Investigate TestFlight crash occurring during:
+
+```text
+Export Incident Bundle
+```
+
+while maintaining:
+
+```text
+Evidence First
+No speculative fixes
+No architecture mutations
+Forensic localization only
+```
+
+---
+
+# Governing Doctrine Reaffirmed
+
+Throughout this period several important doctrine corrections emerged.
+
+---
+
+## 1. Evidence Before Theory
+
+Repeated reminder:
+
+```text
+Observed floor
+→ Gather evidence
+→ Narrow corridor
+→ Form theory
+```
+
+NOT:
+
+```text
+Observed floor
+→ Assume root cause
+→ Build fix
+→ Hope
+```
+
+---
+
+## 2. Production Shape Preservation
+
+Major lesson learned.
+
+Instrumentation must not substantially alter:
+
+```text
+control flow
+storage behavior
+native crossings
+async sequencing
+```
+
+or the resulting data becomes less trustworthy.
+
+This became the central finding of the period.
+
+---
+
+## 3. Forensics Must Be Measured
+
+New realization:
+
+We currently lack a formal system for evaluating whether forensic instrumentation itself has become a source of execution distortion.
+
+Future forensic work must include:
+
+```text
+Instrumentation Cost
+Execution Shape Impact
+Storage Side Effects
+Native Crossings Added
+```
+
+as first-class review criteria.
+
+---
+
+# Investigation Timeline
+
+---
+
+# Early Investigation State
+
+At the start of this period the crash localization effort was focused around:
+
+```text
+load_deps_react_native_import_promise_created
+```
+
+within:
+
+```text
+loadProductionDeps()
+```
+
+inside:
+
+```text
+captureIncidentBundle.ts
+```
+
+Observed floors repeatedly pointed near:
+
+```text
+React Native import promise creation
+```
+
+leading to increasingly narrow localization.
+
+---
+
+# Build 69
+
+Commit introduced:
+
+```text
+ddffb90
+Localize incident stage persistence boundary
+```
+
+New markers added:
+
+```text
+load_deps_react_native_import_promise_created_persist_entered
+load_deps_react_native_import_promise_created_before_storage_write
+load_deps_react_native_import_promise_created_after_storage_write
+load_deps_react_native_import_promise_created_before_return
+```
+
+Goal:
+
+Determine whether failure occurred:
+
+```text
+before storage write
+during storage write
+after storage write
+```
+
+Important later realization:
+
+These markers added additional AsyncStorage writes before and after the original target stage.
+
+---
+
+# Builds 70–77
+
+Progressive forensic narrowing continued.
+
+Major additions included:
+
+---
+
+## lastResolvedStorage
+
+Introduced:
+
+```ts
+let lastResolvedStorage: StorageAdapter | null = null;
+```
+
+Purpose:
+
+Reuse already-resolved storage adapter to emit markers before:
+
+```text
+getStorage()
+```
+
+---
+
+## writeRawCaptureStage
+
+Introduced helper:
+
+```ts
+writeRawCaptureStage(...)
+```
+
+Purpose:
+
+Persist marker stages directly.
+
+---
+
+## activeGetStorageTraceCorrelationId
+
+Introduced:
+
+```ts
+activeGetStorageTraceCorrelationId
+```
+
+Purpose:
+
+Activate tracing within:
+
+```text
+getStorage()
+```
+
+itself.
+
+---
+
+## getStorage Internal Tracing
+
+Markers added:
+
+```text
+entered_get_storage
+before_async_storage_import
+after_async_storage_import
+before_storage_resolution
+after_storage_resolution
+before_return_storage
+```
+
+---
+
+## Invocation Corridor Markers
+
+Markers added around:
+
+```text
+before_get_storage_call
+after_get_storage_call
+```
+
+---
+
+## Gap Markers
+
+Several builds added:
+
+```text
+gap_marker_1
+gap_marker_2
+gap_marker_3
+```
+
+at increasingly narrow locations.
+
+---
+
+## Source-Tied Markers
+
+Gap markers later replaced with markers tied directly to specific source statements.
+
+Goal:
+
+Reduce ambiguity.
+
+---
+
+# Major Audit Phase
+
+Multiple repository audits were conducted.
+
+These audits became more valuable than additional instrumentation.
+
+---
+
+## Audit: writeRawCaptureStage
+
+Confirmed:
+
+```ts
+writeRawCaptureStage()
+→ JSON.stringify()
+→ AsyncStorage.setItem()
+```
+
+Meaning:
+
+Every marker added:
+
+```text
+another AsyncStorage write
+```
+
+to the same key.
+
+---
+
+## Audit: AsyncStorage Call Chain
+
+Confirmed production path:
+
+```text
+persistIncidentCaptureStage
+↓
+AsyncStorage.setItem
+↓
+RCTAsyncStorage.multiSet
+↓
+RNCAsyncStorage
+↓
+iOS file-backed manifest storage
+```
+
+Important finding:
+
+The incident debug record is small enough to remain:
+
+```text
+manifest-backed
+```
+
+rather than separate-file-backed.
+
+---
+
+## Audit: Concurrent Export Risk
+
+Confirmed:
+
+```text
+Export button remains pressable
+```
+
+while exporting.
+
+No guard:
+
+```ts
+if (isExportingIncidentBundle) return;
+```
+
+exists.
+
+No disabled state exists.
+
+Therefore:
+
+```text
+Concurrent exports are repo-supported.
+```
+
+---
+
+## Audit: productionDepsPromise
+
+Confirmed:
+
+```ts
+let productionDepsPromise: Promise | null
+```
+
+is:
+
+```text
+globally cached
+never reset
+```
+
+Meaning:
+
+A rejected promise can poison future exports until process restart.
+
+Important finding but not yet proven as root cause.
+
+---
+
+# Major Realization
+
+After several builds of instrumentation accumulation:
+
+Observed floor became:
+
+```text
+load_deps_react_native_before_get_storage
+```
+
+This stage:
+
+```text
+did not exist in original production code
+```
+
+It existed only because of forensic instrumentation.
+
+This triggered a large review.
+
+---
+
+# Repository History Reconstruction
+
+Git archaeology was performed.
+
+Important commits identified:
+
+---
+
+## ddffb90
+
+```text
+Localize incident stage persistence boundary
+```
+
+First introduction of:
+
+```text
+traceReactNativeImportPromiseCreated
+```
+
+and special-case persistence path.
+
+---
+
+## ad6d5e8
+
+Introduced:
+
+```text
+lastResolvedStorage
+writeRawCaptureStage
+before_get_storage
+```
+
+---
+
+## f4ece24
+
+Introduced:
+
+```text
+activeGetStorageTraceCorrelationId
+```
+
+and:
+
+```text
+getStorage tracing
+```
+
+---
+
+## Later commits
+
+Added:
+
+```text
+gap markers
+call corridor markers
+source operation markers
+```
+
+---
+
+# Critical Audit Conclusion
+
+Current path had diverged significantly from original production behavior.
+
+Original path:
+
+```text
+create record
+↓
+getStorage()
+↓
+storage.setItem(actual stage)
+↓
+return
+```
+
+Current path:
+
+```text
+many instrumentation writes
+↓
+special tracing
+↓
+global state mutation
+↓
+more instrumentation writes
+↓
+eventual actual stage write
+```
+
+Audit estimated:
+
+```text
+~23 writes before actual target write
+```
+
+in the forensic path.
+
+Original production path:
+
+```text
+0 writes before actual target write
+```
+
+---
+
+# Decision: Restore Production Shape
+
+Decision reached:
+
+Return to production-shaped persistence behavior.
+
+Goal:
+
+```text
+Observe production reality
+not instrumentation reality
+```
+
+---
+
+# Build 78
+
+Implemented narrow restoration.
+
+Removed:
+
+```text
+traceReactNativeImportPromiseCreated
+lastResolvedStorage
+activeGetStorageTraceCorrelationId
+writeRawCaptureStage
+all persistence-boundary markers
+all getStorage tracing
+```
+
+Kept:
+
+```text
+load_deps_react_native_import_promise_created
+load_deps_react_native_after_import_promise_created_await_resumed
+```
+
+Validation:
+
+```text
+Typecheck passed
+Targeted tests passed
+```
+
+---
+
+# Build 78 Result
+
+Most important result of the period.
+
+Observed floor became:
+
+```text
+load_deps_react_native_after_microtask_yield
+```
+
+NOT:
+
+```text
+load_deps_react_native_before_get_storage
+```
+
+NOT:
+
+```text
+load_deps_react_native_import_promise_created
+```
+
+This means:
+
+The localization floor moved backward immediately after removing instrumentation.
+
+---
+
+# Interpretation
+
+Strong evidence of:
+
+```text
+Instrumentation-Induced Observer Effect
+```
+
+The forensic machinery itself was affecting:
+
+```text
+storage writes
+execution ordering
+native crossings
+observed floors
+```
+
+Builds 69–77 were no longer observing purely production behavior.
+
+This is now considered a major finding.
+
+---
+
+# Forensics Doctrine v2
+
+Emerging doctrine:
+
+Before adding instrumentation ask:
+
+```text
+How many additional native crossings?
+How many additional AsyncStorage writes?
+How many global mutations?
+How many execution branches?
+How much production-shape drift?
+```
+
+If the answer is large:
+
+```text
+Stop.
+```
+
+---
+
+# Impact To Core App Architecture
+
+No production architecture changes occurred.
+
+Protected systems remain intact:
+
+```text
+Canonical Authority
+Competition Overlay Architecture
+Coach Breakdown Overlay System
+Hydration Systems
+ACK Systems
+Athlete Isolation
+Competition Authority Model
+```
+
+No changes made to:
+
+```text
+Competition topology
+Hydration flows
+Coach review overlays
+Competition storage
+Training authority
+Cross-device sync
+```
+
+---
+
+# Competition / Coach Breakdown Relevance
+
+Important clarification reached:
+
+Incident Capture investigation currently appears isolated from:
+
+```text
+Competition Hydration
+Coach Match Breakdown Hydration
+Competition Overlay Publishing
+Canonical Competition Records
+```
+
+Current evidence does NOT connect:
+
+```text
+Incident Capture crash
+```
+
+to:
+
+```text
+Coach match breakdown hydration
+Competition summary divergence
+Cross-device competition sync
+```
+
+Those remain separate investigative tracks.
+
+---
+
+# Stabilization Result
+
+Incident Capture export is now considered restored for TestFlight based on Build 80.
+
+Build 79 proved the production-shaped dynamic import corridor still failed:
+
+```text
+load_deps_before_platform_react_native
+→ await import("react-native")
+→ termination
+```
+
+Build 80 proved the local CommonJS binding succeeds in the same boundary:
+
+```text
+load_deps_before_platform_react_native
+→ require("react-native")
+→ load_deps_after_platform_react_native
+→ capture_complete
+→ export_complete
+```
+
+Remaining open items are stabilization cleanup only:
+
+```text
+Keep require("react-native") localized to Incident Capture.
+Keep production-shaped persistence.
+Do not reintroduce RN-specific forensic promise choreography.
+Use Incident Capture on real incidents before designing broader observability.
+```
+
+---
+
+# Risks To Avoid
+
+Do NOT:
+
+```text
+Reintroduce persistence-boundary tracing
+Add multiple AsyncStorage writes
+Add getStorage tracing
+Add special persistence branches
+Add instrumentation that changes production shape
+```
+
+Do NOT return to:
+
+```text
+Trial-and-error debugging
+Speculative fixes
+Architecture mutation
+```
+
+---
+
+# Deliverables Produced
+
+During this period:
+
+* Extensive repo audits
+* AsyncStorage call-chain audit
+* productionDepsPromise audit
+* Concurrent export audit
+* Instrumentation history reconstruction
+* Commit lineage reconstruction
+* Persistence path restoration
+* Forensics doctrine refinement
+* Observer-effect discovery
+
+---
+
+# Recommended Starting Point (Next Session)
+
+1. Treat Build 80 as the known-good Incident Capture export path.
+2. Keep `require("react-native")` in `captureIncidentBundle.ts`.
+3. Do not convert it back to dynamic `import("react-native")`.
+4. Do not convert it to top-level static import unless a separate hardening review approves that timing change.
+5. Use Incident Capture exports on real Parent / Coach incidents.
+6. Continue protecting production execution shape during any future forensic work.
+
+---
+
+## Status At Close Of 6/22
+
+```text
+ACTIVE PHASE:
+Incident Capture Stabilization
+
+KNOWN-GOOD EXPORT PATH:
+load_deps_before_platform_react_native
+→ require("react-native")
+→ load_deps_after_platform_react_native
+→ capture_complete
+→ export_complete
+
+BIGGEST FINDING:
+Dynamic import("react-native") failed in TestFlight Incident Capture;
+localized require("react-native") succeeded.
+
+NEXT DECISION:
+Use Incident Capture on real TestFlight incidents;
+avoid additional forensic instrumentation unless a new failure appears.
+```
+
+
+
 # EOD DEV HANDOFF — 6/18/2026
 
 ## Branch
