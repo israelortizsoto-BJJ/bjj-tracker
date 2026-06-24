@@ -31,6 +31,7 @@ import {
   coachSyncDeleteSessionAthlete,
   coachSyncFetchSession,
 } from "../services/coachWeeklySyncApi";
+import { startCoachAnalysisReadinessRun } from "../domain/competition/coachAnalysisReadinessCoordinator";
 import type { CoachLink } from "../types/coachShare";
 import {
   deleteAllKidCompetitionEntriesForKid,
@@ -1639,6 +1640,17 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
     };
   }
 
+  const readinessRun =
+    writerLinks.length > 0
+      ? await startCoachAnalysisReadinessRun({
+          initialSharedAthleteIds: knownLocalSharedAthleteIds,
+          linkKeys: writerLinks.map((link) =>
+            normalizeInviteLinkToken(link.weeklySync!.linkToken),
+          ),
+          startedAt: new Date().toISOString(),
+        })
+      : null;
+
   for (const link of writerLinks) {
     const weeklySync = link.weeklySync!;
     const tokenKey = normalizeInviteLinkToken(weeklySync.linkToken);
@@ -1722,6 +1734,7 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
         session,
         tokenKey,
       );
+      readinessRun?.recordSuccessfulSession(tokenKey, session);
       successfulSnapshots.push({
         linkTokenNorm: tokenKey,
         athletes: session.athletes,
@@ -1735,6 +1748,7 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
       inviteSessionAthletesByToken[tokenKey] = { names, fetchFailed: false };
     } catch (error) {
+      readinessRun?.recordFailedLink(tokenKey);
       if (__DEV__) {
         console.log("[REMOTE_HYDRATION_PROVENANCE]", {
           source: "local_fallback",
@@ -1872,6 +1886,7 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       });
     }
     const reconcileFinishedAt = new Date().toISOString();
+    await readinessRun?.finalize(reconcileFinishedAt);
     bumpCoachSyncHydrationVersion({
       reason: "refreshCoachWriterSessionsAndReconcileStores_complete",
     });
@@ -1924,6 +1939,7 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       writerLinkCount: writerLinks.length,
       sessionsFetchedOkCount: successfulSnapshots.length,
     });
+    await readinessRun?.finalize(new Date().toISOString());
     return {
       successfulSnapshots,
       writerLinks,

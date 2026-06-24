@@ -40,6 +40,23 @@ export type HydrationCacheLinkEvidence = {
   dataSource?: "network" | "cache" | "none";
 };
 
+export type HydrationAnalysisReadinessEvidence = {
+  sharedAthleteId: string;
+  state: "PENDING" | "READY" | "EMPTY_READY" | "FAILED";
+  generation: number;
+  startedAt: string;
+  resolvedAt: string | null;
+  hydrationSource:
+    | "coach_reconcile"
+    | "parent_session_refresh"
+    | "persisted_replay";
+  artifactSetUpdatedAt: string | null;
+  currentArtifactStoreUpdatedAt: string | null;
+  lastConfirmedState: "READY" | "EMPTY_READY" | null;
+  lastConfirmedAt: string | null;
+  lastConfirmedArtifactSetUpdatedAt: string | null;
+};
+
 /** Production-safe, redacted hydration evidence for incident capture (Tier 1). */
 export type HydrationSnapshot = {
   contractVersion: typeof HYDRATION_SNAPSHOT_CONTRACT_VERSION;
@@ -73,4 +90,5 @@ export type HydrationSnapshot = {
   sessionCachePresentCount?: number;
   parentWeeklyFetchSource?: "cache" | "network" | "none";
   parentOverlayArtifactsPresent?: boolean;
+  analysisReadiness: HydrationAnalysisReadinessEvidence[];
 };

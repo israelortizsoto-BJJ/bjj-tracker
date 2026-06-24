@@ -204,10 +204,15 @@ export function medalTierFromKidResult(result: KidCompetitionResult | undefined)
 /** Local rows mirrored from the worker use `id` `shared-comp-<workerCompetitionId>`. */
 const SHARED_COMP_LOCAL_ID_PREFIX = "shared-comp-";
 
+export function kidCompetitionEntryWorkerId(entry: KidCompetitionEntry): string {
+  const sharedCompetitionId =
+    typeof entry.sharedCompetitionId === "string" ? entry.sharedCompetitionId.trim() : "";
+  if (sharedCompetitionId) return sharedCompetitionId;
+  if (!entry.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX)) return "";
+  return entry.id.slice(SHARED_COMP_LOCAL_ID_PREFIX.length).trim();
+}
+
 /** True when this competition row is tied to the sync worker (swipe delete disabled on parent weekly list). */
 export function kidCompetitionEntryIsSyncedFromWorker(entry: KidCompetitionEntry): boolean {
-  const sid =
-    typeof entry.sharedCompetitionId === "string" ? entry.sharedCompetitionId.trim() : "";
-  if (sid) return true;
-  return entry.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX);
+  return Boolean(kidCompetitionEntryWorkerId(entry));
 }

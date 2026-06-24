@@ -54,6 +54,7 @@ function validBundle(deviceRole: "parent" | "coach" = "parent"): IncidentBundleV
         syncConfigured: true,
         captureMode: "read_only_state",
         hydrationVersion: 1,
+        analysisReadiness: [],
       },
       competition: {
         contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
@@ -109,6 +110,7 @@ function validCoachV2Bundle(): IncidentBundleV2 {
         syncConfigured: true,
         captureMode: "shared_authority_reconcile",
         hydrationVersion: 1,
+        analysisReadiness: [],
       },
       competition: {
         contractVersion: COMPETITION_SNAPSHOT_CONTRACT_VERSION,
@@ -213,6 +215,112 @@ describe("validateIncidentBundle", () => {
     assert.throws(
       () => validateIncidentBundle(bundle),
       /invalid authority.contractVersion/,
+    );
+  });
+
+  it("rejects an invalid hydration readiness state", () => {
+    const bundle = validBundle();
+    bundle.artifacts.hydration.analysisReadiness = [
+      {
+        sharedAthleteId: "ath_1",
+        state: "READY",
+        generation: 1,
+        startedAt: CAPTURED_AT,
+        resolvedAt: CAPTURED_AT,
+        hydrationSource: "coach_reconcile",
+        artifactSetUpdatedAt: null,
+        currentArtifactStoreUpdatedAt: null,
+        lastConfirmedState: null,
+        lastConfirmedAt: null,
+        lastConfirmedArtifactSetUpdatedAt: null,
+      },
+    ];
+    (
+      bundle.artifacts.hydration.analysisReadiness[0] as unknown as {
+        state: string;
+      }
+    ).state = "UNKNOWN";
+
+    assert.throws(
+      () => validateIncidentBundle(bundle),
+      /invalid hydration.analysisReadiness.state/,
+    );
+  });
+
+  it("rejects a negative hydration readiness generation", () => {
+    const bundle = validBundle();
+    bundle.artifacts.hydration.analysisReadiness = [
+      {
+        sharedAthleteId: "ath_1",
+        state: "PENDING",
+        generation: -1,
+        startedAt: CAPTURED_AT,
+        resolvedAt: null,
+        hydrationSource: "persisted_replay",
+        artifactSetUpdatedAt: null,
+        currentArtifactStoreUpdatedAt: null,
+        lastConfirmedState: null,
+        lastConfirmedAt: null,
+        lastConfirmedArtifactSetUpdatedAt: null,
+      },
+    ];
+
+    assert.throws(
+      () => validateIncidentBundle(bundle),
+      /invalid hydration.analysisReadiness.generation/,
+    );
+  });
+
+  it("rejects a missing hydration readiness athlete id", () => {
+    const bundle = validBundle();
+    bundle.artifacts.hydration.analysisReadiness = [
+      {
+        sharedAthleteId: "",
+        state: "FAILED",
+        generation: 1,
+        startedAt: CAPTURED_AT,
+        resolvedAt: CAPTURED_AT,
+        hydrationSource: "coach_reconcile",
+        artifactSetUpdatedAt: null,
+        currentArtifactStoreUpdatedAt: null,
+        lastConfirmedState: null,
+        lastConfirmedAt: null,
+        lastConfirmedArtifactSetUpdatedAt: null,
+      },
+    ];
+
+    assert.throws(
+      () => validateIncidentBundle(bundle),
+      /hydration.analysisReadiness.sharedAthleteId is required/,
+    );
+  });
+
+  it("rejects a non-string current artifact store timestamp", () => {
+    const bundle = validBundle();
+    bundle.artifacts.hydration.analysisReadiness = [
+      {
+        sharedAthleteId: "ath_1",
+        state: "READY",
+        generation: 1,
+        startedAt: CAPTURED_AT,
+        resolvedAt: CAPTURED_AT,
+        hydrationSource: "coach_reconcile",
+        artifactSetUpdatedAt: CAPTURED_AT,
+        currentArtifactStoreUpdatedAt: CAPTURED_AT,
+        lastConfirmedState: "READY",
+        lastConfirmedAt: CAPTURED_AT,
+        lastConfirmedArtifactSetUpdatedAt: CAPTURED_AT,
+      },
+    ];
+    (
+      bundle.artifacts.hydration.analysisReadiness[0] as unknown as {
+        currentArtifactStoreUpdatedAt: unknown;
+      }
+    ).currentArtifactStoreUpdatedAt = 42;
+
+    assert.throws(
+      () => validateIncidentBundle(bundle),
+      /hydration.analysisReadiness.currentArtifactStoreUpdatedAt must be a string or null/,
     );
   });
 });

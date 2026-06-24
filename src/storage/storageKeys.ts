@@ -46,6 +46,9 @@ export const StorageKeys = {
   /** Parent/coach read cache: remote coach-owned match breakdown artifacts keyed by athlete. */
   coachMatchBreakdownArtifactsByAthleteId: "mm:v1:coachMatchBreakdownArtifactsByAthleteId",
 
+  /** P6-owned per-athlete readiness for authoritative coach analysis hydration. */
+  coachAnalysisReadinessByAthleteId: "mm:v1:coachAnalysisReadinessByAthleteId",
+
   /** Coach lane: parent-published training proof artifacts keyed by `sharedAthleteId`. */
   coachTrainingProofByAthleteId: "mm:v1:coachTrainingProofByAthleteId",
 

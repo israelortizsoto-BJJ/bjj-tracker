@@ -32,6 +32,10 @@ import {
   setCoachesById,
 } from "../../../src/storage/coachShareStore";
 import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
+import {
+  startCoachAnalysisReadinessRun,
+  type CoachAnalysisReadinessRun,
+} from "../../../src/domain/competition/coachAnalysisReadinessCoordinator";
 import type { CoachIdentity, CoachLink } from "../../../src/types/coachShare";
 
 const UI = {
@@ -87,7 +91,14 @@ export default function CoachJoinScreen() {
     }
 
     setBusy(true);
+    let readinessRun: CoachAnalysisReadinessRun | null = null;
     try {
+      readinessRun = await startCoachAnalysisReadinessRun({
+        initialSharedAthleteIds: [],
+        linkKeys: [token],
+        startedAt: new Date().toISOString(),
+        hydrationSource: "parent_session_refresh",
+      });
       const session = await coachSyncFetchSession(token);
       const { parentWriterSecret } = await coachSyncRedeemParentWriter(
         token,
@@ -215,6 +226,8 @@ export default function CoachJoinScreen() {
         session,
         token,
       );
+      readinessRun.recordSuccessfulSession(token, session);
+      await readinessRun.finalize(new Date().toISOString());
 
       if (__DEV__ && session.athletes.length === 0) {
         console.log("[mm:identity-backbone] join_cached_session_roster_empty", {
@@ -247,6 +260,10 @@ export default function CoachJoinScreen() {
         params: { linkId: linkIdForParentAthletes },
       });
     } catch (e) {
+      if (readinessRun) {
+        readinessRun.recordFailedLink(token);
+        await readinessRun.finalize(new Date().toISOString());
+      }
       const msg =
         e instanceof CoachWeeklySyncApiError
           ? e.message

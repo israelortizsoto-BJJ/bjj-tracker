@@ -10,7 +10,9 @@ import {
   overlayAnnotationsFromCoachMatchBreakdownArtifactSet,
 } from "../../domain/competition/mergeCoachBreakdownIntoMatches";
 import {
+  competitionOverlayAnnotationsFromEmbeddedMatches,
   projectCompetitionCompeteView,
+  selectCompetitionOverlayAnnotations,
   type CompetitionMatchOverlayAnnotation,
 } from "../../domain/competition/projectCompetitionCompeteView";
 import { getCoachMatchBreakdownArtifactSet } from "../../storage/coachMatchBreakdownArtifactStore";
@@ -181,12 +183,14 @@ export function CompetitionCard({
     ]),
   );
 
-  const legacyOverlayAnnotations = entry.matches.map((match) => ({
-    matchLineageKey: match.id,
-    coachNote: match.coachNote,
-  }));
   const hydratedOverlayAnnotations =
     hydratedOverlayState?.key === overlayHydrationKey ? hydratedOverlayState.annotations : null;
+  const legacyOverlayAnnotations =
+    competitionOverlayAnnotationsFromEmbeddedMatches(entry.matches);
+  const coachOverlaySelection = selectCompetitionOverlayAnnotations({
+    hydratedAnnotations: hydratedOverlayAnnotations,
+    embeddedAnnotations: legacyOverlayAnnotations,
+  });
   const hydrationKeyMismatch =
     hydratedOverlayState !== null && hydratedOverlayState.key !== overlayHydrationKey;
   const hydrationPending = hydratedOverlayState === null;
@@ -229,8 +233,7 @@ export function CompetitionCard({
       ? projectCompetitionCompeteView({
           shell: entry,
           topologyArtifact,
-          overlayAnnotations:
-            hydratedOverlayAnnotations?.length ? hydratedOverlayAnnotations : legacyOverlayAnnotations,
+          overlayAnnotations: coachOverlaySelection.annotations,
           fallbackMatches: entry.matches,
         })
       : deviceRole === "parent"

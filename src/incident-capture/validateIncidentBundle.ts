@@ -37,6 +37,18 @@ const COMPETITION_FAILURE_LAYERS = new Set([
   "render_projection_missing",
   "none_detected",
 ]);
+const HYDRATION_READINESS_STATES = new Set([
+  "PENDING",
+  "READY",
+  "EMPTY_READY",
+  "FAILED",
+]);
+const HYDRATION_READINESS_SOURCES = new Set([
+  "coach_reconcile",
+  "parent_session_refresh",
+  "persisted_replay",
+]);
+const HYDRATION_CONFIRMED_STATES = new Set(["READY", "EMPTY_READY"]);
 
 function assertNonEmptyString(value: unknown, field: string): asserts value is string {
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -47,6 +59,95 @@ function assertNonEmptyString(value: unknown, field: string): asserts value is s
 function assertStringArray(value: unknown, field: string): asserts value is string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new Error(`validateIncidentBundle: ${field} must be a string array`);
+  }
+}
+
+function assertNullableString(value: unknown, field: string): void {
+  if (value !== null && typeof value !== "string") {
+    throw new Error(`validateIncidentBundle: ${field} must be a string or null`);
+  }
+}
+
+function validateHydrationAnalysisReadiness(
+  hydration: IncidentBundleArtifactsV1["hydration"],
+): void {
+  if (!Array.isArray(hydration.analysisReadiness)) {
+    throw new Error(
+      "validateIncidentBundle: hydration.analysisReadiness required",
+    );
+  }
+  for (const row of hydration.analysisReadiness) {
+    assertNonEmptyString(
+      row.sharedAthleteId,
+      "hydration.analysisReadiness.sharedAthleteId",
+    );
+    if (!HYDRATION_READINESS_STATES.has(row.state)) {
+      throw new Error(
+        "validateIncidentBundle: invalid hydration.analysisReadiness.state",
+      );
+    }
+    if (
+      !Number.isInteger(row.generation) ||
+      row.generation < 0
+    ) {
+      throw new Error(
+        "validateIncidentBundle: invalid hydration.analysisReadiness.generation",
+      );
+    }
+    assertNonEmptyString(
+      row.startedAt,
+      "hydration.analysisReadiness.startedAt",
+    );
+    assertNullableString(
+      row.resolvedAt,
+      "hydration.analysisReadiness.resolvedAt",
+    );
+    if (
+      row.state === "PENDING" &&
+      row.resolvedAt !== null
+    ) {
+      throw new Error(
+        "validateIncidentBundle: PENDING hydration readiness must not be resolved",
+      );
+    }
+    if (
+      row.state !== "PENDING" &&
+      (typeof row.resolvedAt !== "string" ||
+        row.resolvedAt.trim().length === 0)
+    ) {
+      throw new Error(
+        "validateIncidentBundle: terminal hydration readiness requires resolvedAt",
+      );
+    }
+    if (!HYDRATION_READINESS_SOURCES.has(row.hydrationSource)) {
+      throw new Error(
+        "validateIncidentBundle: invalid hydration.analysisReadiness.hydrationSource",
+      );
+    }
+    assertNullableString(
+      row.artifactSetUpdatedAt,
+      "hydration.analysisReadiness.artifactSetUpdatedAt",
+    );
+    assertNullableString(
+      row.currentArtifactStoreUpdatedAt,
+      "hydration.analysisReadiness.currentArtifactStoreUpdatedAt",
+    );
+    if (
+      row.lastConfirmedState !== null &&
+      !HYDRATION_CONFIRMED_STATES.has(row.lastConfirmedState)
+    ) {
+      throw new Error(
+        "validateIncidentBundle: invalid hydration.analysisReadiness.lastConfirmedState",
+      );
+    }
+    assertNullableString(
+      row.lastConfirmedAt,
+      "hydration.analysisReadiness.lastConfirmedAt",
+    );
+    assertNullableString(
+      row.lastConfirmedArtifactSetUpdatedAt,
+      "hydration.analysisReadiness.lastConfirmedArtifactSetUpdatedAt",
+    );
   }
 }
 
@@ -128,6 +229,7 @@ function validateCoreArtifacts(
   if (competition.contractVersion !== COMPETITION_SNAPSHOT_CONTRACT_VERSION) {
     throw new Error("validateIncidentBundle: invalid competition.contractVersion");
   }
+  validateHydrationAnalysisReadiness(hydration);
 
   for (const artifact of [authority, workerSession, hydration, competition]) {
     if (artifact.capturedAt !== bundle.capturedAt) {

@@ -47,6 +47,103 @@ function refreshResult(
 }
 
 describe("projectHydrationSnapshot", () => {
+  it("exports READY, EMPTY_READY, FAILED, and PENDING readiness evidence", () => {
+    const out = projectHydrationSnapshot({
+      deviceRole: "coach",
+      syncConfigured: true,
+      captureMode: "read_only_state",
+      hydrationVersion: 4,
+      capturedAt: CAPTURED_AT,
+      currentArtifactStoreUpdatedAtByAthleteId: {
+        ath_ready: "2026-06-19T09:59:00.000Z",
+        ath_failed: "2026-06-18T07:59:00.000Z",
+      },
+      analysisReadiness: [
+        {
+          sharedAthleteId: "ath_ready",
+          state: "READY",
+          generation: 4,
+          startedAt: "2026-06-19T10:00:00.000Z",
+          resolvedAt: "2026-06-19T10:01:00.000Z",
+          hydrationSource: "coach_writer_sessions",
+          artifactSetUpdatedAt: "2026-06-19T09:59:00.000Z",
+          lastConfirmedState: "READY",
+          lastConfirmedAt: "2026-06-19T10:01:00.000Z",
+          lastConfirmedArtifactSetUpdatedAt:
+            "2026-06-19T09:59:00.000Z",
+        },
+        {
+          sharedAthleteId: "ath_empty",
+          state: "EMPTY_READY",
+          generation: 3,
+          startedAt: "2026-06-19T09:00:00.000Z",
+          resolvedAt: "2026-06-19T09:01:00.000Z",
+          hydrationSource: "parent_session_refresh",
+          lastConfirmedState: "EMPTY_READY",
+          lastConfirmedAt: "2026-06-19T09:01:00.000Z",
+        },
+        {
+          sharedAthleteId: "ath_failed",
+          state: "FAILED",
+          generation: 2,
+          startedAt: "2026-06-19T08:00:00.000Z",
+          resolvedAt: "2026-06-19T08:01:00.000Z",
+          hydrationSource: "coach_writer_sessions",
+          lastConfirmedState: "READY",
+          lastConfirmedAt: "2026-06-18T08:01:00.000Z",
+          lastConfirmedArtifactSetUpdatedAt:
+            "2026-06-18T07:59:00.000Z",
+        },
+        {
+          sharedAthleteId: "ath_pending",
+          state: "PENDING",
+          generation: 1,
+          startedAt: "2026-06-19T07:00:00.000Z",
+          hydrationSource: "coach_writer_sessions",
+        },
+      ],
+    });
+
+    assert.deepEqual(
+      out.analysisReadiness.map((row) => row.state),
+      ["EMPTY_READY", "FAILED", "PENDING", "READY"],
+    );
+    const ready = out.analysisReadiness.find(
+      (row) => row.sharedAthleteId === "ath_ready",
+    );
+    assert.deepEqual(ready, {
+      sharedAthleteId: "ath_ready",
+      state: "READY",
+      generation: 4,
+      startedAt: "2026-06-19T10:00:00.000Z",
+      resolvedAt: "2026-06-19T10:01:00.000Z",
+      hydrationSource: "coach_reconcile",
+      artifactSetUpdatedAt: "2026-06-19T09:59:00.000Z",
+      currentArtifactStoreUpdatedAt: "2026-06-19T09:59:00.000Z",
+      lastConfirmedState: "READY",
+      lastConfirmedAt: "2026-06-19T10:01:00.000Z",
+      lastConfirmedArtifactSetUpdatedAt:
+        "2026-06-19T09:59:00.000Z",
+    });
+    const failed = out.analysisReadiness.find(
+      (row) => row.sharedAthleteId === "ath_failed",
+    );
+    assert.equal(failed?.lastConfirmedState, "READY");
+    assert.equal(
+      failed?.currentArtifactStoreUpdatedAt,
+      "2026-06-18T07:59:00.000Z",
+    );
+    assert.equal(
+      failed?.lastConfirmedArtifactSetUpdatedAt,
+      "2026-06-18T07:59:00.000Z",
+    );
+    const pending = out.analysisReadiness.find(
+      (row) => row.sharedAthleteId === "ath_pending",
+    );
+    assert.equal(pending?.resolvedAt, null);
+    assert.equal(pending?.currentArtifactStoreUpdatedAt, null);
+  });
+
   it("maps coach shared-pass full reconcile with all stage flags", () => {
     const out = projectHydrationSnapshot({
       deviceRole: "coach",

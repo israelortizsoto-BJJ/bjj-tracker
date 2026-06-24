@@ -1,6 +1,10 @@
 import { dedupeActiveCoachWriterLinks } from "../../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken } from "../../coachShare/inviteLinkToken";
 import { createOverlayForensicTraceId } from "../../dev/overlayForensicTrace";
+import {
+  inviteTokenSuffix,
+  logMatchBreakdownAuthorityTrace,
+} from "../../dev/matchBreakdownAuthorityTrace";
 import { coachSyncPutCoachMatchBreakdownArtifacts } from "../../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../storage/coachShareStore";
 import { getKidsById } from "../../storage/coachKidStore";
@@ -22,18 +26,39 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
       const writerLinks = dedupeActiveCoachWriterLinks(links);
       const kid = input.kidId ? kidsById[input.kidId] : null;
       const kidToken = normalizeInviteLinkToken(kid?.sharedFromInviteTokenNorm ?? "");
-      const target =
+      const matchedLink =
         writerLinks.find((link) => {
           const sync = link.weeklySync;
           if (!sync?.writerSecret?.trim()) return false;
           if (!kidToken) return false;
           return normalizeInviteLinkToken(sync.linkToken) === kidToken;
-        }) ??
+        }) ?? null;
+      const target =
+        matchedLink ??
         (kidToken
           ? null
           : writerLinks.find((link) => Boolean(link.weeklySync?.writerSecret?.trim())) ?? null);
 
       if (!target?.weeklySync?.writerSecret?.trim()) {
+        if (!traceId) {
+          traceId = createOverlayForensicTraceId(sharedAthleteId);
+        }
+        logMatchBreakdownAuthorityTrace("PUBLISH_TARGET_RESOLUTION", {
+          traceId,
+          sharedAthleteId,
+          kidSharedFromInviteTokenNorm: kidToken || null,
+          resolvedWriterTokenSuffix: null,
+          matchedLinkTokenSuffix: matchedLink
+            ? inviteTokenSuffix(matchedLink.weeklySync!.linkToken)
+            : null,
+          publishSkipped: true,
+          publishSkipReason: !kidToken
+            ? "missing_kid_invite_token"
+            : writerLinks.length === 0
+              ? "no_writer_links"
+              : "kid_token_no_matching_writer_link",
+          writerLinkCount: writerLinks.length,
+        });
         console.log("[COACH_OVERLAY_SYNC_TRACE]", {
           stage: "coach_overlay_publish_skipped_no_writer_target",
           sharedAthleteId,
@@ -47,7 +72,20 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
       if (!traceId) {
         traceId = createOverlayForensicTraceId(sharedAthleteId);
       }
-      const resolvedWriterTokenSuffix = target.weeklySync.linkToken.trim().slice(-8);
+      const resolvedWriterTokenSuffix = inviteTokenSuffix(target.weeklySync.linkToken);
+      logMatchBreakdownAuthorityTrace("PUBLISH_TARGET_RESOLUTION", {
+        traceId,
+        sharedAthleteId,
+        kidSharedFromInviteTokenNorm: kidToken || null,
+        resolvedWriterTokenSuffix,
+        matchedLinkTokenSuffix: matchedLink
+          ? inviteTokenSuffix(matchedLink.weeklySync!.linkToken)
+          : resolvedWriterTokenSuffix,
+        publishSkipped: false,
+        publishSkipReason: null,
+        writerLinkCount: writerLinks.length,
+        inviteTokenSuffix: resolvedWriterTokenSuffix,
+      });
       console.log("[OVERLAY_FORENSIC]", {
         stage: "publish_schedule_begin",
         traceId,

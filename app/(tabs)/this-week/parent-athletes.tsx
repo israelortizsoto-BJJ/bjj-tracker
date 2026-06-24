@@ -40,6 +40,10 @@ import {
   unlinkParentAthleteFromCoachSession,
 } from "../../../src/storage/coachKidStore";
 import { setCachedWeeklyForLinkToken } from "../../../src/storage/coachWeeklySyncCacheStore";
+import {
+  startCoachAnalysisReadinessRun,
+  type CoachAnalysisReadinessRun,
+} from "../../../src/domain/competition/coachAnalysisReadinessCoordinator";
 import type { CoachLink } from "../../../src/types/coachShare";
 import type { Kid, KidsById } from "../../../src/types/coachKid";
 import type { SyncedSharedAthlete } from "../../../src/types/coachWeeklySync";
@@ -75,7 +79,21 @@ async function verifyRemoteRosterAfterAthletePost(
   apiBaseUrl: string | undefined | null,
   createdAthleteId: string,
 ): Promise<SyncedSharedAthlete[]> {
-  const session = await coachSyncFetchSession(linkToken, apiBaseUrl ?? undefined);
+  const tokenNorm = normalizeInviteLinkToken(linkToken);
+  const readinessRun = await startCoachAnalysisReadinessRun({
+    initialSharedAthleteIds: [createdAthleteId],
+    linkKeys: [tokenNorm],
+    startedAt: new Date().toISOString(),
+    hydrationSource: "parent_session_refresh",
+  });
+  const session = await coachSyncFetchSession(
+    linkToken,
+    apiBaseUrl ?? undefined,
+  ).catch(async (error) => {
+    readinessRun.recordFailedLink(tokenNorm);
+    await readinessRun.finalize(new Date().toISOString());
+    throw error;
+  });
   const expected = createdAthleteId.trim();
   const onRoster = session.athletes.some(
     (a) => (typeof a.id === "string" ? a.id.trim() : "") === expected,
@@ -85,9 +103,11 @@ async function verifyRemoteRosterAfterAthletePost(
       console.error("[mm:identity-backbone] PARTIAL_LINK_POST_VERIFICATION_FAILED", {
         expectedAthleteId: expected,
         remoteAthleteIds: session.athletes.map((a) => a.id),
-        tokenTail: inviteLinkTokenTail(normalizeInviteLinkToken(linkToken)),
+        tokenTail: inviteLinkTokenTail(tokenNorm),
       });
     }
+    readinessRun.recordFailedLink(tokenNorm);
+    await readinessRun.finalize(new Date().toISOString());
     throw new CoachWeeklySyncApiError(
       "Could not confirm the athlete on the coach session. Try again in a moment.",
       502,
@@ -101,8 +121,14 @@ async function verifyRemoteRosterAfterAthletePost(
     session.weeklyByAthleteId ?? {},
     session.athletes,
     session,
-    normalizeInviteLinkToken(linkToken),
-  );
+    tokenNorm,
+  ).catch(async (error) => {
+    readinessRun.recordFailedLink(tokenNorm);
+    await readinessRun.finalize(new Date().toISOString());
+    throw error;
+  });
+  readinessRun.recordSuccessfulSession(tokenNorm, session);
+  await readinessRun.finalize(new Date().toISOString());
   return session.athletes;
 }
 
@@ -125,6 +151,8 @@ export default function ParentLinkedAthletesScreen() {
   const syncOk = isCoachSyncConfigured();
 
   const refresh = useCallback(async () => {
+    let readinessRun: CoachAnalysisReadinessRun | null = null;
+    let readinessLinkKey = "";
     setError(null);
     setReady(false);
     setSessionAthletes([]);
@@ -199,6 +227,20 @@ export default function ParentLinkedAthletesScreen() {
         });
       }
       if (syncOk && ws.parentWriterSecret) {
+        readinessLinkKey = normalizeInviteLinkToken(ws.linkToken);
+        readinessRun = await startCoachAnalysisReadinessRun({
+          initialSharedAthleteIds: Object.values(localKids)
+            .filter(
+              (kid) =>
+                normalizeInviteLinkToken(
+                  kid.sharedFromInviteTokenNorm ?? "",
+                ) === readinessLinkKey,
+            )
+            .map((kid) => kid.sharedAthleteId ?? ""),
+          linkKeys: [readinessLinkKey],
+          startedAt: new Date().toISOString(),
+          hydrationSource: "parent_session_refresh",
+        });
         const session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
         setSessionAthletes(session.athletes);
         setSessionAthletesAuthoritative(true);
@@ -210,8 +252,10 @@ export default function ParentLinkedAthletesScreen() {
           session.weeklyByAthleteId ?? {},
           session.athletes,
           session,
-          normalizeInviteLinkToken(ws.linkToken),
+          readinessLinkKey,
         );
+        readinessRun.recordSuccessfulSession(readinessLinkKey, session);
+        await readinessRun.finalize(new Date().toISOString());
         if (__DEV__) {
           const remoteIds = new Set(
             session.athletes.map((a) => (typeof a.id === "string" ? a.id.trim() : "")).filter(Boolean),
@@ -233,6 +277,10 @@ export default function ParentLinkedAthletesScreen() {
         }
       }
     } catch (e) {
+      if (readinessRun) {
+        readinessRun.recordFailedLink(readinessLinkKey);
+        await readinessRun.finalize(new Date().toISOString());
+      }
       const msg =
         e instanceof CoachWeeklySyncApiError
           ? e.message

@@ -20,6 +20,38 @@ export type CompetitionProjectionSource =
   | "fallback_missing_topology"
   | "fallback_cardinality_guard";
 
+export type CompetitionOverlayAnnotationSelectionSource =
+  | "hydrated_annotations"
+  | "embedded_compatibility";
+
+export function competitionOverlayAnnotationsFromEmbeddedMatches(
+  matches: readonly CompetitionDetailMatchSnapshot[],
+): CompetitionMatchOverlayAnnotation[] {
+  return matches.map((match) => ({
+    matchLineageKey: match.id,
+    coachNote: match.coachNote,
+  }));
+}
+
+export function selectCompetitionOverlayAnnotations(input: {
+  hydratedAnnotations: readonly CompetitionMatchOverlayAnnotation[] | null;
+  embeddedAnnotations: readonly CompetitionMatchOverlayAnnotation[];
+}): {
+  annotations: CompetitionMatchOverlayAnnotation[];
+  source: CompetitionOverlayAnnotationSelectionSource;
+} {
+  if (input.hydratedAnnotations?.length) {
+    return {
+      annotations: [...input.hydratedAnnotations],
+      source: "hydrated_annotations",
+    };
+  }
+  return {
+    annotations: [...input.embeddedAnnotations],
+    source: "embedded_compatibility",
+  };
+}
+
 function resolveTopologyCompetitionRow(input: {
   shell: KidCompetitionEntry;
   topologyArtifact: SyncedCompetitionTopologyArtifact | null;

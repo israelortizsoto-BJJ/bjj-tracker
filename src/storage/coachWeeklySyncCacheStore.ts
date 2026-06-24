@@ -22,6 +22,7 @@ import type {
   SyncedWeeklyMessagePayload,
 } from "../types/coachWeeklySync";
 import {
+  type CoachMatchBreakdownArtifactWriteOutcome,
   isValidSyncedCoachMatchBreakdownArtifactSet,
   writeCoachMatchBreakdownArtifactSet,
 } from "./coachMatchBreakdownArtifactStore";
@@ -65,6 +66,52 @@ type StoredCoachWeeklySyncCacheEntry = {
 };
 
 type CacheMap = Record<string, StoredCoachWeeklySyncCacheEntry>;
+
+export type CoachWeeklySyncCacheWriteOutcome = {
+  status: "written";
+  artifactWriteOutcomes: CoachMatchBreakdownArtifactWriteOutcome[];
+};
+
+function normalizeCoachMatchBreakdownArtifactEvidence(
+  raw: unknown,
+): CoachWeeklySyncSessionResponse["coachMatchBreakdownArtifactEvidence"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const evidence = raw as Record<string, unknown>;
+  if (
+    evidence.fieldClassification !== "valid" &&
+    evidence.fieldClassification !== "omitted" &&
+    evidence.fieldClassification !== "malformed"
+  ) {
+    return undefined;
+  }
+  if (
+    !evidence.athleteEntryClassificationById ||
+    typeof evidence.athleteEntryClassificationById !== "object" ||
+    Array.isArray(evidence.athleteEntryClassificationById)
+  ) {
+    return undefined;
+  }
+  const athleteEntryClassificationById: Record<
+    string,
+    "populated" | "empty" | "malformed"
+  > = {};
+  for (const [key, value] of Object.entries(
+    evidence.athleteEntryClassificationById as Record<string, unknown>,
+  )) {
+    const athleteId = key.trim();
+    if (
+      !athleteId ||
+      (value !== "populated" && value !== "empty" && value !== "malformed")
+    ) {
+      continue;
+    }
+    athleteEntryClassificationById[athleteId] = value;
+  }
+  return {
+    fieldClassification: evidence.fieldClassification,
+    athleteEntryClassificationById,
+  };
+}
 
 function normalizeWeeklyByAthleteId(
   raw: unknown,
@@ -187,6 +234,10 @@ function normalizeStoredSession(
   const coachMatchBreakdownArtifacts = normalizeCoachMatchBreakdownArtifacts(
     p.coachMatchBreakdownArtifacts,
   );
+  const coachMatchBreakdownArtifactEvidence =
+    normalizeCoachMatchBreakdownArtifactEvidence(
+      p.coachMatchBreakdownArtifactEvidence,
+    );
   for (const comp of competitions) {
     logParentCompPayload(
       "cache_rehydrate_after_normalize",
@@ -217,6 +268,9 @@ function normalizeStoredSession(
     athletes,
     competitions,
     coachMatchBreakdownArtifacts,
+    ...(coachMatchBreakdownArtifactEvidence
+      ? { coachMatchBreakdownArtifactEvidence }
+      : {}),
   };
 }
 
@@ -394,8 +448,9 @@ export async function setCachedWeeklyForLinkToken(
   cachedFullSession?: CoachWeeklySyncSessionResponse,
   /** Normalized token for logs/dedupe; defaults from `linkToken` when session is written. */
   cachedTokenNorm?: string,
-): Promise<void> {
+): Promise<CoachWeeklySyncCacheWriteOutcome> {
   const map = await readMap();
+  const artifactWriteOutcomes: CoachMatchBreakdownArtifactWriteOutcome[] = [];
   const prevRaw = map[linkToken];
   const prev = prevRaw ? normalizeReadEntry(prevRaw, linkToken) : null;
   const nextSession =
@@ -470,7 +525,9 @@ export async function setCachedWeeklyForLinkToken(
       })),
     });
     for (const artifactSet of artifactSets) {
-      await writeCoachMatchBreakdownArtifactSet(artifactSet);
+      artifactWriteOutcomes.push(
+        await writeCoachMatchBreakdownArtifactSet(artifactSet),
+      );
     }
     if (artifactSets.length > 0) {
       console.log("[COACH_OVERLAY_SYNC_TRACE]", {
@@ -522,6 +579,10 @@ export async function setCachedWeeklyForLinkToken(
     }
   }
   await writeMap(map);
+  return {
+    status: "written",
+    artifactWriteOutcomes,
+  };
 }
 
 export async function clearCachedWeeklyForLinkToken(linkToken: string): Promise<void> {

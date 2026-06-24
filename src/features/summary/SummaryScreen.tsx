@@ -76,6 +76,7 @@ import {
 } from "../../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken, inviteLinkTokenTail } from "../../coachShare/inviteLinkToken";
 import { coachSyncFetchSession } from "../../services/coachWeeklySyncApi";
+import { startCoachAnalysisReadinessRun } from "../../domain/competition/coachAnalysisReadinessCoordinator";
 import {
   getCachedWeeklyForLinkToken,
   setCachedWeeklyForLinkToken,
@@ -93,6 +94,7 @@ import {
 import { useActiveAthlete } from "../../hooks/useActiveAthlete";
 import { useAuthorityConsumerRouteTelemetry } from "../../hooks/useAuthorityConsumerRouteTelemetry";
 import { useAthleteData, type SummaryFlowTraceRole } from "../../hooks/useAthleteData";
+import { useSummaryCompetitionFocusInput } from "../../hooks/useSummaryCompetitionFocusInput";
 import { useSignals } from "../../hooks/useSignals";
 import { useActiveKidId } from "../../state/activeKidStore";
 import {
@@ -789,6 +791,14 @@ export default function SummaryScreen() {
         );
       }
 
+      const readinessRun = await startCoachAnalysisReadinessRun({
+        initialSharedAthleteIds: [activeAthleteId],
+        linkKeys: [tokenNorm],
+        startedAt: new Date().toISOString(),
+        hydrationSource: "parent_session_refresh",
+      });
+      if (isCancelled?.()) return;
+
       try {
         const session = await coachSyncFetchSession(token, weeklySync.apiBaseUrl);
         if (isCancelled?.()) return;
@@ -802,6 +812,10 @@ export default function SummaryScreen() {
           session,
           tokenNorm,
         );
+        if (isCancelled?.()) return;
+        readinessRun.recordSuccessfulSession(tokenNorm, session);
+        await readinessRun.finalize(new Date().toISOString());
+        if (isCancelled?.()) return;
         applyWeeklySessionSnapshot(
           "network",
           {
@@ -818,6 +832,10 @@ export default function SummaryScreen() {
           isCancelled,
         );
       } catch (error) {
+        if (isCancelled?.()) return;
+        readinessRun.recordFailedLink(tokenNorm);
+        await readinessRun.finalize(new Date().toISOString());
+        if (isCancelled?.()) return;
         if (__DEV__ && summaryTraceReady) {
           console.warn("[SUMMARY WEEKLY TRACE] hydration.networkError", {
             athleteId: activeAthleteId,
@@ -2184,15 +2202,24 @@ export default function SummaryScreen() {
     summaryV2ViewModel?.stepKey,
   ]);
 
+  const { entries: focusCompetitionEntries } = useSummaryCompetitionFocusInput({
+    deviceRole,
+    sharedAthleteId: activeAthleteId,
+    legacyCompetitions: competitions,
+    competitionSliceFingerprint,
+    hydrationVersion: coachSyncHydrationVersion,
+    weeklySessionSnapshot,
+  });
+
   const competitionSkillFocus = useMemo(
     () =>
       activeAthleteId
         ? deriveCompetitionTrainingSkillFocus({
-            competitionsWithMatches: competitions,
+            competitionsWithMatches: focusCompetitionEntries,
             sessions,
           })
         : null,
-    [activeAthleteId, competitions, sessions],
+    [activeAthleteId, focusCompetitionEntries, sessions],
   );
 
   const competitionSkillFocusHint =

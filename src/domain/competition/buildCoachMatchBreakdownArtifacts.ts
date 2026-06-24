@@ -1,3 +1,4 @@
+import { logMatchBreakdownAuthorityTrace } from "../../dev/matchBreakdownAuthorityTrace";
 import { listCoachMatchBreakdownOverlaysForAthlete } from "../../storage/coachMatchBreakdownOverlayStore";
 import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
 
@@ -12,6 +13,21 @@ export async function buildCoachMatchBreakdownArtifacts(
 
   const traceId = options?.traceId?.trim() || null;
   const overlays = await listCoachMatchBreakdownOverlaysForAthlete(athleteId, traceId);
+  const coachNoteCount = overlays.filter((overlay) => Boolean(overlay.coachNote?.trim())).length;
+  const analysisCount = overlays.filter((overlay) => Boolean(overlay.analysis?.trim())).length;
+  const reflectionCount = overlays.filter((overlay) =>
+    Boolean(overlay.dictatedReflection?.trim()),
+  ).length;
+  logMatchBreakdownAuthorityTrace("ARTIFACT_BUILDER_INPUT", {
+    traceId,
+    sharedAthleteId: athleteId,
+    sharedCompetitionId: overlays[0]?.sharedCompetitionId.trim() ?? null,
+    matchLineageKey: overlays[0]?.matchLineageKey.trim() ?? null,
+    overlayCount: overlays.length,
+    coachNoteCount,
+    analysisCount,
+    reflectionCount,
+  });
   console.log("[OVERLAY_FORENSIC]", {
     stage: "artifact_build_input",
     traceId,
@@ -46,6 +62,9 @@ export async function buildCoachMatchBreakdownArtifacts(
         a.sharedCompetitionId.localeCompare(b.sharedCompetitionId) ||
         a.matchLineageKey.localeCompare(b.matchLineageKey),
     );
+  const droppedBecauseNoCoachNote = overlays.filter(
+    (overlay) => !overlay.coachNote?.trim(),
+  ).length;
   console.log("[OVERLAY_FORENSIC]", {
     stage: "artifact_build_output",
     traceId,
@@ -76,6 +95,16 @@ export async function buildCoachMatchBreakdownArtifacts(
     updatedAt,
     artifacts,
   };
+
+  logMatchBreakdownAuthorityTrace("ARTIFACT_BUILDER_OUTPUT", {
+    traceId,
+    sharedAthleteId: athleteId,
+    sharedCompetitionId: artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: artifacts[0]?.matchLineageKey ?? null,
+    artifactCount: artifacts.length,
+    droppedBecauseNoCoachNote,
+    artifactSetUpdatedAt: updatedAt,
+  });
 
   console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
     stage: "coach_publish_build",

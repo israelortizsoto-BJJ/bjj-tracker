@@ -100,6 +100,7 @@ function hydrationArtifact(deviceRole: "parent" | "coach") {
     captureMode: deviceRole === "parent" ? ("read_only_state" as const) : ("shared_authority_reconcile" as const),
     hydrationVersion: deviceRole === "parent" ? 2 : 3,
     reconcileAttempted: deviceRole === "coach",
+    analysisReadiness: [],
   };
 }
 
@@ -266,7 +267,7 @@ describe("captureIncidentBundle capture stages", () => {
 
   it("parent path emits authority, hydration, worker, assembly, validation stages in order", async () => {
     const recorder = stageRecorder();
-    await captureIncidentBundle(
+    const bundle = await captureIncidentBundle(
       {
         deviceRole: "parent",
         incidentCorrelationId: CORRELATION_ID,
@@ -276,6 +277,7 @@ describe("captureIncidentBundle capture stages", () => {
       parentDeps(recorder),
     );
 
+    assert.deepEqual(bundle.artifacts.hydration.analysisReadiness, []);
     assert.deepEqual(recorder.stages, PARENT_EXPECTED_STAGES);
   });
 
@@ -299,7 +301,7 @@ describe("captureIncidentBundle capture stages", () => {
 
   it("coach path emits authority, hydration, worker, topology, assembly, validation stages in order", async () => {
     const recorder = stageRecorder();
-    await captureIncidentBundle(
+    const bundle = await captureIncidentBundle(
       {
         deviceRole: "coach",
         incidentCorrelationId: CORRELATION_ID,
@@ -309,6 +311,7 @@ describe("captureIncidentBundle capture stages", () => {
       coachDeps(recorder),
     );
 
+    assert.deepEqual(bundle.artifacts.hydration.analysisReadiness, []);
     assert.deepEqual(recorder.stages, COACH_EXPECTED_STAGES);
   });
 

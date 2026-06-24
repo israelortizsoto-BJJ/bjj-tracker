@@ -1,5 +1,9 @@
 import { getCoachSyncApiBaseUrl, logSyncBaseUrlTrace } from "../config/coachSync";
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
+import {
+  inviteTokenSuffix,
+  logMatchBreakdownAuthorityTrace,
+} from "../dev/matchBreakdownAuthorityTrace";
 import { OVERLAY_FORENSIC_TRACE_HEADER } from "../dev/overlayForensicTrace";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import {
@@ -17,6 +21,7 @@ import {
   logHydrationPipelineWatchAthletes,
   namesByIdFromSyncedAthletes,
 } from "../identity/hydrationPipelineTrace";
+import { parseCoachMatchBreakdownArtifactsField } from "./coachMatchBreakdownArtifactParser";
 import type {
   CoachWeeklySyncCreateAthleteBody,
   CoachWeeklySyncCreateAthleteResponse,
@@ -33,8 +38,6 @@ import type {
   CoachWeeklySyncRedeemParentWriterResponse,
   CoachWeeklySyncSessionResponse,
   CoachWeeklySyncUpdateCompetitionBody,
-  SyncedCoachMatchBreakdownArtifact,
-  SyncedCoachMatchBreakdownArtifactSet,
   SyncedCompetitionAggregateArtifact,
   SyncedCompetitionTopologyArtifact,
   SyncedTrainingProofArtifact,
@@ -273,62 +276,6 @@ function parseTrainingProofByAthleteIdField(
   return out;
 }
 
-function isSyncedCoachMatchBreakdownArtifact(
-  v: unknown,
-): v is SyncedCoachMatchBreakdownArtifact {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
-  const o = v as Record<string, unknown>;
-  return (
-    typeof o.sharedAthleteId === "string" &&
-    typeof o.sharedCompetitionId === "string" &&
-    typeof o.matchLineageKey === "string" &&
-    typeof o.updatedAt === "string" &&
-    (o.coachNote === undefined || typeof o.coachNote === "string")
-  );
-}
-
-function isSyncedCoachMatchBreakdownArtifactSet(
-  v: unknown,
-): v is SyncedCoachMatchBreakdownArtifactSet {
-  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
-  const o = v as Record<string, unknown>;
-  if (
-    o.schemaVersion !== 1 ||
-    typeof o.sharedAthleteId !== "string" ||
-    typeof o.updatedAt !== "string" ||
-    !Array.isArray(o.artifacts)
-  ) {
-    return false;
-  }
-  const identityKeys = new Set<string>();
-  for (const artifact of o.artifacts) {
-    if (!isSyncedCoachMatchBreakdownArtifact(artifact)) return false;
-    if (artifact.sharedAthleteId.trim() !== o.sharedAthleteId.trim()) return false;
-    const key = JSON.stringify([
-      artifact.sharedAthleteId.trim(),
-      artifact.sharedCompetitionId.trim(),
-      artifact.matchLineageKey.trim(),
-    ]);
-    if (identityKeys.has(key)) return false;
-    identityKeys.add(key);
-  }
-  return true;
-}
-
-function parseCoachMatchBreakdownArtifactsField(
-  raw: unknown,
-): Record<string, SyncedCoachMatchBreakdownArtifactSet> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const out: Record<string, SyncedCoachMatchBreakdownArtifactSet> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const id = key.trim();
-    if (!id || !isSyncedCoachMatchBreakdownArtifactSet(value)) continue;
-    if (value.sharedAthleteId.trim() !== id) continue;
-    out[id] = value;
-  }
-  return out;
-}
-
 function parseWeeklyByAthleteIdField(raw: unknown): Record<string, SyncedWeeklyMessagePayload | null> {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return {};
@@ -459,9 +406,38 @@ export async function coachSyncFetchSession(
     }
   }
   const trainingProofByAthleteId = parseTrainingProofByAthleteIdField(p.trainingProofByAthleteId);
-  const coachMatchBreakdownArtifacts = parseCoachMatchBreakdownArtifactsField(
+  const {
+    artifactsByAthleteId: coachMatchBreakdownArtifacts,
+    evidence: coachMatchBreakdownArtifactEvidence,
+  } = parseCoachMatchBreakdownArtifactsField(
     p.coachMatchBreakdownArtifacts,
+    Object.prototype.hasOwnProperty.call(p, "coachMatchBreakdownArtifacts"),
   );
+  const parentGetInviteSuffix = inviteTokenSuffix(linkToken);
+  logMatchBreakdownAuthorityTrace("PARENT_GET", {
+    traceId: null,
+    sharedAthleteId: athletes[0]?.id ?? null,
+    inviteTokenSuffix: parentGetInviteSuffix,
+    httpStatus: res.status,
+    athleteCount: athletes.length,
+    note: "parent_get_has_no_coach_save_traceId",
+  });
+  for (const athlete of athletes) {
+    const athleteId = athlete.id.trim();
+    const athleteEntryStatus =
+      coachMatchBreakdownArtifactEvidence.athleteEntryClassificationById[athleteId] ??
+      "absent";
+    const athleteArtifactCount =
+      coachMatchBreakdownArtifacts[athleteId]?.artifacts.length ?? 0;
+    logMatchBreakdownAuthorityTrace("PARENT_PARSER", {
+      traceId: null,
+      sharedAthleteId: athleteId,
+      inviteTokenSuffix: parentGetInviteSuffix,
+      fieldClassification: coachMatchBreakdownArtifactEvidence.fieldClassification,
+      athleteEntryStatus,
+      artifactCount: athleteArtifactCount,
+    });
+  }
   const coachMatchBreakdownArtifactList = Object.values(coachMatchBreakdownArtifacts).flatMap(
     (artifactSet) => artifactSet.artifacts,
   );
@@ -635,6 +611,7 @@ export async function coachSyncFetchSession(
     competitionTopologyByAthleteId,
     trainingProofByAthleteId,
     coachMatchBreakdownArtifacts,
+    coachMatchBreakdownArtifactEvidence,
   };
 }
 
@@ -665,6 +642,18 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
   });
   const tokenSuffix = linkToken.trim().slice(-8);
   const overlayTraceId = traceId?.trim() || null;
+  const putPayloadJson = JSON.stringify(body);
+  const putStartedAt = Date.now();
+  logMatchBreakdownAuthorityTrace("HTTP_PUT_BEFORE", {
+    traceId: overlayTraceId,
+    sharedAthleteId: body.sharedAthleteId,
+    sharedCompetitionId: body.artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: body.artifacts[0]?.matchLineageKey ?? null,
+    artifactCount: body.artifacts.length,
+    payloadBytes: putPayloadJson.length,
+    writerTokenSuffix: inviteTokenSuffix(linkToken),
+    inviteTokenSuffix: inviteTokenSuffix(linkToken),
+  });
   console.log("[OVERLAY_FORENSIC]", {
     stage: "publish_http_request",
     traceId: overlayTraceId,
@@ -685,11 +674,22 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
       Authorization: `Bearer ${writerSecret}`,
       ...(overlayTraceId ? { [OVERLAY_FORENSIC_TRACE_HEADER]: overlayTraceId } : {}),
     },
-    body: JSON.stringify(body),
+    body: putPayloadJson,
   });
+  const putLatencyMs = Date.now() - putStartedAt;
   const payload = await parseJsonOrText(res);
   if (!res.ok) {
     const msg = coachSyncFailureMessage(res, payload);
+    logMatchBreakdownAuthorityTrace("HTTP_PUT_AFTER", {
+      traceId: overlayTraceId,
+      sharedAthleteId: body.sharedAthleteId,
+      sharedCompetitionId: body.artifacts[0]?.sharedCompetitionId ?? null,
+      matchLineageKey: body.artifacts[0]?.matchLineageKey ?? null,
+      httpStatus: res.status,
+      latencyMs: putLatencyMs,
+      error: msg,
+      inviteTokenSuffix: inviteTokenSuffix(linkToken),
+    });
     console.log("[COACH_OVERLAY_SYNC_TRACE]", {
       stage: "coach_overlay_publish_http_failed",
       operation: "PUT",
@@ -713,6 +713,16 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
     });
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
+  logMatchBreakdownAuthorityTrace("HTTP_PUT_AFTER", {
+    traceId: overlayTraceId,
+    sharedAthleteId: body.sharedAthleteId,
+    sharedCompetitionId: body.artifacts[0]?.sharedCompetitionId ?? null,
+    matchLineageKey: body.artifacts[0]?.matchLineageKey ?? null,
+    httpStatus: res.status,
+    latencyMs: putLatencyMs,
+    error: null,
+    inviteTokenSuffix: inviteTokenSuffix(linkToken),
+  });
   console.log("[COACH_OVERLAY_SYNC_TRACE]", {
     stage: "coach_overlay_publish_http_ok",
     operation: "PUT",

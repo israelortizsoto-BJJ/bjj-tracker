@@ -57,6 +57,7 @@ import {
   sharedAthleteIdFromRosterForSession,
 } from "../../../src/coach/resolveWeeklyDoc";
 import { coachSyncFetchSession } from "../../../src/services/coachWeeklySyncApi";
+import { startCoachAnalysisReadinessRun } from "../../../src/domain/competition/coachAnalysisReadinessCoordinator";
 import type {
   SyncedSharedAthlete,
   SyncedWeeklyMessagePayload,
@@ -879,6 +880,17 @@ function ParentThisWeekScreen() {
         }
       } else {
         forceWeeklySessionFetchRef.current = false;
+        const readinessRun =
+          roleNow === "parent"
+            ? await startCoachAnalysisReadinessRun({
+                initialSharedAthleteIds: [
+                  parentActiveAthleteIdRef.current,
+                ],
+                linkKeys: [normWeeklyLinkToken],
+                startedAt: new Date().toISOString(),
+                hydrationSource: "parent_session_refresh",
+              })
+            : null;
         try {
           console.log("[API CALL]", { op: "coachSyncFetchSession", tokenNorm: normWeeklyLinkToken });
           const session = await coachSyncFetchSession(
@@ -978,6 +990,13 @@ function ParentThisWeekScreen() {
               athletes: session.athletes,
             };
           }
+          if (readinessRun) {
+            readinessRun.recordSuccessfulSession(
+              normWeeklyLinkToken,
+              session,
+            );
+            await readinessRun.finalize(new Date().toISOString());
+          }
           const c = session.coach;
           const merged: typeof loadedCoachesById = {
             ...loadedCoachesById,
@@ -992,6 +1011,10 @@ function ParentThisWeekScreen() {
           loadedCoachesById = merged;
           await persistCoachesById(merged);
         } catch {
+          if (readinessRun) {
+            readinessRun.recordFailedLink(normWeeklyLinkToken);
+            await readinessRun.finalize(new Date().toISOString());
+          }
           weeklySessionNetworkOkTokenRef.current = null;
           nextWeeklyFetchFailed = true;
           nextWeeklyNetworkOk = false;

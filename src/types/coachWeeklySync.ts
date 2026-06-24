@@ -171,6 +171,24 @@ export type SyncedCoachMatchBreakdownArtifactSet = {
   artifacts: SyncedCoachMatchBreakdownArtifact[];
 };
 
+export type CoachMatchBreakdownArtifactFieldClassification =
+  | "valid"
+  | "omitted"
+  | "malformed";
+
+export type CoachMatchBreakdownArtifactAthleteEntryClassification =
+  | "populated"
+  | "empty"
+  | "malformed";
+
+export type CoachMatchBreakdownArtifactParseEvidence = {
+  fieldClassification: CoachMatchBreakdownArtifactFieldClassification;
+  athleteEntryClassificationById: Record<
+    SharedAthleteId,
+    CoachMatchBreakdownArtifactAthleteEntryClassification
+  >;
+};
+
 export type CoachWeeklySyncPutCoachMatchBreakdownArtifactsBody =
   SyncedCoachMatchBreakdownArtifactSet;
 
@@ -190,6 +208,8 @@ export type CoachWeeklySyncSessionResponse = {
   trainingProofByAthleteId?: Record<string, SyncedTrainingProofArtifact>;
   /** Per-athlete coach-owned match breakdown overlays. Parents consume read-only. */
   coachMatchBreakdownArtifacts?: Record<string, SyncedCoachMatchBreakdownArtifactSet>;
+  /** Parser evidence retained separately from the accepted artifact map. */
+  coachMatchBreakdownArtifactEvidence?: CoachMatchBreakdownArtifactParseEvidence;
 };
 
 export type CoachWeeklySyncCreateSessionBody = {

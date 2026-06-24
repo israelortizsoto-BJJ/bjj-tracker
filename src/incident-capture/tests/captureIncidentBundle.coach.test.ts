@@ -122,6 +122,21 @@ function coachDeps(
         hydrationVersion: 3,
         reconcileAttempted: true,
         reconcileCompleted: true,
+        analysisReadiness: [
+          {
+            sharedAthleteId: "ath_1",
+            state: "READY",
+            generation: 3,
+            startedAt: CAPTURED_AT,
+            resolvedAt: CAPTURED_AT,
+            hydrationSource: "coach_reconcile",
+            artifactSetUpdatedAt: CAPTURED_AT,
+            currentArtifactStoreUpdatedAt: CAPTURED_AT,
+            lastConfirmedState: "READY",
+            lastConfirmedAt: CAPTURED_AT,
+            lastConfirmedArtifactSetUpdatedAt: CAPTURED_AT,
+          },
+        ],
       };
     },
     captureWorkerSessionSnapshot: async (opts) => {
@@ -208,6 +223,7 @@ describe("captureIncidentBundle coach", () => {
     assert.equal(bundle.bundleVersion, "2");
     assert.equal(bundle.deviceRole, "coach");
     assert.equal(bundle.artifacts.hydration.captureMode, "shared_authority_reconcile");
+    assert.equal(bundle.artifacts.hydration.analysisReadiness.length, 1);
     assert.equal(bundle.artifacts.workerSession.slice, "coach");
     assert.equal(bundle.artifacts.authority.sourceTrigger, "export");
     assert.equal(bundle.artifacts.competition.sharedAthleteId, "ath_1");

@@ -1,10 +1,12 @@
 import type { AuthoritySnapshotSourceTrigger } from "../identity/types";
 import type { CoachWriterSessionRefreshResult } from "../storage/coachKidStore";
 import type { DeviceRole } from "../storage/deviceRoleStore";
+import type { CoachAnalysisReadinessRecord } from "../domain/competition/coachAnalysisReadinessTypes";
 
 import {
   HYDRATION_SNAPSHOT_CONTRACT_VERSION,
   type HydrationCacheLinkEvidence,
+  type HydrationAnalysisReadinessEvidence,
   type HydrationSnapshot,
   type HydrationSnapshotCaptureMode,
   type HydrationTriggerClass,
@@ -29,7 +31,41 @@ export type ProjectHydrationSnapshotContext = {
   parentOverlayArtifactsPresent?: boolean;
   readOnlyCoachWriterLinkCount?: number;
   readOnlyCoachSessionsFetchedOkCount?: number;
+  analysisReadiness?: readonly CoachAnalysisReadinessRecord[];
+  currentArtifactStoreUpdatedAtByAthleteId?: Readonly<
+    Record<string, string | null>
+  >;
 };
+
+function projectAnalysisReadiness(
+  records: readonly CoachAnalysisReadinessRecord[],
+  currentArtifactStoreUpdatedAtByAthleteId: Readonly<
+    Record<string, string | null>
+  >,
+): HydrationAnalysisReadinessEvidence[] {
+  return records
+    .map((record) => ({
+      sharedAthleteId: record.sharedAthleteId,
+      state: record.state,
+      generation: record.generation,
+      startedAt: record.startedAt,
+      resolvedAt: record.resolvedAt ?? null,
+      hydrationSource:
+        record.hydrationSource === "coach_writer_sessions"
+          ? ("coach_reconcile" as const)
+          : ("parent_session_refresh" as const),
+      artifactSetUpdatedAt: record.artifactSetUpdatedAt ?? null,
+      currentArtifactStoreUpdatedAt:
+        currentArtifactStoreUpdatedAtByAthleteId[
+          record.sharedAthleteId
+        ] ?? null,
+      lastConfirmedState: record.lastConfirmedState ?? null,
+      lastConfirmedAt: record.lastConfirmedAt ?? null,
+      lastConfirmedArtifactSetUpdatedAt:
+        record.lastConfirmedArtifactSetUpdatedAt ?? null,
+    }))
+    .sort((a, b) => a.sharedAthleteId.localeCompare(b.sharedAthleteId));
+}
 
 export function hydrationTriggerClassFromSourceTrigger(
   sourceTrigger?: AuthoritySnapshotSourceTrigger,
@@ -147,6 +183,10 @@ export function projectHydrationSnapshot(ctx: ProjectHydrationSnapshotContext): 
     syncConfigured: ctx.syncConfigured,
     captureMode: ctx.captureMode,
     hydrationVersion: ctx.hydrationVersion,
+    analysisReadiness: projectAnalysisReadiness(
+      ctx.analysisReadiness ?? [],
+      ctx.currentArtifactStoreUpdatedAtByAthleteId ?? {},
+    ),
     ...bumpFields,
     ...triggerFields,
   };

@@ -8,6 +8,8 @@ import type { AuthoritySnapshotSourceTrigger } from "../identity/types";
 import type { CoachWriterSessionRefreshResult } from "../storage/coachKidStore";
 import { getCoachLinks } from "../storage/coachShareStore";
 import { getCoachSyncHydrationBumpState } from "../storage/coachSyncHydrationStore";
+import { getAllCoachAnalysisReadiness } from "../storage/coachAnalysisReadinessStore";
+import { getCoachMatchBreakdownArtifactSet } from "../storage/coachMatchBreakdownArtifactStore";
 import type { CoachLink } from "../types/coachShare";
 import type { DeviceRole } from "../storage/deviceRoleStore";
 import {
@@ -36,6 +38,8 @@ export type CaptureHydrationSnapshotOptions = {
   getCachedSession?: (linkToken: string) => Promise<CoachWeeklySyncCacheEntry | null>;
   isSyncConfigured?: () => boolean;
   getHydrationBumpState?: () => ReturnType<typeof getCoachSyncHydrationBumpState>;
+  getAnalysisReadiness?: typeof getAllCoachAnalysisReadiness;
+  getArtifactSet?: typeof getCoachMatchBreakdownArtifactSet;
 };
 
 function activeLinksForRole(links: CoachLink[], deviceRole: DeviceRole | null): CoachLink[] {
@@ -120,6 +124,19 @@ export async function captureHydrationSnapshot(
   const bumpState = (options.getHydrationBumpState ?? getCoachSyncHydrationBumpState)();
   const readLinks = options.getCoachLinks ?? getCoachLinks;
   const getCachedSession = options.getCachedSession ?? getCachedWeeklyForLinkToken;
+  const analysisReadiness = await (
+    options.getAnalysisReadiness ?? getAllCoachAnalysisReadiness
+  )();
+  const readArtifactSet =
+    options.getArtifactSet ?? getCoachMatchBreakdownArtifactSet;
+  const currentArtifactStoreUpdatedAtByAthleteId = Object.fromEntries(
+    await Promise.all(
+      Object.keys(analysisReadiness).map(async (sharedAthleteId) => [
+        sharedAthleteId,
+        (await readArtifactSet(sharedAthleteId))?.updatedAt ?? null,
+      ]),
+    ),
+  );
 
   const needsCacheReads =
     options.deviceRole === "parent" ||
@@ -182,5 +199,7 @@ export async function captureHydrationSnapshot(
     parentOverlayArtifactsPresent,
     readOnlyCoachWriterLinkCount,
     readOnlyCoachSessionsFetchedOkCount,
+    analysisReadiness: Object.values(analysisReadiness),
+    currentArtifactStoreUpdatedAtByAthleteId,
   });
 }

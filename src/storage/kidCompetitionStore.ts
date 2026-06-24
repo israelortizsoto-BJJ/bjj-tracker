@@ -20,7 +20,10 @@ import type {
   KidCompetitionVideoRef,
   KidId,
 } from "../types/coachKid";
-import { medalTierFromKidResult } from "../types/coachKid";
+import {
+  kidCompetitionEntryWorkerId,
+  medalTierFromKidResult,
+} from "../types/coachKid";
 import type { SyncedSharedCompetition } from "../types/coachWeeklySync";
 
 /**
@@ -284,12 +287,7 @@ function normalizeSharedLinkageFields(
 
 /** Worker competition id for parent sync DELETE/PUT/POST; field first, then `shared-comp-` row id. */
 export function getWorkerCompetitionIdForEntry(entry: KidCompetitionEntry): string {
-  const fromField = trimSharedIdField(entry.sharedCompetitionId);
-  if (fromField) return fromField;
-  if (entry.id.startsWith(SHARED_COMP_LOCAL_ID_PREFIX)) {
-    return entry.id.slice(SHARED_COMP_LOCAL_ID_PREFIX.length).trim();
-  }
-  return "";
+  return kidCompetitionEntryWorkerId(entry);
 }
 
 /** Strips unknown enum strings so legacy JSON and bad values never break the read path. */

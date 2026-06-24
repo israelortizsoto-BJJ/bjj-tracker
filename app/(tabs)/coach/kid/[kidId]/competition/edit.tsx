@@ -61,6 +61,7 @@ import {
   logCompPublishGuard,
   logCompSave,
 } from "@/src/dev/competitionMutationDevLog";
+import { logMatchBreakdownAuthorityTrace } from "@/src/dev/matchBreakdownAuthorityTrace";
 import { createOverlayForensicTraceId } from "@/src/dev/overlayForensicTrace";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
 import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
@@ -729,6 +730,16 @@ export default function KidCompetitionEditScreen() {
           overlayCount: matches.length,
         });
         const overlayForensicTraceId = createOverlayForensicTraceId(overlayScope.sharedAthleteId);
+        logMatchBreakdownAuthorityTrace("COACH_SAVE_START", {
+          traceId: overlayForensicTraceId,
+          sharedAthleteId: overlayScope.sharedAthleteId,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          matchLineageKey: matches[0]?.id ?? null,
+          competitionId: entryId || null,
+          overlayCountBeforeSave: matches.length,
+          matchCount: matches.length,
+          coachNoteLengths: matches.map((m) => (m.coachNote ?? "").trim().length),
+        });
         for (const [sequenceIndex, match] of matches.entries()) {
           console.log("[OVERLAY_SERIAL_SAVE]", {
             matchId: match.id,

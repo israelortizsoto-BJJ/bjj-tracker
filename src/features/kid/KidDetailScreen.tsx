@@ -65,6 +65,10 @@ import {
   coachSyncFetchSession,
   coachSyncPublishWeekly,
 } from "../../services/coachWeeklySyncApi";
+import {
+  startCoachAnalysisReadinessRun,
+  type CoachAnalysisReadinessRun,
+} from "../../domain/competition/coachAnalysisReadinessCoordinator";
 import { getCoachLinks } from "../../storage/coachShareStore";
 import {
   getCachedWeeklyForLinkToken,
@@ -676,6 +680,7 @@ export default function KidDetailScreen() {
           const token = ws.linkToken ?? "";
           const linkTokenTail = token.length > 8 ? token.slice(-8) : token;
           const tokenNorm = normalizeInviteLinkToken(token);
+          let readinessRun: CoachAnalysisReadinessRun | null = null;
           try {
             let session: CoachWeeklySyncSessionResponse;
             const useSessionCache = !opts?.forceCoachSessionFetch && Boolean(token);
@@ -688,7 +693,17 @@ export default function KidDetailScreen() {
                 session = cached.session;
               } else {
                 console.log(`[API CALL] coachSyncFetchSession tokenNorm=${tokenNorm}`);
+                if (isThisWeekKidDetail) {
+                  readinessRun = await startCoachAnalysisReadinessRun({
+                    initialSharedAthleteIds: [sharedAthleteId],
+                    linkKeys: [tokenNorm],
+                    startedAt: new Date().toISOString(),
+                    hydrationSource: "parent_session_refresh",
+                  });
+                  if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+                }
                 session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+                if (loadGen !== coachKidDetailLoadGenRef.current) return false;
                 const nowIso = new Date().toISOString();
                 await setCachedWeeklyForLinkToken(
                   ws.linkToken,
@@ -699,6 +714,9 @@ export default function KidDetailScreen() {
                   session,
                   tokenNorm,
                 );
+                if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+                readinessRun?.recordSuccessfulSession(tokenNorm, session);
+                await readinessRun?.finalize(new Date().toISOString());
               }
             } else {
               console.log(
@@ -706,7 +724,17 @@ export default function KidDetailScreen() {
                   ? "[API CALL] coachSyncFetchSession (source: KidDetailScreen_refresh)"
                   : `[API CALL] coachSyncFetchSession tokenNorm=${tokenNorm}`,
               );
+              if (isThisWeekKidDetail) {
+                readinessRun = await startCoachAnalysisReadinessRun({
+                  initialSharedAthleteIds: [sharedAthleteId],
+                  linkKeys: [tokenNorm],
+                  startedAt: new Date().toISOString(),
+                  hydrationSource: "parent_session_refresh",
+                });
+                if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+              }
               session = await coachSyncFetchSession(ws.linkToken, ws.apiBaseUrl);
+              if (loadGen !== coachKidDetailLoadGenRef.current) return false;
               if (token) {
                 const nowIso = new Date().toISOString();
                 await setCachedWeeklyForLinkToken(
@@ -718,6 +746,9 @@ export default function KidDetailScreen() {
                   session,
                   tokenNorm,
                 );
+                if (loadGen !== coachKidDetailLoadGenRef.current) return false;
+                readinessRun?.recordSuccessfulSession(tokenNorm, session);
+                await readinessRun?.finalize(new Date().toISOString());
               }
             }
             if (loadGen !== coachKidDetailLoadGenRef.current) return false;
@@ -744,6 +775,13 @@ export default function KidDetailScreen() {
               });
             }
           } catch {
+            if (
+              readinessRun &&
+              loadGen === coachKidDetailLoadGenRef.current
+            ) {
+              readinessRun.recordFailedLink(tokenNorm);
+              await readinessRun.finalize(new Date().toISOString());
+            }
             sessionFetchFailures += 1;
             if (__DEV__) {
               console.log("[bjj-coach-kid-detail] session fetch failed", {
@@ -899,7 +937,7 @@ export default function KidDetailScreen() {
       });
     }
     return promise;
-  }, [isCoachKidDetail, kidId, weekStartYMD]);
+  }, [isCoachKidDetail, isThisWeekKidDetail, kidId, weekStartYMD]);
 
   const onRefreshFromHeader = useCallback(async () => {
     if (!kidId) return;

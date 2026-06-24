@@ -6,6 +6,7 @@ import type {
   CoachMatchBreakdownOverlayIdentity,
   CoachMatchBreakdownOverlayPatch,
 } from "../types/coachMatchBreakdownOverlay";
+import { logMatchBreakdownAuthorityTrace } from "../dev/matchBreakdownAuthorityTrace";
 import { StorageKeys } from "./storageKeys";
 
 type OverlayByCompositeKey = Record<string, CoachMatchBreakdownOverlay>;
@@ -193,6 +194,15 @@ export async function writeCoachMatchBreakdownOverlay(input: {
   const key = overlayCompositeKey(input.identity);
   const updatedAt = trimmed(input.updatedAt);
   if (!key || !updatedAt) {
+    logMatchBreakdownAuthorityTrace("OVERLAY_STORE_WRITE_REJECTED", {
+      traceId: input.traceId ?? null,
+      sharedAthleteId: trimmed(input.identity.sharedAthleteId) || null,
+      sharedCompetitionId: trimmed(input.identity.sharedCompetitionId) || null,
+      matchLineageKey: trimmed(input.identity.matchLineageKey) || null,
+      writeAccepted: false,
+      reason: !key ? "missing_lineage" : "missing_updated_at",
+      updatedAt: updatedAt || null,
+    });
     logCompPublishGuard({
       sharedAthleteId: trimmed(input.identity.sharedAthleteId) || null,
       canonicalPayloadIds: trimmed(input.identity.sharedCompetitionId)
@@ -217,6 +227,16 @@ export async function writeCoachMatchBreakdownOverlay(input: {
   const map = await readStore();
   const existing = map[key] ?? null;
   if (existing && updatedAt.localeCompare(existing.updatedAt) < 0) {
+    logMatchBreakdownAuthorityTrace("OVERLAY_STORE_WRITE_REJECTED", {
+      traceId: input.traceId ?? null,
+      sharedAthleteId,
+      sharedCompetitionId,
+      matchLineageKey,
+      writeAccepted: false,
+      reason: "stale_overlay",
+      updatedAt,
+      existingUpdatedAt: existing.updatedAt,
+    });
     logCompPublishGuard({
       sharedAthleteId,
       canonicalPayloadIds: [sharedCompetitionId],
@@ -262,6 +282,16 @@ export async function writeCoachMatchBreakdownOverlay(input: {
     (row) => row.sharedAthleteId.trim() === sharedAthleteId,
   ).length;
   const coachNote = overlay.coachNote?.trim() ?? "";
+  logMatchBreakdownAuthorityTrace("OVERLAY_STORE_WRITE_COMPLETE", {
+    traceId: input.traceId ?? null,
+    sharedAthleteId,
+    sharedCompetitionId,
+    matchLineageKey,
+    writeAccepted: true,
+    reason: null,
+    updatedAt,
+    coachNoteLength: coachNote.length,
+  });
   console.log("[OVERLAY_FORENSIC]", {
     stage: "overlay_write_complete",
     traceId: input.traceId?.trim() || null,

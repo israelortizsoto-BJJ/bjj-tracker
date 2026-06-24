@@ -39,6 +39,21 @@ function hydrationArtifact(deviceRole: "parent" | "coach") {
     captureMode: "read_only_state" as const,
     hydrationVersion: 2,
     reconcileAttempted: false,
+    analysisReadiness: [
+      {
+        sharedAthleteId: "ath_1",
+        state: "READY" as const,
+        generation: 2,
+        startedAt: CAPTURED_AT,
+        resolvedAt: CAPTURED_AT,
+        hydrationSource: "parent_session_refresh" as const,
+        artifactSetUpdatedAt: CAPTURED_AT,
+        currentArtifactStoreUpdatedAt: CAPTURED_AT,
+        lastConfirmedState: "READY" as const,
+        lastConfirmedAt: CAPTURED_AT,
+        lastConfirmedArtifactSetUpdatedAt: CAPTURED_AT,
+      },
+    ],
   };
 }
 
@@ -150,6 +165,7 @@ describe("captureIncidentBundle parent", () => {
     assert.equal(bundle.artifacts.authority.sourceTrigger, "export");
     assert.equal(bundle.artifacts.hydration.captureMode, "read_only_state");
     assert.equal(bundle.artifacts.hydration.reconcileAttempted, false);
+    assert.equal(bundle.artifacts.hydration.analysisReadiness.length, 1);
     assert.equal(bundle.artifacts.workerSession.slice, "parent");
     assert.equal(bundle.artifacts.competition.sharedAthleteId, "ath_1");
     assert.equal(bundle.bundleVersion, "1");

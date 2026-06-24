@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { logMatchBreakdownAuthorityTrace } from "../dev/matchBreakdownAuthorityTrace";
 import type {
   SyncedCoachMatchBreakdownArtifact,
   SyncedCoachMatchBreakdownArtifactSet,
@@ -7,6 +8,28 @@ import type {
 import { StorageKeys } from "./storageKeys";
 
 type ArtifactSetByAthleteId = Record<string, SyncedCoachMatchBreakdownArtifactSet>;
+
+export type CoachMatchBreakdownArtifactWriteOutcome =
+  | {
+      status: "written";
+      sharedAthleteId: string;
+      incomingUpdatedAt: string;
+      previousUpdatedAt: string | null;
+      artifactCount: number;
+    }
+  | {
+      status: "rejected_stale";
+      sharedAthleteId: string;
+      incomingUpdatedAt: string;
+      existingUpdatedAt: string;
+      artifactCount: number;
+    }
+  | {
+      status: "rejected_invalid";
+      sharedAthleteId: string | null;
+      reason: "empty_sharedAthleteId" | "invalid_artifact_set_shape";
+      artifactCount: number;
+    };
 
 let artifactMemory: ArtifactSetByAthleteId | null = null;
 
@@ -193,12 +216,22 @@ export async function getCoachMatchBreakdownArtifactSet(
 
 export async function writeCoachMatchBreakdownArtifactSet(
   artifactSet: SyncedCoachMatchBreakdownArtifactSet,
-): Promise<void> {
+): Promise<CoachMatchBreakdownArtifactWriteOutcome> {
   const athleteId = artifactSet.sharedAthleteId.trim();
   if (!athleteId || !isValidSyncedCoachMatchBreakdownArtifactSet(artifactSet)) {
+    const reason = !athleteId ? "empty_sharedAthleteId" : "invalid_artifact_set_shape";
+    logMatchBreakdownAuthorityTrace("ARTIFACT_STORE_WRITE", {
+      traceId: null,
+      sharedAthleteId: athleteId || null,
+      writeOutcome: "rejected_invalid",
+      rejectedStale: false,
+      storedUpdatedAt: null,
+      reason,
+      artifactCount: Array.isArray(artifactSet.artifacts) ? artifactSet.artifacts.length : 0,
+    });
     console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
       stage: "artifact_store_write_skip",
-      reason: !athleteId ? "empty_sharedAthleteId" : "invalid_artifact_set_shape",
+      reason,
       sharedAthleteId: athleteId || null,
       ...artifactSetTraceSummary(isValidSyncedCoachMatchBreakdownArtifactSet(artifactSet) ? artifactSet : null),
     });
@@ -206,12 +239,26 @@ export async function writeCoachMatchBreakdownArtifactSet(
       stage: "parent_overlay_hydrate_skip_invalid",
       sharedAthleteId: athleteId || null,
     });
-    return;
+    return {
+      status: "rejected_invalid",
+      sharedAthleteId: athleteId || null,
+      reason,
+      artifactCount: Array.isArray(artifactSet.artifacts) ? artifactSet.artifacts.length : 0,
+    };
   }
 
   const map = await readStore();
   const existing = map[athleteId] ?? null;
   if (existing && artifactSet.updatedAt.localeCompare(existing.updatedAt) < 0) {
+    logMatchBreakdownAuthorityTrace("ARTIFACT_STORE_WRITE", {
+      traceId: null,
+      sharedAthleteId: athleteId,
+      writeOutcome: "rejected_stale",
+      rejectedStale: true,
+      storedUpdatedAt: existing.updatedAt,
+      incomingUpdatedAt: artifactSet.updatedAt,
+      artifactCount: artifactSet.artifacts.length,
+    });
     console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
       stage: "artifact_store_write_skip",
       reason: "incoming_stale_vs_existing",
@@ -228,11 +275,26 @@ export async function writeCoachMatchBreakdownArtifactSet(
       existingUpdatedAt: existing.updatedAt,
       artifactCount: artifactSet.artifacts.length,
     });
-    return;
+    return {
+      status: "rejected_stale",
+      sharedAthleteId: athleteId,
+      incomingUpdatedAt: artifactSet.updatedAt,
+      existingUpdatedAt: existing.updatedAt,
+      artifactCount: artifactSet.artifacts.length,
+    };
   }
 
   map[athleteId] = artifactSet;
   await writeStore(map);
+  logMatchBreakdownAuthorityTrace("ARTIFACT_STORE_WRITE", {
+    traceId: null,
+    sharedAthleteId: athleteId,
+    writeOutcome: "written",
+    rejectedStale: false,
+    storedUpdatedAt: artifactSet.updatedAt,
+    previousUpdatedAt: existing?.updatedAt ?? null,
+    artifactCount: artifactSet.artifacts.length,
+  });
   console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
     stage: "parent_artifact_store_write",
     sharedAthleteId: athleteId,
@@ -278,6 +340,13 @@ export async function writeCoachMatchBreakdownArtifactSet(
     lineageIds: artifactSet.artifacts.map((artifact) => artifact.matchLineageKey),
     updatedAt: artifactSet.updatedAt,
   });
+  return {
+    status: "written",
+    sharedAthleteId: athleteId,
+    incomingUpdatedAt: artifactSet.updatedAt,
+    previousUpdatedAt: existing?.updatedAt ?? null,
+    artifactCount: artifactSet.artifacts.length,
+  };
 }
 
 export async function removeCoachMatchBreakdownArtifactSet(sharedAthleteId: string): Promise<void> {

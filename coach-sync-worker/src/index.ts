@@ -386,6 +386,41 @@ const MAX_TOPOLOGY_ID_CHARS = 200;
 const MAX_TOPOLOGY_URI_CHARS = 2_000;
 const MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE = 2048;
 const OVERLAY_FORENSIC_TRACE_HEADER = "X-Overlay-Forensic-Trace-Id";
+const MATCH_BREAKDOWN_AUTHORITY_TRACE_PREFIX =
+  "[MATCH_BREAKDOWN_AUTHORITY_TRACE]";
+
+function inviteTokenSuffixForAuthorityTrace(token: string): string | null {
+  const normalized = token.trim();
+  if (!normalized) return null;
+  return normalized.slice(-6);
+}
+
+function logMatchBreakdownAuthorityTrace(
+  stage: string,
+  fields: Record<string, unknown>,
+): void {
+  console.log(
+    MATCH_BREAKDOWN_AUTHORITY_TRACE_PREFIX,
+    JSON.stringify({
+      stage,
+      timestamp: new Date().toISOString(),
+      traceId: fields.traceId ?? null,
+      sharedAthleteId: fields.sharedAthleteId ?? null,
+      sharedCompetitionId: fields.sharedCompetitionId ?? null,
+      matchLineageKey: fields.matchLineageKey ?? null,
+      generation: fields.generation ?? null,
+      inviteTokenSuffix: fields.inviteTokenSuffix ?? null,
+      ...fields,
+    }),
+  );
+}
+
+function coachMatchBreakdownArtifactCountForAthlete(
+  artifactsByAthleteId: Record<string, CoachMatchBreakdownArtifactSet>,
+  sharedAthleteId: string,
+): number {
+  return artifactsByAthleteId[sharedAthleteId]?.artifacts.length ?? 0;
+}
 const MAX_COACH_BREAKDOWN_TEXT_CHARS = 8_000;
 const MAX_COACH_BREAKDOWN_PAYLOAD_CHARS = 256_000;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
@@ -1543,6 +1578,33 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
     readBackWeeklyByProbes: readBackProbes,
     putToReadBackDiffs,
     readBackWeeklyByJsonSnippet: JSON.stringify(readBackWeeklyBy ?? null).slice(0, 4000),
+  });
+  const kvArtifactCount = Object.values(toStore.coachMatchBreakdownArtifacts).reduce(
+    (sum, artifactSet) => sum + artifactSet.artifacts.length,
+    0,
+  );
+  logMatchBreakdownAuthorityTrace("WORKER_SESSION_WRITE", {
+    traceId: null,
+    sharedAthleteId: null,
+    inviteTokenSuffix: inviteTokenSuffixForAuthorityTrace(token),
+    kvArtifactCount,
+    aggregateCount: Object.keys(toStore.competitionAggregateByAthleteId ?? {}).length,
+    topologyCount: Object.keys(toStore.competitionTopologyByAthleteId ?? {}).length,
+  });
+  logMatchBreakdownAuthorityTrace("WORKER_SESSION_SELF_GET", {
+    traceId: null,
+    sharedAthleteId: null,
+    inviteTokenSuffix: inviteTokenSuffixForAuthorityTrace(token),
+    artifactCountReturned: Object.values(readBackCoachMatchBreakdownArtifacts).reduce(
+      (sum, artifactSet) => sum + artifactSet.artifacts.length,
+      0,
+    ),
+    aggregateCount: Object.keys(
+      parseCompetitionAggregateByAthleteId(readBackRoot?.competitionAggregateByAthleteId),
+    ).length,
+    topologyCount: Object.keys(
+      parseCompetitionTopologyByAthleteId(readBackRoot?.competitionTopologyByAthleteId),
+    ).length,
   });
 }
 
@@ -2849,6 +2911,19 @@ export default {
         }
 
         const existing = rec.coachMatchBreakdownArtifacts[artifactSet.sharedAthleteId];
+        const existingKvArtifactCount =
+          existing?.artifacts.length ?? 0;
+        logMatchBreakdownAuthorityTrace("WORKER_PUT_RECEIVED", {
+          traceId: overlayForensicTraceId,
+          sharedAthleteId: artifactSet.sharedAthleteId,
+          sharedCompetitionId: artifactSet.artifacts[0]?.sharedCompetitionId ?? null,
+          matchLineageKey: artifactSet.artifacts[0]?.matchLineageKey ?? null,
+          inviteTokenSuffix: inviteTokenSuffixForAuthorityTrace(token),
+          artifactCount: artifactSet.artifacts.length,
+          updatedAt: artifactSet.updatedAt,
+          existingKvArtifactCount,
+          newKvArtifactCount: artifactSet.artifacts.length,
+        });
         if (existing && artifactSet.updatedAt.localeCompare(existing.updatedAt) < 0) {
           console.log("[COACH_OVERLAY_SYNC_TRACE]", {
             stage: "worker_coach_overlay_reject_stale",
@@ -2906,6 +2981,21 @@ export default {
           updatedAt: artifactSet.updatedAt,
         });
         await writeSession(env.SESSIONS, token, next);
+        const selfGetRec = await readSession(env.SESSIONS, token);
+        const selfGetArtifactCount = selfGetRec
+          ? coachMatchBreakdownArtifactCountForAthlete(
+              selfGetRec.coachMatchBreakdownArtifacts,
+              artifactSet.sharedAthleteId,
+            )
+          : 0;
+        logMatchBreakdownAuthorityTrace("WORKER_SESSION_SELF_GET", {
+          traceId: overlayForensicTraceId,
+          sharedAthleteId: artifactSet.sharedAthleteId,
+          inviteTokenSuffix: inviteTokenSuffixForAuthorityTrace(token),
+          artifactCountReturned: selfGetArtifactCount,
+          aggregateCount: Object.keys(selfGetRec?.competitionAggregateByAthleteId ?? {}).length,
+          topologyCount: Object.keys(selfGetRec?.competitionTopologyByAthleteId ?? {}).length,
+        });
         console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
           stage: "worker_put_persisted",
           sharedAthleteId: artifactSet.sharedAthleteId,

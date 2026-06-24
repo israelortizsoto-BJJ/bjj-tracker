@@ -51,6 +51,7 @@ function baseDeps(
       syncConfigured: true,
       captureMode: "read_only_state",
       hydrationVersion: 1,
+      analysisReadiness: [],
     }),
     captureWorkerSessionSnapshot: async () => ({
       contractVersion: WORKER_SESSION_SNAPSHOT_CONTRACT_VERSION,
@@ -212,6 +213,7 @@ describe("captureIncidentBundle fail-closed", () => {
               syncConfigured: true,
               captureMode: "shared_authority_reconcile",
               hydrationVersion: 1,
+              analysisReadiness: [],
             }),
             captureWorkerSessionSnapshot: async () => ({
               contractVersion: WORKER_SESSION_SNAPSHOT_CONTRACT_VERSION,

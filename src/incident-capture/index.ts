@@ -49,6 +49,7 @@ export {
 export {
   HYDRATION_SNAPSHOT_CONTRACT_VERSION,
   type HydrationCacheLinkEvidence,
+  type HydrationAnalysisReadinessEvidence,
   type HydrationEarlyExitReason,
   type HydrationReconcileOutcome,
   type HydrationSkipReconcileReason,
