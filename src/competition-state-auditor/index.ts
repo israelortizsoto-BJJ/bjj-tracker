@@ -25,6 +25,12 @@ export {
   analyzeCompetitionAuditorTrail,
   formatCompetitionAuditorReadout,
 } from "./analyzeCompetitionAuditorTrail";
+export {
+  dumpCompetitionAuditorTrail,
+  registerDumpCompetitionAuditorTrailGlobal,
+  type DumpCompetitionAuditorTrailOptions,
+  type DumpCompetitionAuditorTrailResult,
+} from "./dumpCompetitionAuditorTrail";
 export { captureWorkerPersistSnapshotFromResponse } from "./captureWorkerPersistSnapshotFromHeader";
 export {
   competitionAuditRequestHeaders,
@@ -63,3 +69,4 @@ export {
   projectCompetitionDomainBlockFromIds,
   type CompetitionDomainBlockInputRow,
 } from "./projectCompetitionDomainBlock";
+export { selectPhaseABoundarySnapshots } from "./selectPhaseABoundarySnapshots";

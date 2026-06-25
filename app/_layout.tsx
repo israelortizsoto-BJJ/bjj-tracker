@@ -13,6 +13,12 @@ export default function RootLayout() {
   const [storageReady, setStorageReady] = useState(false);
 
   useEffect(() => {
+    if (__DEV__) {
+      void import("../src/competition-state-auditor/dumpCompetitionAuditorTrail");
+    }
+  }, []);
+
+  useEffect(() => {
     console.log("[ENV CHECK]", {
       appVariant: getAppVariant(),
       isDev: isDev(),

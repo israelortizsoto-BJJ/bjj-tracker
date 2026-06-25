@@ -24,6 +24,10 @@ import {
   loadIncidentCaptureDebugRecord,
   type IncidentCaptureDebugRecord,
 } from "../../../src/incident-capture";
+import {
+  dumpCompetitionAuditorTrail,
+  type DumpCompetitionAuditorTrailResult,
+} from "../../../src/competition-state-auditor/dumpCompetitionAuditorTrail";
 
 import { loadDevFlags, saveDevFlags } from "../../../src/config/devFlagsStore";
 import {
@@ -117,6 +121,24 @@ function isRecentIncompleteExport(record: IncidentExportDebugRecord): boolean {
   return Date.now() - atMs < INCIDENT_EXPORT_CRASH_ALERT_WINDOW_MS;
 }
 
+function formatCompetitionAuditorClipboardReport(
+  result: DumpCompetitionAuditorTrailResult,
+): string {
+  const snapshotJson = (snapshot: unknown): string =>
+    snapshot ? JSON.stringify(snapshot, null, 2) : "(missing)";
+
+  return [
+    "=== Competition State Auditor Phase A ===",
+    result.readout,
+    "--- S1 parent_canonical ---",
+    snapshotJson(result.snapshots.s1),
+    "--- S2 parent_publish ---",
+    snapshotJson(result.snapshots.s2),
+    "--- S3 worker_persist ---",
+    snapshotJson(result.snapshots.s3),
+  ].join("\n\n");
+}
+
 function FlagRow({
   label,
   value,
@@ -208,6 +230,7 @@ export default function DevSettingsScreen() {
   const [flags, setFlags] = useState<DevFlags>(DEFAULT_DEV_FLAGS);
   const [incidentCorrelationId, setIncidentCorrelationId] = useState("");
   const [isExportingIncidentBundle, setIsExportingIncidentBundle] = useState(false);
+  const [isDumpingCompetitionAuditor, setIsDumpingCompetitionAuditor] = useState(false);
   const [lastExportStage, setLastExportStage] = useState<IncidentExportDebugRecord | null>(null);
   const [lastCaptureStage, setLastCaptureStage] = useState<IncidentCaptureDebugRecord | null>(null);
   const postCrashAlertShownRef = useRef(false);
@@ -345,6 +368,23 @@ export default function DevSettingsScreen() {
       );
     } finally {
       setIsExportingIncidentBundle(false);
+    }
+  }
+
+  async function dumpCompetitionAuditorTrailToClipboard() {
+    setIsDumpingCompetitionAuditor(true);
+    try {
+      const result = await dumpCompetitionAuditorTrail({ expectedCount: 5 });
+      const report = formatCompetitionAuditorClipboardReport(result);
+      await Clipboard.setStringAsync(report);
+      Alert.alert("Competition Auditor copied to clipboard");
+    } catch (error) {
+      Alert.alert(
+        "Dump failed",
+        error instanceof Error ? error.message : "Unknown error",
+      );
+    } finally {
+      setIsDumpingCompetitionAuditor(false);
     }
   }
 
@@ -597,6 +637,25 @@ export default function DevSettingsScreen() {
             title={isExportingIncidentBundle ? "Exporting…" : "Export Incident Bundle"}
             subtitle="Copies JSON to clipboard; share sheet when available"
             onPress={exportIncidentBundle}
+          />
+        </View>
+
+        <View style={{ marginTop: 18 }}>
+          <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+            COMPETITION STATE AUDITOR
+          </Text>
+          <Text style={{ marginTop: 8, fontSize: 13, opacity: 0.7 }}>
+            Phase A boundary report for the active athlete. Copies formatted summary
+            plus S1/S2/S3 JSON to clipboard.
+          </Text>
+          <DevActionButton
+            title={
+              isDumpingCompetitionAuditor
+                ? "Dumping…"
+                : "Dump Competition Auditor Trail"
+            }
+            subtitle="Parent canonical → publish → worker persist (read-only)"
+            onPress={dumpCompetitionAuditorTrailToClipboard}
           />
         </View>
 
