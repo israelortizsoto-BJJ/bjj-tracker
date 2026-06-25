@@ -4,6 +4,15 @@
  * Deploy: set KV id in wrangler.toml, then `npx wrangler deploy` from this folder.
  */
 
+import {
+  buildWorkerPersistSnapshot,
+  MATMIND_AUDIT_SNAPSHOT_HEADER,
+  MATMIND_TRANSITION_HEADER,
+  readTransitionIdFromRequest,
+  serializeWorkerPersistSnapshot,
+  type WorkerPersistLane,
+} from "./competitionStateAuditor";
+
 export interface Env {
   SESSIONS: KVNamespace;
 }
@@ -455,14 +464,44 @@ function summarizeRawWeeklyByAthleteSystemKey(rawWeeklyBy: unknown): Record<
   return out;
 }
 
-function json(data: unknown, status = 200, cors = true): Response {
+function json(data: unknown, status = 200, cors = true, auditSnapshot?: string): Response {
   const headers: Record<string, string> = { "Content-Type": "application/json; charset=utf-8" };
+  if (auditSnapshot) {
+    headers[MATMIND_AUDIT_SNAPSHOT_HEADER] = auditSnapshot;
+  }
   if (cors) {
     headers["Access-Control-Allow-Origin"] = "*";
     headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
-    headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization";
+    headers["Access-Control-Allow-Headers"] = `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}`;
+    headers["Access-Control-Expose-Headers"] = MATMIND_AUDIT_SNAPSHOT_HEADER;
   }
   return new Response(JSON.stringify(data), { status, headers });
+}
+
+function competitionPersistResponse(
+  payload: unknown,
+  status: number,
+  input: {
+    before: SessionRecord;
+    after: SessionRecord;
+    sharedAthleteId: string;
+    persistLane: WorkerPersistLane;
+    request: Request;
+    linkTokenTail: string;
+  },
+): Response {
+  const transitionId = readTransitionIdFromRequest(input.request) ?? `worker-${randomHex(8)}`;
+  const auditSnapshot = serializeWorkerPersistSnapshot(
+    buildWorkerPersistSnapshot({
+      before: input.before,
+      after: input.after,
+      sharedAthleteId: input.sharedAthleteId,
+      persistLane: input.persistLane,
+      transitionId,
+      linkTokenTail: input.linkTokenTail,
+    }),
+  );
+  return json(payload, status, true, auditSnapshot);
 }
 
 function error(message: string, status: number, cors = true): Response {
@@ -1613,7 +1652,8 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      "Access-Control-Allow-Headers": `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}`,
+      "Access-Control-Expose-Headers": MATMIND_AUDIT_SNAPSHOT_HEADER,
     };
 
     if (request.method === "OPTIONS") {
@@ -2743,7 +2783,14 @@ export default {
           competitions: [...rec.competitions, competition],
         };
         await writeSession(env.SESSIONS, token, next);
-        return json({ competition }, 201);
+        return competitionPersistResponse({ competition }, 201, {
+          before: rec,
+          after: next,
+          sharedAthleteId,
+          persistLane: "shell_post",
+          request,
+          linkTokenTail: token.slice(-8),
+        });
       }
 
       const competitionsPut = path.match(/^\/v1\/sessions\/([^/]+)\/competitions\/([^/]+)$/);
@@ -2820,7 +2867,14 @@ export default {
         nextComps[idx] = nextComp;
         const next: SessionRecord = { ...rec, competitions: nextComps };
         await writeSession(env.SESSIONS, token, next);
-        return json({ ok: true }, 200);
+        return competitionPersistResponse({ ok: true }, 200, {
+          before: rec,
+          after: next,
+          sharedAthleteId: current.sharedAthleteId,
+          persistLane: "shell_put",
+          request,
+          linkTokenTail: token.slice(-8),
+        });
       }
 
       const competitionsDelete = path.match(/^\/v1\/sessions\/([^/]+)\/competitions\/([^/]+)$/);
@@ -2835,15 +2889,22 @@ export default {
 
         const rec = await readSession(env.SESSIONS, token);
         if (!rec || rec.parentWriterSecret !== secret) return error("Unauthorized", 401);
-        const exists = rec.competitions.some((c) => c.id === competitionId);
-        if (!exists) return error("Not found", 404);
+        const deleted = rec.competitions.find((c) => c.id === competitionId);
+        if (!deleted) return error("Not found", 404);
 
         const next: SessionRecord = {
           ...rec,
           competitions: rec.competitions.filter((c) => c.id !== competitionId),
         };
         await writeSession(env.SESSIONS, token, next);
-        return json({ ok: true }, 200);
+        return competitionPersistResponse({ ok: true }, 200, {
+          before: rec,
+          after: next,
+          sharedAthleteId: deleted.sharedAthleteId,
+          persistLane: "shell_delete",
+          request,
+          linkTokenTail: token.slice(-8),
+        });
       }
 
       const coachMatchBreakdownsPut = path.match(
@@ -3164,7 +3225,14 @@ export default {
           overwriteReason: existing ? "newer_overwrite" : "first_write",
         });
         await writeSession(env.SESSIONS, token, next);
-        return json({ ok: true }, 200);
+        return competitionPersistResponse({ ok: true }, 200, {
+          before: rec,
+          after: next,
+          sharedAthleteId: artifact.sharedAthleteId,
+          persistLane: "topology_put",
+          request,
+          linkTokenTail: token.slice(-8),
+        });
       }
 
       if (path.endsWith("/competition-topology") && request.method === "PUT") {
@@ -3233,7 +3301,14 @@ export default {
           totalMatches: artifact.totalMatches,
         });
         await writeSession(env.SESSIONS, token, next);
-        return json({ ok: true }, 200);
+        return competitionPersistResponse({ ok: true }, 200, {
+          before: rec,
+          after: next,
+          sharedAthleteId: artifact.sharedAthleteId,
+          persistLane: "aggregate_put",
+          request,
+          linkTokenTail: token.slice(-8),
+        });
       }
 
       if (path.endsWith("/competition-aggregate") && request.method === "PUT") {

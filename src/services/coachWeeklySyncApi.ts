@@ -1,4 +1,9 @@
 import { getCoachSyncApiBaseUrl, logSyncBaseUrlTrace } from "../config/coachSync";
+import {
+  competitionAuditRequestHeaders,
+  recordCoachSyncCompetitionResponse,
+} from "../competition-state-auditor/coachSyncAuditWire";
+import { generateCompetitionTransitionId } from "../competition-state-auditor/generateCompetitionTransitionId";
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
 import {
   inviteTokenSuffix,
@@ -795,17 +800,20 @@ export async function coachSyncPutCompetitionAggregate(
   parentWriterSecret: string,
   body: CoachWeeklySyncPutCompetitionAggregateBody,
   apiBaseUrlOverride?: string | null,
+  auditTransitionId?: string,
 ): Promise<void> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
   const path = `/v1/sessions/${enc}/competition-aggregate`;
   const url = joinUrl(base, path);
+  const transitionId = auditTransitionId?.trim() || generateCompetitionTransitionId();
   const res = await fetch(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${parentWriterSecret}`,
+      ...competitionAuditRequestHeaders(transitionId),
     },
     body: JSON.stringify(body),
   });
@@ -815,6 +823,17 @@ export async function coachSyncPutCompetitionAggregate(
       typeof payload === "object" && payload && "error" in payload
         ? String((payload as { error: unknown }).error)
         : `HTTP ${res.status}`;
+    recordCoachSyncCompetitionResponse({
+      response: res,
+      sharedAthleteId: body.sharedAthleteId,
+      transitionId,
+      publishLane: "aggregate_put",
+      publishOutcome: "error",
+      httpStatus: res.status,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+      generation: body.updatedAt,
+      skipReason: msg,
+    });
     console.log("[COMP_AGG_TRACE] put_http_failed", {
       operation: "PUT",
       url,
@@ -827,6 +846,16 @@ export async function coachSyncPutCompetitionAggregate(
     });
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
+  recordCoachSyncCompetitionResponse({
+    response: res,
+    sharedAthleteId: body.sharedAthleteId,
+    transitionId,
+    publishLane: "aggregate_put",
+    publishOutcome: "ok",
+    httpStatus: res.status,
+    linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+    generation: body.updatedAt,
+  });
   console.log("[COMP_AGG_TRACE] put_http_ok", {
     operation: "PUT",
     url,
@@ -854,6 +883,7 @@ export async function coachSyncPutCompetitionTopology(
   body: CoachWeeklySyncPutCompetitionTopologyBody,
   apiBaseUrlOverride?: string | null,
   competitionTopologyTraceId?: string,
+  auditTransitionId?: string,
 ): Promise<void> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
@@ -886,12 +916,14 @@ export async function coachSyncPutCompetitionTopology(
       });
     }
   }
+  const transitionId = auditTransitionId?.trim() || generateCompetitionTransitionId();
   const res = await fetch(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${parentWriterSecret}`,
+      ...competitionAuditRequestHeaders(transitionId),
       ...(competitionTopologyTraceId
         ? { "X-Competition-Topology-Trace-Id": competitionTopologyTraceId }
         : {}),
@@ -899,11 +931,28 @@ export async function coachSyncPutCompetitionTopology(
     body: JSON.stringify(body),
   });
   const payload = await parseJsonOrText(res);
+  const topologyDomainRows = body.competitions.map((competition) => ({
+    sharedCompetitionId: competition.sharedCompetitionId,
+    artifactUpdatedAt: body.updatedAt,
+    matches: competition.matches.map((match) => ({ id: match.matchLineageKey })),
+  }));
   if (!res.ok) {
     const msg =
       typeof payload === "object" && payload && "error" in payload
         ? String((payload as { error: unknown }).error)
         : `HTTP ${res.status}`;
+    recordCoachSyncCompetitionResponse({
+      response: res,
+      sharedAthleteId: body.sharedAthleteId,
+      transitionId,
+      publishLane: "topology_put",
+      publishOutcome: "error",
+      httpStatus: res.status,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+      generation: body.updatedAt,
+      domainRows: topologyDomainRows,
+      skipReason: msg,
+    });
     console.log("[COMP_TOPOLOGY_TRACE] put_http_failed", {
       traceId: competitionTopologyTraceId ?? null,
       operation: "PUT",
@@ -917,6 +966,20 @@ export async function coachSyncPutCompetitionTopology(
     });
     throw new CoachWeeklySyncApiError(msg, res.status);
   }
+  recordCoachSyncCompetitionResponse({
+    response: res,
+    sharedAthleteId: body.sharedAthleteId,
+    transitionId,
+    publishLane: "topology_put",
+    publishOutcome: "ok",
+    httpStatus: res.status,
+    linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+    generation: body.updatedAt,
+    domainRows: topologyDomainRows,
+    operationSharedCompetitionIds: body.competitions.map(
+      (competition) => competition.sharedCompetitionId,
+    ),
+  });
   console.log("[COMP_TOPOLOGY_TRACE] put_http_ok", {
     ...(competitionTopologyTraceId ? { traceId: competitionTopologyTraceId } : {}),
     operation: "PUT",
@@ -1485,6 +1548,7 @@ export async function coachSyncCreateSessionCompetition(
   parentWriterSecret: string,
   body: CoachWeeklySyncCreateCompetitionBody,
   apiBaseUrlOverride?: string | null,
+  auditTransitionId?: string,
 ): Promise<CoachWeeklySyncCreateCompetitionResponse> {
   const t0 = Date.now();
   const tokenTail = linkToken.trim().length > 8 ? linkToken.trim().slice(-8) : linkToken.trim();
@@ -1513,11 +1577,15 @@ export async function coachSyncCreateSessionCompetition(
     url,
     serializedRequestBody: serialized,
   });
+  const transitionId = auditTransitionId?.trim() || generateCompetitionTransitionId();
   let res: Response;
   try {
     res = await fetch(url, {
       method: "POST",
-      headers,
+      headers: {
+        ...headers,
+        ...competitionAuditRequestHeaders(transitionId),
+      },
       body: serialized,
     });
   } catch (err) {
@@ -1560,6 +1628,16 @@ export async function coachSyncCreateSessionCompetition(
   }
   if (!res.ok) {
     const err = new CoachWeeklySyncApiError(coachSyncFailureMessage(res, payload), res.status);
+    recordCoachSyncCompetitionResponse({
+      response: res,
+      sharedAthleteId: body.sharedAthleteId,
+      transitionId,
+      publishLane: "shell_post",
+      publishOutcome: "error",
+      httpStatus: res.status,
+      linkTokenTail: tokenTail,
+      skipReason: err.message,
+    });
     console.log("[COMP_SYNC_TRACE] coachSyncCreateSessionCompetition", {
       stage: "post_http_error_rethrow",
       elapsedMs: Date.now() - t0,
@@ -1581,6 +1659,16 @@ export async function coachSyncCreateSessionCompetition(
     });
     throw err;
   }
+  recordCoachSyncCompetitionResponse({
+    response: res,
+    sharedAthleteId: body.sharedAthleteId,
+    transitionId,
+    publishLane: "shell_post",
+    publishOutcome: "ok",
+    httpStatus: res.status,
+    linkTokenTail: tokenTail,
+    operationSharedCompetitionIds: remoteCompetitionId ? [remoteCompetitionId] : [],
+  });
   return payload as CoachWeeklySyncCreateCompetitionResponse;
 }
 
@@ -1590,16 +1678,20 @@ export async function coachSyncUpdateSessionCompetition(
   parentWriterSecret: string,
   body: CoachWeeklySyncUpdateCompetitionBody,
   apiBaseUrlOverride?: string | null,
+  audit?: { transitionId?: string; sharedAthleteId: string },
 ): Promise<void> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
   const compEnc = encodeURIComponent(competitionId);
+  const transitionId = audit?.transitionId?.trim() || generateCompetitionTransitionId();
+  const sharedAthleteId = audit?.sharedAthleteId?.trim() ?? "";
   const res = await fetch(joinUrl(base, `/v1/sessions/${enc}/competitions/${compEnc}`), {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
       Authorization: `Bearer ${parentWriterSecret}`,
+      ...competitionAuditRequestHeaders(transitionId),
     },
     body: JSON.stringify(body),
   });
@@ -1609,7 +1701,30 @@ export async function coachSyncUpdateSessionCompetition(
       typeof payload === "object" && payload && "error" in payload
         ? String((payload as { error: unknown }).error)
         : `HTTP ${res.status}`;
+    recordCoachSyncCompetitionResponse({
+      response: res,
+      sharedAthleteId,
+      transitionId,
+      publishLane: "shell_put",
+      publishOutcome: "error",
+      httpStatus: res.status,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+      operationSharedCompetitionIds: [competitionId],
+      skipReason: msg,
+    });
     throw new CoachWeeklySyncApiError(msg, res.status);
+  }
+  if (sharedAthleteId) {
+    recordCoachSyncCompetitionResponse({
+      response: res,
+      sharedAthleteId,
+      transitionId,
+      publishLane: "shell_put",
+      publishOutcome: "ok",
+      httpStatus: res.status,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+      operationSharedCompetitionIds: [competitionId],
+    });
   }
 }
 
@@ -1618,16 +1733,19 @@ export async function coachSyncDeleteSessionCompetition(
   competitionId: string,
   parentWriterSecret: string,
   apiBaseUrlOverride?: string | null,
+  audit?: { transitionId?: string; sharedAthleteId: string },
 ): Promise<void> {
   const base = resolveBase(apiBaseUrlOverride);
   const enc = encodeURIComponent(linkToken);
   const compEnc = encodeURIComponent(competitionId);
   const url = joinUrl(base, `/v1/sessions/${enc}/competitions/${compEnc}`);
+  const transitionId = audit?.transitionId?.trim() || generateCompetitionTransitionId();
   const res = await fetch(url, {
     method: "DELETE",
     headers: {
       Accept: "application/json",
       Authorization: `Bearer ${parentWriterSecret}`,
+      ...competitionAuditRequestHeaders(transitionId),
     },
   });
   const payload = await parseJsonOrText(res);
@@ -1647,6 +1765,31 @@ export async function coachSyncDeleteSessionCompetition(
       typeof payload === "object" && payload && "error" in payload
         ? String((payload as { error: unknown }).error)
         : `HTTP ${res.status}`;
+    if (audit?.sharedAthleteId) {
+      recordCoachSyncCompetitionResponse({
+        response: res,
+        sharedAthleteId: audit.sharedAthleteId,
+        transitionId,
+        publishLane: "shell_delete",
+        publishOutcome: "error",
+        httpStatus: res.status,
+        linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+        operationSharedCompetitionIds: [competitionId],
+        skipReason: msg,
+      });
+    }
     throw new CoachWeeklySyncApiError(msg, res.status);
+  }
+  if (audit?.sharedAthleteId) {
+    recordCoachSyncCompetitionResponse({
+      response: res,
+      sharedAthleteId: audit.sharedAthleteId,
+      transitionId,
+      publishLane: "shell_delete",
+      publishOutcome: "ok",
+      httpStatus: res.status,
+      linkTokenTail: linkToken.length > 8 ? linkToken.slice(-8) : linkToken,
+      operationSharedCompetitionIds: [competitionId],
+    });
   }
 }

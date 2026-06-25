@@ -3,6 +3,11 @@ import {
   resolveLinkedTargetForParentWriter,
   type ParentKidCompetitionDeleteOutcome,
 } from "../../family/parentKidCompetitionDelete";
+import {
+  beginCompetitionTransition,
+  endCompetitionTransition,
+} from "../../competition-state-auditor/competitionTransitionContext";
+import { scheduleParentCanonicalSnapshot } from "../../competition-state-auditor/emitParentCanonicalSnapshot";
 import { medalTierFromKidResult } from "../../types/coachKid";
 import { getKidsById } from "../../storage/coachKidStore";
 import {
@@ -84,11 +89,26 @@ function assertDevWritableTarget(target: { linkToken: string; parentWriterSecret
   }
 }
 
+function completeParentCompetitionMutation(input: {
+  sharedAthleteId: string | null | undefined;
+  transitionId: string;
+}): void {
+  const sharedAthleteId = input.sharedAthleteId?.trim();
+  if (sharedAthleteId) {
+    scheduleParentCanonicalSnapshot({
+      sharedAthleteId,
+      transitionId: input.transitionId,
+    });
+  }
+  endCompetitionTransition(input.transitionId);
+}
+
 function scheduleCompetitionAggregatePublishAfterMutation(input: {
   mutationType: "create" | "edit" | "delete";
   sharedAthleteId: string | null | undefined;
   sharedCompetitionId?: string | null;
   triggerReason: string;
+  transitionId?: string;
 }): void {
   const sharedAthleteId = input.sharedAthleteId?.trim() ?? "";
   if (!sharedAthleteId) {
@@ -112,7 +132,7 @@ function scheduleCompetitionAggregatePublishAfterMutation(input: {
     triggerReason: input.triggerReason,
     aggregatePublishScheduled: true,
   });
-  schedulePublishParentCompetitionAggregate(sharedAthleteId);
+  schedulePublishParentCompetitionAggregate(sharedAthleteId, input.transitionId);
 }
 
 export async function createCompetition(
@@ -248,6 +268,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
       return { ok: false, blocked: { kind: "resolve_miss_new" } };
     }
     assertDevWritableTarget(target);
+    const transitionId = beginCompetitionTransition(linkedAthleteId);
     try {
       setFamilyPhase("pre_coachSyncCreateSessionCompetition");
       console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
@@ -268,6 +289,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
           format: formatDraft,
         },
         target.apiBaseUrl,
+        transitionId,
       );
       setFamilyPhase("post_coachSyncCreateSessionCompetition_ok");
       console.log("[COMP_SYNC_TRACE] familyCompetitionEditScreen onSave", {
@@ -313,8 +335,13 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         sharedAthleteId: linkedAthleteId,
         sharedCompetitionId: remote.competition.id,
         triggerReason: "createCompetitionFamily_after_local_shell_persisted",
+        transitionId,
       });
-      schedulePublishParentCompetitionTopology(linkedAthleteId);
+      schedulePublishParentCompetitionTopology(linkedAthleteId, transitionId);
+      completeParentCompetitionMutation({
+        sharedAthleteId: linkedAthleteId,
+        transitionId,
+      });
       logCompSave("COMPLETE", {
         competitionId: createdRow.id,
         athleteId: kidId,
@@ -325,6 +352,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
       });
       return { ok: true, savedCompetitionId: createdRow.id };
     } catch (e) {
+      endCompetitionTransition(transitionId);
       logCompSave("ERROR", {
         athleteId: kidId,
         sharedAthleteId: linkedAthleteId,
@@ -427,6 +455,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
       return { ok: false, blocked: { kind: "resolve_miss_new" } };
     }
     assertDevWritableTarget(target);
+    const transitionId = beginCompetitionTransition(trimmedResolved);
     try {
       const remote = await coachSyncCreateSessionCompetition(
         target.linkToken,
@@ -441,6 +470,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
           format: formatDraft,
         },
         target.apiBaseUrl,
+        transitionId,
       );
       logCompSave("LOCAL", {
         athleteId: kidId,
@@ -489,8 +519,13 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         sharedAthleteId: trimmedResolved,
         sharedCompetitionId: remote.competition.id,
         triggerReason: "createCompetitionKid_after_detail_persisted",
+        transitionId,
       });
-      schedulePublishParentCompetitionTopology(trimmedResolved);
+      schedulePublishParentCompetitionTopology(trimmedResolved, transitionId);
+      completeParentCompetitionMutation({
+        sharedAthleteId: trimmedResolved,
+        transitionId,
+      });
       logCompSave("COMPLETE", {
         competitionId: created.id,
         athleteId: kidId,
@@ -506,6 +541,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
       });
       return { ok: true, savedCompetitionId: created.id };
     } catch (e) {
+      endCompetitionTransition(transitionId);
       logCompSave("ERROR", {
         athleteId: kidId,
         sharedAthleteId: trimmedResolved,
@@ -550,13 +586,19 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
       surface: "CompetitionSync.createCompetitionKid",
       phaseDetail: "local_only_but_has_resolved_shared",
     });
+    const transitionId = beginCompetitionTransition(trimmedResolved);
     scheduleCompetitionAggregatePublishAfterMutation({
       mutationType: "create",
       sharedAthleteId: trimmedResolved,
       sharedCompetitionId: created.sharedCompetitionId ?? null,
       triggerReason: "createCompetitionKid_local_after_detail_persisted",
+      transitionId,
     });
-    schedulePublishParentCompetitionTopology(trimmedResolved);
+    schedulePublishParentCompetitionTopology(trimmedResolved, transitionId);
+    completeParentCompetitionMutation({
+      sharedAthleteId: trimmedResolved,
+      transitionId,
+    });
   }
   logCompSave("COMPLETE", {
     competitionId: created.id,
@@ -622,6 +664,9 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
   const existing = await getKidCompetitionEntryById(entryId);
   const workerCompetitionId = workerCompetitionIdForEntry(existing);
   const athleteForRemote = athleteIdForFamilyRemoteUpdate(existing, kid?.sharedAthleteId?.trim());
+  const transitionId = athleteForRemote
+    ? beginCompetitionTransition(athleteForRemote)
+    : null;
 
   if (athleteForRemote && workerCompetitionId) {
     const target = await resolveLinkedTargetForParentWriter(athleteForRemote, workerCompetitionId);
@@ -652,6 +697,7 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
           format: formatDraft,
         },
         target.apiBaseUrl,
+        transitionId ? { transitionId, sharedAthleteId: athleteForRemote } : undefined,
       );
       logCompSave("LOCAL", {
         competitionId: entryId,
@@ -703,8 +749,15 @@ async function updateCompetitionFamily(input: FamilyUpdateCompetitionInput): Pro
       sharedAthleteId: athleteForRemote,
       sharedCompetitionId: workerCompetitionId ?? null,
       triggerReason: "updateCompetitionFamily_after_local_shell_persisted",
+      transitionId: transitionId ?? undefined,
     });
-    schedulePublishParentCompetitionTopology(athleteForRemote);
+    schedulePublishParentCompetitionTopology(athleteForRemote, transitionId ?? undefined);
+    if (transitionId) {
+      completeParentCompetitionMutation({
+        sharedAthleteId: athleteForRemote,
+        transitionId,
+      });
+    }
   }
   logCompSave("COMPLETE", {
     competitionId: entryId,
@@ -750,6 +803,10 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
   const athleteForRemote = athleteIdForFamilyRemoteUpdate(existing, kid?.sharedAthleteId?.trim());
   const rosterShared = rosterSharedAthleteId(kids, kidId);
   const trimmedResolved = resolvedSharedAthleteId?.trim();
+  const publishAthleteIdEarly = (trimmedResolved || athleteForRemote || "").trim();
+  const transitionId = publishAthleteIdEarly
+    ? beginCompetitionTransition(publishAthleteIdEarly)
+    : null;
   if (__DEV__ && workerCompetitionId && !athleteForRemote.trim() && rosterShared) {
     console.error(
       "[CompetitionSync DEV] worker competition id present but no athlete for remote PUT while roster shows linked",
@@ -787,6 +844,7 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
           format: formatDraft,
         },
         target.apiBaseUrl,
+        transitionId ? { transitionId, sharedAthleteId: athleteForRemote } : undefined,
       );
       logCompSave("LOCAL", {
         competitionId: entryId,
@@ -857,8 +915,15 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
       sharedAthleteId: publishAthleteId,
       sharedCompetitionId: workerCompetitionId ?? null,
       triggerReason: "updateCompetitionKid_after_detail_persisted",
+      transitionId: transitionId ?? undefined,
     });
-    schedulePublishParentCompetitionTopology(publishAthleteId);
+    schedulePublishParentCompetitionTopology(publishAthleteId, transitionId ?? undefined);
+    if (transitionId) {
+      completeParentCompetitionMutation({
+        sharedAthleteId: publishAthleteId,
+        transitionId,
+      });
+    }
   }
   logCompSave("COMPLETE", {
     competitionId: entryId,

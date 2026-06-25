@@ -4,6 +4,9 @@ import {
   logCompetitionTopologyTrace,
 } from "../../dev/competitionTopologyTrace";
 import { logCompPublishGuard, logCompSave } from "../../dev/competitionMutationDevLog";
+import { recordParentPublishAudit } from "../../competition-state-auditor/coachSyncAuditWire";
+import { generateCompetitionTransitionId } from "../../competition-state-auditor/generateCompetitionTransitionId";
+import { peekActiveCompetitionTransition } from "../../competition-state-auditor/competitionTransitionContext";
 import { resolveLinkedTargetForParentWriter } from "../../family/parentKidCompetitionDelete";
 import { coachSyncPutCompetitionTopology } from "../../services/coachWeeklySyncApi";
 import { buildCompetitionTopologyArtifact } from "./buildCompetitionTopologyArtifact";
@@ -11,9 +14,16 @@ import { buildCompetitionTopologyArtifact } from "./buildCompetitionTopologyArti
 /**
  * Fire-and-forget: publish a full parent-owned topology overwrite. Local saves never wait on sync.
  */
-export function schedulePublishParentCompetitionTopology(sharedAthleteId: string): void {
+export function schedulePublishParentCompetitionTopology(
+  sharedAthleteId: string,
+  auditTransitionId?: string,
+): void {
   const trimmed = sharedAthleteId.trim();
   if (!trimmed) return;
+  const transitionId =
+    auditTransitionId?.trim() ||
+    peekActiveCompetitionTransition(trimmed) ||
+    generateCompetitionTransitionId();
   const traceId = __DEV__ ? createCompetitionTopologyTraceId("parent-publish") : undefined;
   logCompetitionTopologyTrace("[COMP_TOPOLOGY_TRACE]", "publish_scheduled", {
     traceId,
@@ -25,6 +35,13 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
       operationKind: "server",
       surface: "publishParentCompetitionTopology",
       phaseDetail: "topologyPublishV2_flag_off",
+    });
+    recordParentPublishAudit({
+      sharedAthleteId: trimmed,
+      transitionId,
+      publishLane: "topology_put",
+      publishOutcome: "skipped",
+      skipReason: "topologyPublishV2_flag_off",
     });
     console.log("[COMP_TOPOLOGY_TRACE] publish_skipped_flag_off", {
       ...(traceId ? { traceId } : {}),
@@ -50,6 +67,13 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
           operationKind: "server",
           surface: "publishParentCompetitionTopology",
           phaseDetail: "publish_skipped_no_linked_target_rosterOnly",
+        });
+        recordParentPublishAudit({
+          sharedAthleteId: trimmed,
+          transitionId,
+          publishLane: "topology_put",
+          publishOutcome: "skipped",
+          skipReason: "publish_skipped_no_linked_target_rosterOnly",
         });
         console.log("[COMP_TOPOLOGY_TRACE] publish_skipped_no_linked_target", {
           sharedAthleteId: trimmed,
@@ -111,6 +135,7 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
         artifact,
         target.apiBaseUrl,
         traceId,
+        transitionId,
       );
       logCompSave("COMPLETE", {
         sharedAthleteId: trimmed,
@@ -145,6 +170,14 @@ export function schedulePublishParentCompetitionTopology(sharedAthleteId: string
         error && typeof error === "object" && "status" in error
           ? (error as { status: unknown }).status
           : null;
+      recordParentPublishAudit({
+        sharedAthleteId: trimmed,
+        transitionId,
+        publishLane: "topology_put",
+        publishOutcome: "error",
+        httpStatus: typeof status === "number" ? status : null,
+        skipReason: error instanceof Error ? error.message : String(error),
+      });
       console.log("[COMP_TOPOLOGY_TRACE] publish_failed", {
         traceId,
         sharedAthleteId: trimmed,

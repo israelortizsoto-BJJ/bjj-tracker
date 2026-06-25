@@ -1,4 +1,7 @@
 import { logCompPublishGuard, logCompSave } from "../../dev/competitionMutationDevLog";
+import { recordParentPublishAudit } from "../../competition-state-auditor/coachSyncAuditWire";
+import { generateCompetitionTransitionId } from "../../competition-state-auditor/generateCompetitionTransitionId";
+import { peekActiveCompetitionTransition } from "../../competition-state-auditor/competitionTransitionContext";
 import { resolveLinkedTargetForParentWriter } from "../../family/parentKidCompetitionDelete";
 import { coachSyncPutCompetitionAggregate } from "../../services/coachWeeklySyncApi";
 import { getKidCompetitionEntriesWithMatchDetailForSharedAthlete } from "../../storage/competitionStore";
@@ -8,9 +11,16 @@ import { buildCompetitionAggregateArtifact } from "./buildCompetitionAggregateAr
  * Fire-and-forget: recompute bounded competition intelligence from parent local storage
  * and publish to the linked invite session. Local saves are never blocked on sync failure.
  */
-export function schedulePublishParentCompetitionAggregate(sharedAthleteId: string): void {
+export function schedulePublishParentCompetitionAggregate(
+  sharedAthleteId: string,
+  auditTransitionId?: string,
+): void {
   const trimmed = sharedAthleteId.trim();
   if (!trimmed) return;
+  const transitionId =
+    auditTransitionId?.trim() ||
+    peekActiveCompetitionTransition(trimmed) ||
+    generateCompetitionTransitionId();
 
   void (async () => {
     logCompSave("PUBLISH", {
@@ -30,6 +40,13 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
           operationKind: "server",
           surface: "publishParentCompetitionAggregate",
           phaseDetail: "publish_skipped_no_linked_target_rosterOnly",
+        });
+        recordParentPublishAudit({
+          sharedAthleteId: trimmed,
+          transitionId,
+          publishLane: "aggregate_put",
+          publishOutcome: "skipped",
+          skipReason: "publish_skipped_no_linked_target_rosterOnly",
         });
         console.log("[COMP_AGG_TRACE] publish_skipped_no_linked_target", {
           sharedAthleteId: trimmed,
@@ -69,6 +86,7 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
         target.parentWriterSecret,
         artifact,
         target.apiBaseUrl,
+        transitionId,
       );
       logCompSave("COMPLETE", {
         sharedAthleteId: trimmed,
@@ -96,6 +114,14 @@ export function schedulePublishParentCompetitionAggregate(sharedAthleteId: strin
         error && typeof error === "object" && "status" in error
           ? (error as { status: unknown }).status
           : null;
+      recordParentPublishAudit({
+        sharedAthleteId: trimmed,
+        transitionId,
+        publishLane: "aggregate_put",
+        publishOutcome: "error",
+        httpStatus: typeof status === "number" ? status : null,
+        skipReason: error instanceof Error ? error.message : String(error),
+      });
       console.log("[COMP_AGG_TRACE] publish_failed", {
         sharedAthleteId: trimmed,
         error: error instanceof Error ? error.message : String(error),

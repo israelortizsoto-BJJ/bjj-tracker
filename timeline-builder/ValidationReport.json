@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "source_file": "sample_schedule.csv",
+  "total_rows": 19,
+  "valid_rows": 19,
+  "skipped_rows": 0,
+  "warning_count": 0,
+  "error_count": 0,
+  "strict_mode": false,
+  "timeline_generated": true,
+  "skipped": [],
+  "warnings": []
+}

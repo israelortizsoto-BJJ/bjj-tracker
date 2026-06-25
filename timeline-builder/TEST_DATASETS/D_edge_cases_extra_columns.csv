@@ -1,0 +1,9 @@
+Project,Task Name,Start Date,Finish Date,Critical Date,Assigned To,Status,Notes,Smartsheet ID
+Edge Case Suite,Valid baseline,2026-01-06,2026-01-10,,Owner,In Progress,Extra column data,SS-001
+Edge Case Suite,Missing start date,,2026-01-15,,Owner,In Progress,Extra column data,SS-001
+Edge Case Suite,Missing finish date,2026-01-20,,,Owner,In Progress,Extra column data,SS-001
+Edge Case Suite,Invalid date strings,not-a-date,also-bad,???,Owner,In Progress,Extra column data,SS-001
+Edge Case Suite,Duplicate task name,2026-02-01,2026-02-05,,Owner,In Progress,Extra column data,SS-001
+Edge Case Suite,Duplicate task name,2026-02-10,2026-02-14,2026-02-14,Owner,In Progress,Extra column data,SS-001
+Duplicate Project Name,First block task,2026-03-01,2026-03-07,,Owner,In Progress,Extra column data,SS-001
+Other Program,Spacer task,2026-03-10,2026-03-14,,Owner,In Progress,Extra column data,SS-001

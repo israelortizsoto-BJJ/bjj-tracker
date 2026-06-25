@@ -1,0 +1,22 @@
+# Google Sheets publishing configuration for Timeline Builder.
+#
+# Setup:
+# 1. Create a Google Cloud project and enable the Google Sheets API.
+# 2. Create a service account and download the JSON key.
+# 3. Save the key to credentials_path below.
+# 4. Share target Google Sheets with the service account email (Editor access).
+
+credentials_path: credentials/google_service_account.json
+
+# Optional default spreadsheet ID (from the sheet URL).
+# Used when --publish-google is set without --sheet-id.
+default_sheet_id: null
+
+publish:
+  tab_name: Timeline
+  create_title_prefix: "Timeline Roadmap - "
+  # Freeze panes and formatting are derived from Timeline.xlsx.
+  preserve_formatting: true
+  preserve_merged_cells: true
+  preserve_frozen_panes: true
+  preserve_row_groups: true

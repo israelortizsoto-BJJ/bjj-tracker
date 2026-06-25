@@ -1,0 +1,512 @@
+Project,Task Name,Start Date,Finish Date,Critical Date
+Brand Campaign Program 01,Concepting 1,2025-06-02,2025-06-07,
+Brand Campaign Program 01,Pre Pro / Prep 2,2025-06-11,2025-06-24,
+Brand Campaign Program 01,Shoot 3,2025-06-27,2025-07-03,
+Brand Campaign Program 01,Edit / Post 4,2025-07-06,2025-07-20,
+Brand Campaign Program 01,VFX / Color 5,2025-07-21,2025-08-03,
+Brand Campaign Program 01,Client Review 6,2025-08-07,2025-08-11,2025-08-11
+Brand Campaign Program 01,Delivery 7,2025-08-12,2025-08-13,2025-08-13
+Brand Campaign Program 01,Air / Live 8,2025-08-16,2025-08-16,
+Brand Campaign Program 01,Planning 9,2025-08-17,2025-08-26,
+Brand Campaign Program 01,Approval 10,2025-08-29,2025-08-31,2025-08-31
+Brand Campaign Program 01,Concepting 11,2025-09-01,2025-09-10,
+Brand Campaign Program 01,Pre Pro / Prep 12,2025-09-12,2025-09-22,
+Brand Campaign Program 01,Shoot 13,2025-09-24,2025-09-29,
+Brand Campaign Program 01,Edit / Post 14,2025-09-30,2025-10-14,
+Brand Campaign Program 01,VFX / Color 15,2025-10-16,2025-10-23,
+Brand Campaign Program 01,Client Review 16,2025-10-26,2025-10-30,2025-10-30
+Brand Campaign Program 01,Delivery 17,2025-11-03,2025-11-05,2025-11-05
+Product Launch Program 02,Concepting 1,2025-06-09,2025-06-14,
+Product Launch Program 02,Pre Pro / Prep 2,2025-06-18,2025-06-25,
+Product Launch Program 02,Shoot 3,2025-06-29,2025-07-02,
+Product Launch Program 02,Edit / Post 4,2025-07-06,2025-07-26,
+Product Launch Program 02,VFX / Color 5,2025-07-27,2025-08-08,
+Product Launch Program 02,Client Review 6,2025-08-11,2025-08-14,2025-08-14
+Product Launch Program 02,Delivery 7,2025-08-15,2025-08-17,2025-08-17
+Product Launch Program 02,Air / Live 8,2025-08-18,2025-08-18,
+Product Launch Program 02,Planning 9,2025-08-21,2025-08-30,
+Product Launch Program 02,Approval 10,2025-09-02,2025-09-03,2025-09-03
+Product Launch Program 02,Concepting 11,2025-09-04,2025-09-13,
+Product Launch Program 02,Pre Pro / Prep 12,2025-09-17,2025-09-29,
+Product Launch Program 02,Shoot 13,2025-09-30,2025-10-05,
+Product Launch Program 02,Edit / Post 14,2025-10-09,2025-10-24,
+Product Launch Program 02,VFX / Color 15,2025-10-28,2025-11-10,
+Product Launch Program 02,Client Review 16,2025-11-13,2025-11-17,2025-11-17
+Product Launch Program 02,Delivery 17,2025-11-20,2025-11-21,2025-11-21
+Social Content Program 03,Concepting 1,2025-06-16,2025-06-22,
+Social Content Program 03,Pre Pro / Prep 2,2025-06-25,2025-07-07,
+Social Content Program 03,Shoot 3,2025-07-09,2025-07-13,
+Social Content Program 03,Edit / Post 4,2025-07-17,2025-08-05,
+Social Content Program 03,VFX / Color 5,2025-08-09,2025-08-15,
+Social Content Program 03,Client Review 6,2025-08-18,2025-08-21,2025-08-21
+Social Content Program 03,Delivery 7,2025-08-25,2025-08-27,2025-08-27
+Social Content Program 03,Air / Live 8,2025-08-28,2025-08-29,2025-08-29
+Social Content Program 03,Planning 9,2025-09-02,2025-09-07,
+Social Content Program 03,Approval 10,2025-09-11,2025-09-14,2025-09-14
+Social Content Program 03,Concepting 11,2025-09-18,2025-09-22,
+Social Content Program 03,Pre Pro / Prep 12,2025-09-25,2025-10-02,
+Social Content Program 03,Shoot 13,2025-10-06,2025-10-12,
+Social Content Program 03,Edit / Post 14,2025-10-14,2025-11-01,
+Social Content Program 03,VFX / Color 15,2025-11-03,2025-11-10,
+Social Content Program 03,Client Review 16,2025-11-13,2025-11-16,2025-11-16
+Social Content Program 03,Delivery 17,2025-11-20,2025-11-24,2025-11-24
+Documentary Program 04,Concepting 1,2025-06-23,2025-06-29,
+Documentary Program 04,Pre Pro / Prep 2,2025-07-01,2025-07-09,
+Documentary Program 04,Shoot 3,2025-07-13,2025-07-18,
+Documentary Program 04,Edit / Post 4,2025-07-21,2025-08-03,
+Documentary Program 04,VFX / Color 5,2025-08-04,2025-08-16,
+Documentary Program 04,Client Review 6,2025-08-20,2025-08-23,2025-08-23
+Documentary Program 04,Delivery 7,2025-08-24,2025-08-27,2025-08-27
+Documentary Program 04,Air / Live 8,2025-08-28,2025-08-28,2025-08-28
+Documentary Program 04,Planning 9,2025-08-29,2025-09-02,
+Documentary Program 04,Approval 10,2025-09-04,2025-09-07,2025-09-07
+Documentary Program 04,Concepting 11,2025-09-11,2025-09-17,
+Documentary Program 04,Pre Pro / Prep 12,2025-09-19,2025-09-29,
+Documentary Program 04,Shoot 13,2025-10-03,2025-10-05,
+Documentary Program 04,Edit / Post 14,2025-10-08,2025-10-20,
+Documentary Program 04,VFX / Color 15,2025-10-24,2025-11-02,
+Documentary Program 04,Client Review 16,2025-11-06,2025-11-10,2025-11-10
+Documentary Program 04,Delivery 17,2025-11-12,2025-11-13,
+Retail Spot Program 05,Concepting 1,2025-06-30,2025-07-09,
+Retail Spot Program 05,Pre Pro / Prep 2,2025-07-12,2025-07-25,
+Retail Spot Program 05,Shoot 3,2025-07-29,2025-08-02,
+Retail Spot Program 05,Edit / Post 4,2025-08-06,2025-08-18,
+Retail Spot Program 05,VFX / Color 5,2025-08-20,2025-08-26,
+Retail Spot Program 05,Client Review 6,2025-08-27,2025-08-29,2025-08-29
+Retail Spot Program 05,Delivery 7,2025-08-31,2025-09-04,2025-09-04
+Retail Spot Program 05,Air / Live 8,2025-09-08,2025-09-08,2025-09-08
+Retail Spot Program 05,Planning 9,2025-09-11,2025-09-15,
+Retail Spot Program 05,Approval 10,2025-09-18,2025-09-19,2025-09-19
+Retail Spot Program 05,Concepting 11,2025-09-23,2025-09-30,
+Retail Spot Program 05,Pre Pro / Prep 12,2025-10-04,2025-10-17,
+Retail Spot Program 05,Shoot 13,2025-10-18,2025-10-24,
+Retail Spot Program 05,Edit / Post 14,2025-10-26,2025-11-14,
+Retail Spot Program 05,VFX / Color 15,2025-11-17,2025-11-27,
+Retail Spot Program 05,Client Review 16,2025-12-01,2025-12-04,2025-12-04
+Retail Spot Program 05,Delivery 17,2025-12-07,2025-12-09,2025-12-09
+Internal Comms Program 06,Concepting 1,2025-07-07,2025-07-13,
+Internal Comms Program 06,Pre Pro / Prep 2,2025-07-16,2025-07-27,
+Internal Comms Program 06,Shoot 3,2025-07-29,2025-08-01,
+Internal Comms Program 06,Edit / Post 4,2025-08-05,2025-08-21,
+Internal Comms Program 06,VFX / Color 5,2025-08-24,2025-09-03,
+Internal Comms Program 06,Client Review 6,2025-09-04,2025-09-07,
+Internal Comms Program 06,Delivery 7,2025-09-11,2025-09-13,2025-09-13
+Internal Comms Program 06,Air / Live 8,2025-09-17,2025-09-18,2025-09-18
+Internal Comms Program 06,Planning 9,2025-09-21,2025-09-26,
+Internal Comms Program 06,Approval 10,2025-09-30,2025-10-01,2025-10-01
+Internal Comms Program 06,Concepting 11,2025-10-03,2025-10-12,
+Internal Comms Program 06,Pre Pro / Prep 12,2025-10-16,2025-10-24,
+Internal Comms Program 06,Shoot 13,2025-10-26,2025-10-29,
+Internal Comms Program 06,Edit / Post 14,2025-10-30,2025-11-19,
+Internal Comms Program 06,VFX / Color 15,2025-11-22,2025-12-05,
+Internal Comms Program 06,Client Review 16,2025-12-08,2025-12-12,2025-12-12
+Internal Comms Program 06,Delivery 17,2025-12-13,2025-12-16,
+Event Coverage Program 07,Concepting 1,2025-07-14,2025-07-23,
+Event Coverage Program 07,Pre Pro / Prep 2,2025-07-26,2025-08-04,
+Event Coverage Program 07,Shoot 3,2025-08-05,2025-08-10,
+Event Coverage Program 07,Edit / Post 4,2025-08-11,2025-08-20,
+Event Coverage Program 07,VFX / Color 5,2025-08-24,2025-09-06,
+Event Coverage Program 07,Client Review 6,2025-09-10,2025-09-13,2025-09-13
+Event Coverage Program 07,Delivery 7,2025-09-14,2025-09-17,
+Event Coverage Program 07,Air / Live 8,2025-09-19,2025-09-19,
+Event Coverage Program 07,Planning 9,2025-09-21,2025-09-27,
+Event Coverage Program 07,Approval 10,2025-10-01,2025-10-03,2025-10-03
+Event Coverage Program 07,Concepting 11,2025-10-04,2025-10-11,
+Event Coverage Program 07,Pre Pro / Prep 12,2025-10-15,2025-10-23,
+Event Coverage Program 07,Shoot 13,2025-10-25,2025-10-28,
+Event Coverage Program 07,Edit / Post 14,2025-10-30,2025-11-08,
+Event Coverage Program 07,VFX / Color 15,2025-11-09,2025-11-21,
+Event Coverage Program 07,Client Review 16,2025-11-25,2025-11-29,
+Event Coverage Program 07,Delivery 17,2025-11-30,2025-12-02,2025-12-02
+Training Series Program 08,Concepting 1,2025-07-21,2025-07-28,
+Training Series Program 08,Pre Pro / Prep 2,2025-07-29,2025-08-09,
+Training Series Program 08,Shoot 3,2025-08-10,2025-08-16,
+Training Series Program 08,Edit / Post 4,2025-08-19,2025-09-01,
+Training Series Program 08,VFX / Color 5,2025-09-02,2025-09-10,
+Training Series Program 08,Client Review 6,2025-09-13,2025-09-15,2025-09-15
+Training Series Program 08,Delivery 7,2025-09-17,2025-09-18,
+Training Series Program 08,Air / Live 8,2025-09-20,2025-09-20,
+Training Series Program 08,Planning 9,2025-09-23,2025-09-28,
+Training Series Program 08,Approval 10,2025-09-29,2025-09-30,
+Training Series Program 08,Concepting 11,2025-10-01,2025-10-09,
+Training Series Program 08,Pre Pro / Prep 12,2025-10-10,2025-10-22,
+Training Series Program 08,Shoot 13,2025-10-25,2025-10-30,
+Training Series Program 08,Edit / Post 14,2025-11-01,2025-11-10,
+Training Series Program 08,VFX / Color 15,2025-11-12,2025-11-19,
+Training Series Program 08,Client Review 16,2025-11-21,2025-11-24,2025-11-24
+Training Series Program 08,Delivery 17,2025-11-28,2025-12-01,2025-12-01
+Partner Co-Marketing Program 09,Concepting 1,2025-07-28,2025-08-06,
+Partner Co-Marketing Program 09,Pre Pro / Prep 2,2025-08-08,2025-08-18,
+Partner Co-Marketing Program 09,Shoot 3,2025-08-22,2025-08-26,
+Partner Co-Marketing Program 09,Edit / Post 4,2025-08-28,2025-09-16,
+Partner Co-Marketing Program 09,VFX / Color 5,2025-09-20,2025-10-01,
+Partner Co-Marketing Program 09,Client Review 6,2025-10-04,2025-10-07,
+Partner Co-Marketing Program 09,Delivery 7,2025-10-09,2025-10-12,2025-10-12
+Partner Co-Marketing Program 09,Air / Live 8,2025-10-16,2025-10-18,
+Partner Co-Marketing Program 09,Planning 9,2025-10-19,2025-10-24,
+Partner Co-Marketing Program 09,Approval 10,2025-10-26,2025-10-27,2025-10-27
+Partner Co-Marketing Program 09,Concepting 11,2025-10-31,2025-11-06,
+Partner Co-Marketing Program 09,Pre Pro / Prep 12,2025-11-10,2025-11-17,
+Partner Co-Marketing Program 09,Shoot 13,2025-11-18,2025-11-22,
+Partner Co-Marketing Program 09,Edit / Post 14,2025-11-23,2025-12-05,
+Partner Co-Marketing Program 09,VFX / Color 15,2025-12-08,2025-12-17,
+Partner Co-Marketing Program 09,Client Review 16,2025-12-21,2025-12-24,2025-12-24
+Partner Co-Marketing Program 09,Delivery 17,2025-12-26,2025-12-27,
+Seasonal Push Program 10,Concepting 1,2025-08-04,2025-08-12,
+Seasonal Push Program 10,Pre Pro / Prep 2,2025-08-15,2025-08-21,
+Seasonal Push Program 10,Shoot 3,2025-08-25,2025-08-28,
+Seasonal Push Program 10,Edit / Post 4,2025-08-30,2025-09-10,
+Seasonal Push Program 10,VFX / Color 5,2025-09-13,2025-09-20,
+Seasonal Push Program 10,Client Review 6,2025-09-22,2025-09-25,
+Seasonal Push Program 10,Delivery 7,2025-09-28,2025-10-02,
+Seasonal Push Program 10,Air / Live 8,2025-10-05,2025-10-05,2025-10-05
+Seasonal Push Program 10,Planning 9,2025-10-06,2025-10-10,
+Seasonal Push Program 10,Approval 10,2025-10-13,2025-10-16,2025-10-16
+Seasonal Push Program 10,Concepting 11,2025-10-18,2025-10-23,
+Seasonal Push Program 10,Pre Pro / Prep 12,2025-10-25,2025-11-02,
+Seasonal Push Program 10,Shoot 13,2025-11-04,2025-11-09,
+Seasonal Push Program 10,Edit / Post 14,2025-11-12,2025-11-21,
+Seasonal Push Program 10,VFX / Color 15,2025-11-24,2025-12-04,
+Seasonal Push Program 10,Client Review 16,2025-12-06,2025-12-10,2025-12-10
+Seasonal Push Program 10,Delivery 17,2025-12-14,2025-12-16,
+Brand Campaign Program 11,Concepting 1,2025-08-11,2025-08-15,
+Brand Campaign Program 11,Pre Pro / Prep 2,2025-08-16,2025-08-22,
+Brand Campaign Program 11,Shoot 3,2025-08-25,2025-08-27,
+Brand Campaign Program 11,Edit / Post 4,2025-08-29,2025-09-13,
+Brand Campaign Program 11,VFX / Color 5,2025-09-15,2025-09-27,
+Brand Campaign Program 11,Client Review 6,2025-10-01,2025-10-03,2025-10-03
+Brand Campaign Program 11,Delivery 7,2025-10-06,2025-10-10,2025-10-10
+Brand Campaign Program 11,Air / Live 8,2025-10-11,2025-10-12,
+Brand Campaign Program 11,Planning 9,2025-10-13,2025-10-17,
+Brand Campaign Program 11,Approval 10,2025-10-21,2025-10-24,2025-10-24
+Brand Campaign Program 11,Concepting 11,2025-10-25,2025-11-01,
+Brand Campaign Program 11,Pre Pro / Prep 12,2025-11-03,2025-11-14,
+Brand Campaign Program 11,Shoot 13,2025-11-18,2025-11-23,
+Brand Campaign Program 11,Edit / Post 14,2025-11-26,2025-12-06,
+Brand Campaign Program 11,VFX / Color 15,2025-12-10,2025-12-22,
+Brand Campaign Program 11,Client Review 16,2025-12-23,2025-12-25,
+Brand Campaign Program 11,Delivery 17,2025-12-27,2025-12-30,2025-12-30
+Product Launch Program 12,Concepting 1,2025-08-18,2025-08-27,
+Product Launch Program 12,Pre Pro / Prep 2,2025-08-30,2025-09-07,
+Product Launch Program 12,Shoot 3,2025-09-08,2025-09-14,
+Product Launch Program 12,Edit / Post 4,2025-09-16,2025-10-06,
+Product Launch Program 12,VFX / Color 5,2025-10-10,2025-10-17,
+Product Launch Program 12,Client Review 6,2025-10-18,2025-10-20,
+Product Launch Program 12,Delivery 7,2025-10-24,2025-10-28,
+Product Launch Program 12,Air / Live 8,2025-10-30,2025-10-31,2025-10-31
+Product Launch Program 12,Planning 9,2025-11-04,2025-11-13,
+Product Launch Program 12,Approval 10,2025-11-15,2025-11-18,
+Product Launch Program 12,Concepting 11,2025-11-19,2025-11-24,
+Product Launch Program 12,Pre Pro / Prep 12,2025-11-26,2025-12-07,
+Product Launch Program 12,Shoot 13,2025-12-11,2025-12-13,
+Product Launch Program 12,Edit / Post 14,2025-12-15,2025-12-27,
+Product Launch Program 12,VFX / Color 15,2025-12-30,2026-01-10,
+Product Launch Program 12,Client Review 16,2026-01-13,2026-01-15,
+Product Launch Program 12,Delivery 17,2026-01-19,2026-01-21,2026-01-21
+Social Content Program 13,Concepting 1,2025-08-25,2025-08-30,
+Social Content Program 13,Pre Pro / Prep 2,2025-09-02,2025-09-08,
+Social Content Program 13,Shoot 3,2025-09-12,2025-09-16,
+Social Content Program 13,Edit / Post 4,2025-09-19,2025-10-09,
+Social Content Program 13,VFX / Color 5,2025-10-13,2025-10-25,
+Social Content Program 13,Client Review 6,2025-10-29,2025-11-01,2025-11-01
+Social Content Program 13,Delivery 7,2025-11-02,2025-11-03,2025-11-03
+Social Content Program 13,Air / Live 8,2025-11-05,2025-11-07,2025-11-07
+Social Content Program 13,Planning 9,2025-11-09,2025-11-16,
+Social Content Program 13,Approval 10,2025-11-17,2025-11-18,2025-11-18
+Social Content Program 13,Concepting 11,2025-11-21,2025-11-27,
+Social Content Program 13,Pre Pro / Prep 12,2025-12-01,2025-12-08,
+Social Content Program 13,Shoot 13,2025-12-11,2025-12-14,
+Social Content Program 13,Edit / Post 14,2025-12-18,2026-01-07,
+Social Content Program 13,VFX / Color 15,2026-01-08,2026-01-16,
+Social Content Program 13,Client Review 16,2026-01-19,2026-01-23,2026-01-23
+Social Content Program 13,Delivery 17,2026-01-27,2026-01-29,
+Documentary Program 14,Concepting 1,2025-09-01,2025-09-07,
+Documentary Program 14,Pre Pro / Prep 2,2025-09-10,2025-09-19,
+Documentary Program 14,Shoot 3,2025-09-20,2025-09-26,
+Documentary Program 14,Edit / Post 4,2025-09-29,2025-10-16,
+Documentary Program 14,VFX / Color 5,2025-10-19,2025-10-25,
+Documentary Program 14,Client Review 6,2025-10-26,2025-10-29,
+Documentary Program 14,Delivery 7,2025-10-31,2025-11-04,
+Documentary Program 14,Air / Live 8,2025-11-08,2025-11-09,
+Documentary Program 14,Planning 9,2025-11-12,2025-11-16,
+Documentary Program 14,Approval 10,2025-11-17,2025-11-20,2025-11-20
+Documentary Program 14,Concepting 11,2025-11-24,2025-12-02,
+Documentary Program 14,Pre Pro / Prep 12,2025-12-03,2025-12-13,
+Documentary Program 14,Shoot 13,2025-12-17,2025-12-19,
+Documentary Program 14,Edit / Post 14,2025-12-21,2026-01-02,
+Documentary Program 14,VFX / Color 15,2026-01-06,2026-01-14,
+Documentary Program 14,Client Review 16,2026-01-16,2026-01-18,2026-01-18
+Documentary Program 14,Delivery 17,2026-01-20,2026-01-22,2026-01-22
+Retail Spot Program 15,Concepting 1,2025-09-08,2025-09-14,
+Retail Spot Program 15,Pre Pro / Prep 2,2025-09-16,2025-09-28,
+Retail Spot Program 15,Shoot 3,2025-09-30,2025-10-04,
+Retail Spot Program 15,Edit / Post 4,2025-10-05,2025-10-17,
+Retail Spot Program 15,VFX / Color 5,2025-10-18,2025-10-27,
+Retail Spot Program 15,Client Review 6,2025-10-28,2025-11-01,2025-11-01
+Retail Spot Program 15,Delivery 7,2025-11-02,2025-11-03,2025-11-03
+Retail Spot Program 15,Air / Live 8,2025-11-06,2025-11-06,2025-11-06
+Retail Spot Program 15,Planning 9,2025-11-07,2025-11-15,
+Retail Spot Program 15,Approval 10,2025-11-19,2025-11-20,2025-11-20
+Retail Spot Program 15,Concepting 11,2025-11-21,2025-11-27,
+Retail Spot Program 15,Pre Pro / Prep 12,2025-11-29,2025-12-11,
+Retail Spot Program 15,Shoot 13,2025-12-12,2025-12-17,
+Retail Spot Program 15,Edit / Post 14,2025-12-21,2026-01-10,
+Retail Spot Program 15,VFX / Color 15,2026-01-11,2026-01-24,
+Retail Spot Program 15,Client Review 16,2026-01-28,2026-01-30,2026-01-30
+Retail Spot Program 15,Delivery 17,2026-02-02,2026-02-05,2026-02-05
+Internal Comms Program 16,Concepting 1,2025-09-15,2025-09-19,
+Internal Comms Program 16,Pre Pro / Prep 2,2025-09-23,2025-10-06,
+Internal Comms Program 16,Shoot 3,2025-10-10,2025-10-12,
+Internal Comms Program 16,Edit / Post 4,2025-10-14,2025-10-26,
+Internal Comms Program 16,VFX / Color 5,2025-10-28,2025-11-04,
+Internal Comms Program 16,Client Review 6,2025-11-08,2025-11-12,
+Internal Comms Program 16,Delivery 7,2025-11-14,2025-11-16,2025-11-16
+Internal Comms Program 16,Air / Live 8,2025-11-20,2025-11-22,2025-11-22
+Internal Comms Program 16,Planning 9,2025-11-24,2025-11-30,
+Internal Comms Program 16,Approval 10,2025-12-04,2025-12-06,2025-12-06
+Internal Comms Program 16,Concepting 11,2025-12-08,2025-12-14,
+Internal Comms Program 16,Pre Pro / Prep 12,2025-12-16,2025-12-23,
+Internal Comms Program 16,Shoot 13,2025-12-27,2026-01-02,
+Internal Comms Program 16,Edit / Post 14,2026-01-04,2026-01-14,
+Internal Comms Program 16,VFX / Color 15,2026-01-15,2026-01-24,
+Internal Comms Program 16,Client Review 16,2026-01-26,2026-01-28,2026-01-28
+Internal Comms Program 16,Delivery 17,2026-01-31,2026-02-04,2026-02-04
+Event Coverage Program 17,Concepting 1,2025-09-22,2025-09-27,
+Event Coverage Program 17,Pre Pro / Prep 2,2025-10-01,2025-10-12,
+Event Coverage Program 17,Shoot 3,2025-10-16,2025-10-21,
+Event Coverage Program 17,Edit / Post 4,2025-10-23,2025-11-09,
+Event Coverage Program 17,VFX / Color 5,2025-11-10,2025-11-20,
+Event Coverage Program 17,Client Review 6,2025-11-22,2025-11-24,2025-11-24
+Event Coverage Program 17,Delivery 7,2025-11-26,2025-11-29,2025-11-29
+Event Coverage Program 17,Air / Live 8,2025-12-02,2025-12-04,2025-12-04
+Event Coverage Program 17,Planning 9,2025-12-08,2025-12-17,
+Event Coverage Program 17,Approval 10,2025-12-18,2025-12-20,
+Event Coverage Program 17,Concepting 11,2025-12-23,2025-12-30,
+Event Coverage Program 17,Pre Pro / Prep 12,2025-12-31,2026-01-06,
+Event Coverage Program 17,Shoot 13,2026-01-10,2026-01-12,
+Event Coverage Program 17,Edit / Post 14,2026-01-15,2026-01-26,
+Event Coverage Program 17,VFX / Color 15,2026-01-30,2026-02-08,
+Event Coverage Program 17,Client Review 16,2026-02-12,2026-02-16,2026-02-16
+Event Coverage Program 17,Delivery 17,2026-02-17,2026-02-20,2026-02-20
+Training Series Program 18,Concepting 1,2025-09-29,2025-10-05,
+Training Series Program 18,Pre Pro / Prep 2,2025-10-06,2025-10-12,
+Training Series Program 18,Shoot 3,2025-10-15,2025-10-18,
+Training Series Program 18,Edit / Post 4,2025-10-22,2025-11-05,
+Training Series Program 18,VFX / Color 5,2025-11-07,2025-11-14,
+Training Series Program 18,Client Review 6,2025-11-15,2025-11-19,2025-11-19
+Training Series Program 18,Delivery 7,2025-11-21,2025-11-24,
+Training Series Program 18,Air / Live 8,2025-11-27,2025-11-29,2025-11-29
+Training Series Program 18,Planning 9,2025-11-30,2025-12-08,
+Training Series Program 18,Approval 10,2025-12-12,2025-12-14,
+Training Series Program 18,Concepting 11,2025-12-16,2025-12-21,
+Training Series Program 18,Pre Pro / Prep 12,2025-12-22,2025-12-28,
+Training Series Program 18,Shoot 13,2026-01-01,2026-01-07,
+Training Series Program 18,Edit / Post 14,2026-01-09,2026-01-29,
+Training Series Program 18,VFX / Color 15,2026-02-01,2026-02-09,
+Training Series Program 18,Client Review 16,2026-02-13,2026-02-17,2026-02-17
+Training Series Program 18,Delivery 17,2026-02-19,2026-02-23,
+Partner Co-Marketing Program 19,Concepting 1,2025-10-06,2025-10-11,
+Partner Co-Marketing Program 19,Pre Pro / Prep 2,2025-10-14,2025-10-21,
+Partner Co-Marketing Program 19,Shoot 3,2025-10-23,2025-10-26,
+Partner Co-Marketing Program 19,Edit / Post 4,2025-10-29,2025-11-15,
+Partner Co-Marketing Program 19,VFX / Color 5,2025-11-18,2025-11-30,
+Partner Co-Marketing Program 19,Client Review 6,2025-12-02,2025-12-04,2025-12-04
+Partner Co-Marketing Program 19,Delivery 7,2025-12-06,2025-12-08,2025-12-08
+Partner Co-Marketing Program 19,Air / Live 8,2025-12-11,2025-12-12,2025-12-12
+Partner Co-Marketing Program 19,Planning 9,2025-12-15,2025-12-23,
+Partner Co-Marketing Program 19,Approval 10,2025-12-26,2025-12-29,2025-12-29
+Partner Co-Marketing Program 19,Concepting 11,2026-01-02,2026-01-09,
+Partner Co-Marketing Program 19,Pre Pro / Prep 12,2026-01-10,2026-01-17,
+Partner Co-Marketing Program 19,Shoot 13,2026-01-18,2026-01-22,
+Partner Co-Marketing Program 19,Edit / Post 14,2026-01-24,2026-02-03,
+Partner Co-Marketing Program 19,VFX / Color 15,2026-02-05,2026-02-16,
+Partner Co-Marketing Program 19,Client Review 16,2026-02-19,2026-02-23,2026-02-23
+Partner Co-Marketing Program 19,Delivery 17,2026-02-24,2026-02-28,2026-02-28
+Seasonal Push Program 20,Concepting 1,2025-10-13,2025-10-19,
+Seasonal Push Program 20,Pre Pro / Prep 2,2025-10-20,2025-10-30,
+Seasonal Push Program 20,Shoot 3,2025-11-01,2025-11-07,
+Seasonal Push Program 20,Edit / Post 4,2025-11-10,2025-11-25,
+Seasonal Push Program 20,VFX / Color 5,2025-11-27,2025-12-06,
+Seasonal Push Program 20,Client Review 6,2025-12-08,2025-12-12,
+Seasonal Push Program 20,Delivery 7,2025-12-14,2025-12-18,2025-12-18
+Seasonal Push Program 20,Air / Live 8,2025-12-20,2025-12-20,2025-12-20
+Seasonal Push Program 20,Planning 9,2025-12-21,2025-12-28,
+Seasonal Push Program 20,Approval 10,2025-12-29,2025-12-31,
+Seasonal Push Program 20,Concepting 11,2026-01-02,2026-01-11,
+Seasonal Push Program 20,Pre Pro / Prep 12,2026-01-12,2026-01-24,
+Seasonal Push Program 20,Shoot 13,2026-01-27,2026-01-30,
+Seasonal Push Program 20,Edit / Post 14,2026-02-01,2026-02-20,
+Seasonal Push Program 20,VFX / Color 15,2026-02-22,2026-03-05,
+Seasonal Push Program 20,Client Review 16,2026-03-08,2026-03-11,2026-03-11
+Seasonal Push Program 20,Delivery 17,2026-03-15,2026-03-18,
+Brand Campaign Program 21,Concepting 1,2025-10-20,2025-10-25,
+Brand Campaign Program 21,Pre Pro / Prep 2,2025-10-29,2025-11-05,
+Brand Campaign Program 21,Shoot 3,2025-11-07,2025-11-11,
+Brand Campaign Program 21,Edit / Post 4,2025-11-15,2025-11-26,
+Brand Campaign Program 21,VFX / Color 5,2025-11-27,2025-12-09,
+Brand Campaign Program 21,Client Review 6,2025-12-13,2025-12-17,2025-12-17
+Brand Campaign Program 21,Delivery 7,2025-12-18,2025-12-21,2025-12-21
+Brand Campaign Program 21,Air / Live 8,2025-12-23,2025-12-24,
+Brand Campaign Program 21,Planning 9,2025-12-28,2026-01-02,
+Brand Campaign Program 21,Approval 10,2026-01-03,2026-01-06,2026-01-06
+Brand Campaign Program 21,Concepting 11,2026-01-07,2026-01-15,
+Brand Campaign Program 21,Pre Pro / Prep 12,2026-01-19,2026-01-30,
+Brand Campaign Program 21,Shoot 13,2026-02-02,2026-02-08,
+Brand Campaign Program 21,Edit / Post 14,2026-02-11,2026-02-22,
+Brand Campaign Program 21,VFX / Color 15,2026-02-26,2026-03-08,
+Brand Campaign Program 21,Client Review 16,2026-03-09,2026-03-11,2026-03-11
+Brand Campaign Program 21,Delivery 17,2026-03-14,2026-03-15,2026-03-15
+Product Launch Program 22,Concepting 1,2025-10-27,2025-11-05,
+Product Launch Program 22,Pre Pro / Prep 2,2025-11-08,2025-11-21,
+Product Launch Program 22,Shoot 3,2025-11-22,2025-11-26,
+Product Launch Program 22,Edit / Post 4,2025-11-29,2025-12-16,
+Product Launch Program 22,VFX / Color 5,2025-12-20,2025-12-31,
+Product Launch Program 22,Client Review 6,2026-01-02,2026-01-05,2026-01-05
+Product Launch Program 22,Delivery 7,2026-01-08,2026-01-11,2026-01-11
+Product Launch Program 22,Air / Live 8,2026-01-12,2026-01-13,2026-01-13
+Product Launch Program 22,Planning 9,2026-01-16,2026-01-24,
+Product Launch Program 22,Approval 10,2026-01-27,2026-01-29,2026-01-29
+Product Launch Program 22,Concepting 11,2026-01-30,2026-02-08,
+Product Launch Program 22,Pre Pro / Prep 12,2026-02-12,2026-02-24,
+Product Launch Program 22,Shoot 13,2026-02-25,2026-03-03,
+Product Launch Program 22,Edit / Post 14,2026-03-07,2026-03-22,
+Product Launch Program 22,VFX / Color 15,2026-03-25,2026-04-05,
+Product Launch Program 22,Client Review 16,2026-04-07,2026-04-10,2026-04-10
+Product Launch Program 22,Delivery 17,2026-04-11,2026-04-12,2026-04-12
+Social Content Program 23,Concepting 1,2025-11-03,2025-11-08,
+Social Content Program 23,Pre Pro / Prep 2,2025-11-12,2025-11-20,
+Social Content Program 23,Shoot 3,2025-11-24,2025-11-27,
+Social Content Program 23,Edit / Post 4,2025-11-28,2025-12-08,
+Social Content Program 23,VFX / Color 5,2025-12-10,2025-12-21,
+Social Content Program 23,Client Review 6,2025-12-24,2025-12-28,2025-12-28
+Social Content Program 23,Delivery 7,2025-12-31,2026-01-04,
+Social Content Program 23,Air / Live 8,2026-01-06,2026-01-08,2026-01-08
+Social Content Program 23,Planning 9,2026-01-12,2026-01-17,
+Social Content Program 23,Approval 10,2026-01-20,2026-01-23,2026-01-23
+Social Content Program 23,Concepting 11,2026-01-24,2026-01-29,
+Social Content Program 23,Pre Pro / Prep 12,2026-02-02,2026-02-15,
+Social Content Program 23,Shoot 13,2026-02-19,2026-02-23,
+Social Content Program 23,Edit / Post 14,2026-02-26,2026-03-18,
+Social Content Program 23,VFX / Color 15,2026-03-22,2026-03-30,
+Social Content Program 23,Client Review 16,2026-03-31,2026-04-03,2026-04-03
+Social Content Program 23,Delivery 17,2026-04-04,2026-04-08,
+Documentary Program 24,Concepting 1,2025-11-10,2025-11-19,
+Documentary Program 24,Pre Pro / Prep 2,2025-11-21,2025-11-27,
+Documentary Program 24,Shoot 3,2025-11-29,2025-12-02,
+Documentary Program 24,Edit / Post 4,2025-12-03,2025-12-21,
+Documentary Program 24,VFX / Color 5,2025-12-24,2025-12-31,
+Documentary Program 24,Client Review 6,2026-01-04,2026-01-07,
+Documentary Program 24,Delivery 7,2026-01-09,2026-01-10,
+Documentary Program 24,Air / Live 8,2026-01-12,2026-01-13,2026-01-13
+Documentary Program 24,Planning 9,2026-01-15,2026-01-19,
+Documentary Program 24,Approval 10,2026-01-23,2026-01-25,
+Documentary Program 24,Concepting 11,2026-01-27,2026-02-04,
+Documentary Program 24,Pre Pro / Prep 12,2026-02-05,2026-02-18,
+Documentary Program 24,Shoot 13,2026-02-21,2026-02-25,
+Documentary Program 24,Edit / Post 14,2026-02-28,2026-03-17,
+Documentary Program 24,VFX / Color 15,2026-03-19,2026-03-31,
+Documentary Program 24,Client Review 16,2026-04-04,2026-04-07,2026-04-07
+Documentary Program 24,Delivery 17,2026-04-09,2026-04-10,2026-04-10
+Retail Spot Program 25,Concepting 1,2025-11-17,2025-11-23,
+Retail Spot Program 25,Pre Pro / Prep 2,2025-11-25,2025-12-08,
+Retail Spot Program 25,Shoot 3,2025-12-11,2025-12-14,
+Retail Spot Program 25,Edit / Post 4,2025-12-16,2026-01-03,
+Retail Spot Program 25,VFX / Color 5,2026-01-07,2026-01-18,
+Retail Spot Program 25,Client Review 6,2026-01-20,2026-01-23,2026-01-23
+Retail Spot Program 25,Delivery 7,2026-01-27,2026-01-30,2026-01-30
+Retail Spot Program 25,Air / Live 8,2026-02-01,2026-02-01,
+Retail Spot Program 25,Planning 9,2026-02-02,2026-02-11,
+Retail Spot Program 25,Approval 10,2026-02-13,2026-02-14,
+Retail Spot Program 25,Concepting 11,2026-02-17,2026-02-26,
+Retail Spot Program 25,Pre Pro / Prep 12,2026-02-27,2026-03-08,
+Retail Spot Program 25,Shoot 13,2026-03-09,2026-03-14,
+Retail Spot Program 25,Edit / Post 14,2026-03-16,2026-03-30,
+Retail Spot Program 25,VFX / Color 15,2026-04-03,2026-04-10,
+Retail Spot Program 25,Client Review 16,2026-04-11,2026-04-14,
+Retail Spot Program 25,Delivery 17,2026-04-17,2026-04-19,2026-04-19
+Internal Comms Program 26,Concepting 1,2025-11-24,2025-11-29,
+Internal Comms Program 26,Pre Pro / Prep 2,2025-12-03,2025-12-15,
+Internal Comms Program 26,Shoot 3,2025-12-17,2025-12-20,
+Internal Comms Program 26,Edit / Post 4,2025-12-21,2025-12-30,
+Internal Comms Program 26,VFX / Color 5,2026-01-03,2026-01-13,
+Internal Comms Program 26,Client Review 6,2026-01-15,2026-01-18,2026-01-18
+Internal Comms Program 26,Delivery 7,2026-01-22,2026-01-26,
+Internal Comms Program 26,Air / Live 8,2026-01-28,2026-01-30,
+Internal Comms Program 26,Planning 9,2026-02-02,2026-02-07,
+Internal Comms Program 26,Approval 10,2026-02-10,2026-02-11,2026-02-11
+Internal Comms Program 26,Concepting 11,2026-02-14,2026-02-22,
+Internal Comms Program 26,Pre Pro / Prep 12,2026-02-25,2026-03-08,
+Internal Comms Program 26,Shoot 13,2026-03-12,2026-03-17,
+Internal Comms Program 26,Edit / Post 14,2026-03-21,2026-04-04,
+Internal Comms Program 26,VFX / Color 15,2026-04-05,2026-04-15,
+Internal Comms Program 26,Client Review 16,2026-04-17,2026-04-20,
+Internal Comms Program 26,Delivery 17,2026-04-23,2026-04-25,
+Event Coverage Program 27,Concepting 1,2025-12-01,2025-12-07,
+Event Coverage Program 27,Pre Pro / Prep 2,2025-12-10,2025-12-17,
+Event Coverage Program 27,Shoot 3,2025-12-21,2025-12-26,
+Event Coverage Program 27,Edit / Post 4,2025-12-27,2026-01-08,
+Event Coverage Program 27,VFX / Color 5,2026-01-09,2026-01-16,
+Event Coverage Program 27,Client Review 6,2026-01-20,2026-01-24,
+Event Coverage Program 27,Delivery 7,2026-01-26,2026-01-27,2026-01-27
+Event Coverage Program 27,Air / Live 8,2026-01-30,2026-01-31,
+Event Coverage Program 27,Planning 9,2026-02-04,2026-02-09,
+Event Coverage Program 27,Approval 10,2026-02-10,2026-02-11,2026-02-11
+Event Coverage Program 27,Concepting 11,2026-02-15,2026-02-21,
+Event Coverage Program 27,Pre Pro / Prep 12,2026-02-25,2026-03-05,
+Event Coverage Program 27,Shoot 13,2026-03-06,2026-03-08,
+Event Coverage Program 27,Edit / Post 14,2026-03-10,2026-03-22,
+Event Coverage Program 27,VFX / Color 15,2026-03-26,2026-04-06,
+Event Coverage Program 27,Client Review 16,2026-04-09,2026-04-11,2026-04-11
+Event Coverage Program 27,Delivery 17,2026-04-13,2026-04-16,2026-04-16
+Training Series Program 28,Concepting 1,2025-12-08,2025-12-14,
+Training Series Program 28,Pre Pro / Prep 2,2025-12-15,2025-12-23,
+Training Series Program 28,Shoot 3,2025-12-27,2026-01-02,
+Training Series Program 28,Edit / Post 4,2026-01-05,2026-01-15,
+Training Series Program 28,VFX / Color 5,2026-01-17,2026-01-25,
+Training Series Program 28,Client Review 6,2026-01-29,2026-02-02,2026-02-02
+Training Series Program 28,Delivery 7,2026-02-06,2026-02-10,
+Training Series Program 28,Air / Live 8,2026-02-11,2026-02-11,2026-02-11
+Training Series Program 28,Planning 9,2026-02-14,2026-02-22,
+Training Series Program 28,Approval 10,2026-02-23,2026-02-25,2026-02-25
+Training Series Program 28,Concepting 11,2026-02-26,2026-03-04,
+Training Series Program 28,Pre Pro / Prep 12,2026-03-05,2026-03-18,
+Training Series Program 28,Shoot 13,2026-03-20,2026-03-24,
+Training Series Program 28,Edit / Post 14,2026-03-26,2026-04-09,
+Training Series Program 28,VFX / Color 15,2026-04-12,2026-04-21,
+Training Series Program 28,Client Review 16,2026-04-25,2026-04-28,2026-04-28
+Training Series Program 28,Delivery 17,2026-04-29,2026-05-03,2026-05-03
+Partner Co-Marketing Program 29,Concepting 1,2025-12-15,2025-12-19,
+Partner Co-Marketing Program 29,Pre Pro / Prep 2,2025-12-20,2025-12-30,
+Partner Co-Marketing Program 29,Shoot 3,2026-01-01,2026-01-05,
+Partner Co-Marketing Program 29,Edit / Post 4,2026-01-07,2026-01-24,
+Partner Co-Marketing Program 29,VFX / Color 5,2026-01-25,2026-02-04,
+Partner Co-Marketing Program 29,Client Review 6,2026-02-07,2026-02-09,
+Partner Co-Marketing Program 29,Delivery 7,2026-02-13,2026-02-17,
+Partner Co-Marketing Program 29,Air / Live 8,2026-02-18,2026-02-20,2026-02-20
+Partner Co-Marketing Program 29,Planning 9,2026-02-23,2026-02-28,
+Partner Co-Marketing Program 29,Approval 10,2026-03-02,2026-03-03,2026-03-03
+Partner Co-Marketing Program 29,Concepting 11,2026-03-07,2026-03-14,
+Partner Co-Marketing Program 29,Pre Pro / Prep 12,2026-03-15,2026-03-21,
+Partner Co-Marketing Program 29,Shoot 13,2026-03-23,2026-03-28,
+Partner Co-Marketing Program 29,Edit / Post 14,2026-03-31,2026-04-09,
+Partner Co-Marketing Program 29,VFX / Color 15,2026-04-11,2026-04-18,
+Partner Co-Marketing Program 29,Client Review 16,2026-04-21,2026-04-23,
+Partner Co-Marketing Program 29,Delivery 17,2026-04-25,2026-04-29,2026-04-29
+Seasonal Push Program 30,Concepting 1,2025-12-22,2025-12-30,
+Seasonal Push Program 30,Pre Pro / Prep 2,2026-01-02,2026-01-11,
+Seasonal Push Program 30,Shoot 3,2026-01-14,2026-01-16,
+Seasonal Push Program 30,Edit / Post 4,2026-01-18,2026-02-04,
+Seasonal Push Program 30,VFX / Color 5,2026-02-06,2026-02-15,
+Seasonal Push Program 30,Client Review 6,2026-02-16,2026-02-20,2026-02-20
+Seasonal Push Program 30,Delivery 7,2026-02-21,2026-02-25,2026-02-25
+Seasonal Push Program 30,Air / Live 8,2026-03-01,2026-03-01,2026-03-01
+Seasonal Push Program 30,Planning 9,2026-03-03,2026-03-08,
+Seasonal Push Program 30,Approval 10,2026-03-09,2026-03-11,2026-03-11
+Seasonal Push Program 30,Concepting 11,2026-03-15,2026-03-23,
+Seasonal Push Program 30,Pre Pro / Prep 12,2026-03-25,2026-03-31,
+Seasonal Push Program 30,Shoot 13,2026-04-03,2026-04-08,
+Seasonal Push Program 30,Edit / Post 14,2026-04-12,2026-05-02,
+Seasonal Push Program 30,VFX / Color 15,2026-05-04,2026-05-10,
+Seasonal Push Program 30,Client Review 16,2026-05-11,2026-05-15,2026-05-15
+Seasonal Push Program 30,Delivery 17,2026-05-18,2026-05-22,2026-05-22
+Seasonal Push Program 30,Air / Live 18,2026-05-26,2026-05-28,

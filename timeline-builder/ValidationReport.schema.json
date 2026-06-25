@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/bjj-tracker/timeline-builder/ValidationReport.schema.json",
+  "title": "Timeline Builder ValidationReport",
+  "description": "Machine-readable validation output written alongside Timeline.xlsx generation.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source_file",
+    "total_rows",
+    "valid_rows",
+    "skipped_rows",
+    "warning_count",
+    "error_count",
+    "strict_mode",
+    "timeline_generated",
+    "skipped",
+    "warnings"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Validation report schema version.",
+      "const": "1.0"
+    },
+    "source_file": {
+      "type": "string",
+      "description": "Path to the input Smartsheet export."
+    },
+    "total_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Total data rows read from the input file (excluding header)."
+    },
+    "valid_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rows included in timeline generation."
+    },
+    "skipped_rows": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Rows excluded due to validation errors (same as error_count)."
+    },
+    "warning_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Non-fatal issues (e.g. auto-corrected dates, invalid critical dates)."
+    },
+    "error_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Fatal row validation errors."
+    },
+    "strict_mode": {
+      "type": "boolean",
+      "description": "Whether --strict was enabled for this run."
+    },
+    "timeline_generated": {
+      "type": "boolean",
+      "description": "Whether Timeline.xlsx was written."
+    },
+    "skipped": {
+      "type": "array",
+      "description": "One entry per row excluded from the timeline.",
+      "items": {
+        "$ref": "#/$defs/rowIssue"
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "description": "Non-fatal validation issues for rows that were still included.",
+      "items": {
+        "$ref": "#/$defs/rowIssue"
+      }
+    }
+  },
+  "$defs": {
+    "rowIssue": {
+      "type": "object",
+      "required": ["row_number", "kind", "reason", "values"],
+      "properties": {
+        "row_number": {
+          "type": "integer",
+          "minimum": 2,
+          "description": "1-based row number in the source file (row 1 is the header)."
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["error", "warning"]
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "missing_project",
+            "missing_task_name",
+            "missing_start_date",
+            "missing_finish_date",
+            "invalid_start_date",
+            "invalid_finish_date",
+            "invalid_critical_date",
+            "finish_before_start"
+          ]
+        },
+        "values": {
+          "type": "object",
+          "description": "Source column values for the row, plus optional correction metadata.",
+          "properties": {
+            "Project": { "type": ["string", "null"] },
+            "Task Name": { "type": ["string", "null"] },
+            "Start Date": { "type": ["string", "null"] },
+            "Finish Date": { "type": ["string", "null"] },
+            "Critical Date": { "type": ["string", "null"] },
+            "corrected_start_date": { "type": "string", "format": "date" },
+            "corrected_finish_date": { "type": "string", "format": "date" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

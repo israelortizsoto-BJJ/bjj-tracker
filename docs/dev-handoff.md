@@ -60,6 +60,642 @@ If missing after worker_store_artifact_set
 If present through worker_get_artifact_set
 → parent hydration/render issue
 
+
+
+#Dates:** June 23–24, 2026
+
+---
+
+# Executive Summary
+
+These two days established the new architectural floor for Competition Analysis, Coach Match Breakdown hydration, and forensic debugging.
+
+The primary objective shifted from chasing Match Breakdown symptoms to building a deterministic, evidence-based forensic system capable of identifying the exact authority boundary where synchronization fails.
+
+The result is a stable readiness-governed architecture, complete forensic instrumentation, and a validated DEV synchronization pipeline.
+
+---
+
+# Repository Floor
+
+## Branch
+
+```
+rollback-pre-lineage-regression
+```
+
+## Current HEAD
+
+```
+49865c9
+Establish readiness-governed competition analysis and forensic validation pipeline
+```
+
+## Tag
+
+```
+competition-analysis-readiness-floor-v1
+```
+
+## Remote
+
+* Branch pushed
+* Tag pushed
+
+## Repository Status
+
+Repository is clean.
+
+Only intentionally untracked:
+
+```
+debug-logs/
+timeline-builder/
+```
+
+No modified tracked files remain.
+
+---
+
+# Major Engineering Milestone #1
+
+# Readiness Architecture Complete
+
+Completed all readiness phases.
+
+## Phase 1
+
+Coach Breakdown parser evidence.
+
+Added:
+
+* parser classification
+* athlete evidence
+* field validation
+
+Purpose:
+
+Never infer authority from missing data.
+
+---
+
+## Phase 2
+
+Readiness foundation.
+
+Introduced:
+
+```
+PENDING
+READY
+EMPTY_READY
+FAILED
+```
+
+Generation-aware resolution.
+
+Readiness never mutates authority.
+
+---
+
+## Phase 3
+
+Parent/Coach orchestration.
+
+Implemented:
+
+* generation allocation
+* finalize lifecycle
+* readiness persistence
+* hydration coordination
+
+No rendering behavior changed.
+
+No analytics behavior changed.
+
+---
+
+## Phase 4
+
+Incident Capture observability.
+
+Hydration Snapshot now exports:
+
+* readiness state
+* generation
+* timestamps
+* hydration source
+* authority confirmation
+* artifact timestamps
+
+---
+
+## Phase 5
+
+Parent hydration delegation.
+
+Readiness coordinator now governs:
+
+* Summary
+* Parent Athletes
+* Join
+* Kid Detail
+* This Week
+
+Cache-only paths intentionally excluded.
+
+---
+
+## Phase 6
+
+Analytics Eligibility Gate.
+
+Introduced:
+
+```
+selectCompetitionAnalysisForAnalytics()
+```
+
+Eligibility:
+
+READY
+↓
+
+projection
+
+FAILED / PENDING
+↓
+
+last confirmed
+
+Flag:
+
+```
+competitionAnalyticsEligibilityEnabled
+```
+
+Defaults OFF.
+
+No production consumers migrated.
+
+---
+
+## Phase 7
+
+Readiness validation.
+
+Created comprehensive deterministic validation suite proving:
+
+* READY
+* EMPTY_READY
+* FAILED
+* PENDING
+
+all resolve correctly.
+
+---
+
+## Phase 8
+
+Eligibility Forensics.
+
+Incident Bundles now export:
+
+* current artifact timestamps
+* readiness timestamps
+
+making eligibility decisions fully reconstructable offline.
+
+---
+
+# Major Engineering Milestone #2
+
+# Summary Pilot
+
+Implemented new Summary selection architecture.
+
+Added:
+
+```
+resolveCompetitionAnalyticsSelection()
+
+useSummaryCompetitionFocusInput()
+```
+
+Capabilities:
+
+* async selection
+* cancellation
+* generation suppression
+* projection-aware input
+* legacy fallback
+
+Existing analytics algorithms remain untouched.
+
+Everything remains behind:
+
+```
+EXPO_PUBLIC_COMPETITION_ANALYTICS_ELIGIBILITY
+```
+
+Default OFF.
+
+---
+
+# Major Engineering Milestone #3
+
+# Authority Forensics
+
+A complete authority investigation framework now exists.
+
+Instrumentation added across:
+
+Coach Save
+
+↓
+
+Overlay Store
+
+↓
+
+Artifact Builder
+
+↓
+
+Publish Scheduler
+
+↓
+
+HTTP PUT
+
+↓
+
+Worker PUT
+
+↓
+
+Worker KV
+
+↓
+
+Parent Parser
+
+↓
+
+Artifact Store
+
+↓
+
+Readiness Finalize
+
+Purpose:
+
+Identify the first failed authority boundary rather than debugging symptoms.
+
+---
+
+# Authority Boundary Playbook
+
+Formal investigation workflow established.
+
+Boundaries:
+
+0. Route verification
+
+1. Coach Save
+
+2. Overlay Store
+
+3. Artifact Builder
+
+4. Publish Scheduler
+
+5. HTTP PUT
+
+6. Worker PUT
+
+7. Worker KV
+
+8. Worker GET
+
+9. Parent Parser
+
+10. Artifact Store
+
+11. Readiness
+
+12. Analytics Selection
+
+13. Summary UI
+
+Repository audit refined every boundary.
+
+Important conclusions:
+
+* Boundary 2 may fail while downstream stages still succeed.
+* Boundary 8 absence is inconclusive.
+* Boundary 11 READY does not guarantee projection.
+* Boundary 13 should not be used for authority isolation.
+
+Authority investigations should stop at Boundary 12.
+
+---
+
+# Major Engineering Milestone #4
+
+# DEV Match Breakdown Validation
+
+This became the most important runtime discovery.
+
+Multiple successful reproductions performed.
+
+Validated:
+
+Coach Match 1
+
+↓
+
+Parent Match 1
+
+Coach Match 2
+
+↓
+
+Parent Match 2
+
+The Coach Match Breakdown synchronized successfully.
+
+This proves:
+
+Current DEV branch successfully performs end-to-end Match Breakdown hydration.
+
+The current architecture is functioning correctly.
+
+---
+
+# Important Investigation Shift
+
+At the beginning of this work the question was:
+
+```
+Why doesn't Match Breakdown work?
+```
+
+Current evidence changes the question to:
+
+```
+Why does TestFlight behave differently from DEV?
+```
+
+This is now the remaining investigation.
+
+Current DEV branch is considered healthy.
+
+---
+
+# Logging Investigation
+
+A major discovery was made.
+
+Initially believed:
+
+Authority instrumentation was failing.
+
+Repository investigation proved:
+
+Instrumentation exists and is functioning.
+
+Problem:
+
+Wrong capture transport.
+
+React Native forensic traces:
+
+```
+MATCH_BREAKDOWN_AUTHORITY_TRACE
+```
+
+emit through:
+
+```
+console.log()
+```
+
+↓
+
+Metro
+
+NOT
+
+macOS unified logging.
+
+Future forensic investigations must capture:
+
+* Coach Metro
+* Parent Metro
+* Wrangler Tail
+
+Device logs alone are insufficient.
+
+This becomes permanent debugging doctrine.
+
+---
+
+# Environment Investigation
+
+A second investigation emerged.
+
+Observed:
+
+DEV Parent:
+
+* multiple athletes
+* historical local data
+
+DEV Coach:
+
+* single linked athlete
+* archived invite
+* ghost athlete behavior after relinking
+
+Likely caused by differing local histories.
+
+This is independent of Match Breakdown synchronization.
+
+---
+
+# New Strategic Initiative
+
+## Environment Parity System
+
+Promoted to future engineering priority.
+
+Objective:
+
+Move between:
+
+DEV
+
+↓
+
+TestFlight
+
+↓
+
+Future production snapshots
+
+without changing the investigation dataset.
+
+Future capabilities:
+
+* Export dataset
+* Import dataset
+* Dataset fingerprint
+* Environment verification
+* Investigation snapshot export
+
+Snapshot should preserve:
+
+* athletes
+* competitions
+* overlays
+* topology
+* readiness
+* artifact sets
+* weekly sessions
+* metadata
+
+This is expected to significantly reduce future debugging effort.
+
+---
+
+# Repository Health
+
+Current architectural floor:
+
+```
+49865c9
+```
+
+Repository:
+
+Clean.
+
+Stable.
+
+Ready for continued investigation.
+
+---
+
+# Current State
+
+Current DEV branch:
+
+Healthy.
+
+Coach Match Breakdown:
+
+Working.
+
+Readiness architecture:
+
+Complete.
+
+Summary pilot:
+
+Implemented.
+
+Authority forensic framework:
+
+Implemented.
+
+Incident Capture:
+
+Expanded.
+
+Logging transport:
+
+Understood.
+
+Current evidence does NOT indicate an architectural synchronization failure on the development branch.
+
+---
+
+# Remaining Open Investigation
+
+Outstanding question:
+
+Why does the TestFlight environment diverge from the current DEV environment?
+
+Areas to compare:
+
+* dataset
+* invite lineage
+* topology
+* cached storage
+* migrations
+* artifact generations
+* readiness state
+
+Do not modify architecture until environment differences are understood.
+
+---
+
+# Next Session Priorities
+
+## Priority 1
+
+Capture a complete "known-good" forensic bundle from the working DEV environment using:
+
+* Coach Metro
+* Parent Metro
+* Wrangler Tail
+
+This becomes the canonical baseline for future authority investigations.
+
+---
+
+## Priority 2
+
+Perform a structured DEV vs TestFlight comparison.
+
+Determine whether differences originate from:
+
+* local dataset
+* build
+* migration history
+* invite lineage
+* topology
+* readiness
+
+---
+
+## Priority 3
+
+Design the Environment Parity System.
+
+Do not implement yet.
+
+Produce architecture and requirements first.
+
+---
+
+# Engineering Doctrine Going Forward
+
+Every future synchronization investigation must follow this order:
+
+1. Verify environment parity.
+2. Capture evidence.
+3. Identify the first failed authority boundary.
+4. Fix only the proven failing boundary.
+5. Reproduce.
+6. Preserve a known-good forensic snapshot before making further architectural changes.
+
+Evidence—not speculation—now governs MatMind debugging.
+
+
+
+
 # EOD DOCUMENTS — 6/20/2026 → 6/22/2026
 
 ## MatMind / BJJ Tracker

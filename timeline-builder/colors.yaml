@@ -1,0 +1,94 @@
+# Phase color mapping for Timeline Builder.
+#
+# Matching uses word-boundary rules with fixed precedence (first match wins):
+#   1. Delivery / Air / Live
+#   2. Review / Approval
+#   3. Edit / Post / VFX / Color
+#   4. Shoot
+#   5. Pre Pro / Prep
+#   6. Concepting
+#
+# Patterns match whole words/phrases only (e.g. "edit" does not match "editorial").
+categories:
+  - name: Concepting
+    patterns:
+      - concept
+      - concepting
+      - ideation
+    fill: "1F3864"
+    font: "FFFFFF"
+
+  - name: Pre Pro / Prep
+    patterns:
+      - pre pro
+      - pre-pro
+      - prep
+      - preproduction
+      - pre production
+      - planning
+    fill: "2F75B5"
+    font: "FFFFFF"
+
+  - name: Shoot
+    patterns:
+      - shoot
+      - filming
+      - production day
+      - on set
+    fill: "9DC3E6"
+    font: "1F3864"
+
+  - name: Edit / Post / VFX / Color
+    patterns:
+      - edit
+      - post
+      - vfx
+      - color
+      - grade
+      - finishing
+      - compositing
+    fill: "00B0A8"
+    font: "FFFFFF"
+
+  - name: Review / Approval
+    patterns:
+      - review
+      - approval
+      - approve
+      - feedback
+      - sign-off
+      - sign off
+    fill: "A6A6A6"
+    font: "FFFFFF"
+
+  - name: Delivery / Air / Live
+    patterns:
+      - delivery
+      - deliver
+      - air
+      - live
+      - launch
+      - publish
+      - release
+    fill: "006B6B"
+    font: "FFFFFF"
+
+critical:
+  fill: "C00000"
+  font: "FFFFFF"
+
+default:
+  fill: "D9D9D9"
+  font: "404040"
+
+presentation:
+  header_fill: "203864"
+  header_font: "FFFFFF"
+  project_header_fill: "E7E6E6"
+  project_header_font: "203864"
+  month_header_fill: "F2F2F2"
+  month_header_font: "404040"
+  week_header_fill: "FAFAFA"
+  week_header_font: "595959"
+  grid_color: "D0D0D0"
+  alt_row_fill: "F9F9F9"
