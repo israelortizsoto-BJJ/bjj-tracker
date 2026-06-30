@@ -110,6 +110,7 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
     spreadsheet ? spreadsheet.getId() : 'NULL',
     tasks.length
   );
+  appendRuntimeDiag_('BUILD ENTRY', 'OK', 'taskCount=' + tasks.length);
   let sheet = spreadsheet.getSheetByName(SHEET_TIMELINE);
   if (!sheet) {
     sheet = spreadsheet.insertSheet(SHEET_TIMELINE);
@@ -227,6 +228,7 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
   sheet.clear();
   if (!values.length || !totalCols) {
     Logger.log('BUILD_TIMELINE: EXIT reason=empty_grid');
+    appendRuntimeDiag_('EXIT', 'FAILURE', 'empty_grid');
     protectTimelineSheet_(sheet);
     return;
   }
@@ -238,11 +240,13 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
 
   const range = sheet.getRange(1, 1, normalizedValues.length, totalCols);
   Logger.log('BUILD_TIMELINE: before write');
+  appendRuntimeDiag_('before write', 'OK', '');
   range.setValues(normalizedValues);
   range.setBackgrounds(normalizedBackgrounds);
   range.setFontColors(normalizedFontColors);
   range.setFontWeights(normalizedFontWeights);
   Logger.log('BUILD_TIMELINE: after write');
+  appendRuntimeDiag_('after write', 'OK', '');
 
   if (normalizedValues.length >= DATA_START_ROW) {
     const dateRows = normalizedValues.length - DATA_START_ROW + 1;
@@ -274,6 +278,7 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
 
   protectTimelineSheet_(sheet);
   Logger.log('BUILD_TIMELINE: COMPLETE');
+  appendRuntimeDiag_('COMPLETE', 'OK', '');
 }
 
 function protectTimelineSheet_(sheet) {

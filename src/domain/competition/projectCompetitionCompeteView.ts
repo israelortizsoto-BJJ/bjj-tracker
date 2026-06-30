@@ -5,6 +5,7 @@ import type {
   SyncedCompetitionTopologyArtifact,
   SyncedCompetitionTopologyFinishType,
 } from "../../types/coachWeeklySync";
+import { logBreakdownPropagationForMatch } from "./competitionProjectionBreakdownTrace";
 
 export type CompetitionMatchOverlayAnnotation = {
   matchLineageKey: string;
@@ -50,6 +51,22 @@ export function selectCompetitionOverlayAnnotations(input: {
     annotations: [...input.embeddedAnnotations],
     source: "embedded_compatibility",
   };
+}
+
+function logProjectionComplete(
+  sharedCompetitionId: string,
+  matches: readonly CompetitionDetailMatchSnapshot[],
+  overlaySource: string,
+) {
+  for (const match of matches) {
+    logBreakdownPropagationForMatch({
+      stage: "projection_complete",
+      sharedCompetitionId,
+      matchLineageKey: match.id,
+      overlaySource,
+      source: match,
+    });
+  }
 }
 
 function resolveTopologyCompetitionRow(input: {
@@ -160,6 +177,48 @@ export function projectCompetitionCompeteView(input: {
     fallbackMatches,
   });
 
+  if (topology) {
+    for (const match of topology.matches) {
+      logBreakdownPropagationForMatch({
+        stage: "canonical_selected",
+        sharedCompetitionId,
+        matchLineageKey: match.matchLineageKey,
+        overlaySource: "canonical_topology",
+      });
+    }
+  }
+
+  {
+    const canonicalLineageKeys = topology?.matches.map((match) => match.matchLineageKey) ?? [];
+    const canonicalLineageKeySet = new Set(canonicalLineageKeys);
+    const overlaysByInputKey = new Map<string, CompetitionMatchOverlayAnnotation>();
+    for (const overlay of input.overlayAnnotations ?? []) {
+      const matchLineageKey = overlay.matchLineageKey.trim();
+      if (matchLineageKey) overlaysByInputKey.set(matchLineageKey, overlay);
+    }
+    for (const matchLineageKey of canonicalLineageKeys) {
+      const overlay = overlaysByInputKey.get(matchLineageKey) ?? null;
+      logBreakdownPropagationForMatch({
+        stage: "overlay_join",
+        sharedCompetitionId,
+        matchLineageKey,
+        overlaySource: overlay ? "overlay_annotation_matched" : "overlay_annotation_missing",
+        source: overlay ?? undefined,
+      });
+    }
+    for (const overlay of input.overlayAnnotations ?? []) {
+      const matchLineageKey = overlay.matchLineageKey.trim();
+      if (!matchLineageKey || canonicalLineageKeySet.has(matchLineageKey)) continue;
+      logBreakdownPropagationForMatch({
+        stage: "overlay_join",
+        sharedCompetitionId,
+        matchLineageKey,
+        overlaySource: "overlay_annotation_unmatched",
+        source: overlay,
+      });
+    }
+  }
+
   if (projectionSource === "fallback_missing_topology") {
     console.log("[COACH_TOPOLOGY_TRACE]", {
       stage: "coach_compete_projection",
@@ -204,11 +263,13 @@ export function projectCompetitionCompeteView(input: {
         fallbackMatchCount: fallbackMatches.length,
       });
     }
+    logProjectionComplete(sharedCompetitionId, fallbackMatches, "fallback_missing_topology");
     return { ...shell, matches: [...fallbackMatches] };
   }
 
   if (projectionSource === "fallback_cardinality_guard") {
     if (!topology) {
+      logProjectionComplete(sharedCompetitionId, fallbackMatches, "fallback_cardinality_guard");
       return { ...shell, matches: [...fallbackMatches] };
     }
     console.log("[COACH_TOPOLOGY_TRACE]", {
@@ -229,6 +290,7 @@ export function projectCompetitionCompeteView(input: {
       fallbackMatchCount: fallbackMatches.length,
     });
 
+    logProjectionComplete(sharedCompetitionId, fallbackMatches, "fallback_cardinality_guard");
     return {
       ...shell,
       matches: [...fallbackMatches],
@@ -236,6 +298,7 @@ export function projectCompetitionCompeteView(input: {
   }
 
   if (!topology) {
+    logProjectionComplete(sharedCompetitionId, fallbackMatches, "fallback_missing_topology");
     return { ...shell, matches: [...fallbackMatches] };
   }
 
@@ -309,5 +372,6 @@ export function projectCompetitionCompeteView(input: {
     }
   }
 
+  logProjectionComplete(sharedCompetitionId, matches, "topology_projection_used");
   return { ...shell, matches };
 }

@@ -5,10 +5,12 @@ import {
   inviteTokenSuffix,
   logMatchBreakdownAuthorityTrace,
 } from "../../dev/matchBreakdownAuthorityTrace";
+import { logMatchBreakdownBoundaryProbe } from "../../dev/matchBreakdownBoundaryProbe";
 import { coachSyncPutCoachMatchBreakdownArtifacts } from "../../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../storage/coachShareStore";
 import { getKidsById } from "../../storage/coachKidStore";
 import { buildCoachMatchBreakdownArtifacts } from "./buildCoachMatchBreakdownArtifacts";
+import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
 
 export function schedulePublishCoachMatchBreakdownArtifacts(input: {
   sharedAthleteId: string;
@@ -21,6 +23,7 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
 
   void (async () => {
     let traceId = input.traceId?.trim() || "";
+    let probeArtifactSet: SyncedCoachMatchBreakdownArtifactSet | null = null;
     try {
       const [links, kidsById] = await Promise.all([getCoachLinks(), getKidsById()]);
       const writerLinks = dedupeActiveCoachWriterLinks(links);
@@ -43,6 +46,11 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         if (!traceId) {
           traceId = createOverlayForensicTraceId(sharedAthleteId);
         }
+        const publishSkipReason = !kidToken
+          ? "missing_kid_invite_token"
+          : writerLinks.length === 0
+            ? "no_writer_links"
+            : "kid_token_no_matching_writer_link";
         logMatchBreakdownAuthorityTrace("PUBLISH_TARGET_RESOLUTION", {
           traceId,
           sharedAthleteId,
@@ -52,11 +60,7 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
             ? inviteTokenSuffix(matchedLink.weeklySync!.linkToken)
             : null,
           publishSkipped: true,
-          publishSkipReason: !kidToken
-            ? "missing_kid_invite_token"
-            : writerLinks.length === 0
-              ? "no_writer_links"
-              : "kid_token_no_matching_writer_link",
+          publishSkipReason,
           writerLinkCount: writerLinks.length,
         });
         console.log("[COACH_OVERLAY_SYNC_TRACE]", {
@@ -65,6 +69,21 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
           kidId: input.kidId ?? null,
           writerLinkCount: writerLinks.length,
           kidToken: kidToken || null,
+        });
+        logMatchBreakdownBoundaryProbe({
+          probeId: "B3",
+          outcome: "fail",
+          deviceRole: "coach",
+          traceId,
+          sharedAthleteId,
+          sharedCompetitionId: null,
+          matchLineageKey: null,
+          artifactCount: 0,
+          publishAttempted: false,
+          publishSkipReason,
+          httpStatus: null,
+          resolvedWriterTokenSuffix: null,
+          latencyMs: null,
         });
         return;
       }
@@ -99,6 +118,7 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         updatedAtOverride: input.updatedAtOverride ?? null,
         traceId,
       });
+      probeArtifactSet = artifactSet;
       console.log("[OVERLAY_FORENSIC]", {
         stage: "publish_schedule_payload",
         traceId,
@@ -136,6 +156,7 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         lineageIds: artifactSet.artifacts.map((artifact) => artifact.matchLineageKey),
       });
 
+      const putStartedAt = Date.now();
       await coachSyncPutCoachMatchBreakdownArtifacts(
         target.weeklySync.linkToken,
         target.weeklySync.writerSecret,
@@ -143,6 +164,25 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         target.weeklySync.apiBaseUrl,
         traceId,
       );
+      const targetArtifact =
+        artifactSet.artifacts.find((artifact) => Boolean(artifact.coachNote?.trim())) ??
+        artifactSet.artifacts[0] ??
+        null;
+      logMatchBreakdownBoundaryProbe({
+        probeId: "B3",
+        outcome: "pass",
+        deviceRole: "coach",
+        traceId,
+        sharedAthleteId,
+        sharedCompetitionId: targetArtifact?.sharedCompetitionId ?? null,
+        matchLineageKey: targetArtifact?.matchLineageKey ?? null,
+        artifactCount: artifactSet.artifacts.length,
+        publishAttempted: true,
+        publishSkipReason: null,
+        httpStatus: 200,
+        resolvedWriterTokenSuffix,
+        latencyMs: Date.now() - putStartedAt,
+      });
 
       console.log("[COACH_OVERLAY_SYNC_TRACE]", {
         stage: "coach_overlay_publish_ok",
@@ -155,6 +195,26 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         error && typeof error === "object" && "status" in error
           ? (error as { status: unknown }).status
           : null;
+      const targetArtifactForProbe =
+        probeArtifactSet?.artifacts.find((artifact) => Boolean(artifact.coachNote?.trim())) ??
+        probeArtifactSet?.artifacts[0] ??
+        null;
+      logMatchBreakdownBoundaryProbe({
+        probeId: "B3",
+        outcome: "fail",
+        deviceRole: "coach",
+        traceId: traceId || null,
+        sharedAthleteId,
+        sharedCompetitionId: targetArtifactForProbe?.sharedCompetitionId ?? null,
+        matchLineageKey: targetArtifactForProbe?.matchLineageKey ?? null,
+        artifactCount: probeArtifactSet?.artifacts.length ?? 0,
+        publishAttempted: probeArtifactSet != null,
+        publishSkipReason: null,
+        httpStatus: typeof status === "number" ? status : null,
+        resolvedWriterTokenSuffix: null,
+        latencyMs: null,
+        error: error instanceof Error ? error.message : String(error),
+      });
       console.log("[COACH_OVERLAY_SYNC_TRACE]", {
         stage: "coach_overlay_publish_failed",
         sharedAthleteId,

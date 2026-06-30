@@ -99,3 +99,50 @@ function normalizeGrid2D_(grid, numCols, defaultCell) {
     return out;
   });
 }
+
+/** Temporary forensic helper — remove after live-refresh investigation. */
+var RUNTIME_DIAG_EXEC_TYPE_ = 'Manual';
+
+function setRuntimeDiagExecType_(execType) {
+  RUNTIME_DIAG_EXEC_TYPE_ = execType || 'Manual';
+}
+
+function runtimeDiagSpreadsheet_() {
+  const active = SpreadsheetApp.getActiveSpreadsheet();
+  if (active) {
+    PropertiesService.getScriptProperties().setProperty('RUNTIME_DIAG_SS_ID', active.getId());
+    return active;
+  }
+  const id = PropertiesService.getScriptProperties().getProperty('RUNTIME_DIAG_SS_ID');
+  return id ? SpreadsheetApp.openById(id) : null;
+}
+
+function ensureRuntimeDiagnosticsSheet_(spreadsheet) {
+  let sheet = spreadsheet.getSheetByName(SHEET_RUNTIME_DIAGNOSTICS);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(SHEET_RUNTIME_DIAGNOSTICS);
+    sheet.getRange(1, 1, 1, 5).setValues([[
+      'Timestamp', 'Execution Type', 'Checkpoint', 'Status', 'Details',
+    ]]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function appendRuntimeDiag_(checkpoint, status, details) {
+  try {
+    const ss = runtimeDiagSpreadsheet_();
+    if (!ss) {
+      return;
+    }
+    ensureRuntimeDiagnosticsSheet_(ss).appendRow([
+      new Date(),
+      RUNTIME_DIAG_EXEC_TYPE_ || 'Manual',
+      checkpoint,
+      status,
+      details !== undefined && details !== null ? String(details) : '',
+    ]);
+  } catch (err) {
+    Logger.log('RUNTIME_DIAG: append failed ' + err);
+  }
+}

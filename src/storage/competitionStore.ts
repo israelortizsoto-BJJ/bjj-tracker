@@ -1,6 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
+import { logBreakdownPropagationForMatch } from "../domain/competition/competitionProjectionBreakdownTrace";
 import { peekCoachMatchBreakdownArtifactSet } from "./coachMatchBreakdownArtifactStore";
 
 import type {
@@ -523,6 +524,16 @@ export async function mergeCompetitionMatchDetailIntoEntries(
               : isShellEntryId(entry.id)
                 ? "shell_entry_merged_with_non_shell_resolution"
                 : "non_shell_entry_merge",
+        });
+      }
+      const sharedCompetitionId = entry.sharedCompetitionId?.trim() ?? "";
+      for (const match of matches) {
+        logBreakdownPropagationForMatch({
+          stage: "selector_return",
+          sharedCompetitionId,
+          matchLineageKey: match.id,
+          overlaySource: `local_detail_${resolutionStrategy}`,
+          source: match,
         });
       }
       return {

@@ -39,8 +39,8 @@ function assertParentHydrationOrder(
 describe("Parent analysis readiness routing", () => {
   it("routes every eligible Parent full-session surface through P6 readiness", () => {
     assertParentHydrationOrder(
-      "src/features/summary/SummaryScreen.tsx",
-      "const refreshParentWeeklySessionSnapshot",
+      "src/services/refreshParentWriterSessionSnapshot.ts",
+      "export async function refreshParentWriterSessionSnapshot",
     );
     assertParentHydrationOrder(
       "app/(tabs)/this-week/index.tsx",
@@ -58,11 +58,20 @@ describe("Parent analysis readiness routing", () => {
       "app/(tabs)/this-week/join.tsx",
       "const onConnect = useCallback",
     );
+    const compete = source("app/(tabs)/compete.tsx");
+    assert.ok(
+      compete.includes("refreshParentWriterSessionSnapshot"),
+      "app/(tabs)/compete.tsx: Compete parent session refresh missing",
+    );
+    assert.ok(
+      compete.includes("isCancelled: () => cancelled"),
+      "app/(tabs)/compete.tsx: focus cancellation guard missing",
+    );
   });
 
   it("records failed full-session hydration without replacing cache fallback behavior", () => {
     for (const file of [
-      "src/features/summary/SummaryScreen.tsx",
+      "src/services/refreshParentWriterSessionSnapshot.ts",
       "app/(tabs)/this-week/index.tsx",
       "src/features/kid/KidDetailScreen.tsx",
       "app/(tabs)/this-week/parent-athletes.tsx",
@@ -84,17 +93,14 @@ describe("Parent analysis readiness routing", () => {
   });
 
   it("suppresses terminal readiness commits for cancelled or superseded requests", () => {
-    const summary = source("src/features/summary/SummaryScreen.tsx");
-    const summaryCache = summary.indexOf(
-      "await setCachedWeeklyForLinkToken(",
-      summary.indexOf("const refreshParentWeeklySessionSnapshot"),
-    );
-    const summarySuccess = summary.indexOf(
+    const sharedRefresh = source("src/services/refreshParentWriterSessionSnapshot.ts");
+    const sharedCache = sharedRefresh.indexOf("await setCachedWeeklyForLinkToken(");
+    const sharedSuccess = sharedRefresh.indexOf(
       "readinessRun.recordSuccessfulSession",
-      summaryCache,
+      sharedCache,
     );
     assert.ok(
-      summary.slice(summaryCache, summarySuccess).includes(
+      sharedRefresh.slice(sharedCache, sharedSuccess).includes(
         "if (isCancelled?.()) return",
       ),
     );

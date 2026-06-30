@@ -5,6 +5,7 @@ const SHEET_DATA = 'Data';
 const SHEET_CONFIG = 'Config';
 const SHEET_TIMELINE = 'Timeline';
 const SHEET_VALIDATION = 'Validation';
+const SHEET_RUNTIME_DIAGNOSTICS = 'Runtime Diagnostics';
 
 const DATA_HEADERS = [
   'Project',

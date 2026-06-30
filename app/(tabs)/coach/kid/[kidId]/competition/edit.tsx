@@ -61,6 +61,7 @@ import {
   logCompPublishGuard,
   logCompSave,
 } from "@/src/dev/competitionMutationDevLog";
+import { logMatchBreakdownBoundaryProbe } from "@/src/dev/matchBreakdownBoundaryProbe";
 import { logMatchBreakdownAuthorityTrace } from "@/src/dev/matchBreakdownAuthorityTrace";
 import { createOverlayForensicTraceId } from "@/src/dev/overlayForensicTrace";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
@@ -740,13 +741,17 @@ export default function KidCompetitionEditScreen() {
           matchCount: matches.length,
           coachNoteLengths: matches.map((m) => (m.coachNote ?? "").trim().length),
         });
+        const intendedCoachNoteLengths = matches.map((m) => (m.coachNote ?? "").trim().length);
+        const persistedCoachNoteLengths: number[] = [];
+        const persistedUpdatedAts: string[] = [];
+        const writeRejectReasons: string[] = [];
         for (const [sequenceIndex, match] of matches.entries()) {
           console.log("[OVERLAY_SERIAL_SAVE]", {
             matchId: match.id,
             ordinal: sequenceIndex + 1,
             sequenceIndex,
           });
-          await upsertMatchBreakdownOverlay({
+          const upsertResult = await upsertMatchBreakdownOverlay({
             identity: {
               ...overlayScope,
               matchLineageKey: match.id,
@@ -756,7 +761,38 @@ export default function KidCompetitionEditScreen() {
             },
             traceId: overlayForensicTraceId,
           });
+          if (!upsertResult) {
+            writeRejectReasons.push(`${match.id}:overlay_upsert_rejected`);
+            persistedCoachNoteLengths.push(0);
+            persistedUpdatedAts.push("");
+          } else {
+            persistedCoachNoteLengths.push((upsertResult.coachNote ?? "").trim().length);
+            persistedUpdatedAts.push(upsertResult.updatedAt);
+          }
         }
+        const targetMatch =
+          matches.find((m) => (m.coachNote ?? "").trim().length > 0) ?? matches[0];
+        let b1Outcome: "pass" | "fail" = "pass";
+        for (let i = 0; i < matches.length; i += 1) {
+          if (intendedCoachNoteLengths[i] > 0 && persistedCoachNoteLengths[i] === 0) {
+            b1Outcome = "fail";
+            break;
+          }
+        }
+        logMatchBreakdownBoundaryProbe({
+          probeId: "B1",
+          outcome: b1Outcome,
+          deviceRole: "coach",
+          traceId: overlayForensicTraceId,
+          sharedAthleteId: overlayScope.sharedAthleteId,
+          sharedCompetitionId: overlayScope.sharedCompetitionId,
+          matchLineageKey: targetMatch?.id ?? null,
+          matchLineageKeys: matches.map((m) => m.id),
+          intendedCoachNoteLengths,
+          persistedCoachNoteLengths,
+          persistedUpdatedAts,
+          writeRejectReasons,
+        });
         logSaveLifecycleTrace("mutation_complete", {
           competitionId: entryId || null,
           sharedCompetitionId: overlayScope.sharedCompetitionId,

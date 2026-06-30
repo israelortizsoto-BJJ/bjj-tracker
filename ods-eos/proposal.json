@@ -1,0 +1,38 @@
+{
+  "project": {
+    "name": "ODS-EOS"
+  },
+  "session": {
+    "planningIntent": "Wire ChatGPT to emit structured proposal input for operator approval.",
+    "summary": "Built Promotion Proposal Builder v1 and verified proposal-to-ingest flow."
+  },
+  "decisions": [
+    {
+      "description": "Implement proposal builder as a separate CLI command before any LLM integration.",
+      "supportingEvidence": [
+        {
+          "ref": "docs/06-promotion-bridge-v1.md",
+          "kind": "file",
+          "summary": "Promotion Bridge architecture contract"
+        }
+      ]
+    }
+  ],
+  "investigations": [
+    {
+      "title": "ChatGPT proposal export format",
+      "objective": "Determine whether ChatGPT should emit YAML or JSON proposal input for operator review."
+    }
+  ],
+  "parkingLot": [
+    {
+      "title": "Proposal metadata section",
+      "reasonDeferred": "Deferred until v1 proposal-to-ingest path is proven end-to-end."
+    }
+  ],
+  "risks": [
+    {
+      "description": "Operators may bypass the proposal builder and hand-edit proposal.json unless the workflow is documented clearly."
+    }
+  ]
+}

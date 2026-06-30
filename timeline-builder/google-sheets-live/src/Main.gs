@@ -14,7 +14,9 @@ function onOpen() {
     .addToUi();
 }
 
-function refreshTimeline() {
+function refreshTimeline(execType) {
+  setRuntimeDiagExecType_(execType || 'Manual');
+  appendRuntimeDiag_('ENTRY', 'OK', '');
   Logger.log('REFRESH_TIMELINE: ENTRY');
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -23,11 +25,13 @@ function refreshTimeline() {
     'REFRESH_TIMELINE: activeSpreadsheet=%s',
     ss ? ss.getId() : 'NULL'
   );
+  appendRuntimeDiag_('activeSpreadsheet', 'OK', ss ? ss.getId() : 'NULL');
 
   if (!ss) {
     Logger.log(
       'REFRESH_TIMELINE: EXIT reason=no_active_spreadsheet'
     );
+    appendRuntimeDiag_('EXIT', 'FAILURE', 'no_active_spreadsheet');
     return;
   }
 
@@ -40,12 +44,14 @@ function refreshTimeline() {
     'REFRESH_TIMELINE: validatedTasks=%s',
     result.tasks.length
   );
+  appendRuntimeDiag_('validatedTasks', 'OK', result.tasks.length);
   result.report.updatedAt = new Date();
 
   writeValidationSheet(ss, result.report);
 
   if (!result.tasks.length) {
     Logger.log('REFRESH_TIMELINE: EXIT reason=no_valid_tasks');
+    appendRuntimeDiag_('EXIT', 'FAILURE', 'no_valid_tasks');
     ss.toast('No valid tasks on Data tab.', 'Timeline Planner', 5);
     return;
   }
@@ -53,10 +59,12 @@ function refreshTimeline() {
   Logger.log(
     'REFRESH_TIMELINE: before buildTimelineSheet'
   );
+  appendRuntimeDiag_('before buildTimelineSheet', 'OK', '');
   buildTimelineSheet(ss, result.tasks, config);
   Logger.log(
     'REFRESH_TIMELINE: after buildTimelineSheet'
   );
+  appendRuntimeDiag_('after buildTimelineSheet', 'OK', '');
   result.report.timelineGenerated = true;
   writeValidationSheet(ss, result.report);
 
@@ -68,6 +76,7 @@ function refreshTimeline() {
   Logger.log(
     'REFRESH_TIMELINE: EXIT success'
   );
+  appendRuntimeDiag_('EXIT', 'SUCCESS', '');
 }
 
 function handleDataEdit(e) {
@@ -101,6 +110,7 @@ function handleDataEdit(e) {
   }
 
   Logger.log('HANDLE_DATA_EDIT: before calling scheduleDebouncedRefresh_');
+  PropertiesService.getScriptProperties().setProperty('RUNTIME_DIAG_SS_ID', sheet.getParent().getId());
   scheduleDebouncedRefresh_();
   Logger.log('HANDLE_DATA_EDIT: EXIT');
 }
@@ -124,7 +134,7 @@ function scheduleDebouncedRefresh_() {
   } catch (err) {
     Logger.log('SCHEDULE_DEBOUNCE: new trigger failed error=' + err);
     Logger.log('SCHEDULE_DEBOUNCE: fallback calling refreshTimeline');
-    refreshTimeline();
+    refreshTimeline('Automatic');
   }
   Logger.log('SCHEDULE_DEBOUNCE: EXIT');
 }
@@ -134,7 +144,7 @@ function debouncedRefreshTimeline() {
   Logger.log('DEBOUNCED_REFRESH: activeSpreadsheet=' + (SpreadsheetApp.getActiveSpreadsheet() ? SpreadsheetApp.getActiveSpreadsheet().getId() : 'NULL'));
   uninstallDebounceTriggers_();
   Logger.log('DEBOUNCED_REFRESH: before calling refreshTimeline');
-  refreshTimeline();
+  refreshTimeline('Automatic');
   Logger.log('DEBOUNCED_REFRESH: after refreshTimeline');
   Logger.log('DEBOUNCED_REFRESH: EXIT');
 }

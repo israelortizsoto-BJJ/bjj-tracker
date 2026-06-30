@@ -1,0 +1,337 @@
+{
+  "schemaVersion": "0.2",
+  "updatedAt": "2026-06-29T20:11:33Z",
+  "sessions": [
+    {
+      "id": "ses-20260629-001",
+      "createdAt": "2026-06-29T18:24:54Z",
+      "updatedAt": "2026-06-29T18:24:54Z",
+      "startedAt": "2026-06-29T00:00:00Z",
+      "endedAt": "2026-06-29T18:24:54Z",
+      "status": "closed",
+      "planningIntent": "Continue ODS-QA daily dogfooding and improve the Morning Brief using evidence collected from real operational usage.",
+      "repository": "/Users/ods/Repos/bjj-tracker/ods-eos",
+      "summary": "Validated ODS-EOS end-to-end founder workflow through the first operational QA run.",
+      "decisionIds": [
+        "dec-20260629-004"
+      ],
+      "investigationIds": [
+        "inv-20260629-003"
+      ],
+      "parkingLotIds": [
+        "park-20260629-002"
+      ],
+      "riskIds": [
+        "risk-20260629-002"
+      ]
+    },
+    {
+      "id": "ses-20260629-002",
+      "createdAt": "2026-06-29T20:02:59Z",
+      "updatedAt": "2026-06-29T20:02:59Z",
+      "startedAt": "2026-06-29T00:00:00Z",
+      "endedAt": "2026-06-29T20:02:59Z",
+      "status": "closed",
+      "planningIntent": "Extend ingest validation and wire ChatGPT as a promotion interface.",
+      "repository": "ODS-EOS",
+      "summary": "Validated Promotion Bridge adapter v1 end-to-end.",
+      "decisionIds": [
+        "dec-20260629-005"
+      ],
+      "investigationIds": [
+        "inv-20260629-004"
+      ],
+      "parkingLotIds": [
+        "park-20260629-003"
+      ],
+      "riskIds": [
+        "risk-20260629-003"
+      ]
+    },
+    {
+      "id": "ses-20260629-003",
+      "createdAt": "2026-06-29T20:03:03Z",
+      "updatedAt": "2026-06-29T20:03:03Z",
+      "startedAt": "2026-06-29T00:00:00Z",
+      "endedAt": "2026-06-29T20:03:03Z",
+      "status": "closed",
+      "planningIntent": "Extend ingest validation and wire ChatGPT as a promotion interface.",
+      "repository": "ODS-EOS",
+      "summary": "Validated Promotion Bridge adapter v1 end-to-end.",
+      "decisionIds": [
+        "dec-20260629-006"
+      ],
+      "investigationIds": [
+        "inv-20260629-005"
+      ],
+      "parkingLotIds": [
+        "park-20260629-004"
+      ],
+      "riskIds": [
+        "risk-20260629-004"
+      ]
+    },
+    {
+      "id": "ses-20260629-004",
+      "createdAt": "2026-06-29T20:11:33Z",
+      "updatedAt": "2026-06-29T20:11:33Z",
+      "startedAt": "2026-06-29T00:00:00Z",
+      "endedAt": "2026-06-29T20:11:33Z",
+      "status": "closed",
+      "planningIntent": "Wire ChatGPT to emit structured proposal input for operator approval.",
+      "repository": "ODS-EOS",
+      "summary": "Built Promotion Proposal Builder v1 and verified proposal-to-ingest flow.",
+      "decisionIds": [
+        "dec-20260629-007"
+      ],
+      "investigationIds": [
+        "inv-20260629-006"
+      ],
+      "parkingLotIds": [
+        "park-20260629-005"
+      ],
+      "riskIds": [
+        "risk-20260629-005"
+      ]
+    }
+  ],
+  "investigations": [
+    {
+      "id": "inv-20260629-001",
+      "createdAt": "2026-06-29T17:29:13Z",
+      "updatedAt": "2026-06-29T17:29:13Z",
+      "title": "Session freshness timing",
+      "status": "open",
+      "objective": "Whether Compete hydrates before session GET completes.",
+      "evidence": []
+    },
+    {
+      "id": "inv-20260629-002",
+      "createdAt": "2026-06-29T17:32:30Z",
+      "updatedAt": "2026-06-29T17:32:30Z",
+      "title": "Session freshness on Compete tab",
+      "status": "open",
+      "objective": "Whether parent overlay hydrates before session GET\nn\ny\nParent sync flake on compete",
+      "evidence": []
+    },
+    {
+      "id": "inv-20260629-003",
+      "createdAt": "2026-06-29T18:23:56Z",
+      "updatedAt": "2026-06-29T18:23:56Z",
+      "title": "Morning Brief Operational Value",
+      "status": "open",
+      "objective": "Determine whether the Morning Brief provides enough operational context for a Founder to immediately understand where to begin work without reopening previous conversations or documentation.",
+      "evidence": []
+    },
+    {
+      "id": "inv-20260629-004",
+      "createdAt": "2026-06-29T20:02:59Z",
+      "updatedAt": "2026-06-29T20:02:59Z",
+      "title": "ChatGPT promotion proposal format",
+      "status": "open",
+      "objective": "Determine the minimum fields ChatGPT must emit for operator-approved promotion proposals to map cleanly onto the v1 ingest payload.",
+      "evidence": []
+    },
+    {
+      "id": "inv-20260629-005",
+      "createdAt": "2026-06-29T20:03:03Z",
+      "updatedAt": "2026-06-29T20:03:03Z",
+      "title": "ChatGPT promotion proposal format",
+      "status": "open",
+      "objective": "Determine the minimum fields ChatGPT must emit for operator-approved promotion proposals to map cleanly onto the v1 ingest payload.",
+      "evidence": []
+    },
+    {
+      "id": "inv-20260629-006",
+      "createdAt": "2026-06-29T20:11:33Z",
+      "updatedAt": "2026-06-29T20:11:33Z",
+      "title": "ChatGPT proposal export format",
+      "status": "open",
+      "objective": "Determine whether ChatGPT should emit YAML or JSON proposal input for operator review.",
+      "evidence": []
+    }
+  ],
+  "boundaries": [],
+  "qaRuns": [],
+  "decisions": [
+    {
+      "id": "dec-20260629-001",
+      "createdAt": "2026-06-29T17:29:13Z",
+      "updatedAt": "2026-06-29T17:29:13Z",
+      "date": "2026-06-29",
+      "description": "Defer generator work until atomic capture is stable.",
+      "supportingEvidence": [
+        {
+          "ref": "logs/capture-test.log",
+          "kind": "log",
+          "summary": "Capture session output"
+        }
+      ]
+    },
+    {
+      "id": "dec-20260629-002",
+      "createdAt": "2026-06-29T17:32:30Z",
+      "updatedAt": "2026-06-29T17:32:30Z",
+      "date": "2026-06-29",
+      "description": "Defer EOD generator until Session linking is complete.",
+      "supportingEvidence": [
+        {
+          "ref": "docs/05-knowledge-store-schema.md",
+          "kind": "file",
+          "summary": "v0.2 schema contract"
+        }
+      ]
+    },
+    {
+      "id": "dec-20260629-003",
+      "createdAt": "2026-06-29T17:32:54Z",
+      "updatedAt": "2026-06-29T17:32:54Z",
+      "date": "2026-06-29",
+      "description": "Quick standalone decision.",
+      "supportingEvidence": [
+        {
+          "ref": "docs/05-knowledge-store-schema.md",
+          "kind": "file",
+          "summary": "n"
+        }
+      ]
+    },
+    {
+      "id": "dec-20260629-004",
+      "createdAt": "2026-06-29T18:23:38Z",
+      "updatedAt": "2026-06-29T18:23:38Z",
+      "date": "2026-06-29",
+      "description": "Dogfood ODS-EOS through daily operational use before implementing additional major features. Future improvements will be driven by evidence collected from daily usage rather than architectural speculation.",
+      "supportingEvidence": [
+        {
+          "ref": "ODS-QA-001",
+          "kind": "record",
+          "summary": "First end-to-end operational QA validated the workflow and identified product improvements."
+        }
+      ]
+    },
+    {
+      "id": "dec-20260629-005",
+      "createdAt": "2026-06-29T20:02:59Z",
+      "updatedAt": "2026-06-29T20:02:59Z",
+      "date": "2026-06-29",
+      "description": "Implement Promotion Bridge as a narrow CLI ingest adapter before any conversational integration.",
+      "supportingEvidence": [
+        {
+          "ref": "docs/06-promotion-bridge-v1.md",
+          "kind": "file",
+          "summary": "Promotion Bridge architecture contract"
+        }
+      ]
+    },
+    {
+      "id": "dec-20260629-006",
+      "createdAt": "2026-06-29T20:03:03Z",
+      "updatedAt": "2026-06-29T20:03:03Z",
+      "date": "2026-06-29",
+      "description": "Implement Promotion Bridge as a narrow CLI ingest adapter before any conversational integration.",
+      "supportingEvidence": [
+        {
+          "ref": "docs/06-promotion-bridge-v1.md",
+          "kind": "file",
+          "summary": "Promotion Bridge architecture contract"
+        }
+      ]
+    },
+    {
+      "id": "dec-20260629-007",
+      "createdAt": "2026-06-29T20:11:33Z",
+      "updatedAt": "2026-06-29T20:11:33Z",
+      "date": "2026-06-29",
+      "description": "Implement proposal builder as a separate CLI command before any LLM integration.",
+      "supportingEvidence": [
+        {
+          "ref": "docs/06-promotion-bridge-v1.md",
+          "kind": "file",
+          "summary": "Promotion Bridge architecture contract"
+        }
+      ]
+    }
+  ],
+  "parkingLot": [
+    {
+      "id": "park-20260629-001",
+      "createdAt": "2026-06-29T17:29:13Z",
+      "updatedAt": "2026-06-29T17:29:13Z",
+      "title": "Flaky parent sync on compete tab",
+      "reasonDeferred": "Waiting for MM-P1-001 evidence.",
+      "status": "open"
+    },
+    {
+      "id": "park-20260629-002",
+      "createdAt": "2026-06-29T18:24:28Z",
+      "updatedAt": "2026-06-29T18:24:28Z",
+      "title": "Founder Command Center",
+      "reasonDeferred": "Complete multiple days of operational dogfooding before designing a higher-level command center or dashboard.",
+      "status": "open"
+    },
+    {
+      "id": "park-20260629-003",
+      "createdAt": "2026-06-29T20:02:59Z",
+      "updatedAt": "2026-06-29T20:02:59Z",
+      "title": "Payload envelope versioning",
+      "reasonDeferred": "Prove canonical payload to store path with v1 narrow scope before defining transport metadata.",
+      "status": "open"
+    },
+    {
+      "id": "park-20260629-004",
+      "createdAt": "2026-06-29T20:03:03Z",
+      "updatedAt": "2026-06-29T20:03:03Z",
+      "title": "Payload envelope versioning",
+      "reasonDeferred": "Prove canonical payload to store path with v1 narrow scope before defining transport metadata.",
+      "status": "open"
+    },
+    {
+      "id": "park-20260629-005",
+      "createdAt": "2026-06-29T20:11:33Z",
+      "updatedAt": "2026-06-29T20:11:33Z",
+      "title": "Proposal metadata section",
+      "reasonDeferred": "Deferred until v1 proposal-to-ingest path is proven end-to-end.",
+      "status": "open"
+    }
+  ],
+  "doctrines": [],
+  "insights": [],
+  "risks": [
+    {
+      "id": "risk-20260629-001",
+      "createdAt": "2026-06-29T17:29:14Z",
+      "updatedAt": "2026-06-29T17:29:14Z",
+      "description": "EOD generator may encode invalid session prose.",
+      "status": "open"
+    },
+    {
+      "id": "risk-20260629-002",
+      "createdAt": "2026-06-29T18:24:47Z",
+      "updatedAt": "2026-06-29T18:24:47Z",
+      "description": "Morning Brief currently presents structured records instead of an operational story, which may reduce its usefulness as the primary daily briefing.",
+      "status": "open"
+    },
+    {
+      "id": "risk-20260629-003",
+      "createdAt": "2026-06-29T20:02:59Z",
+      "updatedAt": "2026-06-29T20:02:59Z",
+      "description": "Operators may confuse Fact Promotion (record-type evolution) with Promote operational intent unless glossary cross-links are added.",
+      "status": "open"
+    },
+    {
+      "id": "risk-20260629-004",
+      "createdAt": "2026-06-29T20:03:03Z",
+      "updatedAt": "2026-06-29T20:03:03Z",
+      "description": "Operators may confuse Fact Promotion (record-type evolution) with Promote operational intent unless glossary cross-links are added.",
+      "status": "open"
+    },
+    {
+      "id": "risk-20260629-005",
+      "createdAt": "2026-06-29T20:11:33Z",
+      "updatedAt": "2026-06-29T20:11:33Z",
+      "description": "Operators may bypass the proposal builder and hand-edit proposal.json unless the workflow is documented clearly.",
+      "status": "open"
+    }
+  ]
+}

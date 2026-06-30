@@ -16,12 +16,14 @@ import {
   type CompetitionMatchOverlayAnnotation,
 } from "../../domain/competition/projectCompetitionCompeteView";
 import { getCoachMatchBreakdownArtifactSet } from "../../storage/coachMatchBreakdownArtifactStore";
+import { useCoachSyncHydrationVersion } from "../../storage/coachSyncHydrationStore";
 import { peekCoachCompetitionTopology } from "../../storage/coachCompetitionTopologyStore";
 import {
   getCompetitionVersion,
   subscribeCompetition,
 } from "../../storage/kidCompetitionStore";
 import { competeMedalTierFromKidEntry, type KidCompetitionMedalTier } from "../../types/coachKid";
+import { logBreakdownPropagationForMatch } from "../../domain/competition/competitionProjectionBreakdownTrace";
 import { CompetitionMedalMark, type CompeteKidEntryMerged } from "./MedalGallery";
 import { MatchCard } from "./MatchCard";
 import { getPlacementLabel } from "./placementLabel";
@@ -49,6 +51,7 @@ export function CompetitionCard({
   onOpenEntry: (entry: CompeteKidEntryMerged) => void;
 }) {
   const { role: deviceRole } = useDeviceRole();
+  const coachSyncHydrationVersion = useCoachSyncHydrationVersion();
   const competitionVersion = useSyncExternalStore(
     subscribeCompetition,
     getCompetitionVersion,
@@ -174,6 +177,7 @@ export function CompetitionCard({
         active = false;
       };
     }, [
+      coachSyncHydrationVersion,
       competitionVersion,
       deviceRole,
       matchLineageSignature,
@@ -345,6 +349,44 @@ export function CompetitionCard({
   }
   const tier = competeMedalTierFromKidEntry(entry);
   const isPastCompetition = isCompetitionMatchUiAvailableForEventDate(entry.eventDate);
+  const breakdownOverlaySource =
+    deviceRole === "parent"
+      ? hydratedOverlayAnnotations
+        ? "hydrated_artifacts"
+        : hydrationPending
+          ? "hydration_pending"
+          : "empty_hydration"
+      : deviceRole === "coach"
+        ? coachOverlaySelection.source === "hydrated_annotations"
+          ? "hydrated_overlays"
+          : coachOverlaySelection.source === "embedded_compatibility"
+            ? "legacy_shell_coach_notes"
+            : hydrationPending
+              ? "hydration_pending"
+              : "empty_hydration"
+        : "unsupported_role";
+
+  if (isPastCompetition) {
+    for (const match of projectedEntry.matches) {
+      logBreakdownPropagationForMatch({
+        stage: "detail_screen_input",
+        sharedCompetitionId,
+        matchLineageKey: match.id,
+        overlaySource: breakdownOverlaySource,
+        source: match,
+      });
+    }
+    console.log("COMPETITION_PENDING_VALIDATION", {
+      sharedCompetitionId,
+      matchLineageKeys,
+      hydrationPending,
+      hydratedAnnotationCount: hydratedOverlayAnnotations?.length ?? 0,
+      legacyAnnotationCount: legacyOverlayAnnotations.length,
+      overlaySource: breakdownOverlaySource,
+      coachSyncHydrationVersion,
+      competitionVersion,
+    });
+  }
 
   return (
     <Pressable
@@ -388,7 +430,13 @@ export function CompetitionCard({
       {isPastCompetition ? (
         <View style={styles.matchList}>
           {projectedEntry.matches.map((match, index) => (
-            <MatchCard key={match.id} snapshot={match} index={index} />
+            <MatchCard
+              key={match.id}
+              snapshot={match}
+              index={index}
+              sharedCompetitionId={sharedCompetitionId}
+              overlaySource={breakdownOverlaySource}
+            />
           ))}
         </View>
       ) : null}

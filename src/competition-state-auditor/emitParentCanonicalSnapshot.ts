@@ -7,7 +7,10 @@ import {
   COMPETITION_STATE_AUDITOR_CONTRACT_VERSION,
   type ParentCanonicalSnapshot,
 } from "./competitionStateAuditorContract";
-import { persistCompetitionStateSnapshot } from "./competitionStateAuditorRing";
+import {
+  appendCompetitionStateSnapshot,
+  persistCompetitionStateSnapshot,
+} from "./competitionStateAuditorRing";
 import { projectCompetitionDomainBlock } from "./projectCompetitionDomainBlock";
 
 export type EmitParentCanonicalSnapshotOptions = {
@@ -58,8 +61,32 @@ export async function buildParentCanonicalSnapshot(
 export async function emitParentCanonicalSnapshot(
   options: EmitParentCanonicalSnapshotOptions,
 ): Promise<void> {
+  if (__DEV__) {
+    console.log("[COMP_AUDITOR_S1] S1_EMIT_STARTED", {
+      transitionId: options.transitionId,
+    });
+  }
   const snapshot = await buildParentCanonicalSnapshot(options);
-  if (snapshot) persistCompetitionStateSnapshot(snapshot);
+  if (!snapshot) return;
+  if (__DEV__) {
+    console.log("[COMP_AUDITOR_S1] S1_PERSIST_BEGIN", {
+      transitionId: options.transitionId,
+    });
+    try {
+      const ring = await appendCompetitionStateSnapshot(snapshot);
+      console.log("[COMP_AUDITOR_S1] S1_PERSIST_SUCCESS", {
+        transitionId: options.transitionId,
+        ringCount: ring.snapshots.length,
+      });
+    } catch (error) {
+      console.log("[COMP_AUDITOR_S1] S1_PERSIST_ERROR", {
+        transitionId: options.transitionId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return;
+  }
+  persistCompetitionStateSnapshot(snapshot);
 }
 
 /** Fire-and-forget S1 emission. */

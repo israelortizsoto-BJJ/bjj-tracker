@@ -1,5 +1,6 @@
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
+import { logMatchBreakdownBoundaryProbe } from "../../dev/matchBreakdownBoundaryProbe";
 import type { CompetitionMatchOverlayAnnotation } from "./projectCompetitionCompeteView";
 
 function slotKeyFromLineageKey(matchLineageKey: string): string | null {
@@ -196,6 +197,36 @@ export function mergeCoachBreakdownIntoMatches(input: {
     mergeCount,
     parentRenderCount: matches.filter((match) => (match.coachNote ?? "").trim().length > 0).length,
     lineageIds: matches.map((match) => match.id),
+  });
+
+  const targetLineageKey =
+    input.overlayAnnotations
+      .find((annotation) => Boolean(annotation.coachNote?.trim()))
+      ?.matchLineageKey.trim() ??
+    input.matches[0]?.id.trim() ??
+    "";
+  const targetMergedMatch = matches.find((match) => match.id.trim() === targetLineageKey);
+  const outputCoachNoteLength = (targetMergedMatch?.coachNote ?? "").trim().length;
+  let b7SkipReason: string | null = null;
+  if (input.overlayAnnotations.length === 0) {
+    b7SkipReason = "no_annotations";
+  } else if (!overlaysByLineageKey.has(targetLineageKey)) {
+    b7SkipReason = "no_overlay_for_match_id";
+  } else if (outputCoachNoteLength === 0) {
+    b7SkipReason = "overlay_missing_coach_note";
+  }
+  logMatchBreakdownBoundaryProbe({
+    probeId: "B7",
+    outcome: mergeCount >= 1 && outputCoachNoteLength > 0 ? "pass" : "fail",
+    deviceRole: "parent",
+    traceId: null,
+    sharedAthleteId: input.sharedAthleteId.trim() || null,
+    sharedCompetitionId: input.sharedCompetitionId.trim() || null,
+    matchLineageKey: targetLineageKey || null,
+    overlayAnnotationCount: input.overlayAnnotations.length,
+    mergeCount,
+    outputCoachNoteLength,
+    skipReason: b7SkipReason,
   });
 
   return matches;

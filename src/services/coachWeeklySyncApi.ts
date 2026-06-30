@@ -9,6 +9,7 @@ import {
   inviteTokenSuffix,
   logMatchBreakdownAuthorityTrace,
 } from "../dev/matchBreakdownAuthorityTrace";
+import { logMatchBreakdownBoundaryProbe } from "../dev/matchBreakdownBoundaryProbe";
 import { OVERLAY_FORENSIC_TRACE_HEADER } from "../dev/overlayForensicTrace";
 import { logAthleteLineageTrace } from "../identity/athleteLineageTrace";
 import {
@@ -441,6 +442,38 @@ export async function coachSyncFetchSession(
       fieldClassification: coachMatchBreakdownArtifactEvidence.fieldClassification,
       athleteEntryStatus,
       artifactCount: athleteArtifactCount,
+    });
+    const athleteArtifacts = (coachMatchBreakdownArtifacts[athleteId]?.artifacts ?? []).map(
+      (artifact) => ({
+        sharedCompetitionId: artifact.sharedCompetitionId,
+        matchLineageKey: artifact.matchLineageKey,
+        coachNoteLength: (artifact.coachNote ?? "").trim().length,
+        updatedAt: artifact.updatedAt,
+      }),
+    );
+    const targetArtifact =
+      athleteArtifacts.find((artifact) => artifact.coachNoteLength > 0) ?? athleteArtifacts[0] ?? null;
+    const b5Outcome =
+      coachMatchBreakdownArtifactEvidence.fieldClassification === "valid" &&
+      athleteEntryStatus === "populated" &&
+      targetArtifact != null &&
+      targetArtifact.coachNoteLength > 0
+        ? "pass"
+        : "fail";
+    logMatchBreakdownBoundaryProbe({
+      probeId: "B5",
+      outcome: b5Outcome,
+      deviceRole: "parent",
+      traceId: null,
+      sharedAthleteId: athleteId,
+      sharedCompetitionId: targetArtifact?.sharedCompetitionId ?? null,
+      matchLineageKey: targetArtifact?.matchLineageKey ?? null,
+      inviteTokenSuffix: parentGetInviteSuffix,
+      httpStatus: res.status,
+      fieldClassification: coachMatchBreakdownArtifactEvidence.fieldClassification,
+      athleteEntryStatus,
+      artifactCount: athleteArtifactCount,
+      artifacts: athleteArtifacts,
     });
   }
   const coachMatchBreakdownArtifactList = Object.values(coachMatchBreakdownArtifacts).flatMap(

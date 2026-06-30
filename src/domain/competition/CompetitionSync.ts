@@ -95,6 +95,12 @@ function completeParentCompetitionMutation(input: {
 }): void {
   const sharedAthleteId = input.sharedAthleteId?.trim();
   if (sharedAthleteId) {
+    if (__DEV__) {
+      console.log("[COMP_AUDITOR_S1] S1_GATE_REACHED", {
+        transitionId: input.transitionId,
+        sharedAthleteId,
+      });
+    }
     scheduleParentCanonicalSnapshot({
       sharedAthleteId,
       transitionId: input.transitionId,

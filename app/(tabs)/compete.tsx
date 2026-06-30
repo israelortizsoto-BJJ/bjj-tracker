@@ -24,6 +24,7 @@ import {
 import { logCoachHydrationResolveTrace } from "@/src/identity/coachHydrationResolveTrace";
 import { useActiveAthlete } from "@/src/hooks/useActiveAthlete";
 import { useDeviceRole } from "@/src/deviceRole/DeviceRoleProvider";
+import { refreshParentWriterSessionSnapshot } from "@/src/services/refreshParentWriterSessionSnapshot";
 import OperatingHeader from "@/src/components/operating/OperatingHeader";
 
 const FEED = {
@@ -363,13 +364,29 @@ export default function CompetitionTab() {
           competitionVersion,
         });
       }
-      void loadCompetitionsRef.current();
+      let cancelled = false;
+      const trimmedAthleteId = athleteId.trim();
+      if (deviceRole === "parent" && trimmedAthleteId) {
+        void (async () => {
+          await refreshParentWriterSessionSnapshot({
+            initialSharedAthleteIds: [trimmedAthleteId],
+            isCancelled: () => cancelled,
+          });
+          if (cancelled) {
+            return;
+          }
+          await loadCompetitionsRef.current();
+        })();
+      } else {
+        void loadCompetitionsRef.current();
+      }
       return () => {
+        cancelled = true;
         if (__DEV__) {
           console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_cleanup");
         }
       };
-    }, [athleteId, linkedKidId, coachSyncHydrationVersion, competitionVersion]),
+    }, [athleteId, linkedKidId, coachSyncHydrationVersion, competitionVersion, deviceRole]),
   );
 
   const noAthleteSelected = hydrationReady && !athleteId.trim();

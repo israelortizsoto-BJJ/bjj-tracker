@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatSubmissionTimeDisplay } from "../../domain/competition/matchDurationFormat";
+import { logBreakdownPropagationForMatch } from "../../domain/competition/competitionProjectionBreakdownTrace";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import { labelForSubmissionTypeKey } from "./submissionTypes";
 
@@ -24,13 +25,25 @@ function videoLabel(snapshot: CompetitionDetailMatchSnapshot): string {
 export function MatchCard({
   snapshot,
   index,
+  sharedCompetitionId = "",
+  overlaySource = "render_snapshot",
 }: {
   snapshot: CompetitionDetailMatchSnapshot;
   index: number;
+  sharedCompetitionId?: string;
+  overlaySource?: string;
 }) {
   const won = snapshot.matchResult === "win";
   const [coachBreakdownExpanded, setCoachBreakdownExpanded] = useState(false);
   const coachBreakdown = snapshot.coachNote?.trim() ?? "";
+
+  logBreakdownPropagationForMatch({
+    stage: "match_card_render",
+    sharedCompetitionId,
+    matchLineageKey: snapshot.id,
+    overlaySource,
+    source: snapshot,
+  });
 
   console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
     stage: coachBreakdown ? "competition_detail_match_card_overlay_visible" : "competition_detail_match_card_overlay_hidden",

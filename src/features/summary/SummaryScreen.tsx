@@ -75,8 +75,8 @@ import {
   sortCoachWriterLinksNewestFirst,
 } from "../../coachShare/coachLinkBinding";
 import { normalizeInviteLinkToken, inviteLinkTokenTail } from "../../coachShare/inviteLinkToken";
+import { refreshParentWriterSessionSnapshot } from "../../services/refreshParentWriterSessionSnapshot";
 import { coachSyncFetchSession } from "../../services/coachWeeklySyncApi";
-import { startCoachAnalysisReadinessRun } from "../../domain/competition/coachAnalysisReadinessCoordinator";
 import {
   getCachedWeeklyForLinkToken,
   setCachedWeeklyForLinkToken,
@@ -791,37 +791,19 @@ export default function SummaryScreen() {
         );
       }
 
-      const readinessRun = await startCoachAnalysisReadinessRun({
+      const result = await refreshParentWriterSessionSnapshot({
         initialSharedAthleteIds: [activeAthleteId],
-        linkKeys: [tokenNorm],
-        startedAt: new Date().toISOString(),
-        hydrationSource: "parent_session_refresh",
+        isCancelled,
       });
       if (isCancelled?.()) return;
 
-      try {
-        const session = await coachSyncFetchSession(token, weeklySync.apiBaseUrl);
-        if (isCancelled?.()) return;
-        const nowIso = new Date().toISOString();
-        await setCachedWeeklyForLinkToken(
-          token,
-          session.weekly,
-          nowIso,
-          session.weeklyByAthleteId ?? {},
-          session.athletes,
-          session,
-          tokenNorm,
-        );
-        if (isCancelled?.()) return;
-        readinessRun.recordSuccessfulSession(tokenNorm, session);
-        await readinessRun.finalize(new Date().toISOString());
-        if (isCancelled?.()) return;
+      if (result.status === "success") {
         applyWeeklySessionSnapshot(
           "network",
           {
-            weekly: session.weekly,
-            weeklyByAthleteId: session.weeklyByAthleteId ?? {},
-            athletes: session.athletes,
+            weekly: result.session.weekly,
+            weeklyByAthleteId: result.session.weeklyByAthleteId ?? {},
+            athletes: result.session.athletes,
           },
           {
             sourcePath:
@@ -831,17 +813,17 @@ export default function SummaryScreen() {
           },
           isCancelled,
         );
-      } catch (error) {
-        if (isCancelled?.()) return;
-        readinessRun.recordFailedLink(tokenNorm);
-        await readinessRun.finalize(new Date().toISOString());
-        if (isCancelled?.()) return;
+        return;
+      }
+
+      if (result.status === "error") {
         if (__DEV__ && summaryTraceReady) {
           console.warn("[SUMMARY WEEKLY TRACE] hydration.networkError", {
             athleteId: activeAthleteId,
             tokenNorm,
             tokenTail,
-            message: error instanceof Error ? error.message : String(error),
+            message:
+              result.error instanceof Error ? result.error.message : String(result.error),
             keptCacheSnapshot: Boolean(cached),
             dataPlane: "parent_weekly",
           });
