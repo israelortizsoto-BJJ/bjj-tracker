@@ -1,0 +1,25 @@
+{
+  "missionId": "mis-gemini-timeline",
+  "label": "Gemini Timeline",
+  "date": "2026-07-01",
+  "repository": "/Users/ods/Repos/bjj-tracker/ods-eos",
+  "entries": [
+    {
+      "at": "2026-07-01T09:00:00Z",
+      "eventType": "mission.begin",
+      "objective": "Integrate Gemini Timeline into the ODS operating loop as a concurrent mission."
+    },
+    {
+      "at": "2026-07-01T09:15:00Z",
+      "eventType": "work.started",
+      "summary": "Gemini Timeline added as a normal mission dataset to prove multi-mission operation.",
+      "operationalPosture": "Ready to Resume"
+    },
+    {
+      "at": "2026-07-01T09:30:00Z",
+      "eventType": "decision.promoted",
+      "summary": "Gemini Timeline should be visible in the operating surface without project-specific code.",
+      "operationalPosture": "Ready to Resume"
+    }
+  ]
+}

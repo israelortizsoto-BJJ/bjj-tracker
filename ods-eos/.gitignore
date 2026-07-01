@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local environment
+.env
+
+# Generated runtime state
+.ods-eos/
+
+# macOS
+.DS_Store

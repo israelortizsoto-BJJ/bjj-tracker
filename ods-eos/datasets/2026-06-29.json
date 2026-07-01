@@ -1,0 +1,59 @@
+{
+  "missionId": "mis-ods-v01-operational-proof",
+  "label": "ODS-EOS v0.1 Operational Proof",
+  "date": "2026-06-29",
+  "repository": "/Users/ods/Repos/bjj-tracker/ods-eos",
+  "entries": [
+    {
+      "at": "2026-06-29T17:29:13Z",
+      "eventType": "mission.begin",
+      "objective": "Validate ODS-EOS end-to-end founder workflow through daily operational QA."
+    },
+    {
+      "at": "2026-06-29T18:23:38Z",
+      "eventType": "decision.promoted",
+      "ref": "dec-20260629-004",
+      "summary": "Dogfood ODS-EOS through daily operational use before implementing additional major features."
+    },
+    {
+      "at": "2026-06-29T18:24:54Z",
+      "eventType": "session.closed",
+      "ref": "ses-20260629-001",
+      "summary": "Validated ODS-EOS end-to-end founder workflow through the first operational QA run."
+    },
+    {
+      "at": "2026-06-29T20:02:59Z",
+      "eventType": "session.closed",
+      "ref": "ses-20260629-002",
+      "summary": "Validated Promotion Bridge adapter v1 end-to-end."
+    },
+    {
+      "at": "2026-06-29T20:02:59Z",
+      "eventType": "decision.promoted",
+      "ref": "dec-20260629-005",
+      "summary": "Implement Promotion Bridge as a narrow CLI ingest adapter before any conversational integration."
+    },
+    {
+      "at": "2026-06-29T20:03:03Z",
+      "eventType": "session.closed",
+      "ref": "ses-20260629-003",
+      "summary": "Validated Promotion Bridge adapter v1 end-to-end."
+    },
+    {
+      "at": "2026-06-29T20:11:33Z",
+      "eventType": "decision.promoted",
+      "ref": "dec-20260629-007",
+      "summary": "Implement proposal builder as a separate CLI command before any LLM integration."
+    },
+    {
+      "at": "2026-06-29T20:11:33Z",
+      "eventType": "session.closed",
+      "ref": "ses-20260629-004",
+      "summary": "Built Promotion Proposal Builder v1 and verified proposal-to-ingest flow."
+    },
+    {
+      "at": "2026-06-29T20:11:33Z",
+      "eventType": "mission.close"
+    }
+  ]
+}

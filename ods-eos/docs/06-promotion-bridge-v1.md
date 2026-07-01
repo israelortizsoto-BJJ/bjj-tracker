@@ -9,9 +9,9 @@ Related documents:
 | Document | Relationship |
 |----------|--------------|
 | `01-vision.md` | Philosophy: conversation, promotion, persistence |
-| `02-architecture-v1.md` | Python persistence engine and store pipeline |
+| `02-architecture-v0.2.md` | Python persistence engine, Event Store, Projection Engine |
 | `04-operational-doctrine.md` | Engineering rules for capture and facts |
-| `05-knowledge-store-schema.md` | Field definitions for canonical payloads |
+| `05-knowledge-store-schema.md` | Field definitions for knowledge projections |
 
 ---
 
@@ -19,7 +19,7 @@ Related documents:
 
 ### What is the Promotion Bridge?
 
-The Promotion Bridge is the architectural boundary between conversational reasoning and persistent operational memory.
+The Promotion Bridge is the architectural boundary between conversational reasoning and persistent operational knowledge.
 
 It accepts an operator-approved promotion proposal and translates it into a canonical payload suitable for the Python persistence engine. It does not reason, store data, or generate documents.
 
@@ -36,7 +36,7 @@ Operator manually re-enters information
     ↓
 Python CLI
     ↓
-Knowledge Store
+Knowledge Store (v0.1 — superseded)
 ```
 
 Conversation produced structured operational knowledge. The operator then retyped that knowledge into CLI commands. This duplicated effort, introduced transcription errors, and broke the separation between reasoning and persistence.
@@ -52,9 +52,15 @@ Promotion Bridge
     ↓
 Python Persistence Engine
     ↓
-Knowledge Store
+Event Store
     ↓
-Morning Brief · EOD · Dashboard
+Mission Engine
+    ↓
+Mission State
+    ↓
+Projection Engine
+    ↓
+Knowledge Projections · Generated Views
 ```
 
 ### What operational problem does it solve?
@@ -78,13 +84,15 @@ Responsibility is split at the bridge. Neither side performs the other's work.
 ┌─────────────────────────────────────┐
 │  Conversational Layer (GPT)         │
 │  Explore · Operate · Switch · Close │
+│  Begin Mission · Close Mission      │
 │  Promote (proposal only)            │
 └─────────────────┬───────────────────┘
                   │ Promotion Bridge
-                  │ (approved proposal → canonical payload)
+                  │ (approved proposal → canonical payload → event)
 ┌─────────────────▼───────────────────┐
 │  Persistence Layer (Python)         │
-│  Validation · IDs · Store · Output  │
+│  Validation · Event Append ·        │
+│  Projection · Output                │
 └─────────────────────────────────────┘
 ```
 
@@ -100,19 +108,21 @@ Responsibility is split at the bridge. Neither side performs the other's work.
 | Operational intent | Determining whether the operator is exploring, operating, promoting, switching, or closing |
 | Promotion proposal | Preparing a structured proposal when Promote intent is detected |
 
-GPT reads store context when needed to inform conversation. GPT does **not** write to the knowledge store.
+GPT reads Mission State and projections when needed to inform conversation. GPT does **not** write to the Event Store.
 
 ### Python owns
 
 | Responsibility | Description |
 |----------------|-------------|
 | Payload validation | Structural and semantic checks on incoming canonical payloads |
-| Schema validation | Enforcement of `05-knowledge-store-schema.md` |
-| Persistence | Atomic writes to the knowledge store |
-| ID generation | Stable, unique record identifiers at creation time |
-| Reference integrity | Ensuring relationship fields resolve to existing records of the expected type |
-| Generators | EOD, morning brief, and other views over store records |
-| Collectors | Ingestion of canonical payloads and engineering signals that do not require reasoning |
+| Schema validation | Enforcement of `05-knowledge-store-schema.md` projection shape |
+| Event persistence | Append validated promotion events to the Event Store (with Actor) |
+| ID generation | Stable, unique event and record identifiers at creation time |
+| Reference integrity | Ensuring relationship fields resolve to existing projections of the expected type |
+| Mission Engine | Mission lifecycle, Mission State ownership |
+| Projection Engine | Derive knowledge projections and generated views from events and Mission State |
+| Automation Engine | Event-driven reactions subscribed to the Event Store |
+| Collectors | Ingestion of engineering signal events that do not require reasoning |
 
 Python performs no reasoning. It accepts or rejects payloads; it does not infer facts, classify intent, or paraphrase conversation.
 
@@ -142,9 +152,15 @@ Canonical Payload
         ↓
 Validation
         ↓
-Persistence
+Event Append
         ↓
-Generated Outputs
+Mission Engine
+        ↓
+Mission State
+        ↓
+Projection Engine
+        ↓
+Knowledge Projections · Generated Views
 ```
 
 ### Stage definitions
@@ -157,8 +173,10 @@ Generated Outputs
 | **Operator Approval** | Operator | Explicit confirmation that the proposal accurately represents operational knowledge to persist. Rejection returns to conversation. |
 | **Canonical Payload** | Promotion Bridge | Approved proposal normalized to the persistence contract (see §5). |
 | **Validation** | Python | Schema and reference-integrity checks per `05-knowledge-store-schema.md`. |
-| **Persistence** | Python | Write to knowledge store. Assign IDs for new records. Update relationships. |
-| **Generated Outputs** | Python | Generators produce morning brief, EOD, and other views from updated store state. |
+| **Event Append** | Python | Append promotion events to Event Store. Assign IDs and Actor for new events. |
+| **Mission State** | Python Mission Engine | Update live Mission State as events arrive. |
+| **Projection** | Python | Projection Engine derives knowledge projections from events and Mission State. |
+| **Generated Views** | Python | EOS, mission brief, mission timeline, operational timeline, decision log, mission dashboard, and other views from projections. |
 
 Approval is mandatory. Nothing persists without operator confirmation, consistent with `01-vision.md`.
 
@@ -168,25 +186,28 @@ Validation failure returns an error to the interface. The operator and GPT revis
 
 ## 4. Operational Intent
 
-During operational QA, five intents were observed in founder workflows. Intent classification is conversational; only one intent crosses the Promotion Bridge.
+During operational QA, seven intents were observed in founder workflows. Intent classification is conversational; only Promote crosses the Promotion Bridge. Begin Mission and Close Mission invoke the Mission Engine via Python but do not cross the promotion bridge unless accompanied by Promote intent.
 
 ```text
-                    ┌──────────┐
-                    │ Explore  │──┐
-                    └──────────┘  │
-                    ┌──────────┐  │
-                    │ Operate  │──┤
-                    └──────────┘  │   Conversational
-                    ┌──────────┐  │   (no bridge crossing)
-                    │ Switch   │──┤
-                    └──────────┘  │
-                    ┌──────────┐  │
-                    │ Close    │──┘
-                    └──────────┘
+                    ┌──────────────┐
+                    │ Explore      │──┐
+                    └──────────────┘  │
+                    ┌──────────────┐  │
+                    │ Operate      │──┤
+                    └──────────────┘  │   Conversational
+                    ┌──────────────┐  │   (no bridge crossing)
+                    │ Switch       │──┤
+                    └──────────────┘  │
+                    ┌──────────────┐  │
+                    │ Close Mission│──┤
+                    └──────────────┘  │
+                    ┌──────────────┐  │
+                    │ Begin Mission│──┘
+                    └──────────────┘
 
-                    ┌──────────┐
-                    │ Promote  │──────► Promotion Bridge
-                    └──────────┘
+                    ┌──────────────┐
+                    │ Promote      │──────► Promotion Bridge
+                    └──────────────┘
 ```
 
 ### Explore
@@ -199,7 +220,7 @@ Content remains ephemeral. Explore may produce insights in conversation that are
 
 Active execution within the current context: implementation, testing, running CLI commands, reviewing generated documents, dogfooding.
 
-Operate uses tools and may invoke Python for mechanical actions (generate EOD, validate store) that do not create new atomic facts. Operate does not cross the bridge unless the operator explicitly promotes outcomes.
+Operate uses tools and may invoke Python for mechanical actions (generate EOS, refresh projections, validate event store) that do not create new atomic facts. Operate does not cross the bridge unless the operator explicitly promotes outcomes.
 
 ### Promote
 
@@ -209,15 +230,23 @@ GPT extracts and classifies the facts, prepares a promotion proposal, and presen
 
 ### Switch
 
-Change of operational context: different repository, project, or session focus.
+Change of operational context: different repository, project, or mission focus.
 
-Switch is navigational. It may coordinate with Python to open or close session containers, but switching context is not the same as promoting facts. Deferred items discovered during a switch are promoted only when Promote intent is explicit.
+Switch is navigational. It may coordinate with Python Mission Engine to change active mission context, but switching context is not the same as promoting facts. Deferred items discovered during a switch are promoted only when Promote intent is explicit.
+
+### Begin Mission
+
+Open a Mission Session for a mission. Emits `mission.begin` via Python Mission Engine. Initializes Mission State. May trigger mission brief projection. Does not cross the Promotion Bridge unless the operator also promotes facts.
+
+### Close Mission
+
+End the active Mission Session. Emits `mission.close` via Python Mission Engine. Often triggers EOS projection generation. Closure may **accompany** a promotion proposal (e.g. session summary, final decisions). Close Mission itself does not cross the bridge; accompanying Promote intent does.
 
 ### Close
 
-End a bounded unit of work: close a session, investigation, boundary, or QA cycle.
+End a bounded unit of work within a mission: close an investigation, boundary, or QA cycle.
 
-Close signals completion. Closure often **triggers** a promotion proposal (e.g. investigation verdict, session `endedAt`, boundary status). The Close intent itself does not cross the bridge; the resulting Promote intent and its approved payload do.
+Close signals completion. Closure often **triggers** a promotion proposal (e.g. investigation verdict, boundary status). The Close intent itself does not cross the bridge; the resulting Promote intent and its approved payload do.
 
 ### Why only Promote crosses the bridge
 
@@ -226,8 +255,10 @@ Close signals completion. Closure often **triggers** a promotion proposal (e.g. 
 | Explore | No | Exploration is ephemeral by design (`01-vision.md`) |
 | Operate | No | Execution does not imply durable facts |
 | Switch | No | Context change is not fact creation |
+| Begin Mission | No | Lifecycle event via Mission Engine; not promotion |
+| Close Mission | No | Lifecycle event; may accompany promotion |
 | Close | No | Completion may require promotion, but Close is not promotion |
-| Promote | Yes | Intentional act to persist operational knowledge |
+| Promote | Yes | Intentional act to persist operational knowledge as events |
 
 The bridge exists solely to translate approved Promote intent into canonical payloads. All other intents remain in the conversational layer or invoke Python for non-persistent mechanical operations.
 
@@ -235,9 +266,9 @@ The bridge exists solely to translate approved Promote intent into canonical pay
 
 ## 5. Canonical Payload
 
-The canonical payload is the stable contract between the Promotion Bridge and the Python persistence engine. It is not conversation text. It is a structured, validation-ready representation of records to write or update.
+The canonical payload is the stable contract between the Promotion Bridge and the Python persistence engine. It is not conversation text. It is a structured, validation-ready representation of records to project from promotion events.
 
-Field-level definitions live in `05-knowledge-store-schema.md`. This section defines payload **composition** only.
+Field-level definitions live in `05-knowledge-store-schema.md`. This section defines payload **composition** only. Python appends events; the Projection Engine derives records matching this schema.
 
 ### Payload structure
 
@@ -257,7 +288,7 @@ Does not duplicate atomic facts. Provides placement, not content.
 
 ### Session
 
-The container record for the current work period. A payload may create a new Session, update an existing Session (status, `endedAt`, relationship arrays), or reference an active Session by `id`.
+The Mission Session container for the current work period. A payload may create a new Session projection, update an existing Session (status, `endedAt`, relationship arrays), or reference an active Session by `id`. Session boundaries align with Begin Mission and Close Mission events.
 
 Session remains a container per `05-knowledge-store-schema.md` and `04-operational-doctrine.md`. The payload links atomic records to the Session; it does not embed fact fields in `Session.summary`.
 
@@ -271,7 +302,7 @@ Each record conforms to schema field requirements. New records omit `id` (Python
 
 ### Metadata
 
-Promotion traceability: source interface (ChatGPT, CLI, Cursor, etc.), proposal timestamp, operator approval marker, and optional correlation identifier linking proposal to conversation turn.
+Promotion traceability: source interface (ChatGPT, CLI, Cursor, etc.) as **Actor**, proposal timestamp, operator approval marker, and optional correlation identifier linking proposal to conversation turn.
 
 Metadata supports audit and debugging. It is not rendered in generated operational documents unless a generator explicitly includes it.
 
@@ -301,6 +332,16 @@ The Promotion Bridge is interface-agnostic. The payload contract is stable; the 
                           (same payload contract)
                                     │
                           Python Persistence Engine
+                                    │
+                              Event Store
+                                    │
+                    ┌───────────────┴───────────────┐
+                    │                               │
+            Mission Engine                  Automation Engine
+                    │                               │
+            Mission State                         │
+                    │                               │
+            Projection Engine  ←────────────────────┘
 ```
 
 | Interface | Role |
@@ -319,7 +360,7 @@ Adding an interface requires:
 2. Promotion proposal presentation and operator approval
 3. Emission of canonical payload to Python
 
-Adding an interface does **not** require changes to schema semantics, validation rules, or generators—only a new adapter that speaks the payload contract.
+Adding an interface does **not** require changes to projection schema semantics, event validation rules, or projection rules—only a new adapter that speaks the payload contract.
 
 ---
 
@@ -330,12 +371,12 @@ The Promotion Bridge does **not**:
 | Non-goal | Clarification |
 |----------|---------------|
 | Replace ChatGPT | GPT remains the conversational reasoning layer |
-| Replace Python | Python remains the persistence, validation, and generation engine |
-| Replace the schema | `05-knowledge-store-schema.md` remains authoritative for record shape |
-| Perform persistence | Bridge translates; Python writes |
-| Become another knowledge store | No intermediate durable state; approved payloads flow to the single JSON store |
+| Replace Python | Python remains the event store, validation, projection, and automation engine |
+| Replace the schema | `05-knowledge-store-schema.md` remains authoritative for projection field shape |
+| Perform persistence | Bridge translates; Python appends events |
+| Become another event store | No intermediate durable state; approved payloads flow to the single Event Store |
 | Auto-promote conversation | Nothing persists without operator approval |
-| Generate documents | Generators remain in Python, reading from the store after persistence |
+| Generate documents | Projection Engine and view renderers remain in Python, reading from events and projections |
 
 The bridge has one job: translate approved operational intent into canonical payloads.
 
@@ -349,13 +390,17 @@ These principles govern all conversational interfaces and bridge implementations
 
 2. **Promotion is intentional.** Only explicit Promote intent, with operator approval, creates durable records.
 
-3. **Operations are persistent.** Once promoted and validated, knowledge lives in the store until amended through the same bridge contract.
+3. **Operations are persistent.** Once promoted, validated, and appended as events, knowledge lives in projections until amended through the same bridge contract.
 
-4. **The operator never repeats information already present in the conversation.** The bridge carries extracted structure forward; the operator approves or corrects, not retypes.
+4. **Events are canonical.** The Event Store is the source of truth. Every event carries an Actor. Knowledge projections are derived. Mission State is live runtime state owned by the Mission Engine.
 
-5. **Interfaces evolve.** New surfaces (voice, mobile, Slack) attach to the bridge without redesigning persistence.
+5. **The operator never repeats information already present in the conversation.** The bridge carries extracted structure forward; the operator approves or corrects, not retypes.
 
-6. **Contracts remain stable.** Canonical payload shape and schema validation rules change only through versioned schema documents, not per-interface ad hoc formats.
+6. **Interfaces evolve.** New surfaces (voice, mobile, Slack) attach to the bridge without redesigning persistence.
+
+7. **Contracts remain stable.** Canonical payload shape and projection schema validation rules change only through versioned schema documents, not per-interface ad hoc formats.
+
+8. **Mission Sessions bound promotion context.** Facts promoted during a mission session belong to that session's projection, not to a calendar day.
 
 ---
 
@@ -366,7 +411,7 @@ These principles govern all conversational interfaces and bridge implementations
 | §1 Purpose | What, why, which problem |
 | §2 Responsibilities | GPT vs Python boundary |
 | §3 Promotion Lifecycle | End-to-end flow |
-| §4 Operational Intent | Explore, Operate, Promote, Switch, Close |
+| §4 Operational Intent | Explore, Operate, Promote, Switch, Begin Mission, Close Mission, Close |
 | §5 Canonical Payload | Conceptual payload composition |
 | §6 Future Interfaces | Interface stability vs contract stability |
 | §7 Non-Goals | Explicit exclusions |

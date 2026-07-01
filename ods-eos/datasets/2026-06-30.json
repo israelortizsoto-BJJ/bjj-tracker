@@ -1,0 +1,45 @@
+{
+  "missionId": "mis-founder-proof-floor-v01",
+  "label": "Founder Proof Floor v0.1",
+  "date": "2026-06-30",
+  "repository": "/Users/ods/Repos/bjj-tracker/ods-eos",
+  "entries": [
+    {
+      "at": "2026-06-30T09:00:00Z",
+      "eventType": "mission.begin",
+      "objective": "Prove ODS value in under 10 seconds: Python generates Mission State, EOS, and updates Notion."
+    },
+    {
+      "at": "2026-06-30T14:00:00Z",
+      "eventType": "session.closed",
+      "ref": "arch-review-20260630",
+      "summary": "Completed founder dogfooding architecture review; froze v0.2 event-driven mission-centric model."
+    },
+    {
+      "at": "2026-06-30T16:00:00Z",
+      "eventType": "decision.promoted",
+      "ref": "doctrine-freeze",
+      "summary": "Architecture freeze: implementation proceeds without further redesign unless implementation breaks architecture."
+    },
+    {
+      "at": "2026-06-30T18:00:00Z",
+      "eventType": "work.started",
+      "summary": "Replace Notion Projects Database with Mission Registry; build Python vertical slice."
+    },
+    {
+      "at": "2026-06-30T20:00:00Z",
+      "eventType": "work.progress",
+      "summary": "Built proof-floor pipeline: datasets → events → Mission State → EOS → Notion sync."
+    },
+    {
+      "at": "2026-06-30T21:00:00Z",
+      "eventType": "work.progress",
+      "summary": "Stabilized foundation: permanent mission_id, event contract, domain-first Mission Registry."
+    },
+    {
+      "at": "2026-06-30T22:00:00Z",
+      "eventType": "work.progress",
+      "summary": "Final polish: operational posture, mission replay, Notion sync."
+    }
+  ]
+}

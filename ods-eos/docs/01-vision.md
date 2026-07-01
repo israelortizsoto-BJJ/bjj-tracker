@@ -2,15 +2,17 @@
 
 ## Purpose
 
-ODS-EOS is a conversational Executive Operating System that helps founders, operators, consultants, and engineering leaders transform daily work into persistent operational knowledge.
+ODS-EOS is a conversational Executive Operating System that helps founders, operators, consultants, and engineering leaders transform mission work into persistent operational knowledge.
 
-It exists to eliminate the constant reconstruction of work, decisions, and priorities by making operational memory automatic rather than manual.
+It exists to eliminate the constant reconstruction of work, decisions, and priorities by making operational awareness automatic rather than manual.
 
 Conversation is where work begins.
 
 Promotion is where work becomes operational.
 
-Persistent operational memory is what allows leaders to execute with clarity every day.
+Events are where truth lives.
+
+Projections are how clarity is delivered.
 
 ---
 
@@ -22,7 +24,7 @@ They suffer from fragmented attention.
 
 Conversations happen in meetings, Slack, email, ChatGPT, terminal sessions, documents, code reviews, notebooks, and dozens of disconnected tools.
 
-Every day they must reconstruct:
+Every mission they resume, they must reconstruct:
 
 * What happened?
 * What changed?
@@ -34,7 +36,7 @@ That reconstruction is wasted effort.
 
 ODS-EOS exists to eliminate it.
 
-Instead of forcing operators to manually organize information, ODS-EOS continuously builds operational memory that can be surfaced at the right moment.
+Instead of forcing operators to manually organize information, ODS-EOS continuously records operational events and presents the current operational state requiring attention exactly when it is needed.
 
 The objective is simple:
 
@@ -68,7 +70,7 @@ Nothing becomes persistent simply because it was discussed.
 
 Once promoted, operational knowledge becomes part of the company's permanent memory.
 
-Decisions, investigations, risks, doctrines, insights, planning, and execution are preserved as structured operational knowledge rather than scattered notes.
+Decisions, investigations, risks, doctrines, insights, planning, and execution are preserved as immutable events and derived projections—not scattered notes.
 
 ---
 
@@ -80,23 +82,35 @@ It is not another project management system.
 
 It is not another AI chatbot.
 
-ODS-EOS is the operational memory layer that sits between conversation and execution.
+ODS-EOS is the operational awareness layer that sits between conversation and execution.
+
+Work organizes around **Missions**—bounded bodies of operational work—not calendar days.
 
 ```
 Conversation
         ↓
+Intent
+        ↓
 Promotion
         ↓
-Operational Memory
+Event Store
+        ↓
+Mission Engine
+        ↓
+Mission State (Heartbeat)
+        ↓
+Projections
         ↓
 Executive Visibility
 ```
 
 Conversation remains conversational.
 
-Operational knowledge becomes persistent.
+Events become canonical truth.
 
-Executive visibility makes attention obvious.
+Mission State makes the current moment obvious.
+
+Projections deliver operational awareness.
 
 ---
 
@@ -106,8 +120,9 @@ ODS-EOS exists to help operators:
 
 * Capture important work without interrupting thinking.
 * Preserve operational knowledge without manual documentation.
-* Surface priorities rather than raw information.
-* Reduce daily operational overhead.
+* Organize work around missions, not days.
+* Surface priorities and Mission State rather than raw information.
+* Reduce operational overhead across mission sessions.
 * Make every implementation reduce tomorrow's work.
 * Provide leaders with immediate operational clarity.
 
@@ -124,7 +139,7 @@ ODS-EOS is not intended to replace:
 * ChatGPT
 * Notion
 
-Instead, it connects operational knowledge across these systems into a single operational memory.
+Instead, it connects operational knowledge across these systems into a single event-driven operational awareness layer.
 
 ---
 
@@ -132,12 +147,12 @@ Instead, it connects operational knowledge across these systems into a single op
 
 ODS-EOS succeeds when a founder can:
 
-* Understand every active project in under 30 seconds.
-* Immediately identify what requires attention.
-* Resume work without reconstructing previous conversations.
+* Understand every active mission in under 30 seconds.
+* Immediately identify what requires attention via Mission State.
+* Resume any mission without reconstructing previous conversations.
 * Capture important operational knowledge without leaving the conversation.
-* Finish each day without manually writing status reports.
-* Begin each morning with confidence instead of searching for context.
+* Close a mission session without manually writing status reports.
+* Begin any mission with confidence instead of searching for context.
 
 ---
 
@@ -145,17 +160,16 @@ ODS-EOS succeeds when a founder can:
 
 ChatGPT becomes the conversational reasoning layer.
 
-Python becomes the operational memory engine.
+Python becomes the event store, validation, projection, and automation engine.
 
 Notion becomes the executive visualization layer.
 
 Each performs a single responsibility exceptionally well.
 
-The operator interacts naturally through conversation.
+The operator interacts naturally through conversation and mission lifecycle commands.
 
-The system quietly captures, organizes, remembers, and presents operational knowledge exactly when it is needed.
+The system quietly captures events, maintains Mission State, projects operational knowledge, and presents what requires attention exactly when it is needed.
 
 The software disappears.
 
 Operational clarity remains.
-

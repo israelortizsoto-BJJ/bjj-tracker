@@ -5,12 +5,16 @@ from ods.commands.add import run_add
 from ods.commands.capture import run_capture
 from ods.commands.ingest import run_ingest
 from ods.commands.proposal import run_proposal
+from ods.commands.proof import run_proof
 from ods.commands.today import run_today
 from ods.commands.work import run_work
-from ods.config import get_morning_dir, get_store_path
+from ods.config import get_eod_dir, get_morning_dir, get_store_path
+from ods.eos_pipeline import print_eos_pipeline_summary, run_eos_pipeline
+from ods.generators.eod import EodError, write_eod
 from ods.generators.morning import write_morning
 from ods.commands.prompts import utc_today
 from ods.knowledge_store import empty_store, load_store, save_store
+from ods.resolve import closed_sessions_sorted
 
 COMMAND_HELP = {
     "init": "Initialize the knowledge store.",
@@ -22,6 +26,7 @@ COMMAND_HELP = {
     "morning": "Generate morning brief.",
     "today": "Show founder command center for today.",
     "eod": "Generate end-of-day report.",
+    "proof": "Run Founder Proof Floor: missions → events → state → EOS → Notion.",
     "validate": "Verify knowledge store and report status.",
     "version": "Report the ODS-EOS version.",
 }
@@ -74,6 +79,17 @@ def run_morning(path: Path | None = None) -> None:
     print(f"Morning brief: {output_path}")
 
 
+def run_eod(path: Path | None = None) -> None:
+    store = load_store(path or get_store_path())
+    sessions = closed_sessions_sorted(store)
+    if not sessions:
+        raise EodError("No closed sessions are available for EOS generation.")
+
+    eod_path = write_eod(store, sessions[0], get_eod_dir())
+    print(f"EOD report: {eod_path}")
+    print_eos_pipeline_summary(run_eos_pipeline(eod_path=eod_path))
+
+
 def run_version() -> None:
     print(f"ODS-EOS {__version__}")
 
@@ -84,6 +100,8 @@ def run_command(
     record_type: str | None = None,
     payload_path: Path | None = None,
     proposal_input_path: Path | None = None,
+    init_notion: bool = False,
+    dry_run: bool = False,
 ) -> int:
     if command == "init":
         run_init()
@@ -117,6 +135,12 @@ def run_command(
         return 0
     if command == "today":
         run_today()
+        return 0
+    if command == "eod":
+        run_eod()
+        return 0
+    if command == "proof":
+        run_proof(init_notion=init_notion, dry_run=dry_run)
         return 0
     if command == "validate":
         run_validate()

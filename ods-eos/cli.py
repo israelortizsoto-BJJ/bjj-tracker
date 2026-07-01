@@ -14,9 +14,11 @@ from ods.generators.eod import EodError
 from ods.generators.morning import MorningError
 from ods.generators.today import TodayError
 from ods.config import get_store_path
+from ods.eos_pipeline import EosPipelineError
+from ods.proof_floor import ProofFloorError
 from ods.knowledge_store import StoreError, load_store
 
-STORE_OPTIONAL_COMMANDS = frozenset({"init", "validate", "version", "proposal"})
+STORE_OPTIONAL_COMMANDS = frozenset({"init", "validate", "version", "proposal", "proof"})
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -47,6 +49,19 @@ def build_parser() -> argparse.ArgumentParser:
                 help="Path to structured operator proposal input (.yaml, .yml, or .json).",
             )
             continue
+        if name == "proof":
+            proof_parser = subparsers.add_parser(name, help=help_text)
+            proof_parser.add_argument(
+                "--init-notion",
+                action="store_true",
+                help="Create Mission Registry database on NOTION_PARENT_PAGE_ID.",
+            )
+            proof_parser.add_argument(
+                "--dry-run",
+                action="store_true",
+                help="Generate events, state, and EOS without syncing Notion.",
+            )
+            continue
         subparsers.add_parser(name, help=help_text)
 
     return parser
@@ -65,8 +80,10 @@ def main(argv: list[str] | None = None) -> int:
             return run_command(
                 args.command,
                 proposal_input_path=Path(args.input) if args.command == "proposal" else None,
+                init_notion=getattr(args, "init_notion", False),
+                dry_run=getattr(args, "dry_run", False),
             )
-        except (ProposalError, StoreError) as exc:
+        except (ProposalError, StoreError, ProofFloorError, EosPipelineError) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
@@ -85,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
             record_type=record_type,
             payload_path=Path(payload_path) if payload_path else None,
         )
-    except (AddError, CaptureError, IngestError, ProposalError, EodError, MorningError, TodayError) as exc:
+    except (AddError, CaptureError, IngestError, ProposalError, EodError, MorningError, TodayError, EosPipelineError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except StoreError as exc:

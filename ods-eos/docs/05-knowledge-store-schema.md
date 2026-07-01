@@ -2,15 +2,48 @@
 
 ## Purpose
 
-This document defines the structured records stored in the ODS-EOS knowledge store. Collectors write these records; generators read them. The schema is the contract between collection and document generation.
+This document defines the structured records in ODS-EOS **knowledge projections**. In v0.2 architecture, these records are **derived projections** over the Event Store—not the canonical source of truth. Collectors and the Promotion Bridge append events; the Projection Engine derives these records; generators and interfaces read them. Every event carries an **Actor** (see `02-architecture-v0.2.md`).
 
-Scope: v0.2. JSON on local disk. No database. No cloud sync.
+Scope: v0.2. JSON on local disk. No database. No cloud sync. Field definitions unchanged in this review; see `00-architecture-review-2026-06-30.md`.
+
+---
+
+## Architectural Evolution
+
+v0.1 treated the knowledge store as canonical. v0.2 relocates canonical authority to the Event Store. This schema document remains authoritative for **projection field shape** until a dedicated event schema document is introduced.
+
+| Layer | v0.1 | v0.2 |
+|-------|------|------|
+| Canonical | Knowledge Store (JSON) | Event Store (append-only) |
+| This schema | Source of truth | Projection contract |
+| Writes | Collectors write records directly | Events appended; Projection Engine derives records |
+| Reads | Generators read store | Projection Engine and generators read projections |
+
+### What becomes event-derived
+
+| Projection area | Event sources |
+|-----------------|---------------|
+| `sessions` | `mission.begin`, `mission.close`, promotion events linking facts to session |
+| `investigations` | `fact.promoted`, `fact.amended`, `fact.closed` (investigation type) |
+| `decisions` | `fact.promoted`, `fact.amended` (decision type) |
+| `boundaries` | `fact.promoted`, `fact.amended` (boundary type) |
+| `qaRuns` | `qa.completed`, `fact.promoted` (qa_run type) |
+| `parkingLot` | `fact.promoted` (parking_lot type) |
+| `doctrines` | `fact.promoted`, `fact.amended` (doctrine type) |
+| `insights` | `fact.promoted` (insight type) |
+| `risks` | `fact.promoted`, `fact.amended` (risk type) |
+| Mission State (not in this schema) | All mission-scoped events; owned by Mission Engine — see `02-architecture-v0.2.md` |
+| Generated documents | Projection render over events + knowledge projections |
+
+### v0.2 schema stability
+
+No field additions, removals, or enum changes in this review. The `schemaVersion: "0.2"` envelope remains the projection format. Implementation may use knowledge-store-shaped JSON as an interim projection cache while the Event Store is introduced. Schema version bump to `0.3` is deferred until event schema and projection rules are implemented and validated.
 
 ---
 
 ## Store Envelope
 
-The knowledge store is a single JSON document with a top-level envelope and typed record collections.
+The knowledge projection store is a single JSON document with a top-level envelope and typed record collections. In v0.2 this shape is emitted by the Projection Engine; it is not the canonical persistence layer.
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -52,10 +85,10 @@ Field names are descriptive. Timestamps are ISO 8601 strings. Arrays and objects
 
 | Classification | Record types |
 |----------------|--------------|
-| **Container** | Session |
+| **Container** | Session (Mission Session projection) |
 | **Atomic fact** | Decision, Investigation, Boundary, QA Run, Parking Lot Item, Doctrine, Insight, Risk |
 
-Containers group work by time and reference atomic facts by `id`. Atomic facts hold durable engineering knowledge. Generators and collectors must preserve this distinction.
+Containers group work by mission session and reference atomic facts by `id`. Atomic facts hold durable engineering knowledge as projections over promotion events. The Projection Engine and collectors must preserve this distinction.
 
 ### No Duplication of Facts
 
@@ -77,9 +110,9 @@ Facts may evolve across record types by creating a new record and linking to the
 | Risk | Investigation | A threat requires evidence gathering |
 | Risk | Decision | A threat is accepted or mitigated by commitment |
 
-### Documents Are Generated from Records
+### Documents Are Generated from Projections
 
-EOD reports and morning briefs are views over store records. No fact in a generated document may lack a corresponding store record or resolvable reference chain.
+EOS reports, morning briefs, timelines, decision logs, and mission dashboards are views over event-derived projections. No fact in a generated document may lack a corresponding projection record, originating event, or resolvable reference chain.
 
 ---
 
@@ -117,9 +150,11 @@ All records include:
 
 ## Session
 
+> **v0.2 note:** Session is a **Mission Session projection**, not a daily session. It is bounded by Begin Mission and Close Mission events, independent of calendar days. See `02-architecture-v0.2.md`.
+
 ### Purpose
 
-Represents a bounded period of engineering work. Sessions anchor EOD and morning-brief generation to a time window and group activity by reference. Session is a container, not a fact store.
+Represents a bounded period of engineering work within a mission. Sessions anchor EOS and morning-brief generation to a mission session window and group activity by reference. Session is a container, not a fact store.
 
 ### Required Fields
 
@@ -364,19 +399,19 @@ Broken references are store errors. Collectors should not write them; generators
 
 ## v0.2 Record Usage
 
-| Record | Role |
-|--------|------|
-| Session | Container. Required for EOD and morning brief generators. |
-| Decision | Atomic fact. Created at capture when a commitment occurs. |
-| Investigation | Atomic fact. Created manually or by Investigation Collector. |
-| Boundary | Atomic fact. Created manually or derived from investigations. |
-| QA Run | Atomic fact. Created manually or by QA Collector. |
-| Parking Lot Item | Atomic fact. Created at capture when work is deferred. |
-| Risk | Atomic fact. Created at capture when a threat is identified. |
-| Doctrine | Atomic fact. Created manually until Doctrine migration tooling exists. |
-| Insight | Atomic fact. Created manually until Insight migration tooling exists. |
+| Record | Role | Event origin |
+|--------|------|--------------|
+| Session | Container. Required for EOS and morning brief generators. | `mission.begin`, `mission.close` |
+| Decision | Atomic fact projection. | `fact.promoted` (decision) |
+| Investigation | Atomic fact projection. | `fact.promoted`, `fact.closed` (investigation) |
+| Boundary | Atomic fact projection. | `fact.promoted`, `fact.amended` (boundary) |
+| QA Run | Atomic fact projection. | `qa.completed`, `fact.promoted` (qa_run) |
+| Parking Lot Item | Atomic fact projection. | `fact.promoted` (parking_lot) |
+| Risk | Atomic fact projection. | `fact.promoted` (risk) |
+| Doctrine | Atomic fact projection. | `fact.promoted`, `fact.amended` (doctrine) |
+| Insight | Atomic fact projection. | `fact.promoted` (insight) |
 
-Generators must read all record types defined here but may render empty sections when no records exist. Collectors must not write durable facts into `Session.summary`.
+Generators must read all projection record types defined here but may render empty sections when no records exist. Collectors and the Promotion Bridge must not write durable facts into `Session.summary`; they append events and let the Projection Engine derive records.
 
 ---
 

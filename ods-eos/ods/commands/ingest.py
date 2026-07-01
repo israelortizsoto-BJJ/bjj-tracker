@@ -5,6 +5,7 @@ from pathlib import Path
 
 from ods.commands.session import build_session_record
 from ods.config import get_eod_dir, get_store_path
+from ods.eos_pipeline import print_eos_pipeline_summary, run_eos_pipeline
 from ods.generators.eod import write_eod
 from ods.knowledge_store import load_store, save_store
 from ods.payload import validate_payload
@@ -125,3 +126,4 @@ def run_ingest(payload_path: Path, *, store_path: Path | None = None) -> None:
     print()
     print("EOD:")
     print(eod_path)
+    print_eos_pipeline_summary(run_eos_pipeline(eod_path=eod_path))

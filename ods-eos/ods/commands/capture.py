@@ -4,7 +4,9 @@ from pathlib import Path
 
 from ods.commands.prompts import read_multiline, read_optional, read_required
 from ods.commands.session import build_session_record
-from ods.config import get_store_path
+from ods.config import get_eod_dir, get_store_path
+from ods.eos_pipeline import print_eos_pipeline_summary, run_eos_pipeline
+from ods.generators.eod import write_eod
 from ods.knowledge_store import load_store, save_store
 
 
@@ -85,3 +87,6 @@ def run_capture(path: Path | None = None) -> None:
 
     print()
     print(f"Session captured: {session['id']}")
+    eod_path = write_eod(store, session, get_eod_dir())
+    print(f"  EOD report: {eod_path}")
+    print_eos_pipeline_summary(run_eos_pipeline(eod_path=eod_path))
