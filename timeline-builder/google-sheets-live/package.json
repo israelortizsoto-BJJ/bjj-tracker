@@ -1,0 +1,11 @@
+{
+  "name": "live-timeline-planner-deploy",
+  "private": true,
+  "description": "clasp tooling for Live Timeline Planner Apps Script deployment",
+  "scripts": {
+    "clasp": "clasp"
+  },
+  "devDependencies": {
+    "@google/clasp": "^3.0.6"
+  }
+}

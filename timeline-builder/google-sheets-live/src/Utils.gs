@@ -129,6 +129,54 @@ function ensureRuntimeDiagnosticsSheet_(spreadsheet) {
   return sheet;
 }
 
+const QA004_TASK_NAME = 'Planning/ Positioning';
+const QA004_SOURCE_ROW = 10;
+var QA004_TRACE_BUFFER_ = [];
+
+function qa004FormatValue_(value) {
+  if (value instanceof Date) {
+    return formatIsoDate(value) + ' (' + String(value) + ')';
+  }
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function qa004Log_(step, value) {
+  const details = qa004FormatValue_(value);
+  QA004_TRACE_BUFFER_.push({ step: step, value: details });
+  appendRuntimeDiag_('QA004-' + step, 'TRACE', details);
+  Logger.log('QA004-' + step + ': ' + details);
+}
+
+var QA005_TRACE_BUFFER_ = [];
+
+function qa005FormatTimelineBg_(bg, colOffset) {
+  const start = colOffset !== undefined ? colOffset : FIRST_WEEK_COLUMN - 1;
+  const parts = [];
+  for (let i = 0; i < bg.length; i++) {
+    parts.push((start + i) + ':"' + bg[i] + '"');
+  }
+  return '[' + parts.join(',') + ']';
+}
+
+function qa005Log_(step, details) {
+  const text = details !== undefined && details !== null ? String(details) : '';
+  QA005_TRACE_BUFFER_.push({ step: step, value: text });
+  appendRuntimeDiag_('QA005-' + step, 'TRACE', text);
+  Logger.log('QA005-' + step + ': ' + text);
+}
+
+var QA006_TRACE_BUFFER_ = [];
+
+function qa006Log_(step, details) {
+  const text = details !== undefined && details !== null ? String(details) : '';
+  QA006_TRACE_BUFFER_.push({ step: step, value: text });
+  appendRuntimeDiag_('QA006-' + step, 'TRACE', text);
+  Logger.log('QA006-' + step + ': ' + text);
+}
+
 function appendRuntimeDiag_(checkpoint, status, details) {
   try {
     const ss = runtimeDiagSpreadsheet_();

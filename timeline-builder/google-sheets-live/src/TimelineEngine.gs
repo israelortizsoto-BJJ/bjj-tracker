@@ -20,6 +20,40 @@ function groupTasksByProject_(tasks) {
   return blocks;
 }
 
+function timelineTaskDate_(value) {
+  return parseCellDate(value);
+}
+
+function logTaskDateInstrument_(task) {
+  const coercedStart = timelineTaskDate_(task.startDate);
+  const coercedFinish = timelineTaskDate_(task.finishDate);
+  Logger.log(
+    'TASK_DATE_DIAG: taskName=%s typeofStart=%s typeofFinish=%s startIsDate=%s finishIsDate=%s startRaw=%s finishRaw=%s weeksForRangeStart=%s weeksForRangeFinish=%s',
+    task.taskName,
+    typeof task.startDate,
+    typeof task.finishDate,
+    task.startDate instanceof Date,
+    task.finishDate instanceof Date,
+    String(task.startDate),
+    String(task.finishDate),
+    coercedStart ? String(coercedStart) : 'null',
+    coercedFinish ? String(coercedFinish) : 'null'
+  );
+  appendRuntimeDiag_(
+    'TASK_DATE_DIAG',
+    'OK',
+    task.taskName +
+      ' typeofStart=' + typeof task.startDate +
+      ' typeofFinish=' + typeof task.finishDate +
+      ' startIsDate=' + (task.startDate instanceof Date) +
+      ' finishIsDate=' + (task.finishDate instanceof Date) +
+      ' startRaw=' + String(task.startDate) +
+      ' finishRaw=' + String(task.finishDate) +
+      ' weeksForRangeStart=' + (coercedStart ? String(coercedStart) : 'null') +
+      ' weeksForRangeFinish=' + (coercedFinish ? String(coercedFinish) : 'null')
+  );
+}
+
 function timelineBounds_(tasks) {
   let earliest = tasks[0].startDate;
   let latest = tasks[0].finishDate;
@@ -127,6 +161,11 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
   const fontColors = [];
   const fontWeights = [];
   const rowGroups = [];
+  let qa004PlanningRowBg = null;
+  let qa005PlanningBgRowIndex = null;
+  let qa005PlanningSheetRow = null;
+  QA005_TRACE_BUFFER_ = [];
+  QA006_TRACE_BUFFER_ = [];
 
   function appendRow(row) {
     values.push(row.cells);
@@ -176,10 +215,18 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
 
     const taskStartRow = values.length + 1;
     block.tasks.forEach(function (task) {
+      const isQa004Task = task.taskName === QA004_TASK_NAME && task.sourceRow === QA004_SOURCE_ROW;
+      logTaskDateInstrument_(task);
       altToggle = !altToggle;
       const rowFill = altToggle ? theme.altRowFill : '#FFFFFF';
       const style = taskStyle(task.taskName, config.categories, theme);
+      if (isQa004Task) {
+        qa004Log_(3, task.finishDate);
+      }
       const activeWeeks = weeksForRange_(task.startDate, task.finishDate, weeks);
+      if (isQa004Task) {
+        qa004Log_(4, activeWeeks);
+      }
       const criticalIndex = criticalWeekIndex_(task, weeks);
       let renderWeeks = activeWeeks.slice();
       if (criticalIndex !== null && renderWeeks.indexOf(criticalIndex) === -1) {
@@ -198,8 +245,14 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
         row.wt[4] = 'bold';
       }
 
+      if (isQa004Task) {
+        qa004Log_(5, renderWeeks);
+      }
       renderWeeks.forEach(function (offset) {
         const colIndex = FIRST_WEEK_COLUMN - 1 + offset;
+        if (isQa004Task) {
+          qa004Log_(6, colIndex);
+        }
         const isCritical = criticalIndex !== null && offset === criticalIndex;
         const isDuration = activeWeeks.indexOf(offset) !== -1;
         let cellStyle = style;
@@ -207,6 +260,14 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
           cellStyle = { fill: theme.criticalFill, font: theme.criticalFont };
         } else if (!isDuration) {
           cellStyle = { fill: theme.criticalFill, font: theme.criticalFont };
+        }
+        if (isQa004Task) {
+          qa005Log_(
+            1,
+            'colIndex=' + colIndex +
+            ' existing=' + row.bg[colIndex] +
+            ' new=' + cellStyle.fill
+          );
         }
         row.bg[colIndex] = cellStyle.fill;
         row.fg[colIndex] = cellStyle.font;
@@ -216,6 +277,20 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
         }
       });
 
+      if (isQa004Task) {
+        qa004PlanningRowBg = row.bg.slice();
+        qa005Log_(2, qa005FormatTimelineBg_(row.bg));
+        qa005PlanningBgRowIndex = backgrounds.length;
+        qa005PlanningSheetRow = values.length + 1;
+        const lastBg = backgrounds.length > 0 ? backgrounds[backgrounds.length - 1] : null;
+        qa005Log_(
+          3,
+          'sameRefAsLast=' + (lastBg ? row.bg === lastBg : 'n/a') +
+          ' length=' + row.bg.length +
+          ' firstTimeline=' + (FIRST_WEEK_COLUMN - 1) +
+          ' lastTimeline=' + (totalCols - 1)
+        );
+      }
       appendRow(row);
     });
 
@@ -233,6 +308,10 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
     return;
   }
 
+  if (qa005PlanningBgRowIndex !== null) {
+    qa005Log_(4, qa005FormatTimelineBg_(backgrounds[qa005PlanningBgRowIndex]));
+  }
+
   const normalizedValues = normalizeGrid2D_(values, totalCols, '');
   const normalizedBackgrounds = normalizeGrid2D_(backgrounds, totalCols, '#FFFFFF');
   const normalizedFontColors = normalizeGrid2D_(fontColors, totalCols, '#000000');
@@ -241,8 +320,67 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
   const range = sheet.getRange(1, 1, normalizedValues.length, totalCols);
   Logger.log('BUILD_TIMELINE: before write');
   appendRuntimeDiag_('before write', 'OK', '');
+  if (qa004PlanningRowBg) {
+    qa004Log_(7, qa004PlanningRowBg);
+  }
+  if (qa005PlanningBgRowIndex !== null) {
+    qa005Log_(5, qa005FormatTimelineBg_(normalizedBackgrounds[qa005PlanningBgRowIndex]));
+  }
   range.setValues(normalizedValues);
-  range.setBackgrounds(normalizedBackgrounds);
+  if (qa005PlanningSheetRow !== null) {
+    const numberOfWeekColumns = weeks.length;
+    const planningTimelineRow = qa005PlanningSheetRow;
+    const planningRowIndex = planningTimelineRow - range.getRow();
+    qa006Log_(1, 'sheetName=' + sheet.getName());
+    qa006Log_(2, 'writeRangeA1=' + range.getA1Notation());
+    qa006Log_(3, 'writeNumRows=' + range.getNumRows());
+    qa006Log_(4, 'writeNumColumns=' + range.getNumColumns());
+    qa006Log_(5, 'planningTimelineRow=' + planningTimelineRow);
+    qa006Log_(6, 'FIRST_WEEK_COLUMN=' + FIRST_WEEK_COLUMN);
+    qa006Log_(7, 'numberOfWeekColumns=' + numberOfWeekColumns);
+    range.setBackgrounds(normalizedBackgrounds);
+    const rangeABackgrounds = range.getBackgrounds();
+    qa006Log_(8, qa005FormatTimelineBg_(
+      rangeABackgrounds[planningRowIndex].slice(FIRST_WEEK_COLUMN - 1),
+      FIRST_WEEK_COLUMN - 1
+    ));
+    const rangeB = sheet.getRange(
+      planningTimelineRow,
+      FIRST_WEEK_COLUMN,
+      1,
+      numberOfWeekColumns
+    );
+    qa006Log_(9, 'readRangeBA1=' + rangeB.getA1Notation());
+    qa006Log_(10, qa005FormatTimelineBg_(rangeB.getBackgrounds()[0], FIRST_WEEK_COLUMN - 1));
+    const rangeBInsideA =
+      rangeB.getRow() >= range.getRow() &&
+      rangeB.getLastRow() <= range.getLastRow() &&
+      rangeB.getColumn() >= range.getColumn() &&
+      rangeB.getLastColumn() <= range.getLastColumn();
+    qa006Log_(11, 'rangeBInsideRangeA=' + (rangeBInsideA ? 'YES' : 'NO'));
+    if (!rangeBInsideA) {
+      qa006Log_(12,
+        'expectedRow=' + planningTimelineRow +
+        ' rangeA=' + range.getA1Notation() +
+        ' rangeB=' + rangeB.getA1Notation()
+      );
+    }
+    PropertiesService.getScriptProperties().setProperty(
+      'QA006_LAST_TRACE',
+      JSON.stringify(QA006_TRACE_BUFFER_)
+    );
+  } else {
+    range.setBackgrounds(normalizedBackgrounds);
+  }
+  if (qa005PlanningSheetRow !== null) {
+    const readBack = sheet.getRange(
+      qa005PlanningSheetRow,
+      FIRST_WEEK_COLUMN,
+      1,
+      weeks.length
+    ).getBackgrounds()[0];
+    qa005Log_(6, qa005FormatTimelineBg_(readBack, FIRST_WEEK_COLUMN - 1));
+  }
   range.setFontColors(normalizedFontColors);
   range.setFontWeights(normalizedFontWeights);
   Logger.log('BUILD_TIMELINE: after write');
@@ -277,6 +415,12 @@ function buildTimelineSheet(spreadsheet, tasks, config) {
   });
 
   protectTimelineSheet_(sheet);
+  if (QA005_TRACE_BUFFER_.length) {
+    PropertiesService.getScriptProperties().setProperty(
+      'QA005_LAST_TRACE',
+      JSON.stringify(QA005_TRACE_BUFFER_)
+    );
+  }
   Logger.log('BUILD_TIMELINE: COMPLETE');
   appendRuntimeDiag_('COMPLETE', 'OK', '');
 }
@@ -286,4 +430,22 @@ function protectTimelineSheet_(sheet) {
     p.remove();
   });
   sheet.protect().setDescription('Timeline presentation — edit Data tab, then Refresh Timeline').setWarningOnly(true);
+}
+
+function qa005LiveRefresh_() {
+  QA005_TRACE_BUFFER_ = [];
+  const spreadsheetId = '1PKrGas_0owMrjVKJTD725JpuKibn7K4emeLCJIcHU90';
+  PropertiesService.getScriptProperties().setProperty('RUNTIME_DIAG_SS_ID', spreadsheetId);
+  setRuntimeDiagExecType_('QA005');
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const status = ss.getSheetByName(SHEET_DATA);
+  status.getRange(QA004_SOURCE_ROW, STATUS_COL_FINISH_DATE).setValue(new Date('2026-06-24'));
+  SpreadsheetApp.flush();
+  const config = loadConfig(ss);
+  const result = validateDataSheet(ss);
+  if (!result.tasks.length) {
+    return QA005_TRACE_BUFFER_;
+  }
+  buildTimelineSheet(ss, result.tasks, config);
+  return QA005_TRACE_BUFFER_;
 }

@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "project": "timeline-builder/google-sheets-live",
+  "description": "Live Timeline Planner — Google Apps Script deployment manifest",
+  "source": "src",
+  "requiredFiles": [
+    "Constants.gs",
+    "Utils.gs",
+    "Config.gs",
+    "ColorMatcher.gs",
+    "Validation.gs",
+    "TimelineEngine.gs",
+    "TimelineV2.gs",
+    "Nx5StatusTemplate.gs",
+    "SheetSetup.gs",
+    "Main.gs",
+    "appsscript.json"
+  ],
+  "deploymentOrder": [
+    "Constants.gs",
+    "Utils.gs",
+    "Config.gs",
+    "ColorMatcher.gs",
+    "Validation.gs",
+    "TimelineEngine.gs",
+    "TimelineV2.gs",
+    "Nx5StatusTemplate.gs",
+    "SheetSetup.gs",
+    "Main.gs"
+  ],
+  "manifestFiles": [
+    "appsscript.json"
+  ],
+  "verification": {
+    "appsscript": {
+      "path": "src/appsscript.json",
+      "requiredKeys": ["timeZone", "runtimeVersion", "exceptionLogging"],
+      "runtimeVersion": "V8"
+    }
+  },
+  "clasp": {
+    "configPath": ".clasp.json",
+    "rootDir": "src",
+    "exampleConfigPath": "clasp.json.example"
+  }
+}

@@ -1,20 +1,37 @@
 /**
  * Runtime orchestration — REQUIRED for live editing.
  *
- * Forensics: run diagnoseLivePipeline_() then edit Data D4; read View → Executions.
+ * Forensics: run diagnoseLivePipeline_() then edit STATUS date columns; read View → Executions.
  */
 
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Timeline Planner')
-    .addItem('Refresh Timeline', 'refreshTimeline')
     .addItem('Setup workbook (first time)', 'setupLivePlanner')
-    .addItem('Install edit triggers', 'installTriggers_')
+    .addItem('Rebuild Timeline structure', 'rebuildTimelineV2Structure_')
+    .addSeparator()
+    .addItem('Refresh Timeline (legacy)', 'refreshTimeline')
+    .addItem('Install edit triggers (legacy)', 'installTriggers_')
+    .addItem('Remove all triggers', 'uninstallAllTriggers_')
     .addItem('Diagnose live pipeline', 'diagnoseLivePipeline_')
     .addToUi();
 }
 
+/**
+ * Re-run Timeline V2 setup after STATUS structure changes (new departments/tasks).
+ * Does not run on date edits — those recalculate via formulas.
+ */
+function rebuildTimelineV2Structure_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (typeof uninstallAllTriggers_ === 'function') {
+    uninstallAllTriggers_();
+  }
+  setupTimelineV2Production_(ss);
+  ss.toast('Timeline structure rebuilt from STATUS.', 'Timeline Planner', 4);
+}
+
 function refreshTimeline(execType) {
+  QA004_TRACE_BUFFER_ = [];
   setRuntimeDiagExecType_(execType || 'Manual');
   appendRuntimeDiag_('ENTRY', 'OK', '');
   Logger.log('REFRESH_TIMELINE: ENTRY');
@@ -52,7 +69,7 @@ function refreshTimeline(execType) {
   if (!result.tasks.length) {
     Logger.log('REFRESH_TIMELINE: EXIT reason=no_valid_tasks');
     appendRuntimeDiag_('EXIT', 'FAILURE', 'no_valid_tasks');
-    ss.toast('No valid tasks on Data tab.', 'Timeline Planner', 5);
+    ss.toast('No valid tasks on STATUS tab.', 'Timeline Planner', 5);
     return;
   }
 
@@ -61,6 +78,12 @@ function refreshTimeline(execType) {
   );
   appendRuntimeDiag_('before buildTimelineSheet', 'OK', '');
   buildTimelineSheet(ss, result.tasks, config);
+  if (QA004_TRACE_BUFFER_.length) {
+    PropertiesService.getScriptProperties().setProperty(
+      'QA004_LAST_TRACE',
+      JSON.stringify(QA004_TRACE_BUFFER_)
+    );
+  }
   Logger.log(
     'REFRESH_TIMELINE: after buildTimelineSheet'
   );
@@ -101,11 +124,11 @@ function handleDataEdit(e) {
 
   const startCol = col;
   const endCol = col + e.range.getNumColumns() - 1;
-  const passesDateFilter = !(endCol < 3 || startCol > 5);
+  const passesDateFilter = !(endCol < STATUS_COL_START_DATE || startCol > STATUS_COL_FINISH_DATE);
   Logger.log('HANDLE_DATA_EDIT: date-column filter result=' + passesDateFilter);
 
   if (!passesDateFilter) {
-    Logger.log('HANDLE_DATA_EDIT: EXIT reason=outside_date_columns_C_E');
+    Logger.log('HANDLE_DATA_EDIT: EXIT reason=outside_date_columns_H_I');
     return;
   }
 
@@ -192,7 +215,7 @@ function installTriggers_() {
     ' uniqueId=' + editTrigger.getUniqueId() +
     ' spreadsheetId=' + ss.getId()
   );
-  ss.toast('Edit triggers installed — date changes on Data refresh the Timeline.', 'Timeline Planner', 4);
+  ss.toast('Edit triggers installed — date changes on STATUS refresh the Timeline.', 'Timeline Planner', 4);
 }
 
 /**
@@ -255,7 +278,7 @@ function diagnoseLivePipeline_() {
     Logger.log('DIAGNOSE: scriptProperty ' + key + '=' + props[key]);
   });
 
-  Logger.log('DIAGNOSE: nextStep=edit Data D4 Finish Date then inspect Executions for HANDLE_DATA_EDIT');
+  Logger.log('DIAGNOSE: nextStep=edit STATUS Project Timeline or Live Dates then inspect Executions for HANDLE_DATA_EDIT');
   Logger.log('DIAGNOSE: ========== END AUDIT ==========');
 
   if (active) {
@@ -266,6 +289,43 @@ function diagnoseLivePipeline_() {
       8
     );
   }
+}
+
+function qa004LiveRefresh_() {
+  QA004_TRACE_BUFFER_ = [];
+  const spreadsheetId = '1PKrGas_0owMrjVKJTD725JpuKibn7K4emeLCJIcHU90';
+  PropertiesService.getScriptProperties().setProperty('RUNTIME_DIAG_SS_ID', spreadsheetId);
+  setRuntimeDiagExecType_('QA004');
+  const ss = SpreadsheetApp.openById(spreadsheetId);
+  const status = ss.getSheetByName(SHEET_DATA);
+  status.getRange(QA004_SOURCE_ROW, STATUS_COL_FINISH_DATE).setValue(new Date('2026-06-24'));
+  SpreadsheetApp.flush();
+  const config = loadConfig(ss);
+  const result = validateDataSheet(ss);
+  result.report.updatedAt = new Date();
+  writeValidationSheet(ss, result.report);
+  if (!result.tasks.length) {
+    appendRuntimeDiag_('QA004-EXIT', 'FAILURE', 'no_valid_tasks');
+    return QA004_TRACE_BUFFER_;
+  }
+  buildTimelineSheet(ss, result.tasks, config);
+  result.report.timelineGenerated = true;
+  writeValidationSheet(ss, result.report);
+  appendRuntimeDiag_('QA004-EXIT', 'SUCCESS', '');
+  PropertiesService.getScriptProperties().setProperty(
+    'QA004_LAST_TRACE',
+    JSON.stringify(QA004_TRACE_BUFFER_)
+  );
+  return QA004_TRACE_BUFFER_;
+}
+
+function doGet(e) {
+  if (e && e.parameter && e.parameter.run === '1') {
+    qa004LiveRefresh_();
+  }
+  const stored = PropertiesService.getScriptProperties().getProperty('QA004_LAST_TRACE');
+  return ContentService.createTextOutput(stored || '[]')
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 function uninstallAllTriggers_() {

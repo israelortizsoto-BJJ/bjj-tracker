@@ -1,4 +1,5 @@
 {
-  "scriptExtensions": [".gs"],
-  "comment": "Copy to .clasp.json after clasp create; set scriptId from Apps Script URL"
+  "scriptId": "YOUR_SCRIPT_ID_HERE",
+  "rootDir": "src",
+  "scriptExtensions": [".gs", ".json"]
 }

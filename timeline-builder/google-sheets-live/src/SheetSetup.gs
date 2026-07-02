@@ -2,45 +2,24 @@
  * Initial workbook setup and sample data.
  */
 
-function assertOrchestrationPresent_() {
-  if (typeof refreshTimeline !== 'function') {
+function assertTimelineV2SetupPresent_() {
+  if (typeof setupTimelineV2Production_ !== 'function') {
     throw new Error(
-      'Missing refreshTimeline — copy Main.gs into this Apps Script project. ' +
-      'Main.gs contains the live refresh pipeline (validate → Timeline → Validation).'
+      'Missing setupTimelineV2Production_ — copy TimelineV2.gs into this Apps Script project.'
     );
-  }
-  if (typeof handleDataEdit !== 'function' || typeof installTriggers_ !== 'function') {
-    throw new Error('Missing edit trigger handlers — copy Main.gs into this Apps Script project.');
   }
 }
 
 function setupLivePlanner() {
-  assertOrchestrationPresent_();
+  assertTimelineV2SetupPresent_();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  let dataSheet = ss.getSheetByName(SHEET_DATA);
-  if (!dataSheet) {
-    dataSheet = ss.insertSheet(SHEET_DATA, 0);
+  const legacyData = ss.getSheetByName('Data');
+  if (legacyData) {
+    ss.deleteSheet(legacyData);
   }
-  dataSheet.clear();
-  dataSheet.getRange(1, 1, 1, DATA_HEADERS.length).setValues([DATA_HEADERS]);
-  dataSheet.setFrozenRows(1);
 
-  const sampleRows = [
-    ['Brand Campaign Q1', 'Concepting', new Date('2026-01-06'), new Date('2026-01-17'), ''],
-    ['Brand Campaign Q1', 'Pre Pro / Prep', new Date('2026-01-20'), new Date('2026-01-31'), ''],
-    ['Brand Campaign Q1', 'Shoot', new Date('2026-02-03'), new Date('2026-02-07'), ''],
-    ['Brand Campaign Q1', 'Edit / Post', new Date('2026-02-10'), new Date('2026-03-07'), ''],
-    ['Brand Campaign Q1', 'Client Review', new Date('2026-03-10'), new Date('2026-03-14'), new Date('2026-03-14')],
-    ['Brand Campaign Q1', 'Delivery', new Date('2026-03-17'), new Date('2026-03-21'), new Date('2026-03-21')],
-    ['Product Launch Video', 'Concepting', new Date('2026-02-03'), new Date('2026-02-14'), ''],
-    ['Product Launch Video', 'Shoot', new Date('2026-03-03'), new Date('2026-03-07'), ''],
-    ['Product Launch Video', 'VFX / Color', new Date('2026-03-10'), new Date('2026-04-04'), ''],
-    ['Product Launch Video', 'Air / Live', new Date('2026-04-14'), new Date('2026-04-18'), new Date('2026-04-18')],
-  ];
-  const normalizedSample = normalizeGrid2D_(sampleRows, DATA_HEADERS.length, '');
-  dataSheet.getRange(2, 1, normalizedSample.length, DATA_HEADERS.length).setValues(normalizedSample);
-  dataSheet.getRange(2, 3, sampleRows.length, 3).setNumberFormat('yyyy-mm-dd');
+  buildStatusSheetFromTemplate_(ss);
 
   let configSheet = ss.getSheetByName(SHEET_CONFIG);
   if (!configSheet) {
@@ -55,15 +34,88 @@ function setupLivePlanner() {
     ss.insertSheet(SHEET_TIMELINE);
   }
 
-  installTriggers_();
-  refreshTimeline();
+  // Formula timeline — no edit triggers; STATUS edits recalculate natively.
+  if (typeof uninstallAllTriggers_ === 'function') {
+    uninstallAllTriggers_();
+  }
 
-  SpreadsheetApp.getActiveSpreadsheet().toast('Live planner ready. Edit dates on Data tab.', 'Setup', 5);
+  setupTimelineV2Production_(ss);
+
+  SpreadsheetApp.getActiveSpreadsheet().toast(
+    'Timeline V2 ready — edit STATUS dates; bars update instantly via formulas.',
+    'Setup',
+    5
+  );
+}
+
+function buildStatusSheetFromTemplate_(spreadsheet) {
+  const existingStatus = spreadsheet.getSheetByName(SHEET_STATUS);
+  if (existingStatus) {
+    spreadsheet.deleteSheet(existingStatus);
+  }
+
+  const sheet = spreadsheet.insertSheet(SHEET_STATUS, 0);
+  const rowCount = STATUS_TEMPLATE_ROWS.length;
+  const colCount = STATUS_COLUMN_COUNT;
+
+  const values = STATUS_TEMPLATE_ROWS.map(function (row) {
+    return row.values;
+  });
+  const backgrounds = STATUS_TEMPLATE_ROWS.map(function (row) {
+    return row.backgrounds;
+  });
+  const fontColors = STATUS_TEMPLATE_ROWS.map(function (row) {
+    return row.fontColors;
+  });
+
+  const dataRange = sheet.getRange(1, 1, rowCount, colCount);
+  dataRange.setValues(values);
+  dataRange.setBackgrounds(backgrounds);
+  dataRange.setFontColors(fontColors);
+
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+    const boldFlags = STATUS_TEMPLATE_ROWS[rowIndex].bold;
+    for (let colIndex = 0; colIndex < colCount; colIndex++) {
+      if (boldFlags[colIndex]) {
+        sheet.getRange(rowIndex + 1, colIndex + 1).setFontWeight('bold');
+      }
+    }
+  }
+
+  for (let rowIndex = 0; rowIndex < STATUS_ROW_HEIGHTS.length; rowIndex++) {
+    sheet.setRowHeight(rowIndex + 1, STATUS_ROW_HEIGHTS[rowIndex]);
+  }
+
+  STATUS_MERGED_RANGES.forEach(function (merge) {
+    const numCols = merge.endCol - merge.startCol + 1;
+    const templateRow = STATUS_TEMPLATE_ROWS[merge.row - 1];
+    const range = sheet.getRange(merge.row, merge.startCol, 1, numCols);
+    range.merge();
+    range.setBackground(templateRow.backgrounds[merge.startCol - 1]);
+    range.setFontColor(templateRow.fontColors[merge.startCol - 1]);
+    if (templateRow.bold[merge.startCol - 1]) {
+      range.setFontWeight('bold');
+    }
+  });
+
+  sheet.getRange(1, 1, 1, colCount).setHorizontalAlignment('center');
+  sheet.getRange(2, 1, 1, colCount).setHorizontalAlignment('center');
+  sheet.getRange(4, 1, 1, colCount).setWrap(true);
+
+  sheet.setFrozenRows(STATUS_FROZEN_ROWS);
+
+  STATUS_ROW_GROUPS.forEach(function (group) {
+    const numRows = group.endRow - group.startRow + 1;
+    sheet.getRange(group.startRow, 1, numRows, colCount).shiftRowGroupDepth(1);
+  });
+
+  spreadsheet.setActiveSheet(sheet);
+  return sheet;
 }
 
 function protectDataSheetEditing_(spreadsheet) {
   spreadsheet.getSheets().forEach(function (sheet) {
-    if (sheet.getName() === SHEET_DATA) return;
+    if (sheet.getName() === SHEET_STATUS) return;
     if (sheet.getName() === SHEET_CONFIG) {
       sheet.protect().setDescription('Config — edit with care').setWarningOnly(true);
     }
