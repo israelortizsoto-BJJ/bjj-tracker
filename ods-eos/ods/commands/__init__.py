@@ -8,8 +8,10 @@ from ods.commands.proposal import run_proposal
 from ods.commands.proof import run_proof
 from ods.commands.today import run_today
 from ods.commands.work import run_work
-from ods.config import get_eod_dir, get_morning_dir, get_store_path
+from ods.config import get_bootstrap_dir, get_eod_dir, get_morning_dir, get_store_dir, get_store_path
 from ods.eos_pipeline import print_eos_pipeline_summary, run_eos_pipeline
+from ods.generators.active_slice import ActiveSliceError, write_active_slice
+from ods.generators.bootstrap import BootstrapError, load_registry_doc, write_operator_bootstrap
 from ods.generators.eod import EodError, write_eod
 from ods.generators.morning import write_morning
 from ods.commands.prompts import utc_today
@@ -26,6 +28,8 @@ COMMAND_HELP = {
     "morning": "Generate morning brief.",
     "today": "Show founder command center for today.",
     "eod": "Generate end-of-day report.",
+    "bootstrap": "Generate operator bootstrap for fresh execution threads.",
+    "active-slice": "Generate active implementation slice for fresh execution threads.",
     "proof": "Run Founder Proof Floor: missions → events → state → EOS → Notion.",
     "validate": "Verify knowledge store and report status.",
     "version": "Report the ODS-EOS version.",
@@ -90,6 +94,28 @@ def run_eod(path: Path | None = None) -> None:
     print_eos_pipeline_summary(run_eos_pipeline(eod_path=eod_path))
 
 
+def run_bootstrap(path: Path | None = None) -> None:
+    store = load_store(path or get_store_path())
+    registry_doc = load_registry_doc(get_store_dir() / "mission-registry.json")
+    output_path = write_operator_bootstrap(
+        registry_doc=registry_doc,
+        output_dir=get_bootstrap_dir(),
+        store=store,
+    )
+    print(f"Operator bootstrap: {output_path}")
+
+
+def run_active_slice(path: Path | None = None) -> None:
+    load_store(path or get_store_path())
+    registry_doc = load_registry_doc(get_store_dir() / "mission-registry.json")
+    output_path = write_active_slice(
+        registry_doc=registry_doc,
+        output_dir=get_bootstrap_dir(),
+        cwd=Path.cwd(),
+    )
+    print(f"Active slice: {output_path}")
+
+
 def run_version() -> None:
     print(f"ODS-EOS {__version__}")
 
@@ -138,6 +164,12 @@ def run_command(
         return 0
     if command == "eod":
         run_eod()
+        return 0
+    if command == "bootstrap":
+        run_bootstrap()
+        return 0
+    if command == "active-slice":
+        run_active_slice()
         return 0
     if command == "proof":
         run_proof(init_notion=init_notion, dry_run=dry_run)

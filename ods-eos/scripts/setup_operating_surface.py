@@ -12,6 +12,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -21,6 +22,7 @@ from ods.operating_command import TodaysCommand, command_from_registry_doc
 NOTION_VERSION_VIEWS = "2026-03-11"
 NOTION_VERSION = "2025-09-03"
 MISSION_REGISTRY_STATE = Path(__file__).resolve().parents[1] / ".ods-eos" / "mission-registry.json"
+KNOWLEDGE_STORE_STATE = Path(__file__).resolve().parents[1] / ".ods-eos" / "knowledge-store.json"
 
 # Property IDs from Mission Registry data source
 P = {
@@ -299,9 +301,37 @@ def project_todays_command() -> TodaysCommand:
     return command_from_registry_doc(json.loads(MISSION_REGISTRY_STATE.read_text(encoding="utf-8")))
 
 
+def refresh_operational_pulse(token: str, parent_page_id: str) -> None:
+    """Render the computed executive pulse without changing the rest of the homepage."""
+    children = notion("GET", f"/blocks/{parent_page_id}/children?page_size=100", token).get("results", [])
+    section_start = None
+    section_end = len(children)
+    for idx, block in enumerate(children):
+        if block.get("type") == "heading_1" and _block_text(block) == "Operational Pulse":
+            section_start = idx
+            break
+
+    if section_start is not None:
+        for idx in range(section_start + 1, len(children)):
+            if children[idx].get("type") in ("heading_1", "heading_2"):
+                section_end = idx
+                break
+        for block in children[section_start + 1 : section_end]:
+            archive_block(token, block)
+        append_blocks_after(token, parent_page_id, children[section_start]["id"], _operational_pulse_blocks()[1:])
+        return
+
+    blocks = _operational_pulse_blocks()
+    if children:
+        append_blocks_after(token, parent_page_id, children[0]["id"], blocks)
+    else:
+        append_blocks(token, parent_page_id, blocks)
+
+
 def refresh_todays_command(token: str, parent_page_id: str) -> TodaysCommand:
     """Patch the existing Today's Command callout from projected Mission State."""
     command = project_todays_command()
+    refresh_operational_pulse(token, parent_page_id)
     children = notion("GET", f"/blocks/{parent_page_id}/children?page_size=100", token)
     blocks = children.get("results", [])
     seen_heading = False
@@ -327,20 +357,20 @@ def refresh_todays_command(token: str, parent_page_id: str) -> TodaysCommand:
 
 
 def refresh_top_priorities(token: str, parent_page_id: str, command: TodaysCommand | None = None) -> None:
-    """Replace Next Execution with Top Priorities on the homepage."""
+    """Render Active Priorities as founder-facing priority cards."""
     command = command or project_todays_command()
     children = notion("GET", f"/blocks/{parent_page_id}/children?page_size=100", token).get("results", [])
 
     section_start = None
     next_section = len(children)
     for idx, block in enumerate(children):
-        if block.get("type") == "heading_2" and _block_text(block) in ("Next Execution", "Top Priorities"):
+        if block.get("type") == "heading_2" and _block_text(block) in ("Next Execution", "Top Priorities", "Active Priorities"):
             section_start = idx
             notion(
                 "PATCH",
                 f"/blocks/{block['id']}",
                 token,
-                {"heading_2": {"rich_text": [{"type": "text", "text": {"content": "Top Priorities"}}]}},
+                {"heading_2": {"rich_text": [{"type": "text", "text": {"content": "Active Priorities"}}]}},
             )
             break
     if section_start is None:
@@ -351,97 +381,456 @@ def refresh_top_priorities(token: str, parent_page_id: str, command: TodaysComma
             next_section = idx
             break
 
-    quote_id = None
-    existing_recommended = None
-    top_priorities_db = None
-    legacy_execution_db = None
-    future_affordance = None
     for block in children[section_start + 1 : next_section]:
-        btype = block.get("type")
-        text = _block_text(block)
-        if btype == "quote":
-            quote_id = block["id"]
-            notion(
-                "PATCH",
-                f"/blocks/{block['id']}",
-                token,
-                {"quote": {"rich_text": [{"type": "text", "text": {"content": "What does the founder currently own?"}, "annotations": {"italic": True}}]}},
+        archive_block(token, block)
+
+    append_blocks_after(token, parent_page_id, children[section_start]["id"], _active_priority_blocks(command))
+
+    refresh_execution_context(token, parent_page_id)
+
+
+def _active_priority_blocks(command: TodaysCommand) -> list[dict]:
+    missions = _active_priority_missions()
+    missions = sorted(
+        missions,
+        key=lambda mission: (mission["label"] != command.mission, mission["posture"] != "Executing", mission["label"]),
+    )
+    cards = [_active_priority_card(mission, recommended=mission["label"] == command.mission) for mission in missions]
+    return cards or [_p("No active priorities are projected.")]
+
+
+def _active_priority_missions() -> list[dict]:
+    if not MISSION_REGISTRY_STATE.exists():
+        return []
+    doc = json.loads(MISSION_REGISTRY_STATE.read_text(encoding="utf-8"))
+    missions = []
+    for item in doc.get("missions", []):
+        state = item.get("state", {})
+        if state.get("status") == "Active" and state.get("operationalIntent") != "Completed":
+            missions.append(
+                {
+                    "label": state.get("label") or item.get("label", ""),
+                    "status": state.get("status", ""),
+                    "posture": state.get("operationalIntent", ""),
+                    "objective": state.get("currentObjective", ""),
+                    "latest_event": state.get("latestEvent", ""),
+                    "last_updated": state.get("lastUpdated", ""),
+                }
             )
-        elif btype == "callout" and "Recommended" in text:
-            existing_recommended = block["id"]
-        elif btype == "child_database":
-            title = block.get("child_database", {}).get("title", "")
-            if title == "Top Priorities":
-                top_priorities_db = block["id"]
-            elif title in ("Next Execution", "Untitled"):
-                legacy_execution_db = block["id"]
-        elif btype == "paragraph" and "+ New Priority" in text:
-            future_affordance = block["id"]
+    return sorted(missions, key=lambda mission: (mission["posture"] != "Executing", mission["label"]))
 
-    if existing_recommended:
-        notion(
-            "PATCH",
-            f"/blocks/{existing_recommended}",
-            token,
-            {"callout": _top_priorities_recommended_callout(command)["callout"]},
-        )
-        anchor = existing_recommended
-    elif quote_id:
-        ids = append_blocks_after(token, parent_page_id, quote_id, [_top_priorities_recommended_callout(command)])
-        anchor = ids[0]
-    else:
-        anchor = children[section_start]["id"]
 
-    if legacy_execution_db and legacy_execution_db != top_priorities_db:
-        archive_block(token, {"id": legacy_execution_db, "type": "child_database"})
+def _operational_pulse_blocks() -> list[dict]:
+    metrics = _operational_pulse_metrics()
+    return [
+        _h1("Operational Pulse"),
+        _operational_pulse_callout(metrics),
+        _p("Pipeline: Coming Soon    Revenue: Coming Soon    Business Health: Coming Soon"),
+        _divider(),
+    ]
 
-    if top_priorities_db:
-        notion(
-            "PATCH",
-            f"/databases/{top_priorities_db}",
-            token,
-            {"title": [{"type": "text", "text": {"content": "Top Priorities"}}]},
-        )
-        _patch_linked_view(token, top_priorities_db, "Top Priorities", FILTER_TOP_PRIORITIES)
-        anchor = top_priorities_db
-    else:
-        data_source_id = _mission_registry_data_source_id(token)
-        v = create_linked_view(
-            token,
-            parent_page_id,
-            data_source_id,
-            name="Top Priorities",
-            view_type="list",
-            filter_obj=FILTER_TOP_PRIORITIES,
-            sorts=SORT_RECENT,
-            configuration=list_config(P["mission"], P["status"], P["posture"], P["latest_event"]),
-            after_block=anchor,
-        )
-        anchor = v.get("parent", {}).get("database_id", anchor)
-        if anchor:
-            notion(
-                "PATCH",
-                f"/databases/{anchor}",
-                token,
-                {"title": [{"type": "text", "text": {"content": "Top Priorities"}}]},
-            )
 
-    if future_affordance:
-        notion(
-            "PATCH",
-            f"/blocks/{future_affordance}",
-            token,
-            {"paragraph": _future_priority_affordance()["paragraph"]},
+def _operational_pulse_metrics() -> dict[str, str]:
+    missions = _all_projected_missions()
+    active = [
+        mission
+        for mission in missions
+        if mission["status"] == "Active" and mission["posture"] != "Completed"
+    ]
+    founder_waiting = [
+        mission
+        for mission in active
+        if mission["posture"] in ("Blocked", "Paused")
+    ]
+    blocked = [mission for mission in active if mission["posture"] == "Blocked"]
+    completed_this_week = [
+        mission
+        for mission in missions
+        if (mission["status"] == "Closed" or mission["posture"] == "Completed")
+        and _is_this_week(mission["last_updated"])
+    ]
+    qa_runs = _qa_run_count()
+    health = "Blocked" if blocked else "Needs Attention" if founder_waiting else "Healthy"
+    return {
+        "Active Priorities": str(len(active)),
+        "Founder Decisions Waiting": str(len(founder_waiting)),
+        "Blocked Work": str(len(blocked)),
+        "Completed This Week": str(len(completed_this_week)),
+        "Active Bugs": "Coming Soon",
+        "QA Runs": str(qa_runs),
+        "System Health": f"● {health}",
+    }
+
+
+def _operational_pulse_callout(metrics: dict[str, str]) -> dict:
+    ordered = (
+        "Active Priorities",
+        "Founder Decisions Waiting",
+        "Blocked Work",
+        "Completed This Week",
+        "Active Bugs",
+        "QA Runs",
+        "System Health",
+    )
+    rich_text: list[dict] = []
+    for label in ordered:
+        value = metrics[label]
+        rich_text.extend(
+            [
+                {"type": "text", "text": {"content": f"{value}\n"}, "annotations": {"bold": True}},
+                {"type": "text", "text": {"content": f"{label}\n\n"}},
+            ]
         )
-    else:
-        append_blocks_after(token, parent_page_id, anchor, [_future_priority_affordance()])
+    return {
+        "type": "callout",
+        "callout": {
+            "rich_text": rich_text,
+            "icon": {"type": "emoji", "emoji": "📊"},
+            "color": "blue_background",
+        },
+    }
+
+
+def _all_projected_missions() -> list[dict]:
+    if not MISSION_REGISTRY_STATE.exists():
+        return []
+    doc = json.loads(MISSION_REGISTRY_STATE.read_text(encoding="utf-8"))
+    missions = []
+    for item in doc.get("missions", []):
+        state = item.get("state", {})
+        missions.append(
+            {
+                "label": state.get("label") or item.get("label", ""),
+                "status": state.get("status", ""),
+                "posture": state.get("operationalIntent", ""),
+                "latest_event": state.get("latestEvent", ""),
+                "last_updated": state.get("lastUpdated", ""),
+            }
+        )
+    return missions
+
+
+def _is_this_week(value: str) -> bool:
+    if not value:
+        return False
+    normalized = value.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(days=now.weekday())
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=7)
+    return start <= dt.astimezone(timezone.utc) < end
+
+
+def _qa_run_count() -> int:
+    if not KNOWLEDGE_STORE_STATE.exists():
+        return 0
+    try:
+        store = json.loads(KNOWLEDGE_STORE_STATE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return 0
+    qa_runs = store.get("qaRuns", [])
+    return len(qa_runs) if isinstance(qa_runs, list) else 0
+
+
+def _active_priority_card(mission: dict, *, recommended: bool) -> dict:
+    title = f"Recommended\n{mission['label']}" if recommended else mission["label"]
+    lines = [
+        (f"{title}\n", True),
+        (f"What is this? {mission['label']}.\n", False),
+        (f"Current State: {mission['posture'] or mission['status'] or 'Unknown'}\n", False),
+        (f"Why It Matters: {_why_it_matters(mission)}\n", False),
+        (f"Recommended Next Action: {_priority_next_action(mission)}\n", False),
+        (f"Business Impact: {_business_impact(mission)}\n", False),
+        (f"Health: {_executive_health(mission['status'], mission['posture'])}", False),
+    ]
+    rich_text: list[dict] = []
+    for content, bold in lines:
+        rich_text.extend(_rich_text_chunks(content, bold=bold))
+    return {
+        "type": "callout",
+        "callout": {
+            "rich_text": rich_text,
+            "icon": {"type": "emoji", "emoji": "⭐" if recommended else "📌"},
+            "color": "yellow_background" if recommended else "gray_background",
+        },
+    }
+
+
+def _why_it_matters(mission: dict) -> str:
+    text = f"{mission.get('label', '')} {mission.get('objective', '')} {mission.get('latest_event', '')}".lower()
+    if "gemini" in text or "multi-project" in text or "concurrent" in text:
+        return "Validates multi-priority execution before ODS scales."
+    if "mission intelligence" in text or "intelligence" in text:
+        return "Improves every future mission handoff and decision review."
+    if "notion" in text or "sync" in text or "projection" in text or "operating surface" in text:
+        return "Improves operational trust in the founder operating surface."
+    if "proof" in text or "validate" in text:
+        return "Proves the operating system can be trusted before expansion."
+    return _clean_sentence(mission.get("objective", "")) or "Represents active founder attention."
+
+
+def _priority_next_action(mission: dict) -> str:
+    label = mission.get("label", "this priority")
+    posture = mission.get("posture", "")
+    latest = _clean_sentence(mission.get("latest_event", ""))
+    objective = _clean_sentence(mission.get("objective", ""))
+    text = f"{label} {objective} {latest}".lower()
+    if posture == "Blocked":
+        return f"Resolve {latest or objective or label}."
+    if posture == "Paused":
+        return f"Decide whether to resume {label}."
+    if posture == "Ready to Resume":
+        return f"Resume {label} from the latest validated signal."
+    if "gemini" in text:
+        return "Validate Gemini Timeline inside the operating loop."
+    if "mission intelligence" in text or "intelligence" in text:
+        return "Tighten Mission Intelligence until a new operator can act quickly."
+    if "operating surface" in text or "notion" in text:
+        return "Polish the operating surface until the next decision is obvious."
+    if objective:
+        return f"Advance {label} against the current objective."
+    return f"Continue {label} from the latest signal."
+
+
+def _business_impact(mission: dict) -> str:
+    text = f"{mission.get('label', '')} {mission.get('objective', '')} {mission.get('latest_event', '')}".lower()
+    if "gemini" in text or "multi-project" in text or "concurrent" in text:
+        return "Improves founder attention allocation across concurrent work."
+    if "mission intelligence" in text or "intelligence" in text:
+        return "Reduces onboarding time for future collaborators."
+    if "notion" in text or "sync" in text or "projection" in text or "operating surface" in text:
+        return "Reduces operational drag and manual coordination cost."
+    if "proof" in text or "validate" in text:
+        return "Increases confidence before investing in the next system layer."
+    return "Protects founder focus and execution quality."
+
+
+def _executive_health(status: str, posture: str) -> str:
+    if status == "Closed" or posture == "Completed":
+        return "Healthy"
+    if posture == "Blocked":
+        return "Blocked"
+    if posture == "Paused":
+        return "At Risk"
+    if posture == "Ready to Resume":
+        return "Needs Attention"
+    if posture == "Executing":
+        return "Healthy"
+    return "Needs Attention"
+
+
+def refresh_execution_context(token: str, parent_page_id: str) -> None:
+    """Render static Execution Context v0.2 below Active Priorities."""
+    children = notion("GET", f"/blocks/{parent_page_id}/children?page_size=100", token).get("results", [])
+    context_start = None
+    context_end = len(children)
+    for idx, block in enumerate(children):
+        if block.get("type") == "heading_2" and _block_text(block) == "Execution Context":
+            context_start = idx
+            break
+    if context_start is not None:
+        for idx in range(context_start + 1, len(children)):
+            if children[idx].get("type") == "heading_2":
+                context_end = idx
+                break
+        for block in children[context_start:context_end]:
+            archive_block(token, block)
+        children = notion("GET", f"/blocks/{parent_page_id}/children?page_size=100", token).get("results", [])
+
+    top_start = None
+    top_end = len(children)
+    for idx, block in enumerate(children):
+        if block.get("type") == "heading_2" and _block_text(block) in ("Top Priorities", "Active Priorities"):
+            top_start = idx
+            break
+    if top_start is None:
+        return
+
+    for idx in range(top_start + 1, len(children)):
+        if children[idx].get("type") == "heading_2":
+            top_end = idx
+            break
+
+    anchor = children[top_end - 1]["id"] if top_end > top_start else children[top_start]["id"]
+    append_blocks_after(token, parent_page_id, anchor, _execution_context_blocks())
+
+
+def _execution_context_blocks() -> list[dict]:
+    return [
+        _h2("Execution Context"),
+        _callout_static(
+            "Operating Playbook",
+            "Run the checklist. Open reference only when a decision feels unclear.",
+            icon="🧭",
+            color="gray_background",
+        ),
+        _h3("Always Read"),
+        *_todos(
+            [
+                "Review Today's Priorities",
+                "Check git status",
+                "Verify clean working tree",
+                "Review active decisions",
+                "Begin implementation",
+            ]
+        ),
+        *_bullets(
+            [
+                "Evidence before assumptions",
+                "Repository before implementation",
+                "Architecture before patches",
+            ]
+        ),
+        _h3("Sometimes Read"),
+        _toggle_section(
+            "Operating Principles",
+            _bullets(
+                [
+                    "One source of truth",
+                    "Leave every repository cleaner than you found it",
+                    "Decisions become doctrine",
+                    "Humans consume intelligence. Machines consume evidence.",
+                ]
+            ),
+        ),
+        _toggle_section(
+            "Engineering Doctrine",
+            _bullets(
+                [
+                    "Never debug by guessing",
+                    "Instrument before redesign",
+                    "Protect canonical systems",
+                    "Repository-first investigation",
+                    "QA before promotion",
+                    "Every recurring lesson becomes doctrine",
+                ]
+            ),
+        ),
+        _toggle_section(
+            "Founder / Operator Doctrine",
+            _bullets(
+                [
+                    "Operators think in priorities",
+                    "Technology serves operators",
+                    "Interfaces reduce cognitive load",
+                    "Evidence should never compete with intelligence",
+                    "Projects compete for attention",
+                    "The system recommends. The founder decides.",
+                ]
+            ),
+        ),
+        _toggle_section(
+            "Communication Doctrine",
+            [
+                _callout_static(
+                    "Language boundary",
+                    "Backend language stays stable. Presentation language can translate for operators.",
+                    icon="🗣️",
+                    color="blue_background",
+                ),
+                *_bullets(
+                    [
+                        "Backend: Mission, Mission Registry, Mission State",
+                        "Presentation: Project, Projects, Project Status",
+                        "No backend rename. Presentation layer only.",
+                    ]
+                ),
+            ],
+        ),
+        _h3("Reference Only"),
+        _toggle_section(
+            "Protected Systems",
+            _bullets(
+                [
+                    "Competition Overlay",
+                    "Mission Registry",
+                    "Mission State",
+                    "EOS",
+                    "Promotion Bridge",
+                    "Proof Floor",
+                    "Law #001",
+                ]
+            ),
+        ),
+        _toggle_section(
+            "Current Architecture Floors",
+            _bullets(
+                [
+                    "Conversation → Promotion → Event Store → Mission Engine → Mission State → Projection Engine → Notion",
+                    "Mission Registry schema is protected",
+                    "Mission State is protected",
+                    "Event Store is protected",
+                    "EOS generation is protected",
+                    "Law #001 remains the operating pipeline",
+                ]
+            ),
+        ),
+        _toggle_section("Decision Register", _decision_register_blocks()),
+        _divider(),
+    ]
+
+
+def _decision_register_blocks() -> list[dict]:
+    decisions = [
+        (
+            "Law #001 accepted",
+            "EOS is the single founder interaction; downstream projection runs automatically.",
+            "Active",
+            "ODS",
+            "Law #001 pipeline QA",
+        ),
+        (
+            "Mission Registry frozen",
+            "Canonical mission data remains stable while presentation evolves.",
+            "Active",
+            "ODS",
+            "Founder Proof Floor v0.4-v0.6",
+        ),
+        (
+            "Generic mission discovery adopted",
+            "Concurrent missions enter ODS without project-specific code.",
+            "Active",
+            "ODS",
+            "Gemini Timeline integration",
+        ),
+        (
+            "Evidence is progressively disclosed",
+            "Executive intelligence must be visible before raw engineering history.",
+            "Active",
+            "ODS",
+            "Mission Intelligence v0.2",
+        ),
+    ]
+    blocks: list[dict] = []
+    for decision, reason, status, owner, evidence in decisions:
+        blocks.append(
+            {
+                "type": "toggle",
+                "toggle": {
+                    "rich_text": [
+                        {"type": "text", "text": {"content": decision}, "annotations": {"bold": True}},
+                    ],
+                    "children": [
+                        _labeled_block("Reason", reason),
+                        _labeled_block("Status", status),
+                        _labeled_block("Owner", owner),
+                        _labeled_block("Evidence", evidence),
+                    ],
+                },
+            }
+        )
+    return blocks
 
 
 def _mission_registry_data_source_id(token: str) -> str:
     env = load_env()
     database_id = env.get("NOTION_MISSION_REGISTRY_DATABASE_ID", "")
     if not database_id:
-        raise RuntimeError("Missing NOTION_MISSION_REGISTRY_DATABASE_ID for Top Priorities linked view.")
+        raise RuntimeError("Missing NOTION_MISSION_REGISTRY_DATABASE_ID for active priority infrastructure.")
     db = notion("GET", f"/databases/{database_id}", token)
     return db["data_sources"][0]["id"]
 
@@ -471,7 +860,7 @@ def should_archive_block(block: dict, registry_database_id: str) -> bool:
         return False
     if block_type == "child_database":
         title = block.get("child_database", {}).get("title", "")
-        if title in ("Attention Required", "Next Execution", "Top Priorities", "Latest Change", "Closed Loop", "Carry Forward", "System Table", "Untitled"):
+        if title in ("Attention Required", "Next Execution", "Top Priorities", "Active Priorities", "Latest Change", "Closed Loop", "Carry Forward", "System Table", "Untitled"):
             return False
     return block_type in ("child_page", "child_database")
 
@@ -609,7 +998,7 @@ def setup_homepage(
                         {
                             "type": "text",
                             "text": {
-                                "content": "You are operating from projected Mission State.\n\nStart with Today's Command.\n\nUse Top Priorities to review founder-owned missions."
+                                "content": "You are operating from projected Mission State.\n\nStart with Today's Command.\n\nUse Active Priorities to allocate attention."
                             },
                         },
                     ],
@@ -622,11 +1011,8 @@ def setup_homepage(
         ("quote", {"type": "quote", "quote": {"rich_text": [{"type": "text", "text": {"content": "What needs founder judgment?"}, "annotations": {"italic": True}}]}}),
         ("linked", {"name": "Attention Required", "type": "list", "filter": FILTER_ATTENTION, "config": list_config(P["mission"], P["posture"], P["latest_event"], P["last_updated"])}),
         ("divider", {"type": "divider", "divider": {}}),
-        ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Top Priorities"}}]}}),
-        ("quote", {"type": "quote", "quote": {"rich_text": [{"type": "text", "text": {"content": "What does the founder currently own?"}, "annotations": {"italic": True}}]}}),
-        ("callout", _top_priorities_recommended_callout(project_todays_command())),
-        ("linked", {"name": "Top Priorities", "type": "list", "filter": FILTER_TOP_PRIORITIES, "sorts": SORT_RECENT, "config": list_config(P["mission"], P["status"], P["posture"], P["latest_event"])}),
-        ("block", _future_priority_affordance()),
+        ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Active Priorities"}}]}}),
+        *[("block", block) for block in _active_priority_blocks(project_todays_command())],
         ("divider", {"type": "divider", "divider": {}}),
         ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Latest Change"}}]}}),
         ("quote", {"type": "quote", "quote": {"rich_text": [{"type": "text", "text": {"content": "What changed?"}, "annotations": {"italic": True}}]}}),
@@ -964,6 +1350,10 @@ def _h2(text: str) -> dict:
     return {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
 
 
+def _h3(text: str) -> dict:
+    return {"type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
+
+
 def _p(text: str) -> dict:
     return {"type": "paragraph", "paragraph": {"rich_text": _rich_text_chunks(text or "—")}}
 
@@ -976,6 +1366,40 @@ def _bullets(items: list[str]) -> list[dict]:
         }
         for item in items
     ]
+
+
+def _todos(items: list[str]) -> list[dict]:
+    return [
+        {
+            "type": "to_do",
+            "to_do": {"rich_text": _rich_text_chunks(item or "—"), "checked": False},
+        }
+        for item in items
+    ]
+
+
+def _toggle_section(title: str, children: list[dict]) -> dict:
+    return {
+        "type": "toggle",
+        "toggle": {
+            "rich_text": [{"type": "text", "text": {"content": title}, "annotations": {"bold": True}}],
+            "children": children,
+        },
+    }
+
+
+def _callout_static(title: str, body: str, *, icon: str, color: str) -> dict:
+    return {
+        "type": "callout",
+        "callout": {
+            "rich_text": [
+                {"type": "text", "text": {"content": f"{title}\n"}, "annotations": {"bold": True}},
+                {"type": "text", "text": {"content": body}},
+            ],
+            "icon": {"type": "emoji", "emoji": icon},
+            "color": color,
+        },
+    }
 
 
 def _callout_next_action(text: str) -> dict:

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ods.config import get_datasets_dir, get_store_dir
+from ods.config import get_bootstrap_dir, get_datasets_dir, get_store_dir, get_store_path
+from ods.generators.active_slice import write_active_slice
+from ods.generators.bootstrap import write_operator_bootstrap
+from ods.knowledge_store import load_store
 from ods.operating_command import command_from_registry_doc
 from ods.proof_floor import run_proof_floor
 
@@ -34,7 +37,18 @@ def run_eos_pipeline(*, eod_path: Path | None = None, sync_notion: bool = True) 
         sync_notion=sync_notion,
         init_notion=False,
     )
-    command = command_from_registry_doc(result["registry"].to_state_doc())
+    registry_doc = result["registry"].to_state_doc()
+    command = command_from_registry_doc(registry_doc)
+    bootstrap_path = write_operator_bootstrap(
+        registry_doc=registry_doc,
+        output_dir=get_bootstrap_dir(),
+        store=load_store(get_store_path()),
+    )
+    active_slice_path = write_active_slice(
+        registry_doc=registry_doc,
+        output_dir=get_bootstrap_dir(),
+        cwd=Path.cwd(),
+    )
     homepage_refreshed = False
 
     if sync_notion:
@@ -49,6 +63,8 @@ def run_eos_pipeline(*, eod_path: Path | None = None, sync_notion: bool = True) 
         "notionPages": result["notionPages"],
         "homepageRefreshed": homepage_refreshed,
         "todaysCommand": command,
+        "bootstrapPath": str(bootstrap_path),
+        "activeSlicePath": str(active_slice_path),
     }
 
 
@@ -74,6 +90,8 @@ def print_eos_pipeline_summary(summary: dict) -> None:
     print("ODS Law #001 automation complete.")
     print(f"  Mission Registry: {summary['statePath']}")
     print(f"  Mission EOS: {summary['eosDir']}")
+    print(f"  Operator Bootstrap: {summary['bootstrapPath']}")
+    print(f"  Active Slice: {summary['activeSlicePath']}")
     if summary["notionPages"]:
         print(f"  Notion registry pages updated: {len(summary['notionPages'])}")
     if summary["homepageRefreshed"]:

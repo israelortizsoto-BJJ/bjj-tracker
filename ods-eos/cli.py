@@ -10,7 +10,9 @@ from ods.commands.add import AddError
 from ods.commands.capture import CaptureError
 from ods.commands.ingest import IngestError
 from ods.commands.proposal import ProposalError
+from ods.generators.active_slice import ActiveSliceError
 from ods.generators.eod import EodError
+from ods.generators.bootstrap import BootstrapError
 from ods.generators.morning import MorningError
 from ods.generators.today import TodayError
 from ods.config import get_store_path
@@ -102,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             record_type=record_type,
             payload_path=Path(payload_path) if payload_path else None,
         )
-    except (AddError, CaptureError, IngestError, ProposalError, EodError, MorningError, TodayError, EosPipelineError) as exc:
+    except (AddError, CaptureError, IngestError, ProposalError, EodError, BootstrapError, ActiveSliceError, MorningError, TodayError, EosPipelineError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except StoreError as exc:
