@@ -46,6 +46,10 @@ Paste this into a fresh execution thread to restore operating context.
 - Protect canonical systems.
 - QA before promotion.
 - The system recommends. The founder decides.
+- Ship something every day.
+- 2026-07-02T16:49:41Z | always-read | Ship something every day.
+- 2026-07-02T17:59:26Z | founder-doctrine | Founder value > engineering elegance.
+- Founder value > engineering elegance.
 
 ## 7. Analytics Engine Doctrine
 

@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ods.config import get_bootstrap_dir, get_datasets_dir, get_store_dir, get_store_path
+from ods.config import get_bootstrap_dir, get_datasets_dir, get_store_dir, get_store_path, get_yesterday_path
 from ods.generators.active_slice import write_active_slice
 from ods.generators.bootstrap import write_operator_bootstrap
+from ods.generators.yesterday import write_yesterday
 from ods.knowledge_store import load_store
 from ods.operating_command import command_from_registry_doc
 from ods.proof_floor import run_proof_floor
@@ -49,6 +50,14 @@ def run_eos_pipeline(*, eod_path: Path | None = None, sync_notion: bool = True) 
         output_dir=get_bootstrap_dir(),
         cwd=Path.cwd(),
     )
+    yesterday_path = write_yesterday(
+        registry_doc=registry_doc,
+        store=load_store(get_store_path()),
+        command=command,
+        output_dir=get_bootstrap_dir(),
+        eod_path=eod_path,
+        events_path=get_store_dir() / "events.json",
+    )
     homepage_refreshed = False
 
     if sync_notion:
@@ -65,6 +74,7 @@ def run_eos_pipeline(*, eod_path: Path | None = None, sync_notion: bool = True) 
         "todaysCommand": command,
         "bootstrapPath": str(bootstrap_path),
         "activeSlicePath": str(active_slice_path),
+        "yesterdayPath": str(yesterday_path),
     }
 
 
@@ -92,6 +102,7 @@ def print_eos_pipeline_summary(summary: dict) -> None:
     print(f"  Mission EOS: {summary['eosDir']}")
     print(f"  Operator Bootstrap: {summary['bootstrapPath']}")
     print(f"  Active Slice: {summary['activeSlicePath']}")
+    print(f"  Yesterday Recap: {summary['yesterdayPath']}")
     if summary["notionPages"]:
         print(f"  Notion registry pages updated: {len(summary['notionPages'])}")
     if summary["homepageRefreshed"]:

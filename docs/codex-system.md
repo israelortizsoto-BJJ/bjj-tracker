@@ -10,6 +10,21 @@ Core Workflow
 6. Operator → QA in app
 7. Cursor → minor patches only
 
+Founder Velocity constraint
+
+* Founder value > engineering elegance
+* Optimize for the narrowest founder-approved slice with minimal blast radius
+* Stop when scope expands beyond the approved intent
+* Do not drift into architecture exploration, repo-wide cleanup, or elegance theater
+
+Documentation Ops workflow
+
+* `docs/dev-handoff.md` remains engineering source of truth
+* Documentation changes flow: review reports → founder approval → unified diffs → explicit apply
+* Generate diffs with `python3 tools/docs_ops/generate_diffs.py`; apply only after founder approves the diff
+* Codex generates code diffs; canonical documentation patches use the Documentation Ops pipeline unless the operator explicitly approves an exception
+
+
 Non-Negotiables
 
 * DO NOT modify Training tab unless explicitly required

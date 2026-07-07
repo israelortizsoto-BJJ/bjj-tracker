@@ -3,7 +3,10 @@ from pathlib import Path
 from ods import __version__
 from ods.commands.add import run_add
 from ods.commands.capture import run_capture
+from ods.commands.founder_capture import FounderCaptureError, run_promote_pending, run_review_captures
+from ods.commands.session_capture import run_session_capture
 from ods.commands.ingest import run_ingest
+from ods.commands.promote import run_promote, run_verify_promotions
 from ods.commands.proposal import run_proposal
 from ods.commands.proof import run_proof
 from ods.commands.today import run_today
@@ -21,9 +24,14 @@ from ods.resolve import closed_sessions_sorted
 COMMAND_HELP = {
     "init": "Initialize the knowledge store.",
     "work": "Run a linked founder capture work session.",
-    "capture": "Run an interactive session capture.",
+    "capture": "Queue a founder capture for later promotion.",
+    "review-captures": "Review pending founder captures.",
+    "promote-pending": "Walk through pending captures and promote approved items.",
+    "session-capture": "Run an interactive session capture.",
     "add": "Add an atomic record (decision, investigation, parking, risk).",
     "ingest": "Ingest a canonical promotion payload JSON file.",
+    "promote": "Promote operating doctrine into generated ODS knowledge.",
+    "verify-promotions": "Verify promoted knowledge exists across generated surfaces.",
     "proposal": "Build a canonical promotion payload from structured operator input.",
     "morning": "Generate morning brief.",
     "today": "Show founder command center for today.",
@@ -126,6 +134,11 @@ def run_command(
     record_type: str | None = None,
     payload_path: Path | None = None,
     proposal_input_path: Path | None = None,
+    promote_section: str | None = None,
+    promote_text: str | None = None,
+    capture_type: str | None = None,
+    capture_text: str | None = None,
+    capture_project: str | None = None,
     init_notion: bool = False,
     dry_run: bool = False,
 ) -> int:
@@ -136,7 +149,19 @@ def run_command(
         run_work()
         return 0
     if command == "capture":
-        run_capture()
+        if capture_type is None or capture_text is None:
+            print('Error: type and text required. Use: capture --type decision --text "..."')
+            return 1
+        run_capture(capture_type, capture_text, project=capture_project)
+        return 0
+    if command == "review-captures":
+        run_review_captures()
+        return 0
+    if command == "promote-pending":
+        run_promote_pending()
+        return 0
+    if command == "session-capture":
+        run_session_capture()
         return 0
     if command == "add":
         if record_type is None:
@@ -149,6 +174,15 @@ def run_command(
             print("Error: payload file required. Use: ingest payload.json")
             return 1
         run_ingest(payload_path)
+        return 0
+    if command == "promote":
+        if promote_section is None or promote_text is None:
+            print("Error: section and text required. Use: promote --section always-read --text \"...\"")
+            return 1
+        run_promote(promote_section, promote_text)
+        return 0
+    if command == "verify-promotions":
+        run_verify_promotions()
         return 0
     if command == "proposal":
         if proposal_input_path is None:

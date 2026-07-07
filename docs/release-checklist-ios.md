@@ -46,6 +46,19 @@ After the build processes in TestFlight:
 - Assign testers **deliberately** (Internal Testing and/or a **Black Belts–only** External group). Do not widen distribution by habit.
 - **Rule:** treat coach-feedback builds as **Black Belts / internal-pilot only** until product explicitly expands the audience.
 
+## Data preservation reminder
+
+When validating TestFlight builds on devices:
+- **Upgrade Existing App** — do not delete the app, reset storage, remove athletes, or clear competitions
+- Historical on-device state is valuable forensic evidence during beta validation
+
+## Documentation audit reminder (before release)
+
+Before submitting any production or feedback TestFlight build:
+- confirm `docs/dev-handoff.md` reflects what this build actually validates vs what remains Dev-only
+- run `python3 tools/docs_ops/audit_docs.py` and `python3 tools/docs_ops/compare_docs.py` if canonical docs changed this cycle
+- ensure release notes / recap updates are queued per **Release notes / tracking** below
+
 ## Preflight
 - Confirm repo is in an intentional state
 - Run:
@@ -128,15 +141,6 @@ Confirm:
 - new build appears
 - build is processing
 - build becomes available for testing
-
-## Tester focus for Build 5
-- Training flow clarity
-- Add session placement near calendar
-- Today / Yesterday / This Week filter clarity
-- Session logging flow
-- Cancel session flow
-- Profile promotion date guidance
-- Any confusion around prior-date review behavior
 
 ## Release notes / tracking
 After release prep:

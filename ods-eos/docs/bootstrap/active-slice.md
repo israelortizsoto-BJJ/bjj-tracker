@@ -10,6 +10,12 @@
 - Continue execution against: Prove ODS value in under 10 seconds: Python generates Mission State, EOS, and updates Notion.
 - Latest promoted event: Architecture freeze: implementation proceeds without further redesign unless implementation breaks architecture.
 - Latest EOS signal: Final polish: operational posture, mission replay, Notion sync.
+- Latest promoted knowledge: Founder value > engineering elegance. (founder-doctrine).
+
+## Promoted Knowledge
+
+- Ship something every day. (always-read)
+- Founder value > engineering elegance. (founder-doctrine)
 
 ## Repository
 
@@ -18,13 +24,13 @@
 ## Files Involved
 
 - `M cli.py`
+- `M docs/bootstrap/active-slice.md`
+- `M docs/bootstrap/operator-bootstrap.md`
 - `M ods/commands/__init__.py`
+- `M ods/commands/capture.py`
 - `M ods/config.py`
 - `M ods/eos_pipeline.py`
-- `M scripts/setup_operating_surface.py`
-- `?? docs/bootstrap/`
-- `?? ods/generators/active_slice.py`
-- `?? ods/generators/bootstrap.py`
+- `M ods/generators/active_slice.py`
 
 ## Acceptance Criteria
 

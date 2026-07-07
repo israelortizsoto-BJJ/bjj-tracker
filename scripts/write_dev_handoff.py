@@ -1,31 +1,39 @@
 #!/usr/bin/env python3
 
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 import shutil
 import subprocess
+import sys
 
-REPO_ROOT = Path("/Users/ods/Repos/bjj-tracker")
+SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
+from dev_handoff_ordering import split_handoff, update_handoff, verify_newest_first
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 TARGET_DOC = REPO_ROOT / "docs" / "dev-handoff.md"
 
 TODAY = datetime.now().strftime("%Y-%m-%d %H:%M")
+SESSION_DATE = datetime.now().strftime("%Y-%m-%d")
+
 
 def run(cmd):
     return subprocess.check_output(cmd, cwd=REPO_ROOT, text=True).strip()
+
 
 git_status = run(["git", "status", "-sb"])
 latest_commit = run(["git", "log", "--oneline", "--decorate", "-5"])
 
 changed_files = run([
-"git",
-"diff",
-"--name-only",
-"HEAD~2..HEAD"
+    "git",
+    "diff",
+    "--name-only",
+    "HEAD~2..HEAD",
 ])
 
-handoff = f"""
-
-# DEV HANDOFF — {TODAY}
+handoff = f"""# DEV HANDOFF — {TODAY}
 
 ## Runtime Focus
 
@@ -270,8 +278,8 @@ Notion operationalization started:
 * AI-assisted engineering governance
 
 Current strategic transition:
-Reactive debugging → governed distributed runtime engineering.
-"""
+Reactive debugging → governed distributed runtime engineering."""
+
 
 def main():
     TARGET_DOC.parent.mkdir(parents=True, exist_ok=True)
@@ -281,13 +289,23 @@ def main():
         shutil.copy2(TARGET_DOC, backup)
         print(f"Backup created: {backup}")
 
-    existing = ""
-    if TARGET_DOC.exists():
-        existing = TARGET_DOC.read_text()
+    existing = TARGET_DOC.read_text(encoding="utf-8") if TARGET_DOC.exists() else ""
+    before_header, _ = split_handoff(existing)
 
-    TARGET_DOC.write_text(existing + "\n" + handoff)
+    updated = update_handoff(existing, handoff, session_date=SESSION_DATE)
+
+    if not verify_newest_first(updated):
+        raise RuntimeError("Handoff ordering verification failed: newest session is not first.")
+
+    TARGET_DOC.write_text(updated, encoding="utf-8")
+
+    after_header, sessions = split_handoff(updated)
+
+    if before_header.rstrip() != after_header.rstrip():
+        raise RuntimeError("Permanent header changed during handoff generation.")
 
     print(f"Updated handoff: {TARGET_DOC}")
+    print(f"  Sessions: {len(sessions)} (newest first)")
 
 
 if __name__ == "__main__":

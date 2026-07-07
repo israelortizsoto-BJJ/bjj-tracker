@@ -173,24 +173,35 @@ Localize Failures
 ```
 
 before architectural changes occur.
+## Founder Velocity
 
-ACTIVE PHASE:
-Phase 0 — local freeze race proof
+Founder value > engineering elegance.
 
-GOVERNING DOCS:
-- competition-overlay-architecture-v2.md
-- competition-overlay-migration-plan.md
+Default to the narrowest slice that moves founder-visible progress:
+- ship something meaningful every day when possible
+- prefer operational clarity over architectural purity
+- stop when evidence shows diminishing founder ROI
 
-PROTECTED SYSTEMS:
-- canonical authority
-- hydration
-- training proof
-- ACK systems
-- athlete isolation
+When tradeoffs appear, ask: does this increase founder velocity or engineering elegance theater?
 
-CURRENT OBJECTIVE:
-prove save/close lifecycle collision
-WITHOUT architecture mutation
+## Dev / TestFlight coexistence (non-negotiable)
+
+Keep two separate bundle IDs forever:
+- Prod/TestFlight: `com.ortizdigitalstudio.matmind`
+- Dev: `com.ortizdigitalstudio.matmind.dev`
+
+Never overwrite the TestFlight app with dev installs.
+Use `ios.infoPlist.CFBundleDisplayName` for the Dev icon label ("MatMind Dev").
+
+TestFlight is beta reality: nothing affects testers until a new TestFlight build ships and is documented in `docs/dev-handoff.md`.
+
+## Coach sync URL verification
+
+Before debugging connect, invite, or weekly sync flows:
+
+Confirm the coach sync base URL is embedded in the **running** app binary—not assumed from source files alone.
+
+If connect is blocked and the URL is missing from the running build, treat it as a **build / environment mismatch**, not a product-logic regression. Rebuild the correct variant before investigating redeem or sync architecture.
 
 
 Operating Note

@@ -8,7 +8,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ods.commands import ADD_RECORD_TYPES, COMMAND_HELP, run_command
 from ods.commands.add import AddError
 from ods.commands.capture import CaptureError
+from ods.commands.founder_capture import FounderCaptureError
+from ods.commands.session_capture import SessionCaptureError
 from ods.commands.ingest import IngestError
+from ods.commands.promote import PromoteError
 from ods.commands.proposal import ProposalError
 from ods.generators.active_slice import ActiveSliceError
 from ods.generators.eod import EodError
@@ -20,7 +23,18 @@ from ods.eos_pipeline import EosPipelineError
 from ods.proof_floor import ProofFloorError
 from ods.knowledge_store import StoreError, load_store
 
-STORE_OPTIONAL_COMMANDS = frozenset({"init", "validate", "version", "proposal", "proof"})
+STORE_OPTIONAL_COMMANDS = frozenset(
+    {
+        "init",
+        "validate",
+        "version",
+        "proposal",
+        "proof",
+        "capture",
+        "review-captures",
+        "promote-pending",
+    }
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -50,6 +64,17 @@ def build_parser() -> argparse.ArgumentParser:
                 "input",
                 help="Path to structured operator proposal input (.yaml, .yml, or .json).",
             )
+            continue
+        if name == "capture":
+            capture_parser = subparsers.add_parser(name, help=help_text)
+            capture_parser.add_argument("--type", required=True, help="Capture type.")
+            capture_parser.add_argument("--text", required=True, help="Capture text.")
+            capture_parser.add_argument("--project", help="Optional project label.")
+            continue
+        if name == "promote":
+            promote_parser = subparsers.add_parser(name, help=help_text)
+            promote_parser.add_argument("--section", required=True, help="Doctrine section to promote into.")
+            promote_parser.add_argument("--text", required=True, help="Text to promote.")
             continue
         if name == "proof":
             proof_parser = subparsers.add_parser(name, help=help_text)
@@ -82,10 +107,23 @@ def main(argv: list[str] | None = None) -> int:
             return run_command(
                 args.command,
                 proposal_input_path=Path(args.input) if args.command == "proposal" else None,
+                promote_section=getattr(args, "section", None),
+                promote_text=getattr(args, "text", None),
+                capture_type=getattr(args, "type", None),
+                capture_text=getattr(args, "text", None) if args.command == "capture" else None,
+                capture_project=getattr(args, "project", None),
                 init_notion=getattr(args, "init_notion", False),
                 dry_run=getattr(args, "dry_run", False),
             )
-        except (ProposalError, StoreError, ProofFloorError, EosPipelineError) as exc:
+        except (
+            CaptureError,
+            FounderCaptureError,
+            ProposalError,
+            PromoteError,
+            StoreError,
+            ProofFloorError,
+            EosPipelineError,
+        ) as exc:
             print(f"Error: {exc}", file=sys.stderr)
             return 1
 
@@ -103,8 +141,27 @@ def main(argv: list[str] | None = None) -> int:
             args.command,
             record_type=record_type,
             payload_path=Path(payload_path) if payload_path else None,
+            promote_section=getattr(args, "section", None),
+            promote_text=getattr(args, "text", None),
+            capture_type=getattr(args, "type", None),
+            capture_text=getattr(args, "text", None) if args.command == "capture" else None,
+            capture_project=getattr(args, "project", None),
         )
-    except (AddError, CaptureError, IngestError, ProposalError, EodError, BootstrapError, ActiveSliceError, MorningError, TodayError, EosPipelineError) as exc:
+    except (
+        AddError,
+        CaptureError,
+        FounderCaptureError,
+        IngestError,
+        PromoteError,
+        ProposalError,
+        SessionCaptureError,
+        EodError,
+        BootstrapError,
+        ActiveSliceError,
+        MorningError,
+        TodayError,
+        EosPipelineError,
+    ) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     except StoreError as exc:

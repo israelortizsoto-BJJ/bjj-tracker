@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from ods.doctrine import ALLOWED_SECTIONS, load_section_entries
 from ods.operating_command import TodaysCommand, command_from_registry_doc
 
 
@@ -175,9 +176,10 @@ def _active_rules(store: dict | None) -> tuple[str, ...]:
             text = record.get("description") or record.get("statement") or record.get("title")
             if text:
                 doctrine_records.append(_sentence(str(text)))
-    if doctrine_records:
-        return tuple(dict.fromkeys([*EXECUTION_RULES, *doctrine_records]))
-    return EXECUTION_RULES
+    promoted = []
+    for section in sorted(ALLOWED_SECTIONS):
+        promoted.extend(load_section_entries(section))
+    return tuple(dict.fromkeys([*EXECUTION_RULES, *doctrine_records, *promoted]))
 
 
 def _next_slice(command: TodaysCommand) -> str:

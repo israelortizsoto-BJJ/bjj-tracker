@@ -20,168 +20,44 @@ Why:
 - keeps changes explicit
 - improves operating discipline
 - supports better product-quality work
-# BUILD / TESTFLIGHT DOCTRINE
+## Handoff-first startup
 
-## Purpose
+Before any coding plan:
+1. `git status -sb`
+2. `git log -8 --oneline`
+3. `sed -n '1,280p' "docs/dev-handoff.md"`
+4. Read latest recap if needed: `docs/recaps/YYYY-MM-DD_dev-recap.md`
+5. State assumptions explicitly before proposing work
 
-Prevent accidental dev builds, wrong bundle IDs, and repeated release investigation.
+Current slice truth lives in `docs/dev-handoff.md` — not in prompt memory.
 
----
+## Current restart workflow
 
-## Before Every TestFlight Build
+Before coding each day:
+1. check repo state
+2. read latest dev handoff (commands above)
+3. read latest dev recap if needed
+4. identify the narrowest highest-ROI slice from **current** handoff — not closed investigations
+5. confirm what must not break
+6. confirm validation gates before editing
 
-Verify branch:
+Current blockers (verify against latest handoff before planning):
+- coach sync base URL must be present in the **running** app for connect flows
+- validate connect E2E: Paste → Connect → Parent-athletes → Success strip → **This Week**
+- QA **This Week** tab without regressing weekly sync, training, or competition
 
-```bash
-git branch --show-current
-```
+For deep doctrine (product architecture, DEBUG DOCTRINE, 9-step flow): read `docs/master-prompt-developer.md`.
+For release / TestFlight days: read `docs/release-checklist-ios.md`.
 
-Verify clean repo:
+## Documentation Ops reminder
 
-```bash
-git status -sb
-```
+Canonical docs follow the Documentation Ops pipeline:
+1. Review reports in `reports/*.review.md` (DOCOPS-005)
+2. Founder approves recommendations
+3. Unified diffs in `reports/diffs/` (DOCOPS-006)
+4. Apply engine runs only after explicit approval (DOCOPS-007)
 
-Verify intended release commit:
-
-```bash
-git log --oneline --decorate -5
-```
-
----
-
-## Verify Production Profile Resolution
-
-Never assume production config.
-
-Always prove it.
-
-Run:
-
-```bash
-APP_VARIANT=prod EXPO_PUBLIC_APP_VARIANT=prod npx expo config --type public
-```
-
-Must show:
-
-```text
-ios.bundleIdentifier:
-com.ortizdigitalstudio.matmind
-
-CFBundleDisplayName:
-MatMind Jiu Jitsu
-
-appVariant:
-prod
-```
-
-If not:
-
-```text
-STOP BUILD
-```
-
-Do not investigate TestFlight failures until production config resolves correctly.
-
----
-
-## EAS CLI Rule
-
-Do not rely on globally installed EAS.
-
-Preferred:
-
-```bash
-npx eas-cli --version
-```
-
-Builds should be executed with:
-
-```bash
-npx eas-cli build ...
-```
-
-This avoids machine-specific PATH issues.
-
----
-
-## Internal Feedback / Black Belt Builds
-
-Use:
-
-```bash
-npx eas-cli build \
-  --platform ios \
-  --profile testflight-internal
-```
-
-This provides:
-
-```text
-Production Bundle ID
-Production App
-Coach Share Enabled
-Internal Validation Lane
-```
-
-and is the default path for MatMind QA and Black Belt validation.
-
----
-
-## Production App Store Builds
-
-Use:
-
-```bash
-npx eas-cli build \
-  --platform ios \
-  --profile production
-```
-
-Only when preparing broad TestFlight/App Store releases.
-
----
-
-## Data Preservation Rule
-
-When validating TestFlight builds:
-
-```text
-Upgrade Existing App
-```
-
-Do NOT:
-
-```text
-Delete App
-Reset Storage
-Remove Athletes
-Clear Competitions
-```
-
-Historical state is valuable forensic evidence.
-
----
-
-## Release Goal
-
-The purpose of a build is not:
-
-```text
-Ship Features
-```
-
-The purpose is:
-
-```text
-Validate Behavior
-Capture Evidence
-Localize Failures
-```
-
-before architectural changes occur.
-
-
+Do not hand-edit canonical docs outside this pipeline unless the change is tiny and emergency-level.
 
 ## Current build-system truth
 The current operating model is:
@@ -193,13 +69,7 @@ The current operating model is:
 Do not default back into Cursor-led broad implementation.
 
 ## Current development truth
-Before coding each day:
-1. check repo state
-2. read latest dev handoff
-3. read latest dev recap if needed
-4. identify the narrowest highest-ROI slice
-5. confirm what must not break
-6. confirm validation gates before editing
+Follow **Handoff-first startup** and **Current restart workflow** above — they supersede this checklist.
 
 ## Prompt
 Action: Think hard. This is a fresh MatMind coding workday thread. Act as my senior product engineer, technical lead, QA lead, architecture coach, and execution coach.
@@ -223,148 +93,6 @@ Keep me focused on:
 - repo-aware implementation
 - the narrowest high-value slice
 - validation after each slice
-
-## Current Product Doctrine Truth
-
-MatMind is NOT evolving into:
-
-* a statistics dashboard
-* a KPI platform
-* a training ledger
-* a chart-heavy analytics system
-* “AI coaching”
-
-MatMind IS evolving into:
-
-# an interpreted athlete development platform
-
-Core moat:
-
-* coach-guided developmental understanding over time
-* longitudinal coaching intelligence
-* interpreted progression
-* proof-backed meaning
-* athlete evolution understanding
-
-Core governing principle:
-
-“Proof supports meaning.
-Meaning leads the experience.”
-
-This means:
-
-* metrics support developmental understanding
-* proof validates progression
-* progression understanding matters more than data density
-* restraint is part of the premium experience
-
-The best performance apps do NOT make users feel like they are managing data.
-They make users feel like they are understanding progress.
-
-MatMind should increasingly make:
-
-* coaches feel they are understanding athlete development
-* parents feel they are understanding athlete progress
-
-NOT:
-
-* reviewing dashboards
-* managing statistics
-* browsing proof archives
-
-Protected anti-patterns:
-
-* metric sprawl
-* dashboard chaos
-* fake AI insight spam
-* chart overload
-* duplicated proof surfaces
-* AI pretending to replace coach interpretation
-* feature accumulation without semantic clarity
-
-Current platform surface philosophy:
-
-Summary
-
-* progress understanding
-* developmental framing
-* athlete identity evolution
-* coach-guided reinforcement
-
-Coach Athlete Review
-
-* coach interpretation workspace
-* longitudinal observation
-* weekly direction oversight
-* parent reinforcement oversight
-
-Training
-
-* proof generation
-* systems exposure
-* repetition and consistency evidence
-
-Compete
-
-* pressure validation
-* execution proof
-* interpreted pressure memory
-
-Weekly Focus
-
-* directional authoring
-
-Match Breakdown
-
-* longitudinal interpreted competition memory
-
-Longitudinal Intelligence Layer
-
-* recurring patterns
-* athlete evolution
-* strategic identity
-* recurring coach observations
-* voice-note memory
-* progression understanding over time
-
-Non-negotiable:
-Do NOT let the product drift into:
-“well-designed sports analytics dashboard.”
-
-The moat is:
-
-# interpreted athlete development over time.
-
-
-
-## Current product architecture truth
-The product is now understood in layers:
-
-### 1. Identity + Summary layer
-- modal onboarding (skippable)
-- identity snapshot
-- summary reflects:
-  - training
-  - competition
-  - coaching (conditional)
-
-### 2. Coach Feed layer (conditional)
-Appears only if coach is linked.
-
-Includes:
-- weekly coach message
-- mission / resource
-- family recap
-- practice summary
-- connection state
-
-### 3. Execution layer (core engine — protected)
-- Training tab
-- Competition tab
-- Session logging system
-
-Non-negotiable:
-Do not break the Training system.
 
 ## Current build rules
 - architecture-first, not UI-first

@@ -71,7 +71,7 @@ def main() -> int:
         "execution_context_present": context_start is not None,
         "active_priorities_before_execution_context": _index(h2, "Active Priorities") < _index(h2, "Execution Context"),
         "execution_context_before_projects": _index(h2, "Execution Context") < min(
-            idx for idx in (_index(h2, "Carry Forward"), _index(h2, "Latest Change"), _index(h2, "Closed Loop")) if idx >= 0
+            idx for idx in (_index(h2, "Carry Forward"), _index(h2, "Yesterday's Recap"), _index(h2, "Latest Change"), _index(h2, "Closed Loop")) if idx >= 0
         ),
         "expected_h3": EXPECTED_H3,
         "context_h3": context_h3,

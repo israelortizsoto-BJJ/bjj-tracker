@@ -18,8 +18,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ods.operating_command import TodaysCommand, command_from_registry_doc
+from ods.doctrine import load_decision_entries, load_section_entries
+from ods.config import get_yesterday_path
+from ods.generators.yesterday import load_yesterday_text
 
-NOTION_VERSION_VIEWS = "2026-03-11"
+RECAP_HEADINGS = ("Latest Change", "Yesterday's Recap")
+
 NOTION_VERSION = "2025-09-03"
 MISSION_REGISTRY_STATE = Path(__file__).resolve().parents[1] / ".ods-eos" / "mission-registry.json"
 KNOWLEDGE_STORE_STATE = Path(__file__).resolve().parents[1] / ".ods-eos" / "knowledge-store.json"
@@ -348,10 +352,12 @@ def refresh_todays_command(token: str, parent_page_id: str) -> TodaysCommand:
             if seen_heading or "Best Next Move" in text or "Capability Validation" in text:
                 notion("PATCH", f"/blocks/{block['id']}", token, {"callout": _command_callout(command)})
                 refresh_top_priorities(token, parent_page_id, command)
+                refresh_yesterday_recap(token, parent_page_id)
                 return command
     if fallback_callout_id:
         notion("PATCH", f"/blocks/{fallback_callout_id}", token, {"callout": _command_callout(command)})
         refresh_top_priorities(token, parent_page_id, command)
+        refresh_yesterday_recap(token, parent_page_id)
         return command
     raise RuntimeError("Could not find a homepage callout to refresh Today's Command.")
 
@@ -388,6 +394,76 @@ def refresh_top_priorities(token: str, parent_page_id: str, command: TodaysComma
 
     refresh_execution_context(token, parent_page_id)
 
+
+def refresh_yesterday_recap(token: str, parent_page_id: str) -> None:
+    """Replace Latest Change with a deterministic recap from docs/bootstrap/yesterday.md."""
+    children = notion("GET", f"/blocks/{parent_page_id}/children?page_size=100", token).get("results", [])
+
+    section_start = None
+    next_section = len(children)
+    for idx, block in enumerate(children):
+        if block.get("type") == "heading_2" and _block_text(block) in RECAP_HEADINGS:
+            section_start = idx
+            notion(
+                "PATCH",
+                f"/blocks/{block['id']}",
+                token,
+                {"heading_2": {"rich_text": [{"type": "text", "text": {"content": "Yesterday's Recap"}}]}},
+            )
+            break
+    if section_start is None:
+        return
+
+    for idx in range(section_start + 1, len(children)):
+        if children[idx].get("type") == "heading_2":
+            next_section = idx
+            break
+
+    for block in children[section_start + 1 : next_section]:
+        archive_block(token, block)
+
+    append_blocks_after(token, parent_page_id, children[section_start]["id"], _yesterday_recap_blocks())
+
+
+def _yesterday_recap_blocks() -> list[dict]:
+    text = load_yesterday_text(get_yesterday_path())
+    if not text:
+        return [
+            _p("No recap generated yet."),
+            _p("Run `python3 cli.py eod` to project yesterday's operational replay."),
+        ]
+    return _recap_text_to_blocks(text)
+
+
+def _recap_text_to_blocks(text: str) -> list[dict]:
+    blocks: list[dict] = []
+    for raw_section in text.split("-----------------------------------"):
+        lines = [line.strip() for line in raw_section.splitlines() if line.strip()]
+        if not lines:
+            continue
+        if lines[0] == "Yesterday":
+            lines = lines[1:]
+        if not lines:
+            continue
+        title = lines[0]
+        body = lines[1:]
+        blocks.append(_h3(title))
+        for line in body:
+            if line.startswith("✓ "):
+                blocks.append(
+                    {
+                        "type": "to_do",
+                        "to_do": {
+                            "rich_text": _rich_text_chunks(line[2:]),
+                            "checked": True,
+                        },
+                    }
+                )
+            elif line.startswith("• "):
+                blocks.extend(_bullets([line[2:]]))
+            else:
+                blocks.append(_p(line))
+    return blocks or [_p(text)]
 
 def _active_priority_blocks(command: TodaysCommand) -> list[dict]:
     missions = _active_priority_missions()
@@ -676,6 +752,7 @@ def _execution_context_blocks() -> list[dict]:
                 "Verify clean working tree",
                 "Review active decisions",
                 "Begin implementation",
+                *load_section_entries("always-read"),
             ]
         ),
         *_bullets(
@@ -707,8 +784,17 @@ def _execution_context_blocks() -> list[dict]:
                     "Repository-first investigation",
                     "QA before promotion",
                     "Every recurring lesson becomes doctrine",
+                    *load_section_entries("engineering-doctrine"),
                 ]
             ),
+        ),
+        _toggle_section(
+            "Python Doctrine",
+            _bullets(load_section_entries("python-doctrine") or ["No promoted Python doctrine yet."]),
+        ),
+        _toggle_section(
+            "Product Doctrine",
+            _bullets(load_section_entries("product-doctrine") or ["No promoted product doctrine yet."]),
         ),
         _toggle_section(
             "Founder / Operator Doctrine",
@@ -720,6 +806,7 @@ def _execution_context_blocks() -> list[dict]:
                     "Evidence should never compete with intelligence",
                     "Projects compete for attention",
                     "The system recommends. The founder decides.",
+                    *load_section_entries("founder-doctrine"),
                 ]
             ),
         ),
@@ -737,6 +824,7 @@ def _execution_context_blocks() -> list[dict]:
                         "Backend: Mission, Mission Registry, Mission State",
                         "Presentation: Project, Projects, Project Status",
                         "No backend rename. Presentation layer only.",
+                        *load_section_entries("communication-doctrine"),
                     ]
                 ),
             ],
@@ -755,6 +843,10 @@ def _execution_context_blocks() -> list[dict]:
                     "Law #001",
                 ]
             ),
+        ),
+        _toggle_section(
+            "Parking Lot",
+            _bullets(load_section_entries("parking-lot") or ["No promoted parking lot items yet."]),
         ),
         _toggle_section(
             "Current Architecture Floors",
@@ -805,6 +897,16 @@ def _decision_register_blocks() -> list[dict]:
             "Mission Intelligence v0.2",
         ),
     ]
+    for entry in load_decision_entries():
+        decisions.append(
+            (
+                entry["text"],
+                f"Promoted into {entry['section']} via Knowledge Promotion Engine.",
+                "Active",
+                "ODS",
+                entry["timestamp"],
+            )
+        )
     blocks: list[dict] = []
     for decision, reason, status, owner, evidence in decisions:
         blocks.append(
@@ -860,7 +962,7 @@ def should_archive_block(block: dict, registry_database_id: str) -> bool:
         return False
     if block_type == "child_database":
         title = block.get("child_database", {}).get("title", "")
-        if title in ("Attention Required", "Next Execution", "Top Priorities", "Active Priorities", "Latest Change", "Closed Loop", "Carry Forward", "System Table", "Untitled"):
+        if title in ("Attention Required", "Next Execution", "Top Priorities", "Active Priorities", "Latest Change", "Yesterday's Recap", "Closed Loop", "Carry Forward", "System Table", "Untitled"):
             return False
     return block_type in ("child_page", "child_database")
 
@@ -1014,9 +1116,8 @@ def setup_homepage(
         ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Active Priorities"}}]}}),
         *[("block", block) for block in _active_priority_blocks(project_todays_command())],
         ("divider", {"type": "divider", "divider": {}}),
-        ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Latest Change"}}]}}),
-        ("quote", {"type": "quote", "quote": {"rich_text": [{"type": "text", "text": {"content": "What changed?"}, "annotations": {"italic": True}}]}}),
-        ("linked", {"name": "Latest Change", "type": "list", "filter": None, "sorts": SORT_RECENT, "config": list_config(P["mission"], P["latest_event"], P["last_updated"])}),
+        ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Yesterday's Recap"}}]}}),
+        *[("block", block) for block in _yesterday_recap_blocks()],
         ("divider", {"type": "divider", "divider": {}}),
         ("heading", {"type": "heading_2", "heading_2": {"rich_text": [{"type": "text", "text": {"content": "Closed Loop"}}]}}),
         ("quote", {"type": "quote", "quote": {"rich_text": [{"type": "text", "text": {"content": "What closed?"}, "annotations": {"italic": True}}]}}),

@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from ods.doctrine import load_decision_entries
 from ods.operating_command import TodaysCommand, command_from_registry_doc
 
 
@@ -31,6 +32,11 @@ def render_active_slice(*, registry_doc: dict, cwd: Path | None = None) -> str:
         f"- {command.best_next_move}",
         f"- Latest promoted event: {_latest_promoted_event(mission)}",
         f"- Latest EOS signal: {_latest_eos_signal(mission)}",
+        f"- Latest promoted knowledge: {_latest_promoted_knowledge()}",
+        "",
+        "## Promoted Knowledge",
+        "",
+        *(_promoted_knowledge_lines() or ["- No promoted knowledge is registered."]),
         "",
         "## Repository",
         "",
@@ -143,6 +149,18 @@ def _latest_promoted_event(mission: dict) -> str:
 def _latest_eos_signal(mission: dict) -> str:
     latest = mission.get("latest_event") or mission.get("objective")
     return _sentence(latest or "No latest EOS signal is projected.")
+
+
+def _latest_promoted_knowledge() -> str:
+    entries = load_decision_entries()
+    if not entries:
+        return "No promoted knowledge is registered."
+    latest = entries[-1]
+    return _sentence(f"{latest['text']} ({latest['section']})")
+
+
+def _promoted_knowledge_lines() -> list[str]:
+    return [f"- {entry['text']} ({entry['section']})" for entry in load_decision_entries()]
 
 
 def _sentence(value: str) -> str:
