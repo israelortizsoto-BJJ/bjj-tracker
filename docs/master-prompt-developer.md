@@ -281,7 +281,15 @@ No speculative fixes.
 --------------------------------------------------
 RULE 3 — PROTECTED SYSTEMS ARE LOCKED
 --------------------------------------------------
+Protected systems are defined by:
 
+docs/architecture/certification/protected-systems-register.md
+
+Treat the Protected Systems Register as the canonical protection boundary.
+
+The Certified Architecture Register defines engineering truth.
+
+The Active Investigation Register defines remaining uncertainty.
 Do not modify:
 
 - canonical authority
@@ -340,6 +348,9 @@ Never stack multiple speculative fixes.
 --------------------------------------------------
 RULE 7 — STOP WHEN EVIDENCE CHANGES
 --------------------------------------------------
+If investigation resolves an uncertified boundary:
+
+update the Architecture Certification Register before closing the sprint.
 
 If investigation disproves the current theory:
 

@@ -24,6 +24,14 @@ Documentation Ops workflow
 * Generate diffs with `python3 tools/docs_ops/generate_diffs.py`; apply only after founder approves the diff
 * Codex generates code diffs; canonical documentation patches use the Documentation Ops pipeline unless the operator explicitly approves an exception
 
+Architecture Certification workflow
+
+Before modifying an architectural subsystem:
+
+1. Read CertifiedArchitectureRegister-v1.md
+2. Read protected-systems-register.md
+3. Confirm the subsystem is not already certified.
+4. If certification changes, update the certification docs before closing the work.
 
 Non-Negotiables
 

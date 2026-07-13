@@ -8,6 +8,29 @@
 - Main intended coding outcome today: [Short note]
 - Constraints today: [Short note]
 
+# Architecture Certification
+
+Before beginning engineering work:
+
+Read:
+
+docs/architecture/certification/CertifiedArchitectureRegister-v1.md
+
+Also read:
+
+docs/architecture/certification/protected-systems-register.md
+
+docs/architecture/certification/active-investigation-register.md
+Determine whether the subsystem being modified is:
+
+CERTIFIED
+PARTIALLY CERTIFIED
+NOT CERTIFIED
+
+Do not reopen certified architecture without new repository or runtime evidence.
+
+If an investigation certifies a previously unknown boundary, update the Architecture Certification Register before ending the sprint.
+
 ## Operating note
 Use terminal-first inspection for repo truth, handoff review, prompt files, and config files whenever practical.
 
@@ -36,8 +59,15 @@ Current slice truth lives in `docs/dev-handoff.md` — not in prompt memory.
 Before coding each day:
 1. check repo state
 2. read latest dev handoff (commands above)
-3. read latest dev recap if needed
-4. identify the narrowest highest-ROI slice from **current** handoff — not closed investigations
+3. read latest recap only if the dev handoff references it
+4. Identify the narrowest highest-ROI slice from the current handoff.
+
+   Validate:
+   - the investigation is inside the Active Investigation Register
+   - the subsystem is not already CERTIFIED
+   4A. Define today's evidence target before opening source code.
+
+    State the single uncertified boundary you intend to prove or narrow today. The sprint ends when that boundary becomes either CERTIFIED or NARROWED. Do not expand scope until the documentation has been updated or the investigation has been explicitly re-scoped.
 5. confirm what must not break
 6. confirm validation gates before editing
 
@@ -130,3 +160,12 @@ Before ending the day, be ready to summarize:
 - proof / user signal
 - risks / open loops
 - next product block
+
+Before ending today's sprint:
+
+If a previously uncertified boundary became proven:
+
+1. Update CertifiedArchitectureRegister-v1.md
+2. Update protected-systems-register.md if protection changes
+3. Remove or narrow the item from active-investigation-register.md
+4. Update docs/dev-handoff.md

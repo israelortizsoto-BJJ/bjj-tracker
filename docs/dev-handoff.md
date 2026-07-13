@@ -60,7 +60,446 @@ If missing after worker_store_artifact_set
 If present through worker_get_artifact_set
 → parent hydration/render issue
 
+# DEV HANDOFF — 2026-07-07 → 2026-07-09
+Executive Summary
 
+This three-day block became one of the most significant engineering investigations undertaken on MatMind to date.
+
+The original objective was straightforward:
+
+Fix the Parent Match Breakdown hydration issue.
+
+At the beginning of the investigation the application was functionally usable:
+
+Coach application correctly displayed Match Breakdowns.
+Parent application displayed competitions.
+Parent Match Breakdown failed to hydrate consistently.
+
+During the investigation we became increasingly convinced that the issue lived somewhere inside the Parent CompetitionCard hydration lifecycle.
+
+Multiple runtime probes, certification tooling, and lifecycle instrumentation were introduced to isolate that problem.
+
+Near the end of July 8, a new regression appeared:
+
+Parent Compete stopped displaying competitions entirely.
+
+This immediately became a higher priority than Match Breakdown because it represented a loss of core functionality.
+
+No commit or Developer Handoff was completed before ending work that day.
+
+As a result, July 9 became almost entirely dedicated to reconstructing the previous day's engineering work from Git history, repository evidence, timestamps, runtime logs, and conversation history.
+
+The most important discovery from July 9 is that:
+
+Rolling the repository back to a completely clean a904db4 working tree did NOT restore competitions.
+
+That single observation invalidated our leading hypothesis that the July 8 uncommitted CompetitionCard work was solely responsible for the regression.
+
+Current Repository State
+
+Branch
+
+rollback-pre-lineage-regression
+
+HEAD
+
+a904db4
+Automate documentation maintenance and founder knowledge workflow
+
+Working Tree
+
+CLEAN
+
+Stash Inventory
+
+stash@{0}
+WIP: Jul 9 regression investigation before recovery
+
+stash@{1}
+forensics-and-debug-traces
+
+stash@{2}
+post-918bc13-forensics
+
+stash@{3}
+wip-topology-and-traces
+
+Important
+
+All July 8–9 investigation work has been preserved inside stash@{0}.
+
+Nothing has been lost.
+
+Original Objective
+
+Restore Parent Match Breakdown hydration.
+
+Known behavior before regression:
+
+Coach
+
+↓
+
+Match Breakdown present
+
+↓
+
+Parent
+
+↓
+
+Competitions visible
+
+↓
+
+Match Breakdown missing
+
+The investigation was focused entirely on why Parent failed to hydrate coach annotations.
+
+Major Engineering Work
+1. Runtime Transition Certification
+
+Primary objective:
+
+Determine whether Parent CompetitionCard correctly reacted to:
+
+coachSyncHydrationVersion
+
+↓
+
+hydrateOverlayAnnotations
+
+↓
+
+mergeCoachBreakdownIntoMatches
+
+Multiple runtime probes were created.
+
+The investigation certified:
+
+hydration ordering
+lifecycle transitions
+merge boundaries
+retained overlay state
+runtime sequence
+
+This represented the deepest certification work performed on the Parent overlay pipeline.
+
+2. CompetitionCard Refactor
+
+Engineering intent:
+
+Split hydration responsibilities into explicit lifecycle paths.
+
+Major production behavior introduced (uncommitted):
+
+extracted hydrateOverlayAnnotations()
+separated focus hydration
+added reactive hydration
+generation-based stale commit protection
+runtime certification hooks
+
+At the time these changes appeared to move us closer to solving Match Breakdown.
+
+3. Unexpected Regression
+
+During QA:
+
+Coach:
+
+MM-FIX-009-QA
+
+confirmed healthy.
+
+Parent:
+
+Competitions disappeared.
+
+This immediately shifted investigation priority.
+
+July 9 Reconstruction
+
+Because no checkpoint commit existed, we reconstructed the entire engineering narrative using:
+
+Git history
+Git diff
+Git timestamps
+Git reflog
+repository audit
+runtime evidence
+conversation timeline
+
+This reconstruction became the basis for understanding what had actually changed.
+
+Major Certified Findings
+Finding 1
+
+CompetitionCard changes were the only significant production mutations introduced on July 8.
+
+Confidence:
+
+High
+
+Finding 2
+
+Most remaining repository modifications were instrumentation only.
+
+Examples:
+
+BUILD_CERT
+runtime probes
+MM-* tracing
+certification tooling
+
+Confidence:
+
+High
+
+Finding 3
+
+Evidence from July 8 and July 9 had been unintentionally mixed.
+
+Several contradictions disappeared once runtime observations were separated into independent sessions.
+
+Confidence:
+
+High
+
+Finding 4
+
+setEntries_apply { nextCount: 11 }
+
+does not prove competitions should be visible.
+
+It proves only that one runtime instance committed eleven entries.
+
+Confidence:
+
+High
+
+Finding 5
+
+VISIBLE_ENTRIES_STATE
+
+was introduced after the regression began.
+
+Therefore it cannot explain what originally happened on July 8.
+
+Confidence:
+
+High
+
+Finding 6
+
+Rolling back to a completely clean repository
+
+HEAD = a904db4
+
+working tree clean
+
+did not restore competitions.
+
+This is currently the single most important engineering observation.
+
+Confidence:
+
+Very High
+
+Eliminated Hypotheses
+
+The following are no longer considered leading explanations.
+
+❌ CompetitionCard alone caused the regression
+
+Rollback disproved this.
+
+❌ Yesterday's uncommitted probes broke Parent Compete
+
+Rollback disproved this.
+
+❌ Repository corruption
+
+Current repository is clean.
+
+❌ Lost investigation work
+
+Everything is preserved in stash@{0}.
+
+Remaining Active Hypotheses
+
+These remain open.
+
+1. Runtime publisher never settles
+
+Potential loop involving:
+
+refreshParentWriterSessionSnapshot
+
+↓
+
+coachSyncHydrationVersion
+
+↓
+
+subscriber
+
+↓
+
+render
+
+↓
+
+refresh
+
+Confidence:
+
+Medium
+
+2. Persisted runtime state
+
+AsyncStorage or canonical stores may now contain state inconsistent with clean code.
+
+Rollback does not change persisted data.
+
+Confidence:
+
+Medium
+
+3. Regression predates July 8
+
+The bug may already exist inside committed code.
+
+The July 8 investigation may simply have exposed it.
+
+Confidence:
+
+Medium
+
+Match Breakdown Investigation Status
+
+Important:
+
+The Match Breakdown investigation was not completed.
+
+Current status:
+
+Coach
+
+↓
+
+healthy
+
+↓
+
+Parent
+
+↓
+
+competitions unstable
+
+↓
+
+Match Breakdown investigation paused
+
+Do not continue Match Breakdown until Parent Compete is deterministic again.
+
+Biggest Lesson
+
+The absence of an intermediate checkpoint created an expensive reconstruction effort.
+
+The repository itself survived.
+
+The engineering narrative did not.
+
+Future debugging sessions should never reach multiple hours of investigation without preserving an intermediate checkpoint.
+
+New Engineering Doctrine
+
+From this point forward:
+
+Every meaningful investigation stage should end with:
+
+git status -sb
+
+git diff --stat
+
+git commit
+
+If a commit is not appropriate:
+
+git stash push -u
+
+followed immediately by a short checkpoint note describing:
+
+current hypothesis
+latest runtime behavior
+next experiment
+
+This creates a recoverable engineering timeline without requiring a full EOD document.
+
+Startup Checklist
+
+Tomorrow morning:
+
+Phase 1
+
+Remain on clean repository.
+
+Do not restore stash@{0}.
+
+Phase 2
+
+Verify current runtime behavior.
+
+Determine whether Parent Compete still exhibits:
+
+missing competitions
+continuous runtime activity
+refresh loop
+Phase 3
+
+Identify the first publisher that never settles.
+
+Binary isolation only.
+
+No new instrumentation until a publisher is isolated.
+
+Phase 4
+
+Once Parent Compete is deterministic again:
+
+Resume the original Match Breakdown investigation.
+
+Final Status
+Repository
+
+✅ Clean
+
+Branch
+
+✅ rollback-pre-lineage-regression
+
+HEAD
+
+✅ a904db4
+
+Investigation
+
+✅ Fully reconstructed
+
+July 8 work
+
+✅ Preserved in stash@{0}
+
+Parent Compete
+
+❌ Still unstable
+
+Match Breakdown
+
+⏸ Paused pending Parent runtime stabilization
+
+I also want to record one strategic observation. Today changed the investigation in an important way: instead of chasing individual files, we shifted toward understanding the runtime as a system. The clean rollback not restoring behavior is the strongest evidence we've collected that the remaining problem is not explained solely by the July 8 source edits. That insight should shape the next debugging session and help avoid repeating the same investigation paths.
 
 #Dates:** June 23–24, 2026
 

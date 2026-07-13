@@ -53,6 +53,12 @@ When validating TestFlight builds on devices:
 - Historical on-device state is valuable forensic evidence during beta validation
 
 ## Documentation audit reminder (before release)
+If the release resolves an investigation:
+
+update the Active Investigation Register
+before distributing builds.
+
+Do not release while documentation claims an investigation is complete when it is still active.
 
 Before submitting any production or feedback TestFlight build:
 - confirm `docs/dev-handoff.md` reflects what this build actually validates vs what remains Dev-only
