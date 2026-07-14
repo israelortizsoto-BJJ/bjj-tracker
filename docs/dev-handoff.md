@@ -60,6 +60,1943 @@ If missing after worker_store_artifact_set
 If present through worker_get_artifact_set
 → parent hydration/render issue
 
+Canonical intermediate checkpoint (ODS documentation pattern, MatMind adaption):
+docs/engineering-checkpoint.md
+
+Writers:
+scripts/write_engineering_checkpoint.py
+
+---
+
+# DEV HANDOFF — 2026-07-13
+
+# PART 1 — Executive Summary
+
+## Mission
+
+Complete day's close for MatMind documentation + investigation discipline.
+
+Two tracks ran today:
+
+1. Adopt and exercise the ODS documentation operating pattern (DOCOPS v2).
+2. Continue Parent Runtime Convergence via question-driven Competition Lifecycle QA.
+
+## Verified Outcomes
+
+* DOCOPS v2 exercised successfully end-to-end.
+* ODS documentation workflow adopted as MatMind operating pattern.
+* Question-driven investigation methodology established.
+* Competition Lifecycle QA: Q1–Q5 YES; Q6 partial (cold-start convergence).
+* Engineering checkpoint written and verified by Python (`scripts/write_engineering_checkpoint.py`).
+* Engineering Parking Lot introduced (no new parked items today).
+
+## Responsibility Boundary Proven
+
+```text
+GPT generates structured engineering model
+↓
+Python validates / writes / verifies canonical documents
+```
+
+Checkpoint path proven today:
+
+```text
+wrote docs/engineering-checkpoint.md
+verified docs/engineering-checkpoint.md
+```
+
+Python owns the checkpoint.
+Living-document updates follow the same ODS terminal-first pattern.
+
+---
+
+# PART 2 — DOCOPS / ODS Documentation Adoption
+
+## Canonical Operating Pattern
+
+Workflow order must remain identical:
+
+1. Inspect repository.
+2. Reuse existing script if available.
+3. Otherwise generate a terminal-first inline Python updater.
+4. Update canonical living documents.
+5. Create/update the dated checkpoint/EOD artifact.
+6. Preview changes.
+7. Provide git checkpoint commands.
+8. End with the next restart prompt.
+
+## MatMind Adaption Map
+
+| ODS role | MatMind path |
+|---|---|
+| Repository root | `/Users/ods/Repos/bjj-tracker` |
+| Living handoff | `docs/dev-handoff.md` |
+| Daily restart prompt | `docs/master-prompt-daily-restart.md` |
+| Developer doctrine prompt | `docs/master-prompt-developer.md` |
+| Certification living docs | `docs/architecture/certification/*` |
+| Dated checkpoint artifact | `docs/engineering-checkpoint.md` |
+| Checkpoint writer | `scripts/write_engineering_checkpoint.py` |
+| Handoff ordering helper | `scripts/dev_handoff_ordering.py` |
+| Handoff writer (when model-ready) | `scripts/write_dev_handoff.py` |
+| Certification writer | `scripts/write_architecture_certification.py` |
+| Engineering Parking Lot | `docs/engineering-parking-lot.md` |
+
+## Script Reuse Rule
+
+Prefer existing writers in order:
+
+1. `scripts/write_engineering_checkpoint.py`
+2. `scripts/write_dev_handoff.py` + `scripts/dev_handoff_ordering.py`
+3. `scripts/write_architecture_certification.py`
+
+If no writer owns the required update, use a terminal-first inline Python updater.
+
+Python validates, formats, writes, and verifies.
+GPT supplies engineering content / structured models.
+
+## Architectural Direction (Not Building Now)
+
+Long-term target (founder velocity: capture only, do not implement today):
+
+```text
+Engineer → GPT → Engineering Model → Python → Checkpoint / Dev Handoff / Parking Lot / future docs
+```
+
+The engineering model becomes canonical source.
+Documents become views of that model.
+
+---
+
+# PART 3 — Competition Lifecycle QA (Question-Driven)
+
+Investigation remains:
+
+**Parent Runtime Convergence** (ACTIVE)
+
+Method:
+
+Answer one binary question at a time.
+Stop at the first uncertified boundary.
+Do not reopen Overlay Merge Contract or Canonical Identity Ownership without new evidence.
+
+## Results
+
+| Question | Result |
+|---|---|
+| Q1 | YES |
+| Q2 | YES |
+| Q3 | YES |
+| Q4 | YES |
+| Q5 | YES |
+| Q6 | PARTIAL — cold-start convergence |
+
+Q6 detail:
+
+After cold launch, competitions were absent until the temporary suppression experiment was enabled, after which competitions immediately returned.
+
+A newly created competition initially rendered two matches on Parent while Coach hydrated only one until the Parent competition was edited.
+
+Compete instrumentation in `app/(tabs)/compete.tsx` remains diagnostic-only.
+
+---
+
+# PART 4 — Remaining Investigation Boundaries
+
+Exactly two boundaries remain open:
+
+1. **Parent cold-start convergence**
+   Why temporary suppression of artifact hydration publication materially changes Parent initialization after cold launch.
+
+2. **Coach initial match hydration divergence**
+   Newly created competition hydrates differently on Coach vs Parent until a subsequent Parent mutation.
+
+Next experiment:
+
+Refocus INV8 on runtime convergence.
+Determine why suppression changes Parent initialization, then investigate the Coach match hydration divergence using the newly created competition as the certified reproduction path.
+
+---
+
+# PART 5 — Do Not
+
+* Redesign the ODS documentation workflow
+* Add new documentation frameworks
+* Expand DOCOPS beyond existing MatMind writers
+* Treat documentation adoption as a Parent Compete fix
+* Reopen certified architecture boundaries
+* Add instrumentation unless an approved question cannot be answered
+* Continue investigating downstream after the first uncertified boundary
+* Treat suppression as the root cause without runtime proof
+* Park work without founder decision + Resume Trigger
+
+# DEV HANDOFF — 2026-07-10
+
+# PART 1 — Executive Summary, Repository State, Mission, Certified Architecture
+
+---
+
+# MATMIND ENGINEERING HANDOFF
+
+**Date**
+
+2026-07-10
+
+---
+
+# Executive Summary
+
+July 10 represented a major reset of the engineering process.
+
+The objective was intentionally **not** to continue broad debugging of the Parent Competition issue.
+
+Instead, the day was dedicated to restoring engineering discipline after several weeks of increasingly broad investigations that repeatedly rediscovered already-proven architecture.
+
+The primary goal became:
+
+> **Create a certification-driven engineering workflow where future investigations begin from repository truth instead of reconstructed chat history.**
+
+This objective was successfully completed.
+
+The result is a new engineering operating model centered around:
+
+* Architecture Certification
+* Protected Systems
+* Active Investigation Register
+* Runtime-first investigation doctrine
+* Binary investigation methodology
+* Git checkpoint discipline
+* Founder Velocity
+
+Although the Parent Competition runtime remains unresolved, the search space has been dramatically reduced.
+
+Ownership has shifted away from generic Competition rendering and toward the Parent runtime publication corridor.
+
+---
+
+# Repository State
+
+Branch
+
+```text
+rollback-pre-lineage-regression
+```
+
+HEAD
+
+```text
+a90f3c8
+
+Establish architecture certification knowledge base
+```
+
+Working Tree (End of Day)
+
+```text
+M app/(tabs)/compete.tsx
+```
+
+Only the active runtime investigation remains uncommitted.
+
+All documentation work completed during the day has been committed or intentionally separated from the runtime investigation.
+
+This separation is now considered part of engineering doctrine.
+
+---
+
+# Mission of July 10
+
+Previous investigations repeatedly suffered from the same failure mode:
+
+* broad debugging
+* reopening certified systems
+* reconstructing architecture from memory
+* multiple simultaneous hypotheses
+* unclear ownership
+
+July 10 intentionally paused debugging to establish permanent engineering infrastructure.
+
+The guiding principle became:
+
+> **Do not continue debugging until the repository itself can tell us what is already proven.**
+
+---
+
+# Major Deliverable
+
+## Architecture Certification System
+
+Repository additions:
+
+```text
+docs/architecture/certification/
+
+    CertifiedArchitectureRegister-v1.md
+    protected-systems-register.md
+    active-investigation-register.md
+    CERTIFICATION_HISTORY.md
+
+scripts/
+
+    write_architecture_certification.py
+```
+
+Commit
+
+```text
+a90f3c8
+
+Establish architecture certification knowledge base
+```
+
+This became the canonical certification layer for the repository.
+
+Architecture documentation now serves two different purposes:
+
+Architecture Documents
+
+↓
+
+Explain how systems work.
+
+Architecture Certification
+
+↓
+
+States which systems are actually proven.
+
+---
+
+# Engineering Operating Model
+
+The repository startup workflow is now:
+
+```text
+git status
+
+↓
+
+git log
+
+↓
+
+Architecture Certification Register
+
+↓
+
+Developer Handoff
+
+↓
+
+Active Investigation Register
+
+↓
+
+Resume exactly one investigation
+```
+
+This replaces reconstructing engineering context from previous conversations.
+
+---
+
+# Protected Engineering Philosophy
+
+A certified subsystem is considered protected.
+
+Protected systems may **not** be modified without:
+
+* repository evidence
+* runtime evidence
+* explicit reason for reopening
+
+This prevents reopening previously solved engineering work.
+
+---
+
+# Certified Architecture (Current)
+
+As of July 10 the following areas are considered certified.
+
+---
+
+## Canonical Identity Ownership
+
+Status
+
+✅ Certified
+
+Reason
+
+Identity ownership has been repeatedly validated through repository investigation.
+
+Ownership boundaries are considered stable.
+
+No further investigation should occur without new runtime evidence.
+
+---
+
+## Overlay Merge Contract
+
+Status
+
+✅ Certified
+
+Reason
+
+Overlay merge behavior has been certified through repository investigation and runtime validation.
+
+No architectural redesign should occur.
+
+---
+
+## Competition Topology
+
+Status
+
+⚠️ Partially Certified
+
+Reason
+
+Core ownership is understood.
+
+Runtime investigations remain active.
+
+---
+
+## Coach Artifact Pipeline
+
+Status
+
+⚠️ Partially Certified
+
+Reason
+
+Multiple boundaries have been certified.
+
+Publication behavior remains under active investigation.
+
+---
+
+## Competition Rendering Pipeline
+
+Status
+
+⚠️ Partially Certified
+
+Reason
+
+Rendering itself is no longer considered the primary owner.
+
+Parent runtime convergence remains unresolved.
+
+---
+
+# Protected Systems
+
+The following systems should not be reopened during future investigations unless new evidence appears.
+
+Examples include:
+
+* Canonical Identity Ownership
+* Overlay Merge
+* Certified rendering boundaries
+* Incident Capture architecture
+* Competition State Auditor infrastructure
+* Documentation Operations (DOCOPS)
+* Git checkpoint workflow
+
+Future investigations should begin by assuming these systems are correct.
+
+---
+
+# Active Investigation Register
+
+Current Active Investigation
+
+```text
+Parent Runtime Convergence
+```
+
+Current Owner
+
+```text
+Parent Runtime Publication Corridor
+```
+
+Not
+
+```text
+CompetitionTab
+```
+
+Current Question
+
+```text
+Can the Parent runtime publication corridor converge?
+```
+
+Not
+
+```text
+Why are competitions missing?
+```
+
+This distinction is intentional.
+
+Investigations now target the first unstable owner rather than downstream symptoms.
+
+---
+
+# Founder Velocity Doctrine
+
+July 10 also established a permanent reminder.
+
+The goal is not to produce more documentation.
+
+The goal is to:
+
+* certify architecture
+* eliminate uncertainty
+* ship investigations
+* move engineering forward
+
+Documentation exists to accelerate engineering.
+
+Not replace it.
+
+---
+
+# End of Part 1
+
+# PART 2 — Complete Investigation Timeline, Runtime Certifications, Eliminated Hypotheses, Mental Model
+
+---
+
+# Investigation Timeline
+
+The July 10 investigation intentionally followed the new engineering doctrine.
+
+Each investigation had:
+
+* one owner
+* one question
+* one success criteria
+* repository evidence before runtime conclusions
+* no speculative fixes
+
+This was the first full day operating under the new certification-first workflow.
+
+---
+
+# Investigation 1
+
+## Restore Engineering Discipline
+
+### Objective
+
+Before touching Parent Compete again, restore deterministic engineering workflow.
+
+Previous investigations had begun by reconstructing context from memory.
+
+That process officially ended.
+
+---
+
+### Actions
+
+Validated repository state.
+
+Verified:
+
+```text
+git status
+
+git log
+
+branch
+
+HEAD
+
+working tree
+```
+
+Confirmed:
+
+Branch
+
+```text
+rollback-pre-lineage-regression
+```
+
+HEAD
+
+```text
+a90f3c8
+```
+
+Working tree
+
+Initially clean.
+
+---
+
+### Result
+
+Certified startup workflow.
+
+Every future investigation now begins with:
+
+```text
+git status
+
+↓
+
+git log
+
+↓
+
+Certification Register
+
+↓
+
+Developer Handoff
+
+↓
+
+Active Investigation
+```
+
+---
+
+# Investigation 2
+
+## Identify Runtime Owner
+
+### Original assumption
+
+CompetitionTab was repeatedly suspected to own the bug.
+
+This assumption was intentionally challenged.
+
+Question:
+
+> Which subsystem actually owns repeated runtime activity?
+
+---
+
+### Repository Audit
+
+Mapped all major runtime subscriptions.
+
+Investigated:
+
+```text
+subscribeCompetition()
+
+subscribeCoachSyncHydration()
+
+subscribeActiveAthleteChanges()
+
+refreshParentWriterSessionSnapshot()
+```
+
+Objective:
+
+Identify every runtime publisher capable of recreating Compete while focused.
+
+---
+
+### Result
+
+Search space reduced.
+
+Ownership moved upstream.
+
+CompetitionTab increasingly appeared to be a consumer rather than the owner.
+
+---
+
+# Investigation 3
+
+## Publisher Convergence Audit
+
+Objective:
+
+Determine whether Parent runtime publication converges.
+
+Repository corridor audited:
+
+```text
+refreshParentWriterSessionSnapshot()
+
+↓
+
+coachSyncFetchSession()
+
+↓
+
+setCachedWeeklyForLinkToken()
+
+↓
+
+bumpCoachSyncHydrationVersion()
+```
+
+---
+
+### Major Repository Finding
+
+Current publication behavior is **not idempotent**.
+
+Current repository behavior:
+
+```text
+same payload
+
+↓
+
+publish
+
+↓
+
+hydrationVersion++
+```
+
+No equality gate currently exists before publication.
+
+Publication is driven by:
+
+presence of hydrated artifacts
+
+not
+
+change detection.
+
+---
+
+### Certification
+
+Repository now certifies:
+
+Current publication can repeatedly increment
+
+```text
+coachSyncHydrationVersion
+```
+
+even when runtime state appears unchanged.
+
+---
+
+# Investigation 4
+
+## Runtime Dependency Investigation
+
+Objective
+
+Determine why logs never stabilize.
+
+---
+
+### Runtime Probe
+
+Instrumented:
+
+```text
+FOCUS_ENTER
+
+↓
+
+FOCUS_CLEANUP
+```
+
+including:
+
+* hydration version
+* competition version
+* athlete identity
+* device role
+
+---
+
+### Runtime Finding
+
+Observed:
+
+```text
+hydration
+
+1
+
+↓
+
+2
+
+↓
+
+3
+
+↓
+
+4
+
+↓
+
+5
+```
+
+CompetitionVersion remained stable.
+
+This immediately reduced the likely owner.
+
+---
+
+### Repository + Runtime Combined
+
+Current chain became:
+
+```text
+Publication
+
+↓
+
+HydrationVersion++
+
+↓
+
+Focus callback recreated
+```
+
+This was the first time repository evidence and runtime evidence described the same behavior.
+
+---
+
+# Investigation 5
+
+## Parent Runtime Bridge
+
+Objective
+
+Determine whether repeated publication actually affects Parent initialization.
+
+---
+
+Instrumentation
+
+```text
+FOCUS_ENTER
+
+↓
+
+REFRESH_BEGIN
+
+↓
+
+REFRESH_END
+
+↓
+
+CANCELLED_CHECK
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+↓
+
+LOAD_COMPETITIONS_BEGIN
+
+↓
+
+LOAD_COMPETITIONS_END
+
+↓
+
+SET_ENTRIES
+```
+
+---
+
+### Major Runtime Finding
+
+Observed runtime:
+
+```text
+REFRESH_BEGIN
+
+↓
+
+REFRESH_END
+
+↓
+
+cancelled = true
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+```
+
+No corresponding
+
+```text
+LOAD_COMPETITIONS_BEGIN
+```
+
+was observed during the failing cycles.
+
+---
+
+### Why this mattered
+
+This was the first runtime evidence connecting:
+
+publication
+
+↓
+
+cleanup
+
+↓
+
+cancelled
+
+↓
+
+Parent initialization starvation
+
+This was no longer repository theory.
+
+---
+
+# Investigation 6
+
+## Unexpected Double Focus
+
+Runtime logs showed:
+
+```text
+FOCUS_ENTER
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+REFRESH_BEGIN
+```
+
+This initially appeared suspicious.
+
+---
+
+### Repository Audit
+
+Investigated:
+
+React Navigation
+
+useFocusEffect
+
+useActiveAthlete
+
+identity resolution
+
+---
+
+### Certified Finding
+
+Two different focus re-entry mechanisms exist.
+
+---
+
+## Mechanism A
+
+Bootstrap Re-entry
+
+```text
+athleteId = ""
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+athlete resolves
+
+↓
+
+FOCUS_CLEANUP
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+first REFRESH_BEGIN
+```
+
+Status
+
+✅ Certified Expected Behavior
+
+Owner
+
+```text
+useActiveAthlete
+```
+
+Not a bug.
+
+---
+
+## Mechanism B
+
+Hydration Re-entry
+
+```text
+REFRESH_BEGIN
+
+↓
+
+publication
+
+↓
+
+hydrationVersion++
+
+↓
+
+cleanup
+
+↓
+
+cancelled
+
+↓
+
+RETURN_BEFORE_LOAD
+
+↓
+
+repeat
+```
+
+Status
+
+⚠️ Active Runtime Investigation
+
+Different owner.
+
+Different lifecycle.
+
+Different problem.
+
+---
+
+### Importance
+
+This became one of the most valuable findings of the day.
+
+Future engineers should never confuse bootstrap re-entry with hydration starvation.
+
+---
+
+# Investigation 7
+
+## Runtime Comparison Framework
+
+Objective
+
+Compare:
+
+Successful Parent startup
+
+vs
+
+Failed Parent startup
+
+without changing production behavior.
+
+---
+
+Framework Created
+
+Canonical startup ladder:
+
+```text
+Application Launch
+
+↓
+
+Device Role
+
+↓
+
+Athlete Resolution
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+REFRESH_BEGIN
+
+↓
+
+REFRESH_END
+
+↓
+
+CANCELLED_CHECK
+
+↓
+
+LOAD_COMPETITIONS
+
+↓
+
+SET_ENTRIES
+
+↓
+
+Competition Render
+```
+
+This framework now exists for future runtime investigations.
+
+---
+
+# Investigation 8A
+
+## First Publication vs Repeated Publication
+
+Question
+
+Does starvation begin:
+
+on the first hydration publication
+
+or
+
+only after repeated publication?
+
+---
+
+### Result
+
+Investigation closed as:
+
+INCONCLUSIVE
+
+Reason
+
+Current runtime evidence was insufficient.
+
+Required ordered Metro capture had not been preserved.
+
+Engineering doctrine prevented guessing.
+
+---
+
+### Important Process Lesson
+
+This was considered a success.
+
+The team intentionally refused to invent conclusions unsupported by evidence.
+
+Current status:
+
+```text
+Unknown
+
+↓
+
+Remain Unknown
+```
+
+This represents a major improvement in engineering discipline.
+
+---
+
+# Runtime Certifications
+
+The following runtime behavior became certified during July 10.
+
+---
+
+## Bootstrap Focus Re-entry
+
+Status
+
+✅ Certified Expected Behavior
+
+Repository
+
+*
+
+Runtime
+
+agree.
+
+Do not reopen.
+
+---
+
+## Parent Runtime Starvation Path
+
+Status
+
+Runtime Certified
+
+Observed:
+
+```text
+REFRESH_END
+
+↓
+
+CANCELLED_CHECK
+
+cancelled=true
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+```
+
+Observed during failing Parent initialization.
+
+---
+
+## Non-idempotent Publication
+
+Status
+
+Repository Certified
+
+Current repository permits repeated publication without payload equality.
+
+---
+
+# Eliminated Hypotheses
+
+The following theories were eliminated.
+
+---
+
+RootLayout owns runtime loop.
+
+❌ Eliminated
+
+---
+
+DeviceRoleProvider owns runtime loop.
+
+❌ Eliminated
+
+---
+
+React Navigation remount causes Parent runtime failure.
+
+❌ Eliminated
+
+---
+
+Bootstrap athlete resolution is the hydration bug.
+
+❌ Eliminated
+
+Bootstrap behavior is expected.
+
+---
+
+CompetitionVersion is the owner of repeated runtime activity.
+
+❌ Eliminated
+
+Observed runtime remained:
+
+```text
+competitionVersion = 0
+```
+
+while
+
+```text
+hydrationVersion
+```
+
+continued increasing.
+
+---
+
+CompetitionTab owns the bug.
+
+❌ Ownership moved upstream.
+
+Current owner:
+
+```text
+Parent Runtime Publication Corridor
+```
+
+---
+
+# New Runtime Mental Model
+
+This represents the single biggest engineering improvement from July 10.
+
+Previous mental model:
+
+```text
+Competition
+
+↓
+
+Competition
+
+↓
+
+Competition
+```
+
+Current certified mental model:
+
+```text
+BOOTSTRAP
+
+↓
+
+Identity Resolution
+
+↓
+
+Expected Focus Re-entry
+
+────────────────────────────
+
+Parent Runtime
+
+↓
+
+Refresh
+
+↓
+
+Publication
+
+↓
+
+HydrationVersion++
+
+↓
+
+Focus Cleanup
+
+↓
+
+Cancelled
+
+↓
+
+RETURN_BEFORE_LOAD
+
+↓
+
+Parent Initialization Starvation
+```
+
+This model should guide every future investigation.
+
+---
+
+# Ownership Shift
+
+The investigation officially moved ownership.
+
+Morning assumption:
+
+```text
+CompetitionTab
+```
+
+End-of-day owner:
+
+```text
+Parent Runtime Publication Corridor
+
+↓
+
+Runtime Convergence
+```
+
+This ownership shift dramatically reduced the investigation search space.
+
+---
+
+# End of Part 2
+
+This final section ties the investigation back into the new engineering operating system so tomorrow begins from a certified checkpoint rather than another reconstruction.
+
+# PART 3 — Engineering Doctrine, Tomorrow Startup, Active Investigation, DOCOPS, Lessons Learned
+
+---
+
+# Current Engineering Status
+
+At the close of July 10, the engineering state is intentionally **stable but incomplete**.
+
+This is considered a successful stopping point.
+
+Repository status:
+
+```text
+Branch
+
+rollback-pre-lineage-regression
+
+HEAD
+
+a90f3c8
+
+Working Tree
+
+M app/(tabs)/compete.tsx
+```
+
+The repository intentionally contains only one modified engineering file.
+
+Everything else has been documented and checkpointed.
+
+This separation is now part of engineering doctrine.
+
+---
+
+# Current Active Investigation
+
+Investigation ID
+
+```text
+INV8
+```
+
+Title
+
+```text
+Controlled Runtime Convergence Experiment
+```
+
+Current Owner
+
+```text
+Parent Runtime Publication Corridor
+```
+
+Current Question
+
+> Does repeated Parent runtime publication directly prevent Parent Competition initialization from converging?
+
+This is now the only active engineering question.
+
+Do not reopen previously certified architecture.
+
+---
+
+# Investigation Status
+
+The following investigations are complete.
+
+| Investigation                 | Status                                                    |
+| ----------------------------- | --------------------------------------------------------- |
+| Architecture Certification    | ✅ Complete                                                |
+| Protected Systems             | ✅ Complete                                                |
+| Runtime Ownership             | ✅ Complete                                                |
+| Publisher Audit               | ✅ Complete                                                |
+| Dependency Investigation      | ✅ Complete                                                |
+| Parent Runtime Bridge         | ✅ Complete                                                |
+| Bootstrap Focus Re-entry      | ✅ Complete                                                |
+| Runtime Comparison Framework  | ✅ Complete                                                |
+| First vs Repeated Publication | ⚠️ Inconclusive (insufficient preserved runtime evidence) |
+
+---
+
+# Investigation NOT Yet Performed
+
+The following work has **not** been executed.
+
+Controlled Convergence Experiment.
+
+This experiment has only been designed.
+
+No production behavior has been changed.
+
+No repository fix has been attempted.
+
+This is intentional.
+
+---
+
+# Why the Experiment Exists
+
+Current repository and runtime evidence support the following chain.
+
+```text
+Parent Refresh
+
+↓
+
+setCachedWeeklyForLinkToken()
+
+↓
+
+bumpCoachSyncHydrationVersion()
+
+↓
+
+Focus Cleanup
+
+↓
+
+cancelled = true
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+↓
+
+Parent initialization starvation
+```
+
+The remaining engineering question is:
+
+Does suppressing runtime publication allow Parent initialization to converge?
+
+The experiment exists only to answer that question.
+
+---
+
+# Engineering Doctrine (Updated)
+
+The July 10 investigation permanently changes how MatMind engineering should operate.
+
+---
+
+## Repository Before Runtime
+
+Always begin by asking:
+
+What does the repository certify?
+
+Only after repository evidence exists should runtime investigation begin.
+
+---
+
+## Runtime Before Production
+
+Repository evidence proves:
+
+What the application **can** do.
+
+Runtime evidence proves:
+
+What the application **actually did**.
+
+Production changes require both.
+
+---
+
+## Binary Investigations
+
+Every investigation should answer exactly one question.
+
+Avoid investigations with multiple hypotheses.
+
+The investigation ends when uncertainty is removed.
+
+Not when code changes.
+
+---
+
+## Protected Architecture
+
+Certified systems are protected.
+
+Do not reopen:
+
+* Identity
+* Overlay Merge
+* Incident Capture
+* Competition State Auditor
+* Certified rendering boundaries
+
+unless new runtime evidence requires it.
+
+---
+
+## Smallest Blast Radius
+
+Repository modifications should:
+
+* affect one owner
+* affect one investigation
+* remain easily reversible
+
+Investigation code should remain isolated.
+
+---
+
+## Git Discipline
+
+Every engineering session begins with:
+
+```bash
+git status -sb
+
+git log --oneline --decorate -8
+
+git diff --stat
+```
+
+Every checkpoint ends with:
+
+```bash
+git status -sb
+```
+
+No engineering session should end with unknown repository state.
+
+---
+
+# Python Documentation Workflow (DOCOPS)
+
+July 10 also clarified the intended relationship between ChatGPT and Python.
+
+The original design remains the correct design.
+
+---
+
+## ChatGPT Responsibilities
+
+Engineering reasoning.
+
+Investigation.
+
+Certification.
+
+Writing.
+
+Organization.
+
+Timeline.
+
+Decision making.
+
+---
+
+## Python Responsibilities
+
+Deterministic document generation.
+
+Formatting.
+
+Updating repository documents.
+
+Verification.
+
+Writing generated artifacts.
+
+No engineering reasoning should occur inside Python.
+
+Python is the writer.
+
+Not the engineer.
+
+---
+
+## Future Workflow
+
+Future EOD workflow should become:
+
+```text
+Engineering Complete
+
+↓
+
+ChatGPT produces structured engineering model
+
+↓
+
+Python writes repository documents
+
+↓
+
+Founder reviews diff
+
+↓
+
+git status
+
+↓
+
+git diff
+
+↓
+
+Commit
+```
+
+This work remains partially complete.
+
+The certification writer exists.
+
+The Engineering Checkpoint writer exists:
+
+scripts/write_engineering_checkpoint.py
+
+→ docs/engineering-checkpoint.md
+
+MatMind documentation closes follow the ODS documentation workflow order (adapted paths/scripts only).
+
+---
+
+# Tomorrow Morning Startup
+
+The July 11 startup should follow this order exactly.
+
+---
+
+## Step 1
+
+Repository verification.
+
+```bash
+git status -sb
+
+git log --oneline --decorate -8
+
+git diff --stat
+```
+
+Expected working tree:
+
+```text
+M app/(tabs)/compete.tsx
+```
+
+Nothing else.
+
+---
+
+## Step 2
+
+Read:
+
+```text
+CertifiedArchitectureRegister-v1.md
+
+↓
+
+Developer Handoff
+
+↓
+
+Active Investigation Register
+```
+
+Do not reconstruct engineering context from previous conversations.
+
+---
+
+## Step 3
+
+Resume only the active investigation.
+
+Do not reopen completed investigations.
+
+---
+
+## Step 4
+
+Determine whether the Controlled Convergence Experiment should be executed.
+
+No production fixes before the experiment.
+
+---
+
+# Lessons Learned
+
+The July 10 investigation produced several engineering lessons.
+
+---
+
+## Lesson 1
+
+Engineering memory is unreliable.
+
+Repository certification is reliable.
+
+---
+
+## Lesson 2
+
+Runtime observations without repository understanding produce broad debugging.
+
+Repository understanding without runtime evidence produces incorrect certainty.
+
+Both are required.
+
+---
+
+## Lesson 3
+
+The investigation should move upstream until ownership becomes stable.
+
+The investigation began at CompetitionTab.
+
+It ended at the Parent Runtime Publication Corridor.
+
+This represents significant reduction in search space.
+
+---
+
+## Lesson 4
+
+Do not confuse expected runtime behavior with runtime failure.
+
+Bootstrap focus re-entry and hydration re-entry are different systems.
+
+Treating them as one bug delayed previous investigations.
+
+---
+
+## Lesson 5
+
+Unknown is an acceptable engineering outcome.
+
+Investigation 8A intentionally concluded:
+
+"Inconclusive."
+
+This prevented unsupported conclusions.
+
+That is considered successful engineering.
+
+---
+
+## Lesson 6
+
+Preserve runtime evidence.
+
+Today's investigation exposed a process weakness.
+
+Although repository evidence was preserved, the complete Metro runtime sequence was not archived before analysis.
+
+Future runtime investigations should preserve complete Metro captures before interpretation.
+
+Lost runtime evidence should never be reconstructed from memory.
+
+---
+
+# Current Mental Model
+
+Future investigations should begin with this architecture.
+
+```text
+Expected Runtime
+
+Application Launch
+
+↓
+
+Identity Resolution
+
+↓
+
+Bootstrap Focus Re-entry
+
+↓
+
+First Parent Refresh
+
+──────────────────────────────
+
+Active Investigation
+
+Parent Refresh
+
+↓
+
+Publication Corridor
+
+↓
+
+HydrationVersion++
+
+↓
+
+Focus Cleanup
+
+↓
+
+Cancelled
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+↓
+
+Parent Initialization
+
+↓
+
+Competition Render
+
+↓
+
+Match Breakdown
+```
+
+Everything above the divider is certified.
+
+Everything below the divider remains the active investigation.
+
+---
+
+# July 10 Closing Assessment
+
+July 10 represents a significant milestone in the Parent Competition investigation.
+
+Although the original runtime issue remains unresolved, the engineering process itself has fundamentally improved.
+
+The repository now contains:
+
+* Certified Architecture
+* Protected Systems
+* Active Investigation Register
+* Founder Velocity workflow
+* Certification-first startup sequence
+* Evidence-first runtime doctrine
+
+The search space has been reduced from the entire Competition subsystem to a single runtime publication corridor.
+
+The engineering team should **not** resume broad debugging.
+
+The next session begins with one active investigation, one owner, and one binary question.
+
+That is the intended operating model for MatMind engineering going forward.
+
+---
+
+# Canonical Restart Statement
+
+> **Do not reconstruct yesterday. Begin from certified architecture. Verify the repository. Resume the active investigation. Remove exactly one uncertainty before changing production behavior.**
+
 # DEV HANDOFF — 2026-07-07 → 2026-07-09
 Executive Summary
 
@@ -12411,3 +14348,4 @@ When the user says:
 "Operator Spec Mode"
 
 All responses must follow this structure exactly.
+\n
