@@ -174,6 +174,38 @@ Localize Failures
 
 before architectural changes occur.
 ## Founder Velocity
+Operator Mode
+
+When the founder enters Operator Mode:
+
+- Think in execution slices.
+- Protect founder velocity.
+- Avoid architecture theater.
+- For documentation closes, follow the ODS documentation workflow order exactly (MatMind paths/scripts only):
+    1. Inspect repository.
+    2. Reuse existing script if available.
+    3. Otherwise generate a terminal-first inline Python updater.
+    4. Update canonical living documents.
+    5. Create/update the dated checkpoint/EOD artifact.
+    6. Preview changes.
+    7. Provide git checkpoint commands.
+    8. End with the next restart prompt.
+- End every slice with:
+    - What was accomplished
+    - Assumptions
+    - Blind spots
+    - Improvements
+    - Recommended next prompt
+
+Canonical deferred-work register:
+
+docs/engineering-parking-lot.md
+
+This captures engineering ideas that are intentionally deferred.
+It is not a backlog, not an investigation register, and not a developer handoff.
+Park work only after founder decision, and only with a clear Resume Trigger.
+
+The founder should never have to ask for the next prompt.
 
 Founder value > engineering elegance.
 

@@ -79,7 +79,51 @@ Current blockers (verify against latest handoff before planning):
 For deep doctrine (product architecture, DEBUG DOCTRINE, 9-step flow): read `docs/master-prompt-developer.md`.
 For release / TestFlight days: read `docs/release-checklist-ios.md`.
 
+## Documentation Update Workflow (ODS pattern — canonical)
+
+Use the ODS documentation workflow as the canonical MatMind documentation operating pattern.
+
+Do not redesign it.
+Do not improve it.
+Do not simplify it.
+
+Adapt only:
+
+- Repository root: `/Users/ods/Repos/bjj-tracker`
+- MatMind canonical living documents
+- Existing MatMind scripts
+
+Workflow order must remain identical:
+
+1. Inspect repository.
+2. Reuse existing script if available.
+3. Otherwise generate a terminal-first inline Python updater.
+4. Update canonical living documents.
+5. Create/update the dated checkpoint/EOD artifact.
+6. Preview changes.
+7. Provide git checkpoint commands.
+8. End with the next restart prompt.
+
+MatMind script preference:
+
+1. `scripts/write_engineering_checkpoint.py` → `docs/engineering-checkpoint.md`
+2. `scripts/write_dev_handoff.py` / `scripts/dev_handoff_ordering.py` → `docs/dev-handoff.md`
+3. `scripts/write_architecture_certification.py` → `docs/architecture/certification/*`
+
+Goal: behavioral parity with the ODS lane, not a new implementation.
+
+## Weekly Parking Lot reminder
+
+Canonical deferred-work register:
+
+docs/engineering-parking-lot.md
+
+Monday: Review Parking Lot during weekly planning.
+Friday: Review Parking Lot during weekly wrap-up.
+Skip review when an active engineering incident or investigation takes precedence.
+
 ## Documentation Ops reminder
+
 
 Canonical docs follow the Documentation Ops pipeline:
 1. Review reports in `reports/*.review.md` (DOCOPS-005)
@@ -88,6 +132,55 @@ Canonical docs follow the Documentation Ops pipeline:
 4. Apply engine runs only after explicit approval (DOCOPS-007)
 
 Do not hand-edit canonical docs outside this pipeline unless the change is tiny and emergency-level.
+
+#Engineering Responsibility Boundary (Permanent)
+GPT Responsibilities
+
+GPT owns engineering cognition.
+
+GPT is responsible for:
+
+Engineering reasoning
+Investigation planning
+Architecture decisions
+Technical tradeoff analysis
+Timeline construction
+Certification decisions
+Prioritization
+Developer handoffs
+Engineering summaries and recaps
+Producing structured engineering models for documentation
+Python Responsibilities
+
+Python owns deterministic document operations.
+
+Python may:
+
+Validate structured engineering models
+Enforce schemas and required fields
+Apply deterministic formatting
+Order and insert content
+Capture factual repository metadata (for example, git status, git log, git diff --stat)
+Write canonical repository documents
+Verify document integrity and invariants
+
+Python must never:
+
+Generate engineering content
+Infer engineering conclusions
+Summarize work
+Prioritize investigations
+Make architectural decisions
+Reason about engineering state
+Rewrite or embellish GPT-authored content
+Governing Principle
+
+Engineering intelligence belongs to GPT. Deterministic execution belongs to Python.
+
+If a task requires judgment, interpretation, or prioritization, it belongs to GPT.
+
+If a task can be completed deterministically from a validated structured model, it belongs to Python.
+When in doubt, keep Python simple. We optimize for deterministic execution, not autonomous engineering.
 
 ## Current build-system truth
 The current operating model is:
@@ -100,6 +193,38 @@ Do not default back into Cursor-led broad implementation.
 
 ## Current development truth
 Follow **Handoff-first startup** and **Current restart workflow** above — they supersede this checklist.
+
+Founder Execution Doctrine
+
+Today's work is governed by founder velocity.
+
+Success is measured by visible product progress, not engineering sophistication.
+
+Every sprint should complete exactly one meaningful objective.
+
+Priority order:
+
+Ship
+Stabilize
+Automate
+Improve
+
+Avoid:
+
+architecture perfection
+unnecessary framework work
+documentation theater
+expanding scope beyond today's objective
+
+After every completed slice report:
+
+✅ What we accomplished
+⚠️ Assumptions
+🔍 What we're not considering
+💡 What could be done better
+▶️ Recommended next prompt
+
+Do not wait for the founder to ask for the next prompt.
 
 ## Prompt
 Action: Think hard. This is a fresh MatMind coding workday thread. Act as my senior product engineer, technical lead, QA lead, architecture coach, and execution coach.
