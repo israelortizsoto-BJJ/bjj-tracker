@@ -233,6 +233,15 @@ export default function DevSettingsScreen() {
   const [isDumpingCompetitionAuditor, setIsDumpingCompetitionAuditor] = useState(false);
   const [lastExportStage, setLastExportStage] = useState<IncidentExportDebugRecord | null>(null);
   const [lastCaptureStage, setLastCaptureStage] = useState<IncidentCaptureDebugRecord | null>(null);
+  // INV8 — temporary; remove after INV8 closes. Not a DevFlagKey; not persisted.
+  const [inv8SuppressArtifactHydrationBump, setInv8SuppressArtifactHydrationBump] =
+    useState(
+      () =>
+        typeof __DEV__ !== "undefined" &&
+        __DEV__ &&
+        (globalThis as { __INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__?: boolean })
+          .__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__ === true,
+    );
   const postCrashAlertShownRef = useRef(false);
   const postCaptureCrashAlertShownRef = useRef(false);
 
@@ -537,6 +546,45 @@ export default function DevSettingsScreen() {
             onChange={(v) => setFlag("enableDebugTools", v)}
           />
         </View>
+
+        {__DEV__ ? (
+          <View style={{ marginTop: 18 }}>
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+              INV8 Experiment (Temporary)
+            </Text>
+            <Text style={{ marginTop: 4, fontSize: 12, opacity: 0.65 }}>
+              Remove after INV8 closes.
+            </Text>
+            <View style={{ paddingVertical: 6 }}>
+              <FlagRow
+                label="Suppress artifact hydration bump"
+                value={inv8SuppressArtifactHydrationBump}
+                onChange={(next) => {
+                  // INV8 harness validation — temporary; remove after harness is certified.
+                  const g = globalThis as {
+                    __INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__?: boolean;
+                  };
+                  console.log("[INV8_HARNESS]", {
+                    stage: "toggle_onChange",
+                    next,
+                    beforeAssign: g.__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__,
+                  });
+                  g.__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__ = next;
+                  console.log("[INV8_HARNESS]", {
+                    stage: "toggle_afterAssign",
+                    assigned: next,
+                    readback: g.__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__,
+                    readbackEqualsTrue:
+                      g.__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__ === true,
+                    globalSameAsGlobalThis:
+                      typeof global !== "undefined" && global === globalThis,
+                  });
+                  setInv8SuppressArtifactHydrationBump(next);
+                }}
+              />
+            </View>
+          </View>
+        ) : null}
 
         {flags.enableHiddenTabs ? (
   <View style={{ marginTop: 18 }}>

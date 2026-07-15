@@ -68,6 +68,268 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-14 22:11
+
+## Runtime Focus
+
+Competition runtime stabilization, replay governance, topology vs aggregate convergence, and architecture governance formalization.
+
+---
+
+# Major Runtime Discoveries
+
+## Summary vs Compete Architectural Split
+
+Confirmed:
+
+* Summary renders through:
+
+  * `computeSignals`
+  * aggregate overlay
+  * `overlayCompetitionAggregateSignals`
+* Compete renders through:
+
+  * topology projection
+  * `projectCompetitionCompeteView`
+  * `CompetitionCard`
+
+Meaning:
+Summary and Compete do NOT render from the same final convergence substrate.
+
+---
+
+## Replay Asymmetry Confirmed
+
+Observed:
+
+* topology replay uses strict `>`
+* aggregate replay uses `>=`
+
+This creates deterministic divergence windows under equal timestamp conditions.
+
+---
+
+## Projection Invalidation Root Cause
+
+Grounded finding:
+`overlayCompetitionAggregateSignals`
+peeked topology state for `competitionCount`,
+BUT:
+`useSignals`
+did NOT subscribe to topology invalidation (`competitionVersion`).
+
+This caused:
+
+* Compete topology updates appearing before Summary convergence
+* stale Summary counts
+* delayed overlay recompute
+
+---
+
+# Runtime Governance Work Completed
+
+Created architecture governance suite:
+
+* `docs/architecture/hydration-orchestration-v1.md`
+* `docs/architecture/runtime-dependency-maps-v1.md`
+* `docs/architecture/recovery-systems-v1.md`
+* `docs/architecture/invalidation-cache-systems-v1.md`
+* `docs/architecture/sequence-diagrams-v1.md`
+* `docs/architecture/competition/competition-runtime-governance-v1.md`
+* `docs/architecture/competition/competition-runtime-invariants-v1.md`
+* `docs/architecture/competition/competition-stabilization-roadmap-v1.md`
+
+Governance now includes:
+
+* runtime planes P1–P6
+* ownership doctrine
+* replay doctrine
+* invalidation doctrine
+* stabilization sequencing
+* recovery governance
+* AI mutation safety zones
+* bounded Codex/Cursor governance
+
+---
+
+# Runtime Stabilization Patch Applied
+
+Commit:
+`eddc0e7`
+`Stabilize coach Summary topology overlay recompute timing`
+
+Patch:
+
+* Added `competitionVersion` subscription inside `useSignals`
+* Added coach-gated topology invalidation recompute dependency
+* Preserved:
+
+  * replay semantics
+  * hydration ordering
+  * store ownership
+  * invalidation ownership
+  * persistence boundaries
+
+Scope:
+Read-only projection invalidation alignment only.
+
+---
+
+# QA Results
+
+## PASS
+
+* Summary no longer exhibited obvious topology recompute lag
+* Athlete fast switching stable
+* Summary/Compete counts stable during navigation
+* No replay bleed observed
+* No duplicate competitions observed
+* No hydration flicker observed
+
+## REMAINING ISSUE
+
+Coach aggregate remains stale:
+
+* Summary shows `30-12`
+* Historical topology inspection indicates `30-13`
+
+Important:
+This is NOT the same issue as projection invalidation timing.
+
+Likely remaining runtime class:
+
+* aggregate publication staleness
+* aggregate replay acceptance
+* parent aggregate rebuild omission
+* equal timestamp aggregate replay behavior
+
+Projection convergence appears improved.
+Aggregate correctness remains unresolved.
+
+---
+
+# Parent App State
+
+Important runtime event:
+Parent app was deleted/reinstalled during QA.
+
+Effects:
+
+* P1 canonical local stores lost on parent device
+* Parent app relinked Luca only
+* Mikey blocked by ghost athlete detection
+* Coach app retained:
+
+  * topology artifacts
+  * aggregate artifacts
+  * overlays
+  * shared competition shells
+
+Major discovery:
+Coach mirrors already function as a bounded survivability substrate.
+
+Recovery orchestration does NOT yet exist.
+
+---
+
+# Latest Git Status
+
+```text
+## rollback-pre-lineage-regression
+ M app/(tabs)/compete.tsx
+ M app/(tabs)/profile/dev-settings.tsx
+ M src/storage/coachWeeklySyncCacheStore.ts
+?? debug-logs/inv8/
+?? scripts/__pycache__/
+?? src/domain/competition/tests/inv8ParentPublicationCorridor.test.ts
+```
+
+---
+
+# Latest Commits
+
+```text
+7cc9715 (HEAD -> rollback-pre-lineage-regression) Document question-driven runtime investigation and QA findings
+6f9ad61 Establish DOCOPS v2 engineering documentation workflow
+cf3bfdc Strengthen engineering doctrine and certification workflow
+a90f3c8 Establish architecture certification knowledge base
+a904db4 Automate documentation maintenance and founder knowledge workflow
+```
+
+---
+
+# Recently Changed Files
+
+```text
+docs/dev-handoff.md
+docs/engineering-checkpoint.md
+docs/engineering-parking-lot.md
+docs/master-prompt-daily-restart.md
+docs/master-prompt-developer.md
+scripts/write_engineering_checkpoint.py
+```
+
+---
+
+# Known Runtime Risks
+
+* aggregate replay asymmetry
+* equal timestamp divergence
+* stale aggregate overlays
+* hydration ordering ambiguity
+* refresh-dependent convergence
+* incomplete recovery orchestration
+* parent deletion non-recoverability
+* aggregate publication correctness
+
+---
+
+# Recommended Next Steps
+
+## Phase 1 — Replay Governance Investigation
+
+Focus:
+Why aggregate artifacts remain stale while topology/history appears newer.
+
+Priority targets:
+
+1. aggregate artifact publication path
+2. aggregate builder completeness
+3. aggregate replay acceptance behavior
+4. equal timestamp handling
+5. parent mutation → aggregate rebuild chain
+6. aggregate overwrite ordering
+7. reconcile timing
+
+DO NOT:
+
+* rewrite hydration
+* widen ownership
+* add new stores
+* introduce speculative recovery systems
+* mutate replay semantics broadly
+
+Continue operating inside:
+
+* runtime governance doctrine
+* invariant doctrine
+* stabilization roadmap sequencing
+
+---
+
+# Operational Notes
+
+Notion operationalization started:
+
+* runtime cognition layer
+* proof-of-work engineering case study
+* architecture governance capture
+* future portfolio narrative
+* AI-assisted engineering governance
+
+Current strategic transition:
+Reactive debugging → governed distributed runtime engineering.
+
 # DEV HANDOFF — 2026-07-13
 
 # PART 1 — Executive Summary

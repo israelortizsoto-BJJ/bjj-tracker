@@ -278,7 +278,22 @@ export default function CompetitionTab() {
         extra: { entriesLoaded: merged.length, loadPath: lk ? "by_kid" : "by_shared_athlete" },
       });
     }
-    if (gen !== loadGenerationRef.current) return;
+    if (__DEV__) {
+      console.log("[COMPETE_INIT_BRIDGE]", { stage: "LOAD_COMPETITIONS_END", gen });
+    }
+    if (gen !== loadGenerationRef.current) {
+      if (__DEV__) {
+        console.log("[COMPETE_INIT_BRIDGE]", {
+          stage: "SET_ENTRIES_SKIPPED_GEN",
+          gen,
+          currentGen: loadGenerationRef.current,
+        });
+      }
+      return;
+    }
+    if (__DEV__) {
+      console.log("[COMPETE_INIT_BRIDGE]", { stage: "SET_ENTRIES_APPLY", gen });
+    }
     setEntries((prev) => {
       const prevTotalMatches = prev.reduce((sum, entry) => sum + entry.matches.length, 0);
       const nextTotalMatches = merged.reduce((sum, entry) => sum + entry.matches.length, 0);
@@ -357,23 +372,67 @@ export default function CompetitionTab() {
         athleteId: athleteId.trim() || null,
       });
       if (__DEV__) {
+        // INV8 harness validation — temporary; remove after harness is certified.
+        const inv8Raw = (
+          globalThis as { __INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__?: boolean }
+        ).__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__;
+        console.log("[INV8_HARNESS]", {
+          stage: "FOCUS_ENTER_read",
+          raw: inv8Raw,
+          equalsTrue: inv8Raw === true,
+          typeofRaw: typeof inv8Raw,
+          globalSameAsGlobalThis:
+            typeof global !== "undefined" && global === globalThis,
+        });
+        console.log("[COMPETE_INIT_BRIDGE]", {
+          stage: "FOCUS_ENTER",
+          coachSyncHydrationVersion,
+          competitionVersion,
+          deviceRole,
+          inv8SuppressArtifactHydrationBump: inv8Raw === true,
+        });
         console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_entered", {
           athleteId: athleteId.trim() || null,
           linkedKidId: linkedKidId ?? null,
           coachSyncHydrationVersion,
           competitionVersion,
         });
+        console.log("[COMPETE_FOCUS_DEP_TRACE] entered", {
+          athleteId: athleteId.trim() || null,
+          linkedKidId: linkedKidId?.trim() || null,
+          coachSyncHydrationVersion,
+          competitionVersion,
+          deviceRole,
+        });
       }
       let cancelled = false;
       const trimmedAthleteId = athleteId.trim();
       if (deviceRole === "parent" && trimmedAthleteId) {
         void (async () => {
+          if (__DEV__) {
+            console.log("[COMPETE_INIT_BRIDGE]", { stage: "REFRESH_BEGIN" });
+          }
           await refreshParentWriterSessionSnapshot({
             initialSharedAthleteIds: [trimmedAthleteId],
             isCancelled: () => cancelled,
           });
+          if (__DEV__) {
+            console.log("[COMPETE_INIT_BRIDGE]", { stage: "REFRESH_END" });
+            console.log("[COMPETE_INIT_BRIDGE]", {
+              stage: "CANCELLED_CHECK",
+              cancelled,
+            });
+          }
           if (cancelled) {
+            if (__DEV__) {
+              console.log("[COMPETE_INIT_BRIDGE]", {
+                stage: "RETURN_BEFORE_LOAD_COMPETITIONS",
+              });
+            }
             return;
+          }
+          if (__DEV__) {
+            console.log("[COMPETE_INIT_BRIDGE]", { stage: "LOAD_COMPETITIONS_BEGIN" });
           }
           await loadCompetitionsRef.current();
         })();
@@ -384,6 +443,13 @@ export default function CompetitionTab() {
         cancelled = true;
         if (__DEV__) {
           console.log("[COMPETE_RENDER_LOOP_TRACE] focus_effect_cleanup");
+          console.log("[COMPETE_FOCUS_DEP_TRACE] cleanup", {
+            athleteId: athleteId.trim() || null,
+            linkedKidId: linkedKidId?.trim() || null,
+            coachSyncHydrationVersion,
+            competitionVersion,
+            deviceRole,
+          });
         }
       };
     }, [athleteId, linkedKidId, coachSyncHydrationVersion, competitionVersion, deviceRole]),

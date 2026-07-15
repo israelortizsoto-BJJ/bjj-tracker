@@ -26,7 +26,10 @@ import {
   isValidSyncedCoachMatchBreakdownArtifactSet,
   writeCoachMatchBreakdownArtifactSet,
 } from "./coachMatchBreakdownArtifactStore";
-import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
+import {
+  bumpCoachSyncHydrationVersion,
+  getCoachSyncHydrationVersion,
+} from "./coachSyncHydrationStore";
 import { enforceWeeklyAthleteInvariant } from "./invariants/weeklyAthleteInvariant";
 import { StorageKeys } from "./storageKeys";
 
@@ -536,9 +539,38 @@ export async function setCachedWeeklyForLinkToken(
         artifactCount: artifactSets.reduce((sum, artifactSet) => sum + artifactSet.artifacts.length, 0),
         sharedAthleteIds: artifactSets.map((artifactSet) => artifactSet.sharedAthleteId),
       });
-      bumpCoachSyncHydrationVersion({
-        reason: "coach_match_breakdown_artifacts_hydrated",
-      });
+      // INV8 — temporary experiment; revert after one failing-run comparison.
+      // Default OFF: production and normal __DEV__ always publish.
+      // INV8 harness validation — temporary; remove after harness is certified.
+      if (__DEV__) {
+        const inv8Raw = (
+          globalThis as { __INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__?: boolean }
+        ).__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__;
+        console.log("[INV8_HARNESS]", {
+          stage: "setCachedWeeklyForLinkToken_beforeRead",
+          raw: inv8Raw,
+          equalsTrue: inv8Raw === true,
+          typeofRaw: typeof inv8Raw,
+          __DEV__: true,
+          globalSameAsGlobalThis:
+            typeof global !== "undefined" && global === globalThis,
+        });
+      }
+      const suppressArtifactHydrationBump =
+        __DEV__ &&
+        (globalThis as { __INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__?: boolean })
+          .__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__ === true;
+      if (suppressArtifactHydrationBump) {
+        console.log("[INV8_CONVERGENCE_EXPERIMENT]", {
+          stage: "publication_suppressed",
+          reason: "coach_match_breakdown_artifacts_hydrated",
+          hydrationVersionHeld: getCoachSyncHydrationVersion(),
+        });
+      } else {
+        bumpCoachSyncHydrationVersion({
+          reason: "coach_match_breakdown_artifacts_hydrated",
+        });
+      }
     }
   }
   if (__DEV__) {
