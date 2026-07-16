@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "re
 
 import { useCoachSyncHydrationVersion } from "@/src/storage/coachSyncHydrationStore";
 import { peekCoachMatchBreakdownArtifactSet } from "@/src/storage/coachMatchBreakdownArtifactStore";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { localTodayDateKey, toDateKey } from "@/src/_domain/dateKey";
@@ -153,6 +153,7 @@ export default function CompetitionTab() {
   } = useActiveAthlete();
   const [entries, setEntries] = useState<CompeteKidEntryMerged[]>([]);
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
+  const [competeRefreshing, setCompeteRefreshing] = useState(false);
   const loadGenerationRef = useRef(0);
   const coachSyncHydrationVersion = useCoachSyncHydrationVersion();
   const competitionVersion = useSyncExternalStore(
@@ -358,6 +359,43 @@ export default function CompetitionTab() {
   const loadCompetitionsRef = useRef(loadCompetitions);
   loadCompetitionsRef.current = loadCompetitions;
 
+  const runParentCompeteRefresh = useCallback(
+    async (options: {
+      initialSharedAthleteIds: readonly string[];
+      isCancelled?: () => boolean;
+    }) => {
+      const isCancelled = options.isCancelled ?? (() => false);
+      if (__DEV__) {
+        console.log("[COMPETE_INIT_BRIDGE]", { stage: "REFRESH_BEGIN" });
+      }
+      await refreshParentWriterSessionSnapshot({
+        initialSharedAthleteIds: options.initialSharedAthleteIds,
+        isCancelled,
+      });
+      const cancelled = isCancelled();
+      if (__DEV__) {
+        console.log("[COMPETE_INIT_BRIDGE]", { stage: "REFRESH_END" });
+        console.log("[COMPETE_INIT_BRIDGE]", {
+          stage: "CANCELLED_CHECK",
+          cancelled,
+        });
+      }
+      if (cancelled) {
+        if (__DEV__) {
+          console.log("[COMPETE_INIT_BRIDGE]", {
+            stage: "RETURN_BEFORE_LOAD_COMPETITIONS",
+          });
+        }
+        return;
+      }
+      if (__DEV__) {
+        console.log("[COMPETE_INIT_BRIDGE]", { stage: "LOAD_COMPETITIONS_BEGIN" });
+      }
+      await loadCompetitionsRef.current();
+    },
+    [],
+  );
+
   useFocusEffect(
     useCallback(() => {
       logSaveLifecycleTrace("compete_screen_focus", {
@@ -408,34 +446,10 @@ export default function CompetitionTab() {
       let cancelled = false;
       const trimmedAthleteId = athleteId.trim();
       if (deviceRole === "parent" && trimmedAthleteId) {
-        void (async () => {
-          if (__DEV__) {
-            console.log("[COMPETE_INIT_BRIDGE]", { stage: "REFRESH_BEGIN" });
-          }
-          await refreshParentWriterSessionSnapshot({
-            initialSharedAthleteIds: [trimmedAthleteId],
-            isCancelled: () => cancelled,
-          });
-          if (__DEV__) {
-            console.log("[COMPETE_INIT_BRIDGE]", { stage: "REFRESH_END" });
-            console.log("[COMPETE_INIT_BRIDGE]", {
-              stage: "CANCELLED_CHECK",
-              cancelled,
-            });
-          }
-          if (cancelled) {
-            if (__DEV__) {
-              console.log("[COMPETE_INIT_BRIDGE]", {
-                stage: "RETURN_BEFORE_LOAD_COMPETITIONS",
-              });
-            }
-            return;
-          }
-          if (__DEV__) {
-            console.log("[COMPETE_INIT_BRIDGE]", { stage: "LOAD_COMPETITIONS_BEGIN" });
-          }
-          await loadCompetitionsRef.current();
-        })();
+        void runParentCompeteRefresh({
+          initialSharedAthleteIds: [trimmedAthleteId],
+          isCancelled: () => cancelled,
+        });
       } else {
         void loadCompetitionsRef.current();
       }
@@ -452,8 +466,24 @@ export default function CompetitionTab() {
           });
         }
       };
-    }, [athleteId, linkedKidId, coachSyncHydrationVersion, competitionVersion, deviceRole]),
+    }, [athleteId, linkedKidId, competitionVersion, deviceRole, runParentCompeteRefresh]),
   );
+
+  const onCompeteRefresh = useCallback(async () => {
+    setCompeteRefreshing(true);
+    try {
+      const trimmedAthleteId = athleteId.trim();
+      if (deviceRole === "parent" && trimmedAthleteId) {
+        await runParentCompeteRefresh({
+          initialSharedAthleteIds: [trimmedAthleteId],
+        });
+      } else {
+        await loadCompetitionsRef.current();
+      }
+    } finally {
+      setCompeteRefreshing(false);
+    }
+  }, [athleteId, deviceRole, runParentCompeteRefresh]);
 
   const noAthleteSelected = hydrationReady && !athleteId.trim();
   const competeNoAthleteSubtitle =
@@ -513,6 +543,14 @@ export default function CompetitionTab() {
         style={styles.screen}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={competeRefreshing}
+            onRefresh={onCompeteRefresh}
+            tintColor={THIS_WEEK.primaryFill}
+            colors={[THIS_WEEK.primaryFill]}
+          />
+        }
       >
         <OperatingHeader
           mode="athlete"
