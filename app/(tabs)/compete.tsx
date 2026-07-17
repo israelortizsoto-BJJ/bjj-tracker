@@ -150,6 +150,7 @@ export default function CompetitionTab() {
     athlete,
     authorityBootstrapState,
     operatingAthleteRoster,
+    refreshActiveAthleteAuthority,
   } = useActiveAthlete();
   const [entries, setEntries] = useState<CompeteKidEntryMerged[]>([]);
   const [expandedMonthKey, setExpandedMonthKey] = useState<string | null>(null);
@@ -477,13 +478,16 @@ export default function CompetitionTab() {
         await runParentCompeteRefresh({
           initialSharedAthleteIds: [trimmedAthleteId],
         });
+      } else if (deviceRole === "coach") {
+        await refreshActiveAthleteAuthority();
+        await loadCompetitionsRef.current();
       } else {
         await loadCompetitionsRef.current();
       }
     } finally {
       setCompeteRefreshing(false);
     }
-  }, [athleteId, deviceRole, runParentCompeteRefresh]);
+  }, [athleteId, deviceRole, refreshActiveAthleteAuthority, runParentCompeteRefresh]);
 
   const noAthleteSelected = hydrationReady && !athleteId.trim();
   const competeNoAthleteSubtitle =
