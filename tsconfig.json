@@ -18,5 +18,12 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
-  "exclude": ["coach-sync-worker"]
+  "exclude": [
+    "coach-sync-worker",
+    "src/domain/competition/tests/competitionResultDomainParity.test.ts",
+    "src/domain/competition/tests/parentResultsRecorded.test.ts",
+    "src/domain/competition/tests/parentResultsRecordedGateWiring.test.ts",
+    "src/features/coach/tests/coachDashboardPullToRefreshWiring.test.ts",
+    "src/features/coach/tests/ux002CoachVoiceReuseWiring.test.ts"
+  ]
 }

@@ -2,7 +2,7 @@ import { useHeaderHeight } from "@react-navigation/elements";
 import { useFocusEffect } from "@react-navigation/native";
 import { Stack, router, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, Keyboard, Platform, Pressable, Text, TextInput, View } from "react-native";
+import { Alert, Keyboard, Platform, Pressable, Text, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -11,6 +11,7 @@ import {
   patchKidWeeklyFocusCoachFields,
 } from "../../../../../src/storage/coachKidStore";
 import type { CoachOutcome } from "../../../../../src/types/coachKid";
+import { CoachVoiceNoteField } from "../../../../../src/features/coach/CoachVoiceNoteField";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -194,38 +195,18 @@ export default function KidProgressReflectionEditScreen() {
               })}
             </View>
 
-            <Text
-              style={{
-                marginTop: 16,
-                fontSize: 12,
-                letterSpacing: 0.6,
-                fontWeight: "700",
-                color: UI.textSecondary,
-              }}
-            >
-              NOTES
-            </Text>
-            <TextInput
-              value={notesDraft}
-              scrollEnabled={false}
-              onChangeText={setNotesDraft}
-              onFocus={bumpScrollToFocusedInput}
-              onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="Weekly progress notes"
-              placeholderTextColor={UI.textSecondary}
-              multiline
-              style={{
-                marginTop: 8,
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                padding: 12,
-                minHeight: 120,
-                color: UI.textPrimary,
-                textAlignVertical: "top",
-              }}
-            />
+            <View style={{ marginTop: 16 }}>
+              <CoachVoiceNoteField
+                label="NOTES"
+                value={notesDraft}
+                onChangeText={setNotesDraft}
+                onFocus={bumpScrollToFocusedInput}
+                onContentSizeChange={bumpScrollToFocusedInput}
+                placeholder="Weekly progress notes"
+                scrollEnabled={false}
+                minHeight={120}
+              />
+            </View>
 
             <Pressable
               disabled={saving}

@@ -53,6 +53,10 @@ import {
 import { ReadTogetherStoryModal } from "../../family/ReadTogetherStoryModal";
 import { deriveWeeklyNarrative } from "../coach/deriveWeeklyNarrative";
 import WeeklySuggestionCard from "../coach/components/WeeklySuggestionCard";
+import {
+  appendCompetitionLaunchContext,
+  type CompetitionLaunchContext,
+} from "../competition/competitionNavigationContract";
 import { getPlacementLabel } from "../competition/placementLabel";
 import {
   deriveCompetitionTrainingSkillFocus,
@@ -88,6 +92,7 @@ import {
   updateKidHouseholdLabel,
 } from "../../storage/coachKidStore";
 import { deleteSessionById } from "../../storage/sessionsStore";
+import { getKidCurrentStateAssessment } from "../../storage/kidCurrentStateAssessmentStore";
 import { getKidStandingGuidance } from "../../storage/kidStandingGuidanceStore";
 import { StorageKeys } from "../../storage/storageKeys";
 import { logCompDelete } from "../../dev/competitionMutationDevLog";
@@ -110,6 +115,7 @@ import {
   type KidCompetitionFormat,
   type KidCompetitionOutcomeKind,
   type KidCompetitionResult,
+  type KidCurrentStateAssessment,
   type KidStandingGuidance,
   type KidWeeklyFocusEntry,
 } from "../../types/coachKid";
@@ -451,7 +457,10 @@ async function openYoutubeUrl(rawUrl: string | undefined) {
 }
 
 export default function KidDetailScreen() {
-  const params = useLocalSearchParams<{ kidId?: string }>();
+  const params = useLocalSearchParams<{
+    kidId?: string;
+    competitionLaunchOrigin?: string;
+  }>();
   const kidId = params.kidId ? String(params.kidId) : "";
   const segments = useSegments();
   const pathname = usePathname();
@@ -473,6 +482,24 @@ export default function KidDetailScreen() {
     if (kidLaneBase) return `${kidLaneBase}/competition/edit`;
     return `/coach/kid/${kidId}/competition/edit`;
   }, [kidLaneBase, kidId]);
+  const competitionLaunchContext = useMemo<CompetitionLaunchContext>(
+    () =>
+      isThisWeekKidDetail
+        ? {
+            launchSurface: "parent_this_week_via_athlete",
+            returnClass: "athlete",
+            returnScopeId: kidId,
+          }
+        : {
+            launchSurface:
+              params.competitionLaunchOrigin === "coach_dashboard_via_athlete"
+                ? "coach_dashboard_via_athlete"
+                : "coach_athlete",
+            returnClass: "athlete",
+            returnScopeId: kidId,
+          },
+    [isThisWeekKidDetail, kidId, params.competitionLaunchOrigin],
+  );
 
   useEffect(() => {
     const lane = isThisWeekKidDetail ? "parent" : isCoachKidDetail ? "coach" : "unknown";
@@ -528,6 +555,8 @@ export default function KidDetailScreen() {
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const [mediaPreview, setMediaPreview] = useState<MediaPreviewState | null>(null);
   const [playableMediaUri, setPlayableMediaUri] = useState<string | null>(null);
+  const [currentStateAssessment, setCurrentStateAssessment] =
+    useState<KidCurrentStateAssessment | null>(null);
   const [standingGuidance, setStandingGuidance] = useState<KidStandingGuidance | null>(null);
   const [progressNotesInputKey, setProgressNotesInputKey] = useState(0);
   const [publishingWeekly, setPublishingWeekly] = useState(false);
@@ -609,6 +638,7 @@ export default function KidDetailScreen() {
         setThisWeekReflections([]);
         setCompetitions([]);
         setKidWeekSessions([]);
+        setCurrentStateAssessment(null);
         setStandingGuidance(null);
         setPublishedWeeklyFeedback(null);
         if (loadGen === coachKidDetailLoadGenRef.current) {
@@ -883,6 +913,9 @@ export default function KidDetailScreen() {
 
       const guidanceRow = await getKidStandingGuidance(kidId);
       setStandingGuidance(guidanceRow);
+
+      const currentStateRow = await getKidCurrentStateAssessment(kidId);
+      setCurrentStateAssessment(currentStateRow);
 
       // Lightweight "this week's training" display (pilot-only).
       const weekEndYMD = addDaysYMDLocal(weekStartYMD, 6);
@@ -1384,6 +1417,26 @@ export default function KidDetailScreen() {
   const standingSecondaryMuted =
     standingHeadline && standingDetail ? standingDetail : "";
   const standingIsActive = Boolean(standingPrimary);
+  const currentStateNarrative = (currentStateAssessment?.narrative ?? "").trim();
+  const currentStateMetadata = [
+    ["Confidence", currentStateAssessment?.confidence],
+    ["Execution", currentStateAssessment?.execution],
+    ["Consistency", currentStateAssessment?.consistency],
+    ["Pressure", currentStateAssessment?.pressureResponse],
+  ]
+    .map(([label, value]) => ({
+      label: String(label),
+      value: typeof value === "string" ? value.trim() : "",
+    }))
+    .filter((item) => item.value);
+  const currentStateIsActive =
+    Boolean(currentStateNarrative) || currentStateMetadata.length > 0;
+  const currentStateUpdatedLabel = currentStateAssessment?.updatedAt
+    ? new Date(currentStateAssessment.updatedAt).toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+      })
+    : null;
 
   const onSaveHousehold = useCallback(async () => {
     if (!kidId) return;
@@ -1953,8 +2006,8 @@ export default function KidDetailScreen() {
               {kidName}
             </Text>
             <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-              This athlete's detail lives in This Week. Notes you keep here stay on your device. The green
-              section is what you can share when you publish to your coach's linked invite.
+              This athlete&apos;s detail lives in This Week. Notes you keep here stay on your device. The green
+              section is what you can share when you publish to your coach&apos;s linked invite.
             </Text>
           </>
         )}
@@ -2480,6 +2533,112 @@ export default function KidDetailScreen() {
           </View>
 
           <View
+            style={{
+              paddingVertical: 20,
+              paddingHorizontal: 16,
+              borderRadius: CARD_RADIUS,
+              borderWidth: 1,
+              borderColor: "#d5deea",
+              backgroundColor: "#ffffff",
+              gap: 13,
+            }}
+          >
+            <View style={{ gap: 3 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text
+                  style={{
+                    flex: 1,
+                    fontSize: 11,
+                    letterSpacing: 1,
+                    fontWeight: "800",
+                    color: "#334155",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Current state
+                </Text>
+                {currentStateUpdatedLabel ? (
+                  <Text style={{ fontSize: 11, color: UI.textSecondary, fontWeight: "700" }}>
+                    Updated {currentStateUpdatedLabel}
+                  </Text>
+                ) : null}
+              </View>
+              <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                Your read of who this athlete is today, before setting direction.
+              </Text>
+            </View>
+
+            {currentStateIsActive ? (
+              <>
+                {currentStateNarrative ? (
+                  <Text style={{ fontSize: 16, fontWeight: "800", color: UI.textPrimary, lineHeight: 23 }}>
+                    {currentStateNarrative}
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
+                    Optional metadata saved. Add a narrative assessment when you are ready.
+                  </Text>
+                )}
+
+                {currentStateMetadata.length > 0 ? (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {currentStateMetadata.map((item) => (
+                      <View
+                        key={item.label}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: UI.border,
+                          backgroundColor: "#f8fafc",
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            color: UI.textSecondary,
+                            fontWeight: "800",
+                          }}
+                          numberOfLines={2}
+                        >
+                          {item.label}:{" "}
+                          <Text style={{ color: UI.textPrimary }}>{item.value}</Text>
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "700" }}>
+                Capture what is true about this athlete right now.
+              </Text>
+            )}
+
+            <Pressable
+              onPress={() =>
+                router.push(`${kidLaneBase}/current-state` as Href)
+              }
+              style={({ pressed }) => ({
+                marginTop: 1,
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                borderWidth: 1,
+                borderColor: "#cbd5e1",
+                backgroundColor: pressed ? "#eef2f6" : "#ffffff",
+                alignSelf: "flex-start",
+              })}
+            >
+              <Text style={{ fontSize: 14, color: UI.textPrimary, fontWeight: "800" }}>
+                {currentStateIsActive ? "Review assessment" : "Assess current state"}
+              </Text>
+            </Pressable>
+          </View>
+
+          <View
           style={{
               paddingVertical: 20,
               paddingHorizontal: 16,
@@ -2957,7 +3116,7 @@ export default function KidDetailScreen() {
             }}
           >
             <Text style={{ fontSize: 13, letterSpacing: 0.3, fontWeight: "800", color: UI.textPrimary }}>
-              This week's evolution cycle
+              This week&apos;s evolution cycle
             </Text>
             <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
               Weekly support for the behavior you want to become more natural.
@@ -3417,7 +3576,14 @@ export default function KidDetailScreen() {
           ) : null}
 
           <Pressable
-            onPress={() => router.push(competitionEditBaseHref as Href)}
+            onPress={() =>
+              router.push(
+                appendCompetitionLaunchContext(
+                  competitionEditBaseHref,
+                  competitionLaunchContext,
+                ) as Href,
+              )
+            }
             style={({ pressed }) => ({
               paddingVertical: 10,
               paddingHorizontal: 12,
@@ -3508,7 +3674,10 @@ export default function KidDetailScreen() {
                               onPress={() => {
                                 if (isSyncedRow) return;
                                 router.push(
-                                  `${competitionEditBaseHref}?entryId=${encodeURIComponent(row.id)}` as Href,
+                                  appendCompetitionLaunchContext(
+                                    `${competitionEditBaseHref}?entryId=${encodeURIComponent(row.id)}`,
+                                    competitionLaunchContext,
+                                  ) as Href,
                                 );
                               }}
                               style={({ pressed }) => ({

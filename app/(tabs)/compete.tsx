@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { localTodayDateKey, toDateKey } from "@/src/_domain/dateKey";
 import { CompetitionCard } from "@/src/features/competition/CompetitionCard";
+import { appendCompetitionLaunchContext } from "@/src/features/competition/competitionNavigationContract";
 import { logSaveLifecycleTrace } from "@/src/features/competition/saveLifecycleTrace";
 import { MedalCollection } from "@/src/features/competition/MedalCollection";
 import type { CompeteKidEntryMerged } from "@/src/features/competition/MedalGallery";
@@ -535,7 +536,13 @@ export default function CompetitionTab() {
       if (deviceRole !== "parent" && deviceRole !== "coach") return;
       const lane = deviceRole === "coach" ? "coach" : "this-week";
       router.push(
-        `/${lane}/kid/${encodeURIComponent(entry.kidId)}/competition/edit?entryId=${encodeURIComponent(entry.id)}` as Href,
+        appendCompetitionLaunchContext(
+          `/${lane}/kid/${encodeURIComponent(entry.kidId)}/competition/edit?entryId=${encodeURIComponent(entry.id)}`,
+          {
+            launchSurface: "competition_detail",
+            returnClass: "compete",
+          },
+        ) as Href,
       );
     },
     [deviceRole],
@@ -578,16 +585,24 @@ export default function CompetitionTab() {
               onPress: () => {
                 if (!hydrationReady || !athleteId.trim()) return;
                 const aid = athleteId.trim();
+                const launchSurface =
+                  deviceRole === "coach" ? "coach_compete" : "parent_compete";
                 if (linkedKidId) {
                   router.push(
-                    `/this-week/kid/${linkedKidId}/competition/edit?openNonce=${Date.now()}` as Href,
+                    appendCompetitionLaunchContext(
+                      `/this-week/kid/${linkedKidId}/competition/edit?openNonce=${Date.now()}`,
+                      { launchSurface, returnClass: "compete" },
+                    ) as Href,
                   );
                   return;
                 }
                 if (!aid) return;
                 const bucket = kidIdForUnlinkedParentAthleteCompetitions(aid);
                 router.push(
-                  `/this-week/kid/${encodeURIComponent(bucket)}/competition/edit?openNonce=${Date.now()}` as Href,
+                  appendCompetitionLaunchContext(
+                    `/this-week/kid/${encodeURIComponent(bucket)}/competition/edit?openNonce=${Date.now()}`,
+                    { launchSurface, returnClass: "compete" },
+                  ) as Href,
                 );
               },
             },

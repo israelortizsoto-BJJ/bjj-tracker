@@ -1,5 +1,6888 @@
 # BJJ Tracker - Dev Handoff Notes
+# DEBUGGING REMINDER
 
+Facts before fixes.
+Trace before mutation.
+Protected systems remain locked until evidence proves ownership.
+
+Reference:
+master-prompt-developer.md
+
+GOVERNING INCIDENT RESPONSE DOCUMENT
+
+docs/architecture/matmind-incident-capture-architecture-v1.md
+
+→ DEBUG DOCTRINE
+OVERLAY FORENSIC TOOLKIT
+
+Document:
+
+Primary tag:
+[OVERLAY_FORENSIC]
+
+Primary correlation key:
+traceId
+
+Primary investigation flow:
+
+1. overlay_write_complete
+2. overlay_list_for_publish
+3. artifact_build_input
+4. artifact_build_output
+5. publish_schedule_payload
+6. publish_http_request
+7. publish_http_success
+8. worker_store_artifact_set
+9. worker_get_artifact_set
+
+And explicitly document:
+
+If a coach note does not hydrate:
+
+Step 1:
+Search traceId from overlay_write_complete
+
+Step 2:
+Determine first missing stage
+
+If missing after overlay_write_complete
+→ local overlay storage issue
+
+If missing after artifact_build_input
+→ artifact filtering issue
+
+If missing after publish_http_request
+→ network transport issue
+
+If missing after worker_store_artifact_set
+→ worker persistence issue
+
+If present through worker_get_artifact_set
+→ parent hydration/render issue
+
+Canonical intermediate checkpoint (ODS documentation pattern, MatMind adaption):
+docs/engineering-checkpoint.md
+
+Writers:
+scripts/write_engineering_checkpoint.py
+
+---
+
+# DEV HANDOFF — 2026-07-15 21:59
+
+## Runtime Focus
+
+Engineering Design Phase — INV8 Production Design v1 authored under Correction Authorization (AUTHORIZE WITH CONDITIONS). Governance Freeze active. No production code yet.
+
+## Accomplished
+
+Authored **INV8 Production Design v1**:
+
+`docs/engineering/inv8-production-design-v1.md`
+
+C-D6 shape: sole behavioral delta is elimination of observation-derived Init-Affecting Reactions (CO-R5 / XR-1 / XR-2) so Parent Initialization can reach the certified Minimum Parent Initialization floor under C-RT4, epoch-independently.
+
+Exit answers recorded in document: Q3 = YES (demonstrably smallest); Q4 = YES (implementation may begin after design approval; no missing engineering input).
+
+## Explicit non-authorization / freeze
+
+- Constitutions and governance documents unmodified.
+- Temporary INV8 suppression harness is **not** production shape (COND-5).
+- Publication epoch A/B remains uncertified (COND-1).
+- Success is not list visibility alone (C-D3 / COND-6).
+
+## Do Not
+
+- Do not amend constitutional or governance artifacts.
+- Do not author additional architecture.
+- Do not promote `__INV8_SUPPRESS_ARTIFACT_HYDRATION_BUMP__` to production.
+- Do not reopen protected systems or falsely close Active Investigation Register items.
+
+## Next
+
+Production Implementation of the Section 4 single behavioral delta within Authorization §§3–7; then Runtime Validation V-1…V-8; then Completion Certification.
+
+---
+
+# DEV HANDOFF — 2026-07-15 21:45
+
+## Runtime Focus
+
+Engineering Proposal Phase — INV8 Proposed Change Statement v1 (RI-6) authored. No production runtime work authorized.
+
+## Accomplished
+
+Authored **INV8 Proposed Change Statement v1**:
+
+`docs/architecture/governance/inv8-proposed-change-statement-v1.md`
+
+Ownership claim (C-D6): Observation Delivery must not Init-Affect Parent Initialization; Init must reach certified Minimum Parent Initialization floor; epoch-independent (does not require Candidate A/B).
+
+Exit answers recorded in document: Q3 = NO (missing Correction Authorization); Q4 = YES (RI-6 reduces distance on the only authorized path).
+
+## Explicit non-authorization
+
+- Proposed Change Statement does **not** authorize production design or code.
+- Required next authorization artifact (if ARB review later passes): **INV8 Ownership-Preserving Correction Authorization v1**.
+- Companion Required Inputs still owed: RI-7…RI-11.
+
+## Do Not
+
+- Do not implement INV8 fixes.
+- Do not begin production design.
+- Do not promote temporary INV8 suppression harness to production shape.
+- Do not certify Publication epoch A/B via this proposal.
+- Do not reopen protected systems or amend constitution/governance via proposal text.
+
+## Next
+
+Assemble RI-7…RI-11 and submit ARB review package; await §11 AUTHORIZE before any production design.
+
+---
+
+# DEV HANDOFF — 2026-07-15 21:37
+
+## Runtime Focus
+
+Governance Phase — Architecture Review Board procedure authored. No production runtime work authorized.
+
+## Accomplished
+
+Authored **Ownership-Preserving Change Review Procedure v1**:
+
+`docs/architecture/governance/ownership-preserving-change-review-procedure-v1.md`
+
+This is ARB governance procedure, not constitutional law, not runtime design, not implementation.
+
+Immutable inputs bound into review:
+
+1. Parent Initialization Ownership Contract v1
+2. Consumer Observation Contract v1
+3. Certified Architecture Register
+4. Protected Systems Register
+5. Active Investigation Register
+
+## Explicit non-authorization
+
+- Procedure does **not** authorize the smallest ownership-preserving implementation.
+- Engineering is **not** authorized to begin production design.
+- Required next authorization artifact (if review later passes): **INV8 Ownership-Preserving Correction Authorization v1**.
+
+## Do Not
+
+- Do not implement INV8 fixes.
+- Do not redesign the runtime.
+- Do not amend constitutional contracts via governance paperwork.
+- Do not reopen protected systems.
+
+## Next
+
+Assemble Proposed Change Statement + Required Inputs RI-6…RI-11 under the review procedure when directed.
+
+---
+
+# DEV HANDOFF — 2026-07-14 22:11
+
+Runtime Focus
+
+Transition the investigation from runtime debugging to architecture certification.
+
+The investigation is no longer centered on callbacks, hooks, or replay timing.
+
+Instead, the investigation is centered on certifying ownership contracts across the Parent Runtime.
+
+Success is no longer defined as "making competitions appear."
+
+Success is defined as producing a repository-backed ownership model in which every runtime responsibility has exactly one architectural owner.
+
+Major realization
+
+Yesterday established a new engineering doctrine:
+
+Runtime execution is temporary.
+
+Ownership is permanent.
+
+Execution traces explain what happened.
+
+Ownership contracts explain what is allowed to happen.
+
+Future investigations should therefore certify ownership before proposing runtime modifications.
+
+Certified systems that remain closed
+
+Identity
+
+Canonical Athlete Authority
+
+Overlay Merge
+
+Artifact Persistence
+
+Competition Rendering Pipeline
+
+Topology Ownership
+
+Coach Runtime
+
+None of these should be reopened without contradictory evidence.
+
+Active Investigation
+
+Parent Runtime Publication Corridor
+
+Specifically:
+
+Who owns the boundary between
+
+Parent Refresh
+
+↓
+
+Publication
+
+↓
+
+Hydration Bus
+
+↓
+
+Competition Initialization
+
+and what architecture contract governs that ownership?
+
+Primary Goal for 7/15
+
+Produce the missing Parent Initialization Ownership Contract.
+
+Not another runtime probe.
+
+Not another callback investigation.
+
+A formal ownership contract that clearly defines:
+
+initialization owner
+publication owner
+hydration owner
+rendering owner
+eventual consistency owner
+
+Once that contract exists, determine whether the publication timing is violating it or whether the contract itself needs to be refined.
+# DEV HANDOFF — 2026-07-13
+
+# PART 1 — Executive Summary
+
+## Mission
+
+Complete day's close for MatMind documentation + investigation discipline.
+
+Two tracks ran today:
+
+1. Adopt and exercise the ODS documentation operating pattern (DOCOPS v2).
+2. Continue Parent Runtime Convergence via question-driven Competition Lifecycle QA.
+
+## Verified Outcomes
+
+* DOCOPS v2 exercised successfully end-to-end.
+* ODS documentation workflow adopted as MatMind operating pattern.
+* Question-driven investigation methodology established.
+* Competition Lifecycle QA: Q1–Q5 YES; Q6 partial (cold-start convergence).
+* Engineering checkpoint written and verified by Python (`scripts/write_engineering_checkpoint.py`).
+* Engineering Parking Lot introduced (no new parked items today).
+
+## Responsibility Boundary Proven
+
+```text
+GPT generates structured engineering model
+↓
+Python validates / writes / verifies canonical documents
+```
+
+Checkpoint path proven today:
+
+```text
+wrote docs/engineering-checkpoint.md
+verified docs/engineering-checkpoint.md
+```
+
+Python owns the checkpoint.
+Living-document updates follow the same ODS terminal-first pattern.
+
+---
+
+# PART 2 — DOCOPS / ODS Documentation Adoption
+
+## Canonical Operating Pattern
+
+Workflow order must remain identical:
+
+1. Inspect repository.
+2. Reuse existing script if available.
+3. Otherwise generate a terminal-first inline Python updater.
+4. Update canonical living documents.
+5. Create/update the dated checkpoint/EOD artifact.
+6. Preview changes.
+7. Provide git checkpoint commands.
+8. End with the next restart prompt.
+
+## MatMind Adaption Map
+
+| ODS role | MatMind path |
+|---|---|
+| Repository root | `/Users/ods/Repos/bjj-tracker` |
+| Living handoff | `docs/dev-handoff.md` |
+| Daily restart prompt | `docs/master-prompt-daily-restart.md` |
+| Developer doctrine prompt | `docs/master-prompt-developer.md` |
+| Certification living docs | `docs/architecture/certification/*` |
+| Dated checkpoint artifact | `docs/engineering-checkpoint.md` |
+| Checkpoint writer | `scripts/write_engineering_checkpoint.py` |
+| Handoff ordering helper | `scripts/dev_handoff_ordering.py` |
+| Handoff writer (when model-ready) | `scripts/write_dev_handoff.py` |
+| Certification writer | `scripts/write_architecture_certification.py` |
+| Engineering Parking Lot | `docs/engineering-parking-lot.md` |
+
+## Script Reuse Rule
+
+Prefer existing writers in order:
+
+1. `scripts/write_engineering_checkpoint.py`
+2. `scripts/write_dev_handoff.py` + `scripts/dev_handoff_ordering.py`
+3. `scripts/write_architecture_certification.py`
+
+If no writer owns the required update, use a terminal-first inline Python updater.
+
+Python validates, formats, writes, and verifies.
+GPT supplies engineering content / structured models.
+
+## Architectural Direction (Not Building Now)
+
+Long-term target (founder velocity: capture only, do not implement today):
+
+```text
+Engineer → GPT → Engineering Model → Python → Checkpoint / Dev Handoff / Parking Lot / future docs
+```
+
+The engineering model becomes canonical source.
+Documents become views of that model.
+
+---
+
+# PART 3 — Competition Lifecycle QA (Question-Driven)
+
+Investigation remains:
+
+**Parent Runtime Convergence** (ACTIVE)
+
+Method:
+
+Answer one binary question at a time.
+Stop at the first uncertified boundary.
+Do not reopen Overlay Merge Contract or Canonical Identity Ownership without new evidence.
+
+## Results
+
+| Question | Result |
+|---|---|
+| Q1 | YES |
+| Q2 | YES |
+| Q3 | YES |
+| Q4 | YES |
+| Q5 | YES |
+| Q6 | PARTIAL — cold-start convergence |
+
+Q6 detail:
+
+After cold launch, competitions were absent until the temporary suppression experiment was enabled, after which competitions immediately returned.
+
+A newly created competition initially rendered two matches on Parent while Coach hydrated only one until the Parent competition was edited.
+
+Compete instrumentation in `app/(tabs)/compete.tsx` remains diagnostic-only.
+
+---
+
+# PART 4 — Remaining Investigation Boundaries
+
+Exactly two boundaries remain open:
+
+1. **Parent cold-start convergence**
+   Why temporary suppression of artifact hydration publication materially changes Parent initialization after cold launch.
+
+2. **Coach initial match hydration divergence**
+   Newly created competition hydrates differently on Coach vs Parent until a subsequent Parent mutation.
+
+Next experiment:
+
+Refocus INV8 on runtime convergence.
+Determine why suppression changes Parent initialization, then investigate the Coach match hydration divergence using the newly created competition as the certified reproduction path.
+
+---
+
+# PART 5 — Do Not
+
+* Redesign the ODS documentation workflow
+* Add new documentation frameworks
+* Expand DOCOPS beyond existing MatMind writers
+* Treat documentation adoption as a Parent Compete fix
+* Reopen certified architecture boundaries
+* Add instrumentation unless an approved question cannot be answered
+* Continue investigating downstream after the first uncertified boundary
+* Treat suppression as the root cause without runtime proof
+* Park work without founder decision + Resume Trigger
+
+# DEV HANDOFF — 2026-07-10
+
+# PART 1 — Executive Summary, Repository State, Mission, Certified Architecture
+
+---
+
+# MATMIND ENGINEERING HANDOFF
+
+**Date**
+
+2026-07-10
+
+---
+
+# Executive Summary
+
+July 10 represented a major reset of the engineering process.
+
+The objective was intentionally **not** to continue broad debugging of the Parent Competition issue.
+
+Instead, the day was dedicated to restoring engineering discipline after several weeks of increasingly broad investigations that repeatedly rediscovered already-proven architecture.
+
+The primary goal became:
+
+> **Create a certification-driven engineering workflow where future investigations begin from repository truth instead of reconstructed chat history.**
+
+This objective was successfully completed.
+
+The result is a new engineering operating model centered around:
+
+* Architecture Certification
+* Protected Systems
+* Active Investigation Register
+* Runtime-first investigation doctrine
+* Binary investigation methodology
+* Git checkpoint discipline
+* Founder Velocity
+
+Although the Parent Competition runtime remains unresolved, the search space has been dramatically reduced.
+
+Ownership has shifted away from generic Competition rendering and toward the Parent runtime publication corridor.
+
+---
+
+# Repository State
+
+Branch
+
+```text
+rollback-pre-lineage-regression
+```
+
+HEAD
+
+```text
+a90f3c8
+
+Establish architecture certification knowledge base
+```
+
+Working Tree (End of Day)
+
+```text
+M app/(tabs)/compete.tsx
+```
+
+Only the active runtime investigation remains uncommitted.
+
+All documentation work completed during the day has been committed or intentionally separated from the runtime investigation.
+
+This separation is now considered part of engineering doctrine.
+
+---
+
+# Mission of July 10
+
+Previous investigations repeatedly suffered from the same failure mode:
+
+* broad debugging
+* reopening certified systems
+* reconstructing architecture from memory
+* multiple simultaneous hypotheses
+* unclear ownership
+
+July 10 intentionally paused debugging to establish permanent engineering infrastructure.
+
+The guiding principle became:
+
+> **Do not continue debugging until the repository itself can tell us what is already proven.**
+
+---
+
+# Major Deliverable
+
+## Architecture Certification System
+
+Repository additions:
+
+```text
+docs/architecture/certification/
+
+    CertifiedArchitectureRegister-v1.md
+    protected-systems-register.md
+    active-investigation-register.md
+    CERTIFICATION_HISTORY.md
+
+scripts/
+
+    write_architecture_certification.py
+```
+
+Commit
+
+```text
+a90f3c8
+
+Establish architecture certification knowledge base
+```
+
+This became the canonical certification layer for the repository.
+
+Architecture documentation now serves two different purposes:
+
+Architecture Documents
+
+↓
+
+Explain how systems work.
+
+Architecture Certification
+
+↓
+
+States which systems are actually proven.
+
+---
+
+# Engineering Operating Model
+
+The repository startup workflow is now:
+
+```text
+git status
+
+↓
+
+git log
+
+↓
+
+Architecture Certification Register
+
+↓
+
+Developer Handoff
+
+↓
+
+Active Investigation Register
+
+↓
+
+Resume exactly one investigation
+```
+
+This replaces reconstructing engineering context from previous conversations.
+
+---
+
+# Protected Engineering Philosophy
+
+A certified subsystem is considered protected.
+
+Protected systems may **not** be modified without:
+
+* repository evidence
+* runtime evidence
+* explicit reason for reopening
+
+This prevents reopening previously solved engineering work.
+
+---
+
+# Certified Architecture (Current)
+
+As of July 10 the following areas are considered certified.
+
+---
+
+## Canonical Identity Ownership
+
+Status
+
+✅ Certified
+
+Reason
+
+Identity ownership has been repeatedly validated through repository investigation.
+
+Ownership boundaries are considered stable.
+
+No further investigation should occur without new runtime evidence.
+
+---
+
+## Overlay Merge Contract
+
+Status
+
+✅ Certified
+
+Reason
+
+Overlay merge behavior has been certified through repository investigation and runtime validation.
+
+No architectural redesign should occur.
+
+---
+
+## Competition Topology
+
+Status
+
+⚠️ Partially Certified
+
+Reason
+
+Core ownership is understood.
+
+Runtime investigations remain active.
+
+---
+
+## Coach Artifact Pipeline
+
+Status
+
+⚠️ Partially Certified
+
+Reason
+
+Multiple boundaries have been certified.
+
+Publication behavior remains under active investigation.
+
+---
+
+## Competition Rendering Pipeline
+
+Status
+
+⚠️ Partially Certified
+
+Reason
+
+Rendering itself is no longer considered the primary owner.
+
+Parent runtime convergence remains unresolved.
+
+---
+
+# Protected Systems
+
+The following systems should not be reopened during future investigations unless new evidence appears.
+
+Examples include:
+
+* Canonical Identity Ownership
+* Overlay Merge
+* Certified rendering boundaries
+* Incident Capture architecture
+* Competition State Auditor infrastructure
+* Documentation Operations (DOCOPS)
+* Git checkpoint workflow
+
+Future investigations should begin by assuming these systems are correct.
+
+---
+
+# Active Investigation Register
+
+Current Active Investigation
+
+```text
+Parent Runtime Convergence
+```
+
+Current Owner
+
+```text
+Parent Runtime Publication Corridor
+```
+
+Not
+
+```text
+CompetitionTab
+```
+
+Current Question
+
+```text
+Can the Parent runtime publication corridor converge?
+```
+
+Not
+
+```text
+Why are competitions missing?
+```
+
+This distinction is intentional.
+
+Investigations now target the first unstable owner rather than downstream symptoms.
+
+---
+
+# Founder Velocity Doctrine
+
+July 10 also established a permanent reminder.
+
+The goal is not to produce more documentation.
+
+The goal is to:
+
+* certify architecture
+* eliminate uncertainty
+* ship investigations
+* move engineering forward
+
+Documentation exists to accelerate engineering.
+
+Not replace it.
+
+---
+
+# End of Part 1
+
+# PART 2 — Complete Investigation Timeline, Runtime Certifications, Eliminated Hypotheses, Mental Model
+
+---
+
+# Investigation Timeline
+
+The July 10 investigation intentionally followed the new engineering doctrine.
+
+Each investigation had:
+
+* one owner
+* one question
+* one success criteria
+* repository evidence before runtime conclusions
+* no speculative fixes
+
+This was the first full day operating under the new certification-first workflow.
+
+---
+
+# Investigation 1
+
+## Restore Engineering Discipline
+
+### Objective
+
+Before touching Parent Compete again, restore deterministic engineering workflow.
+
+Previous investigations had begun by reconstructing context from memory.
+
+That process officially ended.
+
+---
+
+### Actions
+
+Validated repository state.
+
+Verified:
+
+```text
+git status
+
+git log
+
+branch
+
+HEAD
+
+working tree
+```
+
+Confirmed:
+
+Branch
+
+```text
+rollback-pre-lineage-regression
+```
+
+HEAD
+
+```text
+a90f3c8
+```
+
+Working tree
+
+Initially clean.
+
+---
+
+### Result
+
+Certified startup workflow.
+
+Every future investigation now begins with:
+
+```text
+git status
+
+↓
+
+git log
+
+↓
+
+Certification Register
+
+↓
+
+Developer Handoff
+
+↓
+
+Active Investigation
+```
+
+---
+
+# Investigation 2
+
+## Identify Runtime Owner
+
+### Original assumption
+
+CompetitionTab was repeatedly suspected to own the bug.
+
+This assumption was intentionally challenged.
+
+Question:
+
+> Which subsystem actually owns repeated runtime activity?
+
+---
+
+### Repository Audit
+
+Mapped all major runtime subscriptions.
+
+Investigated:
+
+```text
+subscribeCompetition()
+
+subscribeCoachSyncHydration()
+
+subscribeActiveAthleteChanges()
+
+refreshParentWriterSessionSnapshot()
+```
+
+Objective:
+
+Identify every runtime publisher capable of recreating Compete while focused.
+
+---
+
+### Result
+
+Search space reduced.
+
+Ownership moved upstream.
+
+CompetitionTab increasingly appeared to be a consumer rather than the owner.
+
+---
+
+# Investigation 3
+
+## Publisher Convergence Audit
+
+Objective:
+
+Determine whether Parent runtime publication converges.
+
+Repository corridor audited:
+
+```text
+refreshParentWriterSessionSnapshot()
+
+↓
+
+coachSyncFetchSession()
+
+↓
+
+setCachedWeeklyForLinkToken()
+
+↓
+
+bumpCoachSyncHydrationVersion()
+```
+
+---
+
+### Major Repository Finding
+
+Current publication behavior is **not idempotent**.
+
+Current repository behavior:
+
+```text
+same payload
+
+↓
+
+publish
+
+↓
+
+hydrationVersion++
+```
+
+No equality gate currently exists before publication.
+
+Publication is driven by:
+
+presence of hydrated artifacts
+
+not
+
+change detection.
+
+---
+
+### Certification
+
+Repository now certifies:
+
+Current publication can repeatedly increment
+
+```text
+coachSyncHydrationVersion
+```
+
+even when runtime state appears unchanged.
+
+---
+
+# Investigation 4
+
+## Runtime Dependency Investigation
+
+Objective
+
+Determine why logs never stabilize.
+
+---
+
+### Runtime Probe
+
+Instrumented:
+
+```text
+FOCUS_ENTER
+
+↓
+
+FOCUS_CLEANUP
+```
+
+including:
+
+* hydration version
+* competition version
+* athlete identity
+* device role
+
+---
+
+### Runtime Finding
+
+Observed:
+
+```text
+hydration
+
+1
+
+↓
+
+2
+
+↓
+
+3
+
+↓
+
+4
+
+↓
+
+5
+```
+
+CompetitionVersion remained stable.
+
+This immediately reduced the likely owner.
+
+---
+
+### Repository + Runtime Combined
+
+Current chain became:
+
+```text
+Publication
+
+↓
+
+HydrationVersion++
+
+↓
+
+Focus callback recreated
+```
+
+This was the first time repository evidence and runtime evidence described the same behavior.
+
+---
+
+# Investigation 5
+
+## Parent Runtime Bridge
+
+Objective
+
+Determine whether repeated publication actually affects Parent initialization.
+
+---
+
+Instrumentation
+
+```text
+FOCUS_ENTER
+
+↓
+
+REFRESH_BEGIN
+
+↓
+
+REFRESH_END
+
+↓
+
+CANCELLED_CHECK
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+↓
+
+LOAD_COMPETITIONS_BEGIN
+
+↓
+
+LOAD_COMPETITIONS_END
+
+↓
+
+SET_ENTRIES
+```
+
+---
+
+### Major Runtime Finding
+
+Observed runtime:
+
+```text
+REFRESH_BEGIN
+
+↓
+
+REFRESH_END
+
+↓
+
+cancelled = true
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+```
+
+No corresponding
+
+```text
+LOAD_COMPETITIONS_BEGIN
+```
+
+was observed during the failing cycles.
+
+---
+
+### Why this mattered
+
+This was the first runtime evidence connecting:
+
+publication
+
+↓
+
+cleanup
+
+↓
+
+cancelled
+
+↓
+
+Parent initialization starvation
+
+This was no longer repository theory.
+
+---
+
+# Investigation 6
+
+## Unexpected Double Focus
+
+Runtime logs showed:
+
+```text
+FOCUS_ENTER
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+REFRESH_BEGIN
+```
+
+This initially appeared suspicious.
+
+---
+
+### Repository Audit
+
+Investigated:
+
+React Navigation
+
+useFocusEffect
+
+useActiveAthlete
+
+identity resolution
+
+---
+
+### Certified Finding
+
+Two different focus re-entry mechanisms exist.
+
+---
+
+## Mechanism A
+
+Bootstrap Re-entry
+
+```text
+athleteId = ""
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+athlete resolves
+
+↓
+
+FOCUS_CLEANUP
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+first REFRESH_BEGIN
+```
+
+Status
+
+✅ Certified Expected Behavior
+
+Owner
+
+```text
+useActiveAthlete
+```
+
+Not a bug.
+
+---
+
+## Mechanism B
+
+Hydration Re-entry
+
+```text
+REFRESH_BEGIN
+
+↓
+
+publication
+
+↓
+
+hydrationVersion++
+
+↓
+
+cleanup
+
+↓
+
+cancelled
+
+↓
+
+RETURN_BEFORE_LOAD
+
+↓
+
+repeat
+```
+
+Status
+
+⚠️ Active Runtime Investigation
+
+Different owner.
+
+Different lifecycle.
+
+Different problem.
+
+---
+
+### Importance
+
+This became one of the most valuable findings of the day.
+
+Future engineers should never confuse bootstrap re-entry with hydration starvation.
+
+---
+
+# Investigation 7
+
+## Runtime Comparison Framework
+
+Objective
+
+Compare:
+
+Successful Parent startup
+
+vs
+
+Failed Parent startup
+
+without changing production behavior.
+
+---
+
+Framework Created
+
+Canonical startup ladder:
+
+```text
+Application Launch
+
+↓
+
+Device Role
+
+↓
+
+Athlete Resolution
+
+↓
+
+FOCUS_ENTER
+
+↓
+
+REFRESH_BEGIN
+
+↓
+
+REFRESH_END
+
+↓
+
+CANCELLED_CHECK
+
+↓
+
+LOAD_COMPETITIONS
+
+↓
+
+SET_ENTRIES
+
+↓
+
+Competition Render
+```
+
+This framework now exists for future runtime investigations.
+
+---
+
+# Investigation 8A
+
+## First Publication vs Repeated Publication
+
+Question
+
+Does starvation begin:
+
+on the first hydration publication
+
+or
+
+only after repeated publication?
+
+---
+
+### Result
+
+Investigation closed as:
+
+INCONCLUSIVE
+
+Reason
+
+Current runtime evidence was insufficient.
+
+Required ordered Metro capture had not been preserved.
+
+Engineering doctrine prevented guessing.
+
+---
+
+### Important Process Lesson
+
+This was considered a success.
+
+The team intentionally refused to invent conclusions unsupported by evidence.
+
+Current status:
+
+```text
+Unknown
+
+↓
+
+Remain Unknown
+```
+
+This represents a major improvement in engineering discipline.
+
+---
+
+# Runtime Certifications
+
+The following runtime behavior became certified during July 10.
+
+---
+
+## Bootstrap Focus Re-entry
+
+Status
+
+✅ Certified Expected Behavior
+
+Repository
+
+*
+
+Runtime
+
+agree.
+
+Do not reopen.
+
+---
+
+## Parent Runtime Starvation Path
+
+Status
+
+Runtime Certified
+
+Observed:
+
+```text
+REFRESH_END
+
+↓
+
+CANCELLED_CHECK
+
+cancelled=true
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+```
+
+Observed during failing Parent initialization.
+
+---
+
+## Non-idempotent Publication
+
+Status
+
+Repository Certified
+
+Current repository permits repeated publication without payload equality.
+
+---
+
+# Eliminated Hypotheses
+
+The following theories were eliminated.
+
+---
+
+RootLayout owns runtime loop.
+
+❌ Eliminated
+
+---
+
+DeviceRoleProvider owns runtime loop.
+
+❌ Eliminated
+
+---
+
+React Navigation remount causes Parent runtime failure.
+
+❌ Eliminated
+
+---
+
+Bootstrap athlete resolution is the hydration bug.
+
+❌ Eliminated
+
+Bootstrap behavior is expected.
+
+---
+
+CompetitionVersion is the owner of repeated runtime activity.
+
+❌ Eliminated
+
+Observed runtime remained:
+
+```text
+competitionVersion = 0
+```
+
+while
+
+```text
+hydrationVersion
+```
+
+continued increasing.
+
+---
+
+CompetitionTab owns the bug.
+
+❌ Ownership moved upstream.
+
+Current owner:
+
+```text
+Parent Runtime Publication Corridor
+```
+
+---
+
+# New Runtime Mental Model
+
+This represents the single biggest engineering improvement from July 10.
+
+Previous mental model:
+
+```text
+Competition
+
+↓
+
+Competition
+
+↓
+
+Competition
+```
+
+Current certified mental model:
+
+```text
+BOOTSTRAP
+
+↓
+
+Identity Resolution
+
+↓
+
+Expected Focus Re-entry
+
+────────────────────────────
+
+Parent Runtime
+
+↓
+
+Refresh
+
+↓
+
+Publication
+
+↓
+
+HydrationVersion++
+
+↓
+
+Focus Cleanup
+
+↓
+
+Cancelled
+
+↓
+
+RETURN_BEFORE_LOAD
+
+↓
+
+Parent Initialization Starvation
+```
+
+This model should guide every future investigation.
+
+---
+
+# Ownership Shift
+
+The investigation officially moved ownership.
+
+Morning assumption:
+
+```text
+CompetitionTab
+```
+
+End-of-day owner:
+
+```text
+Parent Runtime Publication Corridor
+
+↓
+
+Runtime Convergence
+```
+
+This ownership shift dramatically reduced the investigation search space.
+
+---
+
+# End of Part 2
+
+This final section ties the investigation back into the new engineering operating system so tomorrow begins from a certified checkpoint rather than another reconstruction.
+
+# PART 3 — Engineering Doctrine, Tomorrow Startup, Active Investigation, DOCOPS, Lessons Learned
+
+---
+
+# Current Engineering Status
+
+At the close of July 10, the engineering state is intentionally **stable but incomplete**.
+
+This is considered a successful stopping point.
+
+Repository status:
+
+```text
+Branch
+
+rollback-pre-lineage-regression
+
+HEAD
+
+a90f3c8
+
+Working Tree
+
+M app/(tabs)/compete.tsx
+```
+
+The repository intentionally contains only one modified engineering file.
+
+Everything else has been documented and checkpointed.
+
+This separation is now part of engineering doctrine.
+
+---
+
+# Current Active Investigation
+
+Investigation ID
+
+```text
+INV8
+```
+
+Title
+
+```text
+Controlled Runtime Convergence Experiment
+```
+
+Current Owner
+
+```text
+Parent Runtime Publication Corridor
+```
+
+Current Question
+
+> Does repeated Parent runtime publication directly prevent Parent Competition initialization from converging?
+
+This is now the only active engineering question.
+
+Do not reopen previously certified architecture.
+
+---
+
+# Investigation Status
+
+The following investigations are complete.
+
+| Investigation                 | Status                                                    |
+| ----------------------------- | --------------------------------------------------------- |
+| Architecture Certification    | ✅ Complete                                                |
+| Protected Systems             | ✅ Complete                                                |
+| Runtime Ownership             | ✅ Complete                                                |
+| Publisher Audit               | ✅ Complete                                                |
+| Dependency Investigation      | ✅ Complete                                                |
+| Parent Runtime Bridge         | ✅ Complete                                                |
+| Bootstrap Focus Re-entry      | ✅ Complete                                                |
+| Runtime Comparison Framework  | ✅ Complete                                                |
+| First vs Repeated Publication | ⚠️ Inconclusive (insufficient preserved runtime evidence) |
+
+---
+
+# Investigation NOT Yet Performed
+
+The following work has **not** been executed.
+
+Controlled Convergence Experiment.
+
+This experiment has only been designed.
+
+No production behavior has been changed.
+
+No repository fix has been attempted.
+
+This is intentional.
+
+---
+
+# Why the Experiment Exists
+
+Current repository and runtime evidence support the following chain.
+
+```text
+Parent Refresh
+
+↓
+
+setCachedWeeklyForLinkToken()
+
+↓
+
+bumpCoachSyncHydrationVersion()
+
+↓
+
+Focus Cleanup
+
+↓
+
+cancelled = true
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+↓
+
+Parent initialization starvation
+```
+
+The remaining engineering question is:
+
+Does suppressing runtime publication allow Parent initialization to converge?
+
+The experiment exists only to answer that question.
+
+---
+
+# Engineering Doctrine (Updated)
+
+The July 10 investigation permanently changes how MatMind engineering should operate.
+
+---
+
+## Repository Before Runtime
+
+Always begin by asking:
+
+What does the repository certify?
+
+Only after repository evidence exists should runtime investigation begin.
+
+---
+
+## Runtime Before Production
+
+Repository evidence proves:
+
+What the application **can** do.
+
+Runtime evidence proves:
+
+What the application **actually did**.
+
+Production changes require both.
+
+---
+
+## Binary Investigations
+
+Every investigation should answer exactly one question.
+
+Avoid investigations with multiple hypotheses.
+
+The investigation ends when uncertainty is removed.
+
+Not when code changes.
+
+---
+
+## Protected Architecture
+
+Certified systems are protected.
+
+Do not reopen:
+
+* Identity
+* Overlay Merge
+* Incident Capture
+* Competition State Auditor
+* Certified rendering boundaries
+
+unless new runtime evidence requires it.
+
+---
+
+## Smallest Blast Radius
+
+Repository modifications should:
+
+* affect one owner
+* affect one investigation
+* remain easily reversible
+
+Investigation code should remain isolated.
+
+---
+
+## Git Discipline
+
+Every engineering session begins with:
+
+```bash
+git status -sb
+
+git log --oneline --decorate -8
+
+git diff --stat
+```
+
+Every checkpoint ends with:
+
+```bash
+git status -sb
+```
+
+No engineering session should end with unknown repository state.
+
+---
+
+# Python Documentation Workflow (DOCOPS)
+
+July 10 also clarified the intended relationship between ChatGPT and Python.
+
+The original design remains the correct design.
+
+---
+
+## ChatGPT Responsibilities
+
+Engineering reasoning.
+
+Investigation.
+
+Certification.
+
+Writing.
+
+Organization.
+
+Timeline.
+
+Decision making.
+
+---
+
+## Python Responsibilities
+
+Deterministic document generation.
+
+Formatting.
+
+Updating repository documents.
+
+Verification.
+
+Writing generated artifacts.
+
+No engineering reasoning should occur inside Python.
+
+Python is the writer.
+
+Not the engineer.
+
+---
+
+## Future Workflow
+
+Future EOD workflow should become:
+
+```text
+Engineering Complete
+
+↓
+
+ChatGPT produces structured engineering model
+
+↓
+
+Python writes repository documents
+
+↓
+
+Founder reviews diff
+
+↓
+
+git status
+
+↓
+
+git diff
+
+↓
+
+Commit
+```
+
+This work remains partially complete.
+
+The certification writer exists.
+
+The Engineering Checkpoint writer exists:
+
+scripts/write_engineering_checkpoint.py
+
+→ docs/engineering-checkpoint.md
+
+MatMind documentation closes follow the ODS documentation workflow order (adapted paths/scripts only).
+
+---
+
+# Tomorrow Morning Startup
+
+The July 11 startup should follow this order exactly.
+
+---
+
+## Step 1
+
+Repository verification.
+
+```bash
+git status -sb
+
+git log --oneline --decorate -8
+
+git diff --stat
+```
+
+Expected working tree:
+
+```text
+M app/(tabs)/compete.tsx
+```
+
+Nothing else.
+
+---
+
+## Step 2
+
+Read:
+
+```text
+CertifiedArchitectureRegister-v1.md
+
+↓
+
+Developer Handoff
+
+↓
+
+Active Investigation Register
+```
+
+Do not reconstruct engineering context from previous conversations.
+
+---
+
+## Step 3
+
+Resume only the active investigation.
+
+Do not reopen completed investigations.
+
+---
+
+## Step 4
+
+Determine whether the Controlled Convergence Experiment should be executed.
+
+No production fixes before the experiment.
+
+---
+
+# Lessons Learned
+
+The July 10 investigation produced several engineering lessons.
+
+---
+
+## Lesson 1
+
+Engineering memory is unreliable.
+
+Repository certification is reliable.
+
+---
+
+## Lesson 2
+
+Runtime observations without repository understanding produce broad debugging.
+
+Repository understanding without runtime evidence produces incorrect certainty.
+
+Both are required.
+
+---
+
+## Lesson 3
+
+The investigation should move upstream until ownership becomes stable.
+
+The investigation began at CompetitionTab.
+
+It ended at the Parent Runtime Publication Corridor.
+
+This represents significant reduction in search space.
+
+---
+
+## Lesson 4
+
+Do not confuse expected runtime behavior with runtime failure.
+
+Bootstrap focus re-entry and hydration re-entry are different systems.
+
+Treating them as one bug delayed previous investigations.
+
+---
+
+## Lesson 5
+
+Unknown is an acceptable engineering outcome.
+
+Investigation 8A intentionally concluded:
+
+"Inconclusive."
+
+This prevented unsupported conclusions.
+
+That is considered successful engineering.
+
+---
+
+## Lesson 6
+
+Preserve runtime evidence.
+
+Today's investigation exposed a process weakness.
+
+Although repository evidence was preserved, the complete Metro runtime sequence was not archived before analysis.
+
+Future runtime investigations should preserve complete Metro captures before interpretation.
+
+Lost runtime evidence should never be reconstructed from memory.
+
+---
+
+# Current Mental Model
+
+Future investigations should begin with this architecture.
+
+```text
+Expected Runtime
+
+Application Launch
+
+↓
+
+Identity Resolution
+
+↓
+
+Bootstrap Focus Re-entry
+
+↓
+
+First Parent Refresh
+
+──────────────────────────────
+
+Active Investigation
+
+Parent Refresh
+
+↓
+
+Publication Corridor
+
+↓
+
+HydrationVersion++
+
+↓
+
+Focus Cleanup
+
+↓
+
+Cancelled
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+↓
+
+Parent Initialization
+
+↓
+
+Competition Render
+
+↓
+
+Match Breakdown
+```
+
+Everything above the divider is certified.
+
+Everything below the divider remains the active investigation.
+
+---
+
+# July 10 Closing Assessment
+
+July 10 represents a significant milestone in the Parent Competition investigation.
+
+Although the original runtime issue remains unresolved, the engineering process itself has fundamentally improved.
+
+The repository now contains:
+
+* Certified Architecture
+* Protected Systems
+* Active Investigation Register
+* Founder Velocity workflow
+* Certification-first startup sequence
+* Evidence-first runtime doctrine
+
+The search space has been reduced from the entire Competition subsystem to a single runtime publication corridor.
+
+The engineering team should **not** resume broad debugging.
+
+The next session begins with one active investigation, one owner, and one binary question.
+
+That is the intended operating model for MatMind engineering going forward.
+
+---
+
+# Canonical Restart Statement
+
+> **Do not reconstruct yesterday. Begin from certified architecture. Verify the repository. Resume the active investigation. Remove exactly one uncertainty before changing production behavior.**
+
+# DEV HANDOFF — 2026-07-07 → 2026-07-09
+Executive Summary
+
+This three-day block became one of the most significant engineering investigations undertaken on MatMind to date.
+
+The original objective was straightforward:
+
+Fix the Parent Match Breakdown hydration issue.
+
+At the beginning of the investigation the application was functionally usable:
+
+Coach application correctly displayed Match Breakdowns.
+Parent application displayed competitions.
+Parent Match Breakdown failed to hydrate consistently.
+
+During the investigation we became increasingly convinced that the issue lived somewhere inside the Parent CompetitionCard hydration lifecycle.
+
+Multiple runtime probes, certification tooling, and lifecycle instrumentation were introduced to isolate that problem.
+
+Near the end of July 8, a new regression appeared:
+
+Parent Compete stopped displaying competitions entirely.
+
+This immediately became a higher priority than Match Breakdown because it represented a loss of core functionality.
+
+No commit or Developer Handoff was completed before ending work that day.
+
+As a result, July 9 became almost entirely dedicated to reconstructing the previous day's engineering work from Git history, repository evidence, timestamps, runtime logs, and conversation history.
+
+The most important discovery from July 9 is that:
+
+Rolling the repository back to a completely clean a904db4 working tree did NOT restore competitions.
+
+That single observation invalidated our leading hypothesis that the July 8 uncommitted CompetitionCard work was solely responsible for the regression.
+
+Current Repository State
+
+Branch
+
+rollback-pre-lineage-regression
+
+HEAD
+
+a904db4
+Automate documentation maintenance and founder knowledge workflow
+
+Working Tree
+
+CLEAN
+
+Stash Inventory
+
+stash@{0}
+WIP: Jul 9 regression investigation before recovery
+
+stash@{1}
+forensics-and-debug-traces
+
+stash@{2}
+post-918bc13-forensics
+
+stash@{3}
+wip-topology-and-traces
+
+Important
+
+All July 8–9 investigation work has been preserved inside stash@{0}.
+
+Nothing has been lost.
+
+Original Objective
+
+Restore Parent Match Breakdown hydration.
+
+Known behavior before regression:
+
+Coach
+
+↓
+
+Match Breakdown present
+
+↓
+
+Parent
+
+↓
+
+Competitions visible
+
+↓
+
+Match Breakdown missing
+
+The investigation was focused entirely on why Parent failed to hydrate coach annotations.
+
+Major Engineering Work
+1. Runtime Transition Certification
+
+Primary objective:
+
+Determine whether Parent CompetitionCard correctly reacted to:
+
+coachSyncHydrationVersion
+
+↓
+
+hydrateOverlayAnnotations
+
+↓
+
+mergeCoachBreakdownIntoMatches
+
+Multiple runtime probes were created.
+
+The investigation certified:
+
+hydration ordering
+lifecycle transitions
+merge boundaries
+retained overlay state
+runtime sequence
+
+This represented the deepest certification work performed on the Parent overlay pipeline.
+
+2. CompetitionCard Refactor
+
+Engineering intent:
+
+Split hydration responsibilities into explicit lifecycle paths.
+
+Major production behavior introduced (uncommitted):
+
+extracted hydrateOverlayAnnotations()
+separated focus hydration
+added reactive hydration
+generation-based stale commit protection
+runtime certification hooks
+
+At the time these changes appeared to move us closer to solving Match Breakdown.
+
+3. Unexpected Regression
+
+During QA:
+
+Coach:
+
+MM-FIX-009-QA
+
+confirmed healthy.
+
+Parent:
+
+Competitions disappeared.
+
+This immediately shifted investigation priority.
+
+July 9 Reconstruction
+
+Because no checkpoint commit existed, we reconstructed the entire engineering narrative using:
+
+Git history
+Git diff
+Git timestamps
+Git reflog
+repository audit
+runtime evidence
+conversation timeline
+
+This reconstruction became the basis for understanding what had actually changed.
+
+Major Certified Findings
+Finding 1
+
+CompetitionCard changes were the only significant production mutations introduced on July 8.
+
+Confidence:
+
+High
+
+Finding 2
+
+Most remaining repository modifications were instrumentation only.
+
+Examples:
+
+BUILD_CERT
+runtime probes
+MM-* tracing
+certification tooling
+
+Confidence:
+
+High
+
+Finding 3
+
+Evidence from July 8 and July 9 had been unintentionally mixed.
+
+Several contradictions disappeared once runtime observations were separated into independent sessions.
+
+Confidence:
+
+High
+
+Finding 4
+
+setEntries_apply { nextCount: 11 }
+
+does not prove competitions should be visible.
+
+It proves only that one runtime instance committed eleven entries.
+
+Confidence:
+
+High
+
+Finding 5
+
+VISIBLE_ENTRIES_STATE
+
+was introduced after the regression began.
+
+Therefore it cannot explain what originally happened on July 8.
+
+Confidence:
+
+High
+
+Finding 6
+
+Rolling back to a completely clean repository
+
+HEAD = a904db4
+
+working tree clean
+
+did not restore competitions.
+
+This is currently the single most important engineering observation.
+
+Confidence:
+
+Very High
+
+Eliminated Hypotheses
+
+The following are no longer considered leading explanations.
+
+❌ CompetitionCard alone caused the regression
+
+Rollback disproved this.
+
+❌ Yesterday's uncommitted probes broke Parent Compete
+
+Rollback disproved this.
+
+❌ Repository corruption
+
+Current repository is clean.
+
+❌ Lost investigation work
+
+Everything is preserved in stash@{0}.
+
+Remaining Active Hypotheses
+
+These remain open.
+
+1. Runtime publisher never settles
+
+Potential loop involving:
+
+refreshParentWriterSessionSnapshot
+
+↓
+
+coachSyncHydrationVersion
+
+↓
+
+subscriber
+
+↓
+
+render
+
+↓
+
+refresh
+
+Confidence:
+
+Medium
+
+2. Persisted runtime state
+
+AsyncStorage or canonical stores may now contain state inconsistent with clean code.
+
+Rollback does not change persisted data.
+
+Confidence:
+
+Medium
+
+3. Regression predates July 8
+
+The bug may already exist inside committed code.
+
+The July 8 investigation may simply have exposed it.
+
+Confidence:
+
+Medium
+
+Match Breakdown Investigation Status
+
+Important:
+
+The Match Breakdown investigation was not completed.
+
+Current status:
+
+Coach
+
+↓
+
+healthy
+
+↓
+
+Parent
+
+↓
+
+competitions unstable
+
+↓
+
+Match Breakdown investigation paused
+
+Do not continue Match Breakdown until Parent Compete is deterministic again.
+
+Biggest Lesson
+
+The absence of an intermediate checkpoint created an expensive reconstruction effort.
+
+The repository itself survived.
+
+The engineering narrative did not.
+
+Future debugging sessions should never reach multiple hours of investigation without preserving an intermediate checkpoint.
+
+New Engineering Doctrine
+
+From this point forward:
+
+Every meaningful investigation stage should end with:
+
+git status -sb
+
+git diff --stat
+
+git commit
+
+If a commit is not appropriate:
+
+git stash push -u
+
+followed immediately by a short checkpoint note describing:
+
+current hypothesis
+latest runtime behavior
+next experiment
+
+This creates a recoverable engineering timeline without requiring a full EOD document.
+
+Startup Checklist
+
+Tomorrow morning:
+
+Phase 1
+
+Remain on clean repository.
+
+Do not restore stash@{0}.
+
+Phase 2
+
+Verify current runtime behavior.
+
+Determine whether Parent Compete still exhibits:
+
+missing competitions
+continuous runtime activity
+refresh loop
+Phase 3
+
+Identify the first publisher that never settles.
+
+Binary isolation only.
+
+No new instrumentation until a publisher is isolated.
+
+Phase 4
+
+Once Parent Compete is deterministic again:
+
+Resume the original Match Breakdown investigation.
+
+Final Status
+Repository
+
+✅ Clean
+
+Branch
+
+✅ rollback-pre-lineage-regression
+
+HEAD
+
+✅ a904db4
+
+Investigation
+
+✅ Fully reconstructed
+
+July 8 work
+
+✅ Preserved in stash@{0}
+
+Parent Compete
+
+❌ Still unstable
+
+Match Breakdown
+
+⏸ Paused pending Parent runtime stabilization
+
+I also want to record one strategic observation. Today changed the investigation in an important way: instead of chasing individual files, we shifted toward understanding the runtime as a system. The clean rollback not restoring behavior is the strongest evidence we've collected that the remaining problem is not explained solely by the July 8 source edits. That insight should shape the next debugging session and help avoid repeating the same investigation paths.
+
+#Dates:** June 23–24, 2026
+
+---
+
+# Executive Summary
+
+These two days established the new architectural floor for Competition Analysis, Coach Match Breakdown hydration, and forensic debugging.
+
+The primary objective shifted from chasing Match Breakdown symptoms to building a deterministic, evidence-based forensic system capable of identifying the exact authority boundary where synchronization fails.
+
+The result is a stable readiness-governed architecture, complete forensic instrumentation, and a validated DEV synchronization pipeline.
+
+---
+
+# Repository Floor
+
+## Branch
+
+```
+rollback-pre-lineage-regression
+```
+
+## Current HEAD
+
+```
+49865c9
+Establish readiness-governed competition analysis and forensic validation pipeline
+```
+
+## Tag
+
+```
+competition-analysis-readiness-floor-v1
+```
+
+## Remote
+
+* Branch pushed
+* Tag pushed
+
+## Repository Status
+
+Repository is clean.
+
+Only intentionally untracked:
+
+```
+debug-logs/
+timeline-builder/
+```
+
+No modified tracked files remain.
+
+---
+
+# Major Engineering Milestone #1
+
+# Readiness Architecture Complete
+
+Completed all readiness phases.
+
+## Phase 1
+
+Coach Breakdown parser evidence.
+
+Added:
+
+* parser classification
+* athlete evidence
+* field validation
+
+Purpose:
+
+Never infer authority from missing data.
+
+---
+
+## Phase 2
+
+Readiness foundation.
+
+Introduced:
+
+```
+PENDING
+READY
+EMPTY_READY
+FAILED
+```
+
+Generation-aware resolution.
+
+Readiness never mutates authority.
+
+---
+
+## Phase 3
+
+Parent/Coach orchestration.
+
+Implemented:
+
+* generation allocation
+* finalize lifecycle
+* readiness persistence
+* hydration coordination
+
+No rendering behavior changed.
+
+No analytics behavior changed.
+
+---
+
+## Phase 4
+
+Incident Capture observability.
+
+Hydration Snapshot now exports:
+
+* readiness state
+* generation
+* timestamps
+* hydration source
+* authority confirmation
+* artifact timestamps
+
+---
+
+## Phase 5
+
+Parent hydration delegation.
+
+Readiness coordinator now governs:
+
+* Summary
+* Parent Athletes
+* Join
+* Kid Detail
+* This Week
+
+Cache-only paths intentionally excluded.
+
+---
+
+## Phase 6
+
+Analytics Eligibility Gate.
+
+Introduced:
+
+```
+selectCompetitionAnalysisForAnalytics()
+```
+
+Eligibility:
+
+READY
+↓
+
+projection
+
+FAILED / PENDING
+↓
+
+last confirmed
+
+Flag:
+
+```
+competitionAnalyticsEligibilityEnabled
+```
+
+Defaults OFF.
+
+No production consumers migrated.
+
+---
+
+## Phase 7
+
+Readiness validation.
+
+Created comprehensive deterministic validation suite proving:
+
+* READY
+* EMPTY_READY
+* FAILED
+* PENDING
+
+all resolve correctly.
+
+---
+
+## Phase 8
+
+Eligibility Forensics.
+
+Incident Bundles now export:
+
+* current artifact timestamps
+* readiness timestamps
+
+making eligibility decisions fully reconstructable offline.
+
+---
+
+# Major Engineering Milestone #2
+
+# Summary Pilot
+
+Implemented new Summary selection architecture.
+
+Added:
+
+```
+resolveCompetitionAnalyticsSelection()
+
+useSummaryCompetitionFocusInput()
+```
+
+Capabilities:
+
+* async selection
+* cancellation
+* generation suppression
+* projection-aware input
+* legacy fallback
+
+Existing analytics algorithms remain untouched.
+
+Everything remains behind:
+
+```
+EXPO_PUBLIC_COMPETITION_ANALYTICS_ELIGIBILITY
+```
+
+Default OFF.
+
+---
+
+# Major Engineering Milestone #3
+
+# Authority Forensics
+
+A complete authority investigation framework now exists.
+
+Instrumentation added across:
+
+Coach Save
+
+↓
+
+Overlay Store
+
+↓
+
+Artifact Builder
+
+↓
+
+Publish Scheduler
+
+↓
+
+HTTP PUT
+
+↓
+
+Worker PUT
+
+↓
+
+Worker KV
+
+↓
+
+Parent Parser
+
+↓
+
+Artifact Store
+
+↓
+
+Readiness Finalize
+
+Purpose:
+
+Identify the first failed authority boundary rather than debugging symptoms.
+
+---
+
+# Authority Boundary Playbook
+
+Formal investigation workflow established.
+
+Boundaries:
+
+0. Route verification
+
+1. Coach Save
+
+2. Overlay Store
+
+3. Artifact Builder
+
+4. Publish Scheduler
+
+5. HTTP PUT
+
+6. Worker PUT
+
+7. Worker KV
+
+8. Worker GET
+
+9. Parent Parser
+
+10. Artifact Store
+
+11. Readiness
+
+12. Analytics Selection
+
+13. Summary UI
+
+Repository audit refined every boundary.
+
+Important conclusions:
+
+* Boundary 2 may fail while downstream stages still succeed.
+* Boundary 8 absence is inconclusive.
+* Boundary 11 READY does not guarantee projection.
+* Boundary 13 should not be used for authority isolation.
+
+Authority investigations should stop at Boundary 12.
+
+---
+
+# Major Engineering Milestone #4
+
+# DEV Match Breakdown Validation
+
+This became the most important runtime discovery.
+
+Multiple successful reproductions performed.
+
+Validated:
+
+Coach Match 1
+
+↓
+
+Parent Match 1
+
+Coach Match 2
+
+↓
+
+Parent Match 2
+
+The Coach Match Breakdown synchronized successfully.
+
+This proves:
+
+Current DEV branch successfully performs end-to-end Match Breakdown hydration.
+
+The current architecture is functioning correctly.
+
+---
+
+# Important Investigation Shift
+
+At the beginning of this work the question was:
+
+```
+Why doesn't Match Breakdown work?
+```
+
+Current evidence changes the question to:
+
+```
+Why does TestFlight behave differently from DEV?
+```
+
+This is now the remaining investigation.
+
+Current DEV branch is considered healthy.
+
+---
+
+# Logging Investigation
+
+A major discovery was made.
+
+Initially believed:
+
+Authority instrumentation was failing.
+
+Repository investigation proved:
+
+Instrumentation exists and is functioning.
+
+Problem:
+
+Wrong capture transport.
+
+React Native forensic traces:
+
+```
+MATCH_BREAKDOWN_AUTHORITY_TRACE
+```
+
+emit through:
+
+```
+console.log()
+```
+
+↓
+
+Metro
+
+NOT
+
+macOS unified logging.
+
+Future forensic investigations must capture:
+
+* Coach Metro
+* Parent Metro
+* Wrangler Tail
+
+Device logs alone are insufficient.
+
+This becomes permanent debugging doctrine.
+
+---
+
+# Environment Investigation
+
+A second investigation emerged.
+
+Observed:
+
+DEV Parent:
+
+* multiple athletes
+* historical local data
+
+DEV Coach:
+
+* single linked athlete
+* archived invite
+* ghost athlete behavior after relinking
+
+Likely caused by differing local histories.
+
+This is independent of Match Breakdown synchronization.
+
+---
+
+# New Strategic Initiative
+
+## Environment Parity System
+
+Promoted to future engineering priority.
+
+Objective:
+
+Move between:
+
+DEV
+
+↓
+
+TestFlight
+
+↓
+
+Future production snapshots
+
+without changing the investigation dataset.
+
+Future capabilities:
+
+* Export dataset
+* Import dataset
+* Dataset fingerprint
+* Environment verification
+* Investigation snapshot export
+
+Snapshot should preserve:
+
+* athletes
+* competitions
+* overlays
+* topology
+* readiness
+* artifact sets
+* weekly sessions
+* metadata
+
+This is expected to significantly reduce future debugging effort.
+
+---
+
+# Repository Health
+
+Current architectural floor:
+
+```
+49865c9
+```
+
+Repository:
+
+Clean.
+
+Stable.
+
+Ready for continued investigation.
+
+---
+
+# Current State
+
+Current DEV branch:
+
+Healthy.
+
+Coach Match Breakdown:
+
+Working.
+
+Readiness architecture:
+
+Complete.
+
+Summary pilot:
+
+Implemented.
+
+Authority forensic framework:
+
+Implemented.
+
+Incident Capture:
+
+Expanded.
+
+Logging transport:
+
+Understood.
+
+Current evidence does NOT indicate an architectural synchronization failure on the development branch.
+
+---
+
+# Remaining Open Investigation
+
+Outstanding question:
+
+Why does the TestFlight environment diverge from the current DEV environment?
+
+Areas to compare:
+
+* dataset
+* invite lineage
+* topology
+* cached storage
+* migrations
+* artifact generations
+* readiness state
+
+Do not modify architecture until environment differences are understood.
+
+---
+
+# Next Session Priorities
+
+## Priority 1
+
+Capture a complete "known-good" forensic bundle from the working DEV environment using:
+
+* Coach Metro
+* Parent Metro
+* Wrangler Tail
+
+This becomes the canonical baseline for future authority investigations.
+
+---
+
+## Priority 2
+
+Perform a structured DEV vs TestFlight comparison.
+
+Determine whether differences originate from:
+
+* local dataset
+* build
+* migration history
+* invite lineage
+* topology
+* readiness
+
+---
+
+## Priority 3
+
+Design the Environment Parity System.
+
+Do not implement yet.
+
+Produce architecture and requirements first.
+
+---
+
+# Engineering Doctrine Going Forward
+
+Every future synchronization investigation must follow this order:
+
+1. Verify environment parity.
+2. Capture evidence.
+3. Identify the first failed authority boundary.
+4. Fix only the proven failing boundary.
+5. Reproduce.
+6. Preserve a known-good forensic snapshot before making further architectural changes.
+
+Evidence—not speculation—now governs MatMind debugging.
+
+
+
+
+# EOD DOCUMENTS — 6/20/2026 → 6/22/2026
+
+## MatMind / BJJ Tracker
+
+## Incident Capture Investigation Period
+
+## Status: Active Investigation / Forensics Doctrine Correction
+
+---
+
+# Executive Summary
+
+This period was dominated by investigation of the **TestFlight Incident Bundle export crash**.
+
+The final stabilization result was:
+
+```text
+Build 79:
+await import("react-native")
+→ terminated after load_deps_before_platform_react_native
+
+Build 80:
+require("react-native")
+→ reached capture_complete and export_complete
+```
+
+The proven failure boundary was the React Native dependency binding inside:
+
+```text
+loadProductionDeps()
+```
+
+The known-good implementation keeps Incident Capture's lazy dependency-loading shape but binds React Native with:
+
+```ts
+const { Platform } =
+  require("react-native") as typeof import("react-native");
+```
+
+This should remain localized to Incident Capture. It is a targeted compatibility result, not a general instruction to replace dynamic imports elsewhere.
+
+The most important process outcome was not only localization of the crash.
+
+The most important outcome was discovery that our forensic instrumentation had begun altering the execution path being measured.
+
+Builds 69–77 progressively added persistence-boundary tracing inside:
+
+```text
+persistIncidentCaptureStage()
+```
+
+By Build 77, the special-case instrumentation path had grown substantially beyond the original production implementation.
+
+Build 78 restored the original production-shaped execution path and immediately produced a different floor.
+
+That result strongly suggests we had crossed into:
+
+```text
+observer effect territory
+```
+
+where instrumentation itself was influencing observed behavior.
+
+This is now considered one of the most important engineering lessons of this investigation.
+
+Build 79 then restored the React Native corridor to production-shaped dynamic import execution and still terminated at:
+
+```text
+load_deps_before_platform_react_native
+```
+
+Build 80 changed only the React Native binding mechanism from dynamic `import("react-native")` to local `require("react-native")`; export completed successfully. That is the first TestFlight proof that Incident Capture export itself is viable again.
+
+---
+
+# Primary Objective
+
+Investigate TestFlight crash occurring during:
+
+```text
+Export Incident Bundle
+```
+
+while maintaining:
+
+```text
+Evidence First
+No speculative fixes
+No architecture mutations
+Forensic localization only
+```
+
+---
+
+# Governing Doctrine Reaffirmed
+
+Throughout this period several important doctrine corrections emerged.
+
+---
+
+## 1. Evidence Before Theory
+
+Repeated reminder:
+
+```text
+Observed floor
+→ Gather evidence
+→ Narrow corridor
+→ Form theory
+```
+
+NOT:
+
+```text
+Observed floor
+→ Assume root cause
+→ Build fix
+→ Hope
+```
+
+---
+
+## 2. Production Shape Preservation
+
+Major lesson learned.
+
+Instrumentation must not substantially alter:
+
+```text
+control flow
+storage behavior
+native crossings
+async sequencing
+```
+
+or the resulting data becomes less trustworthy.
+
+This became the central finding of the period.
+
+---
+
+## 3. Forensics Must Be Measured
+
+New realization:
+
+We currently lack a formal system for evaluating whether forensic instrumentation itself has become a source of execution distortion.
+
+Future forensic work must include:
+
+```text
+Instrumentation Cost
+Execution Shape Impact
+Storage Side Effects
+Native Crossings Added
+```
+
+as first-class review criteria.
+
+---
+
+# Investigation Timeline
+
+---
+
+# Early Investigation State
+
+At the start of this period the crash localization effort was focused around:
+
+```text
+load_deps_react_native_import_promise_created
+```
+
+within:
+
+```text
+loadProductionDeps()
+```
+
+inside:
+
+```text
+captureIncidentBundle.ts
+```
+
+Observed floors repeatedly pointed near:
+
+```text
+React Native import promise creation
+```
+
+leading to increasingly narrow localization.
+
+---
+
+# Build 69
+
+Commit introduced:
+
+```text
+ddffb90
+Localize incident stage persistence boundary
+```
+
+New markers added:
+
+```text
+load_deps_react_native_import_promise_created_persist_entered
+load_deps_react_native_import_promise_created_before_storage_write
+load_deps_react_native_import_promise_created_after_storage_write
+load_deps_react_native_import_promise_created_before_return
+```
+
+Goal:
+
+Determine whether failure occurred:
+
+```text
+before storage write
+during storage write
+after storage write
+```
+
+Important later realization:
+
+These markers added additional AsyncStorage writes before and after the original target stage.
+
+---
+
+# Builds 70–77
+
+Progressive forensic narrowing continued.
+
+Major additions included:
+
+---
+
+## lastResolvedStorage
+
+Introduced:
+
+```ts
+let lastResolvedStorage: StorageAdapter | null = null;
+```
+
+Purpose:
+
+Reuse already-resolved storage adapter to emit markers before:
+
+```text
+getStorage()
+```
+
+---
+
+## writeRawCaptureStage
+
+Introduced helper:
+
+```ts
+writeRawCaptureStage(...)
+```
+
+Purpose:
+
+Persist marker stages directly.
+
+---
+
+## activeGetStorageTraceCorrelationId
+
+Introduced:
+
+```ts
+activeGetStorageTraceCorrelationId
+```
+
+Purpose:
+
+Activate tracing within:
+
+```text
+getStorage()
+```
+
+itself.
+
+---
+
+## getStorage Internal Tracing
+
+Markers added:
+
+```text
+entered_get_storage
+before_async_storage_import
+after_async_storage_import
+before_storage_resolution
+after_storage_resolution
+before_return_storage
+```
+
+---
+
+## Invocation Corridor Markers
+
+Markers added around:
+
+```text
+before_get_storage_call
+after_get_storage_call
+```
+
+---
+
+## Gap Markers
+
+Several builds added:
+
+```text
+gap_marker_1
+gap_marker_2
+gap_marker_3
+```
+
+at increasingly narrow locations.
+
+---
+
+## Source-Tied Markers
+
+Gap markers later replaced with markers tied directly to specific source statements.
+
+Goal:
+
+Reduce ambiguity.
+
+---
+
+# Major Audit Phase
+
+Multiple repository audits were conducted.
+
+These audits became more valuable than additional instrumentation.
+
+---
+
+## Audit: writeRawCaptureStage
+
+Confirmed:
+
+```ts
+writeRawCaptureStage()
+→ JSON.stringify()
+→ AsyncStorage.setItem()
+```
+
+Meaning:
+
+Every marker added:
+
+```text
+another AsyncStorage write
+```
+
+to the same key.
+
+---
+
+## Audit: AsyncStorage Call Chain
+
+Confirmed production path:
+
+```text
+persistIncidentCaptureStage
+↓
+AsyncStorage.setItem
+↓
+RCTAsyncStorage.multiSet
+↓
+RNCAsyncStorage
+↓
+iOS file-backed manifest storage
+```
+
+Important finding:
+
+The incident debug record is small enough to remain:
+
+```text
+manifest-backed
+```
+
+rather than separate-file-backed.
+
+---
+
+## Audit: Concurrent Export Risk
+
+Confirmed:
+
+```text
+Export button remains pressable
+```
+
+while exporting.
+
+No guard:
+
+```ts
+if (isExportingIncidentBundle) return;
+```
+
+exists.
+
+No disabled state exists.
+
+Therefore:
+
+```text
+Concurrent exports are repo-supported.
+```
+
+---
+
+## Audit: productionDepsPromise
+
+Confirmed:
+
+```ts
+let productionDepsPromise: Promise | null
+```
+
+is:
+
+```text
+globally cached
+never reset
+```
+
+Meaning:
+
+A rejected promise can poison future exports until process restart.
+
+Important finding but not yet proven as root cause.
+
+---
+
+# Major Realization
+
+After several builds of instrumentation accumulation:
+
+Observed floor became:
+
+```text
+load_deps_react_native_before_get_storage
+```
+
+This stage:
+
+```text
+did not exist in original production code
+```
+
+It existed only because of forensic instrumentation.
+
+This triggered a large review.
+
+---
+
+# Repository History Reconstruction
+
+Git archaeology was performed.
+
+Important commits identified:
+
+---
+
+## ddffb90
+
+```text
+Localize incident stage persistence boundary
+```
+
+First introduction of:
+
+```text
+traceReactNativeImportPromiseCreated
+```
+
+and special-case persistence path.
+
+---
+
+## ad6d5e8
+
+Introduced:
+
+```text
+lastResolvedStorage
+writeRawCaptureStage
+before_get_storage
+```
+
+---
+
+## f4ece24
+
+Introduced:
+
+```text
+activeGetStorageTraceCorrelationId
+```
+
+and:
+
+```text
+getStorage tracing
+```
+
+---
+
+## Later commits
+
+Added:
+
+```text
+gap markers
+call corridor markers
+source operation markers
+```
+
+---
+
+# Critical Audit Conclusion
+
+Current path had diverged significantly from original production behavior.
+
+Original path:
+
+```text
+create record
+↓
+getStorage()
+↓
+storage.setItem(actual stage)
+↓
+return
+```
+
+Current path:
+
+```text
+many instrumentation writes
+↓
+special tracing
+↓
+global state mutation
+↓
+more instrumentation writes
+↓
+eventual actual stage write
+```
+
+Audit estimated:
+
+```text
+~23 writes before actual target write
+```
+
+in the forensic path.
+
+Original production path:
+
+```text
+0 writes before actual target write
+```
+
+---
+
+# Decision: Restore Production Shape
+
+Decision reached:
+
+Return to production-shaped persistence behavior.
+
+Goal:
+
+```text
+Observe production reality
+not instrumentation reality
+```
+
+---
+
+# Build 78
+
+Implemented narrow restoration.
+
+Removed:
+
+```text
+traceReactNativeImportPromiseCreated
+lastResolvedStorage
+activeGetStorageTraceCorrelationId
+writeRawCaptureStage
+all persistence-boundary markers
+all getStorage tracing
+```
+
+Kept:
+
+```text
+load_deps_react_native_import_promise_created
+load_deps_react_native_after_import_promise_created_await_resumed
+```
+
+Validation:
+
+```text
+Typecheck passed
+Targeted tests passed
+```
+
+---
+
+# Build 78 Result
+
+Most important result of the period.
+
+Observed floor became:
+
+```text
+load_deps_react_native_after_microtask_yield
+```
+
+NOT:
+
+```text
+load_deps_react_native_before_get_storage
+```
+
+NOT:
+
+```text
+load_deps_react_native_import_promise_created
+```
+
+This means:
+
+The localization floor moved backward immediately after removing instrumentation.
+
+---
+
+# Interpretation
+
+Strong evidence of:
+
+```text
+Instrumentation-Induced Observer Effect
+```
+
+The forensic machinery itself was affecting:
+
+```text
+storage writes
+execution ordering
+native crossings
+observed floors
+```
+
+Builds 69–77 were no longer observing purely production behavior.
+
+This is now considered a major finding.
+
+---
+
+# Forensics Doctrine v2
+
+Emerging doctrine:
+
+Before adding instrumentation ask:
+
+```text
+How many additional native crossings?
+How many additional AsyncStorage writes?
+How many global mutations?
+How many execution branches?
+How much production-shape drift?
+```
+
+If the answer is large:
+
+```text
+Stop.
+```
+
+---
+
+# Impact To Core App Architecture
+
+No production architecture changes occurred.
+
+Protected systems remain intact:
+
+```text
+Canonical Authority
+Competition Overlay Architecture
+Coach Breakdown Overlay System
+Hydration Systems
+ACK Systems
+Athlete Isolation
+Competition Authority Model
+```
+
+No changes made to:
+
+```text
+Competition topology
+Hydration flows
+Coach review overlays
+Competition storage
+Training authority
+Cross-device sync
+```
+
+---
+
+# Competition / Coach Breakdown Relevance
+
+Important clarification reached:
+
+Incident Capture investigation currently appears isolated from:
+
+```text
+Competition Hydration
+Coach Match Breakdown Hydration
+Competition Overlay Publishing
+Canonical Competition Records
+```
+
+Current evidence does NOT connect:
+
+```text
+Incident Capture crash
+```
+
+to:
+
+```text
+Coach match breakdown hydration
+Competition summary divergence
+Cross-device competition sync
+```
+
+Those remain separate investigative tracks.
+
+---
+
+# Stabilization Result
+
+Incident Capture export is now considered restored for TestFlight based on Build 80.
+
+Build 79 proved the production-shaped dynamic import corridor still failed:
+
+```text
+load_deps_before_platform_react_native
+→ await import("react-native")
+→ termination
+```
+
+Build 80 proved the local CommonJS binding succeeds in the same boundary:
+
+```text
+load_deps_before_platform_react_native
+→ require("react-native")
+→ load_deps_after_platform_react_native
+→ capture_complete
+→ export_complete
+```
+
+Remaining open items are stabilization cleanup only:
+
+```text
+Keep require("react-native") localized to Incident Capture.
+Keep production-shaped persistence.
+Do not reintroduce RN-specific forensic promise choreography.
+Use Incident Capture on real incidents before designing broader observability.
+```
+
+---
+
+# Risks To Avoid
+
+Do NOT:
+
+```text
+Reintroduce persistence-boundary tracing
+Add multiple AsyncStorage writes
+Add getStorage tracing
+Add special persistence branches
+Add instrumentation that changes production shape
+```
+
+Do NOT return to:
+
+```text
+Trial-and-error debugging
+Speculative fixes
+Architecture mutation
+```
+
+---
+
+# Deliverables Produced
+
+During this period:
+
+* Extensive repo audits
+* AsyncStorage call-chain audit
+* productionDepsPromise audit
+* Concurrent export audit
+* Instrumentation history reconstruction
+* Commit lineage reconstruction
+* Persistence path restoration
+* Forensics doctrine refinement
+* Observer-effect discovery
+
+---
+
+# Recommended Starting Point (Next Session)
+
+1. Treat Build 80 as the known-good Incident Capture export path.
+2. Keep `require("react-native")` in `captureIncidentBundle.ts`.
+3. Do not convert it back to dynamic `import("react-native")`.
+4. Do not convert it to top-level static import unless a separate hardening review approves that timing change.
+5. Use Incident Capture exports on real Parent / Coach incidents.
+6. Continue protecting production execution shape during any future forensic work.
+
+---
+
+## Status At Close Of 6/22
+
+```text
+ACTIVE PHASE:
+Incident Capture Stabilization
+
+KNOWN-GOOD EXPORT PATH:
+load_deps_before_platform_react_native
+→ require("react-native")
+→ load_deps_after_platform_react_native
+→ capture_complete
+→ export_complete
+
+BIGGEST FINDING:
+Dynamic import("react-native") failed in TestFlight Incident Capture;
+localized require("react-native") succeeded.
+
+NEXT DECISION:
+Use Incident Capture on real TestFlight incidents;
+avoid additional forensic instrumentation unless a new failure appears.
+```
+
+
+
+# EOD DEV HANDOFF — 6/18/2026
+
+## Branch
+
+```bash
+rollback-pre-lineage-regression
+```
+
+## Latest Commit
+
+```bash
+7d22614 Add end-to-end overlay forensic trace instrumentation
+```
+
+## Git Status at Close
+
+```bash
+git push origin rollback-pre-lineage-regression
+
+3f310f7..7d22614
+rollback-pre-lineage-regression -> rollback-pre-lineage-regression
+```
+
+---
+
+# PRIMARY OBJECTIVE
+
+Continue investigation of:
+
+```text
+Coach Match Breakdown
+Coach → Worker → Parent hydration
+```
+
+for canonical competition overlay architecture.
+
+NO architecture mutations performed today.
+
+Focus was:
+
+```text
+Evidence collection
+Forensic instrumentation
+Pipeline proof
+```
+
+NOT fixing behavior.
+
+---
+
+# MAJOR DISCOVERY #1
+
+## Worker Snapshot Shows Divergence
+
+Session token inspected:
+
+```text
+s:47dd1b8126ad0a0749b3b456deb1c218547c6d75c350727b
+```
+
+Worker snapshot:
+
+```json
+coachMatchBreakdownArtifacts
+```
+
+contained:
+
+```text
+Israel athlete:
+19 artifacts
+
+Luca athlete:
+0 artifacts
+```
+
+Evidence:
+
+```json
+shared_ath_c1dcd2cdbe8eaad87807a0ac670943ec
+
+artifacts: []
+```
+
+This was the first major signal that:
+
+```text
+Parent-visible Luca coach notes
+may not be coming from current worker hydration
+```
+
+---
+
+# MAJOR DISCOVERY #2
+
+## Existing Parent Notes Are Potentially Stale
+
+QA performed:
+
+Coach side:
+
+Changed existing Luca coach breakdowns.
+
+Examples:
+
+```text
+24-0
+```
+
+changed to:
+
+```text
+TEST 6/18 1150pm
+```
+
+and
+
+```text
+test hydration 6/18 11:50
+```
+
+Coach app:
+
+```text
+Save successful
+Hydration visible locally
+```
+
+Parent TestFlight:
+
+```text
+Still showed old values
+```
+
+Result:
+
+Strong evidence that:
+
+```text
+Current Luca notes shown on Parent
+are not proving active hydration.
+```
+
+They may be:
+
+```text
+Historical cache
+Historical projection
+Legacy locally materialized data
+```
+
+rather than live worker-fed hydration.
+
+This is NOT yet proven.
+
+But it is now a lead hypothesis.
+
+---
+
+# MAJOR DISCOVERY #3
+
+## Historical Symptom Reappeared
+
+New competition created.
+
+Observed sequence:
+
+```text
+Parent creates competition
+↓
+Competition missing
+↓
+Hard close app
+↓
+Hard close app again
+↓
+Competition appears
+↓
+Only 1 match visible
+↓
+Coach breakdown edited
+↓
+2nd match appears
+```
+
+This is EXTREMELY IMPORTANT.
+
+We have seen this exact family of symptoms before.
+
+Historically:
+
+```text
+Topology incomplete
+↓
+Unrelated event occurs
+↓
+Missing matches appear
+```
+
+Examples previously observed:
+
+```text
+coach save
+app restart
+athlete switch
+competition reopen
+```
+
+This symptom survives despite the topology stabilization work.
+
+---
+
+# CRITICAL QUESTION ASKED TODAY
+
+Israel asked:
+
+```text
+Why do these recurring discoveries
+not seem to exist in the handoff notes?
+```
+
+Answer:
+
+Because many investigations were documented as:
+
+```text
+bug
+theory
+fix
+```
+
+rather than:
+
+```text
+observable system behavior
+debugging signals
+forensic methodology
+```
+
+We repeatedly found ourselves:
+
+```text
+Searching docs
+Searching grep
+Remembering history
+```
+
+instead of:
+
+```text
+Interrogating instrumentation
+```
+
+This led to a major shift in strategy.
+
+---
+
+# STRATEGIC DECISION
+
+STOP CHASING INDIVIDUAL BUGS.
+
+Start building:
+
+```text
+Competition Forensics Layer
+```
+
+The app has reached sufficient complexity that:
+
+```text
+Observability
+>
+Memory
+```
+
+---
+
+# MAJOR DISCOVERY #4
+
+## Missing Publish Entry Point Investigation
+
+Today we proved:
+
+Worker PUT path exists:
+
+```text
+coach-sync-worker/src/index.ts
+```
+
+and correctly stores:
+
+```text
+coachMatchBreakdownArtifacts
+```
+
+We also proved:
+
+```text
+schedulePublishCoachMatchBreakdownArtifacts
+```
+
+is only referenced by:
+
+```text
+coach competition edit flow
+competition delete cleanup
+```
+
+Key discovery:
+
+```text
+Coach overlay publication is NOT globally wired everywhere.
+```
+
+Only specific save paths trigger publication.
+
+---
+
+# MAJOR DISCOVERY #5
+
+## Found Real Overlay Save Pipeline
+
+Cursor investigation located:
+
+```text
+app/(tabs)/coach/kid/[kidId]/competition/edit.tsx
+```
+
+Actual save sequence:
+
+```text
+Save
+↓
+upsertMatchBreakdownOverlay
+↓
+writeCoachMatchBreakdownOverlay
+↓
+schedulePublishCoachMatchBreakdownArtifacts
+↓
+buildCoachMatchBreakdownArtifacts
+↓
+coachSyncPutCoachMatchBreakdownArtifacts
+↓
+Worker PUT
+```
+
+This was a significant breakthrough.
+
+Before this we were still hunting for the true publish entry point.
+
+---
+
+# FORENSIC TOOLING BUILT TODAY
+
+Commit:
+
+```bash
+7d22614
+Add end-to-end overlay forensic trace instrumentation
+```
+
+---
+
+## New Trace System
+
+```text
+[OVERLAY_FORENSIC]
+```
+
+Added throughout:
+
+```text
+Local Overlay Write
+Artifact Build
+Publish Scheduling
+HTTP Publish
+Worker Store
+Worker Read
+```
+
+---
+
+## New Trace ID
+
+Every coach save now generates:
+
+```text
+traceId
+```
+
+Example:
+
+```text
+abc123-1718718721234
+```
+
+Threaded through:
+
+```text
+Coach Save
+↓
+Overlay Store
+↓
+Artifact Build
+↓
+Publish
+↓
+HTTP
+↓
+Worker PUT
+```
+
+via:
+
+```text
+X-Overlay-Forensic-Trace-Id
+```
+
+header.
+
+Purpose:
+
+Stop guessing.
+
+Track a single coach note end-to-end.
+
+---
+
+# WHY THIS MATTERS
+
+For months we have debugged by:
+
+```text
+grep
+logs
+memory
+theories
+```
+
+instead of:
+
+```text
+trace
+evidence
+localization
+```
+
+The new forensic chain allows us to prove:
+
+```text
+Coach
+↓
+Overlay Store
+↓
+Artifact Builder
+↓
+Publish
+↓
+Worker
+```
+
+without speculation.
+
+---
+
+# IMPORTANT LESSON LEARNED
+
+Israel correctly challenged the process.
+
+Observation:
+
+```text
+We keep remembering symptoms
+instead of measuring them.
+```
+
+This led to the new debugging doctrine.
+
+---
+
+# NEW DEBUG DOCTRINE
+
+Add to top of future handoffs.
+
+```text
+Never patch based on theory.
+
+First prove:
+
+1. Canonical truth
+2. Hydration truth
+3. Topology truth
+4. Projection truth
+5. Overlay truth
+6. Render truth
+
+If a layer cannot be observed:
+
+BUILD OBSERVABILITY FIRST.
+
+Do not modify architecture
+until the failing layer is proven.
+```
+
+---
+
+# WHAT WE NOW BELIEVE
+
+Most likely current failure categories:
+
+## Possibility A
+
+```text
+Coach
+↓
+Worker
+
+publish failure
+```
+
+Worker never receives Luca artifacts.
+
+---
+
+## Possibility B
+
+```text
+Coach
+↓
+Worker
+
+success
+
+Worker
+↓
+Parent
+
+hydration failure
+```
+
+Parent never materializes latest artifacts.
+
+---
+
+## Possibility C
+
+```text
+Topology hydration bug
+
+masked by overlay-triggered refresh
+```
+
+because:
+
+```text
+Coach save
+↓
+Second match appears
+```
+
+should never happen architecturally.
+
+---
+
+# WHAT WE SHOULD NOT DO TOMORROW
+
+Do NOT:
+
+```text
+Patch hydration
+Patch topology
+Patch overlays
+Refactor architecture
+Add new fallback paths
+```
+
+without forensic proof.
+
+---
+
+# STARTING POINT FOR 6/19
+
+## Step 1
+
+Use new forensic instrumentation.
+
+Follow one Luca save.
+
+Capture:
+
+```text
+overlay_write_complete
+overlay_list_for_publish
+artifact_build_input
+artifact_build_output
+publish_schedule_payload
+publish_http_request
+publish_http_success
+worker_store_artifact_set
+```
+
+Goal:
+
+Determine whether failure is:
+
+```text
+Coach → Worker
+```
+
+or
+
+```text
+Worker → Parent
+```
+
+---
+
+## Step 2
+
+Build Competition Forensics v1.
+
+High ROI.
+
+Not bug fixes.
+
+Instrumentation.
+
+Desired future command:
+
+```text
+dumpCompetitionSnapshot()
+```
+
+Output:
+
+```text
+Canonical
+Hydration
+Topology
+Projection
+Overlay
+Render
+```
+
+with match counts at every layer.
+
+---
+
+## Step 3
+
+Investigate historical symptom:
+
+```text
+Competition appears
+↓
+1 match
+↓
+Coach save
+↓
+2 matches
+```
+
+NOT as a bug.
+
+As a:
+
+```text
+Forensic trace exercise
+```
+
+to identify which recompute path is being triggered.
+
+---
+
+# END OF DAY STATUS
+
+Architecture remains stable.
+
+No architecture mutations.
+
+No new fallbacks.
+
+No new topology mutations.
+
+Major progress achieved in:
+
+```text
+observability
+forensics
+pipeline visibility
+```
+
+The biggest win of the day was realizing that future debugging must be evidence-driven and instrumentation-first rather than grep-driven and memory-driven.
+
+
+# EOD DEV HANDOFF
+
+## Dates: 2026-06-16 → 2026-06-17
+
+### Branch
+
+```txt
+rollback-pre-lineage-regression
+```
+
+---
+
+# EXECUTIVE SUMMARY
+
+The competition platform remains on the strongest architectural floor it has ever had.
+
+The following systems remain stable:
+
+```txt
+canonical authority
+topology replay
+overlay isolation
+lineage ownership
+competition persistence
+hydration orchestration
+coach local review storage
+save lifecycle
+navigation lifecycle
+```
+
+The active issue is now isolated to:
+
+```txt
+Coach Match Breakdown
+Parent Hydration / Render Lane
+```
+
+This is no longer an architecture problem.
+
+This is now a bounded transport + hydrate + attach investigation.
+
+---
+
+# MAJOR ACCOMPLISHMENTS
+
+## 1. Replay-Safe Competition Topology Remains Stable
+
+No evidence found of:
+
+```txt
+authority corruption
+overlay corruption
+lineage corruption
+competition mutation corruption
+```
+
+Competition system continues operating as:
+
+```txt
+governed replay-safe distributed topology architecture
+```
+
+This remains a major milestone.
+
+---
+
+## 2. Coach Overlay Ownership Doctrine Confirmed
+
+Ownership remains:
+
+### Parent
+
+Owns:
+
+```txt
+competition facts
+results
+matches
+placements
+scores
+canonical competition record
+```
+
+### Coach
+
+Owns:
+
+```txt
+analysis
+match breakdown
+transcript
+coaching observations
+overlay interpretation
+```
+
+This separation remains intact.
+
+No regression observed.
+
+---
+
+## 3. Match Breakdown Persistence Stabilized
+
+Prior work successfully stabilized:
+
+```txt
+save lifecycle
+overlay lineage
+attachment identity
+bounded coach ownership
+```
+
+Evidence suggests:
+
+Coach device is saving correctly.
+
+Current suspicion is no longer:
+
+```txt
+save failure
+```
+
+Current suspicion is:
+
+```txt
+post-save transport / hydrate failure
+```
+
+---
+
+## 4. Developer Operating Doctrine Upgraded
+
+Master prompt updated with:
+
+```txt
+DEBUG DOCTRINE
+```
+
+Key additions:
+
+```txt
+facts before fixes
+trace before mutation
+prove failure layer first
+repo truth > memory
+protected systems locked
+small blast radius
+```
+
+This should significantly reduce future drift.
+
+---
+
+# CURRENT ACTIVE ISSUE
+
+## Symptom
+
+Coach creates:
+
+```txt
+match breakdown
+transcript
+analysis
+```
+
+Coach side displays correctly.
+
+Parent side does NOT consistently display breakdown content.
+
+---
+
+# CURRENT HYPOTHESIS
+
+The breakdown is disappearing somewhere within:
+
+```txt
+coach publish
+↓
+worker persistence
+↓
+worker GET payload
+↓
+parent hydrate
+↓
+artifact normalization
+↓
+artifact store
+↓
+merge attachment
+↓
+parent render
+```
+
+The failure has NOT yet been proven.
+
+Only bounded.
+
+---
+
+# FAILURE ZONES
+
+## Candidate A
+
+Worker persistence succeeds.
+
+Worker GET response omits:
+
+```txt
+coachMatchBreakdownArtifacts
+```
+
+Result:
+
+Parent never receives artifact.
+
+---
+
+## Candidate B
+
+GET response contains artifact.
+
+Hydrate layer strips artifact.
+
+Result:
+
+Artifact arrives.
+
+Artifact never reaches store.
+
+---
+
+## Candidate C
+
+Artifact reaches store.
+
+Attachment logic fails.
+
+Result:
+
+Artifact exists.
+
+Never attaches to match.
+
+---
+
+## Candidate D
+
+Artifact attaches correctly.
+
+Render layer hides it.
+
+Result:
+
+Data exists.
+
+UI never shows it.
+
+---
+
+# IMPORTANT DISCIPLINE
+
+DO NOT:
+
+```txt
+change authority
+change topology
+change replay
+change lineage
+change ownership
+change hydration architecture
+```
+
+until exact failure layer is proven.
+
+The system is healthy enough now that broad mutation would create more risk than value.
+
+---
+
+# NEXT RESTART PLAN
+
+## PHASE 1
+
+Begin with questions.
+
+NO CODING.
+
+NO CURSOR.
+
+NO CODEX.
+
+Gather evidence first.
+
+---
+
+# QUESTIONS TO ANSWER
+
+## Question 1
+
+When breakdown is saved:
+
+```txt
+Does coach still see it after:
+- app restart?
+- cold boot?
+- athlete switch?
+```
+
+If yes:
+
+```txt
+local persistence works
+```
+
+---
+
+## Question 2
+
+Does worker actually receive artifact?
+
+Need proof from:
+
+```txt
+publish payload
+```
+
+Questions:
+
+```txt
+Is coachMatchBreakdownArtifacts present?
+How many artifacts?
+Expected lineage keys?
+```
+
+---
+
+## Question 3
+
+Does worker persist artifact?
+
+Need proof from:
+
+```txt
+worker storage
+```
+
+Questions:
+
+```txt
+Artifact count?
+Artifact payload?
+Stored lineage?
+```
+
+---
+
+## Question 4
+
+Does parent GET receive artifact?
+
+Need proof from:
+
+```txt
+GET payload
+```
+
+Questions:
+
+```txt
+Artifact present?
+Artifact count?
+Artifact lineage?
+```
+
+---
+
+## Question 5
+
+Does hydrate normalize artifact?
+
+Need proof from:
+
+```txt
+parent hydrate logs
+```
+
+Questions:
+
+```txt
+Artifact count before normalize?
+Artifact count after normalize?
+```
+
+---
+
+## Question 6
+
+Does merge attach artifact?
+
+Need proof from:
+
+```txt
+mergeCoachBreakdownIntoMatches
+```
+
+Questions:
+
+```txt
+Artifacts available?
+Lineage match found?
+Attachment success?
+```
+
+---
+
+## Question 7
+
+Does render receive breakdown?
+
+Need proof from:
+
+```txt
+MatchCard
+Competition Summary
+Competition Detail
+```
+
+Questions:
+
+```txt
+Breakdown present in props?
+Rendered?
+Suppressed?
+```
+
+---
+
+# FIRST RESTART OBJECTIVE
+
+At next startup we should be able to answer:
+
+```txt
+What is the FIRST layer where the artifact disappears?
+```
+
+NOT:
+
+```txt
+How do we fix it?
+```
+
+That distinction is critical.
+
+---
+
+# SUCCESS CONDITION
+
+By next session we should produce:
+
+```txt
+Coach Save
+✓
+
+Worker Persist
+✓
+
+Worker GET
+✓
+
+Parent Hydrate
+✓
+
+Store
+✓
+
+Merge
+✓
+
+Render
+✗
+```
+
+or
+
+```txt
+Coach Save
+✓
+
+Worker Persist
+✓
+
+Worker GET
+✗
+```
+
+or similar.
+
+Once the first failing layer is proven, the actual fix should become small, surgical, and low-risk.
+
+---
+
+# MORNING RESTART REMINDER
+
+```txt
+FACTS BEFORE FIXES
+
+Trace before mutation.
+
+Identify the first failing layer.
+
+Do not modify protected systems until evidence proves ownership.
+```
+
+That should be the opening frame for the next engineering session.
+
+
+# 2026-06-08 → 2026-06-09
+
+## Branch
+
+```text
+rollback-pre-lineage-regression
+```
+
+Latest key commits:
+
+```text
+3f310f7 Add topology publication and hydration proof instrumentation
+1cc0ee4 Use Expo File directly for transcription multipart uploads
+2238e4a Expose transcription runtime exceptions for release QA
+7a41616 Replace transcription upload transport with Expo file upload pipeline
+44eb493 Align topology arbitration semantics with aggregate synchronization
+```
+
+Repo status at close:
+
+```text
+working tree clean
+```
+
+---
+
+# PRIMARY OBJECTIVE
+
+Validate end-to-end competition review workflow:
+
+```text
+Parent Competition
+↓
+Coach Match Breakdown
+↓
+Voice Recording
+↓
+Transcription
+↓
+Coach Hydration
+↓
+Parent Hydration
+```
+
+while continuing topology publication investigation.
+
+---
+
+# MAJOR WIN #1
+
+## Coach Transcription Pipeline — RESOLVED
+
+### Original Symptoms
+
+Coach recording produced:
+
+```text
+Could not transcribe.
+Try again.
+```
+
+No useful diagnostics.
+
+---
+
+## Investigation Chain
+
+### Phase 1
+
+Runtime exception exposure added.
+
+Discovered:
+
+```text
+Creating blobs from 'ArrayBuffer'
+and 'ArrayBufferView'
+are not supported
+```
+
+---
+
+### Phase 2
+
+Repo investigation traced failure to:
+
+```ts
+audioFile.slice(...)
+```
+
+inside:
+
+```text
+competitionMatchEditor.tsx
+```
+
+which internally became:
+
+```text
+File.slice()
+↓
+bytesSync()
+↓
+Uint8Array
+↓
+Blob(Uint8Array)
+```
+
+and failed on TestFlight.
+
+---
+
+### Phase 3
+
+Transport repaired.
+
+Removed:
+
+```ts
+audioFile.slice(...)
+```
+
+Removed manual Blob construction.
+
+Moved to:
+
+```ts
+formData.append("file", audioFile)
+```
+
+using Expo File.
+
+---
+
+### Phase 4
+
+Authentication failure exposed.
+
+New runtime error:
+
+```text
+Incorrect API key provided:
+sk-YOUR_OPENAI_KEY
+```
+
+---
+
+### Root Cause
+
+EAS Production environment contained:
+
+```text
+EXPO_PUBLIC_OPENAI_API_KEY=sk-YOUR_OPENAI_KEY
+```
+
+Placeholder value.
+
+Not a real key.
+
+---
+
+### Resolution
+
+Created real OpenAI key.
+
+Updated:
+
+```text
+EXPO_PUBLIC_OPENAI_API_KEY
+```
+
+inside EAS Production environment.
+
+Rebuilt TestFlight.
+
+---
+
+## Final Validation
+
+Successfully verified:
+
+```text
+Record Audio
+↓
+Upload
+↓
+Whisper
+↓
+Transcript
+↓
+Save
+↓
+Coach Hydration
+↓
+Parent Hydration
+```
+
+Examples validated on device.
+
+### Status
+
+```text
+RESOLVED
+```
+
+---
+
+# MAJOR WIN #2
+
+## Coach Breakdown Sync — VERIFIED
+
+Verified:
+
+```text
+Coach Match Breakdown
+↓
+Competition Card
+↓
+Parent App
+↓
+Coach App
+```
+
+Hydrates correctly.
+
+Voice → Transcript → Match Breakdown path operational.
+
+---
+
+# MAJOR WIN #3
+
+## Competition Summary Parity
+
+Validated:
+
+Parent:
+
+```text
+15-5
+```
+
+Coach:
+
+```text
+15-5
+```
+
+Aggregate publication healthy.
+
+### Status
+
+```text
+PASS
+```
+
+---
+
+# TOPOLOGY INVESTIGATION
+
+## Original Reproduction
+
+Comp 9
+
+Parent:
+
+```text
+2 matches
+```
+
+Coach:
+
+```text
+Competition appears
+Record updates
+Only Match 1 visible
+```
+
+Parent:
+
+```text
+Open competition
+Press Save
+(no meaningful edits)
+```
+
+Coach:
+
+```text
+Match 2 immediately appears
+```
+
+---
+
+## Investigation Findings
+
+Repo evidence disproved:
+
+```text
+Topology builder reading stale detail
+before persistence completes
+```
+
+because:
+
+```ts
+await setCompetitionDetailForEntry(...)
+```
+
+completes before topology scheduling.
+
+---
+
+## Important Discovery
+
+Topology publication is:
+
+```text
+fire-and-forget
+```
+
+Save flow does not wait for:
+
+```text
+Topology PUT success
+```
+
+---
+
+## Worker Arbitration Mismatch
+
+Coach store:
+
+```text
+Equal timestamp
+Different payload
+↓
+ACCEPT
+```
+
+Worker:
+
+```text
+Equal timestamp
+Different payload
+↓
+409 REJECT
+```
+
+Found in:
+
+```text
+coach-sync-worker/src/index.ts
+```
+
+This creates divergence between:
+
+```text
+Worker acceptance
+Coach acceptance
+```
+
+---
+
+## Instrumentation Added
+
+Commit:
+
+```text
+3f310f7
+```
+
+Added:
+
+### Parent
+
+```text
+[COMP_TOPOLOGY_TRACE]
+```
+
+* build_ok
+* put_request_payload
+* put_http_ok
+* put_http_failed
+
+---
+
+### Worker
+
+```text
+[COMP_TOPOLOGY_TRACE]
+```
+
+* worker_request_received
+* worker_store_ok
+* worker_reject_stale
+* worker_reject_equal_timestamp_conflict
+
+---
+
+### Coach
+
+```text
+[COACH_TOPOLOGY_TRACE]
+```
+
+* worker_get_topology
+* coach_topology_store_write
+* coach_topology_store_reject
+* coach_compete_projection
+
+---
+
+# LATE-DAY QA RESULTS
+
+## Comp 10
+
+Hydrated correctly.
+
+No intervention.
+
+---
+
+## Comp 11
+
+Hydrated correctly.
+
+Both matches visible.
+
+Transcription successful.
+
+Coach hydration successful.
+
+Parent hydration successful.
+
+---
+
+## Comp 12+
+
+Hydrated correctly.
+
+Observation:
+
+Sometimes user must:
+
+```text
+Navigate away
+↓
+Return to Compete
+```
+
+before newest data appears.
+
+This now looks more like:
+
+```text
+Mounted screen refresh
+Projection invalidation
+Recompute timing
+```
+
+than:
+
+```text
+Data loss
+```
+
+---
+
+# CURRENT SYSTEM HEALTH
+
+## Competition
+
+```text
+GOOD
+```
+
+---
+
+## Topology
+
+```text
+MOSTLY STABLE
+```
+
+Need more runtime evidence.
+
+---
+
+## Coach Review
+
+```text
+GOOD
+```
+
+---
+
+## Parent ↔ Coach Sync
+
+```text
+GOOD
+```
+
+---
+
+## Transcription
+
+```text
+GOOD
+```
+
+---
+
+# PRODUCT STRATEGY DISCUSSION
+
+## Future Coach Video Architecture
+
+Decision direction:
+
+Do NOT store coach video inside canonical competition records.
+
+Avoid:
+
+```text
+Competition
+└── Match
+     └── Video
+```
+
+because it reintroduces authority complexity.
+
+---
+
+## Proposed Future Architecture
+
+### Canonical Competition
+
+Parent-owned facts:
+
+```text
+Results
+Matches
+Placement
+Time
+Submission
+Opponent
+```
+
+---
+
+### Coach Review Overlay
+
+Coach-owned:
+
+```text
+Breakdowns
+Transcripts
+Observations
+```
+
+---
+
+### Match Study Library
+
+Future coach-owned domain:
+
+```text
+Video
+Transcript
+Tags
+AI Findings
+Recommendations
+```
+
+References competitions.
+
+Does not live inside competitions.
+
+---
+
+## Future App Placement
+
+No new tab.
+
+Compete remains:
+
+```text
+What happened?
+```
+
+Coach becomes:
+
+```text
+What should we do next?
+```
+
+Future Coach tab evolves into:
+
+```text
+Weekly
+Signals
+Match Studies
+Pattern Engine
+Recommendations
+```
+
+---
+
+# PREMIUM TIER VISION
+
+## Coach Tags Moments
+
+Coach watches video.
+
+Adds structured tags:
+
+Examples:
+
+```text
+Head Position Lost
+Good Entry
+Guard Retention Failure
+Triangle Finish
+```
+
+with timestamps.
+
+---
+
+## AI Findings
+
+AI summarizes:
+
+```text
+What happened
+```
+
+from tags + transcript.
+
+---
+
+## Pattern Engine
+
+Across many matches:
+
+```text
+Recurring weaknesses
+Recurring strengths
+Recurring positions
+Recurring mistakes
+```
+
+Example:
+
+```text
+Inside-control collapse
+appears in 67% of losses.
+```
+
+---
+
+## Opportunity Ranking
+
+AI identifies:
+
+```text
+Highest-impact weakness
+```
+
+not simply most frequent weakness.
+
+---
+
+## Recommendation Engine
+
+Outputs:
+
+```text
+Training focus
+Drill priorities
+Competition preparation
+```
+
+based on historical patterns.
+
+---
+
+# NEXT QA PHASE (2026-06-10)
+
+## Real Athlete Stress Test
+
+Keep existing athlete:
+
+```text
+Israel
+```
+
+intact.
+
+Do NOT delete.
+
+Acts as:
+
+```text
+Known-good baseline
+```
+
+---
+
+Add:
+
+```text
+Luca
+```
+
+Real athlete.
+
+---
+
+Add:
+
+```text
+iOS
+```
+
+Real athlete.
+
+---
+
+Purpose:
+
+```text
+3-athlete stress test
+```
+
+Validate:
+
+* athlete isolation
+* competition hydration
+* coach notes
+* transcriptions
+* summary parity
+* fast switching
+* close/reopen behavior
+
+---
+
+## QA Focus
+
+### Athlete Isolation
+
+Verify:
+
+```text
+Luca data
+never appears under iOS
+
+iOS data
+never appears under Luca
+```
+
+---
+
+### Fast Switching
+
+```text
+Israel
+↓
+Luca
+↓
+iOS
+↓
+Israel
+```
+
+Check:
+
+* Summary
+* Compete
+* Coach notes
+
+---
+
+### Hard Close Validation
+
+Parent:
+
+```text
+close
+reopen
+```
+
+Coach:
+
+```text
+close
+reopen
+```
+
+Verify:
+
+* competitions
+* summaries
+* coach notes
+* transcriptions
+
+---
+
+# END OF DAY STATUS
+
+## Architecture Confidence
+
+```text
+HIGHER
+```
+
+## Transcription
+
+```text
+PASS
+```
+
+## Competition Review Workflow
+
+```text
+PASS
+```
+
+## Coach Hydration
+
+```text
+PASS
+```
+
+## Parent Hydration
+
+```text
+PASS
+```
+
+## Remaining Investigation
+
+```text
+Compete mounted-screen refresh behavior
+and topology publication proof traces
+```
+
+No active evidence of data corruption.
+
+System is in the strongest state observed since beginning the topology stabilization effort.
+
+
+
+## Date Range: 2026-06-06 → 2026-06-07
+
+## Branch
+
+`rollback-pre-lineage-regression`
+
+## Latest Stable Commit
+
+```bash
+10c6825 Stabilize canonical athlete retirement and overlay lineage cleanup
+```
+
+---
+
+# PRIMARY OBJECTIVE OF THIS WORK CYCLE
+
+Stabilize the complete canonical athlete lifecycle:
+
+```txt
+create
+→ link
+→ hydrate
+→ sync
+→ topology projection
+→ overlay projection
+→ delete
+→ remote retirement
+→ cold-start recovery
+→ re-link
+→ re-delete
+```
+
+WITHOUT:
+
+* authority rewrites
+* heuristic lineage recovery
+* topology ownership mutations
+* hydration hacks
+* bootstrap suppression
+* multi-owner regressions
+
+This was a major repo-integrity stabilization pass.
+
+---
+
+# HIGH-LEVEL ARCHITECTURAL THEMES
+
+## 1. Competition substrate divergence discovered
+
+Critical finding:
+
+Coach Summary and Coach Compete were reading from DIFFERENT competition substrates.
+
+### Coach Compete
+
+Used:
+
+```txt
+projectCompetitionCompeteView(...)
+→ peekCoachCompetitionTopology(...)
+```
+
+This was already topology-driven and healthy.
+
+### Coach Summary
+
+Used:
+
+```txt
+useSignals(...)
+→ overlayCompetitionAggregateSignals(...)
+```
+
+This depended on:
+
+* aggregate overlays
+* bounded aggregate visibility
+
+Topology existed but was NOT used as a metric source.
+
+Result:
+
+* Coach Compete showed matches correctly
+* Coach Summary metrics disappeared when aggregate artifacts were absent
+
+---
+
+# FIX — TOPOLOGY FALLBACK FOR SUMMARY
+
+## Files
+
+* `src/domain/competition/overlayCompetitionAggregateSignals.ts`
+* `src/hooks/useSignals.ts`
+
+## Behavior Added
+
+Coach Summary now derives bounded metrics directly from hydrated topology IF aggregate artifacts are absent.
+
+### Allowed metric subset only
+
+* wins
+* losses
+* totalMatches
+* winRate
+* submissionRate
+* fastestSubmission
+* averageMatchTime
+* winStyle
+
+### Safety constraints
+
+Fallback only runs when:
+
+```txt
+deviceRole === "coach"
+topology exists
+topology contains matches
+aggregate artifact absent
+```
+
+### Explicitly NOT changed
+
+* parent summary
+* topology ownership
+* hydration
+* worker schema
+* aggregate publishing
+* authority
+* overlays
+
+## Result
+
+Coach Summary metrics stabilized and survived:
+
+* fast switching
+* hard close/open
+* topology replay
+
+---
+
+# ATHLETE DELETE FAILURE INVESTIGATION
+
+This became the dominant stabilization effort of the cycle.
+
+---
+
+# INITIAL SYMPTOM
+
+Deleting athletes:
+
+* appeared to work
+* switched active athlete
+* coach app removed athlete
+* BUT parent app resurrected athlete after cold start
+
+This triggered a multi-stage forensic investigation.
+
+---
+
+# ROOT CAUSE #1 — WRONG ID TYPE DURING RETIREMENT
+
+## Finding
+
+Delete flow passed:
+
+```txt
+pa_*
+```
+
+Worker retirement required:
+
+```txt
+shared_ath_*
+```
+
+### Failure chain
+
+Summary:
+
+```ts
+deleteAthlete(activeAthleteId)
+```
+
+Delete pipeline incorrectly assumed:
+
+```txt
+input id === canonical shared id
+```
+
+Remote retirement gate therefore failed:
+
+```txt
+retirementSharedAthleteId === null
+```
+
+DELETE request never fired.
+
+---
+
+# FIX — EXPLICIT CANONICAL RETIREMENT HANDOFF
+
+## Files
+
+* `src/storage/athleteStore.ts`
+* `src/features/summary/SummaryScreen.tsx`
+
+## Change
+
+Delete flow now accepts:
+
+```ts
+deleteAthlete({
+  athleteId,
+  canonicalSharedAthleteId,
+})
+```
+
+### Canonical resolution priority
+
+1. already canonical `shared_ath_*`
+2. `activeKidId -> kid.sharedAthleteId`
+3. `summaryLinkedKidId -> kid.sharedAthleteId`
+4. else null
+
+### Logs added
+
+```txt
+[DELETE_CANONICAL_HANDOFF]
+[CANONICAL_RETIREMENT_RESOLUTION]
+[CANONICAL_RETIREMENT_SKIPPED]
+```
+
+## Result
+
+Remote retirement finally executed correctly.
+
+---
+
+# ROOT CAUSE #2 — STALE OVERLAY ARTIFACT REPLAY
+
+## Symptom
+
+Deleted competitions:
+
+* disappeared locally
+* but stale overlay lineage rehydrated later
+
+## Finding
+
+Overlay artifact builder:
+
+```txt
+listCoachMatchBreakdownOverlaysForAthlete(...)
+```
+
+had:
+
+* no prune path
+* no delete-by-lineage
+* no overlay retirement publish
+
+Worker behavior was actually correct:
+PUT overwrote full artifact set.
+
+Problem:
+smaller artifact set was never republished.
+
+---
+
+# FIX — OVERLAY RETIREMENT PROPAGATION
+
+## Files
+
+* `coachMatchBreakdownOverlayStore.ts`
+* `buildCoachMatchBreakdownArtifacts.ts`
+* `publishCoachMatchBreakdownArtifacts.ts`
+* `parentKidCompetitionDelete.ts`
+
+## Added
+
+Exact prune semantics:
+
+```txt
+sharedAthleteId + sharedCompetitionId
+```
+
+Optional:
+
+```txt
+matchLineageKeys[]
+```
+
+No:
+
+* name matching
+* fuzzy scans
+* authority rewrites
+
+### Retirement sequence
+
+1. prune local overlays
+2. publish reduced artifact set
+3. force fresh updatedAt
+4. empty sets publish valid empty artifacts
+
+## Result
+
+Deleted competition overlays stopped replaying.
+
+---
+
+# ROOT CAUSE #3 — BOOTSTRAP ATHLETE RESURRECTION
+
+This was the largest repo-level finding.
+
+---
+
+# Symptom
+
+Athlete:
+
+* deleted successfully
+* disappeared
+* coach linkage removed
+* BUT resurrected after cold start
+
+---
+
+# Forensic Discovery
+
+Bootstrap projection recreated deleted athletes.
+
+## Resurrection source
+
+```txt
+ensureOperatingAthletesFromCoachLinkedKids(...)
+```
+
+inside:
+
+```txt
+buildAthleteAuthoritySnapshot(...)
+```
+
+### Recovery logic
+
+If:
+
+```txt
+kid.sharedAthleteId exists
+AND parent athlete missing
+```
+
+bootstrap recreated:
+
+```ts
+{
+  id: sharedAthleteId,
+  name: kid.name
+}
+```
+
+and persisted it back into parent athletes.
+
+---
+
+# WHY DELETE LOST
+
+Delete removed:
+
+```txt
+parentAthletes
+```
+
+BUT:
+
+```txt
+coachKidsById.sharedAthleteId
+```
+
+survived.
+
+Bootstrap trusted linked kid lineage and rebuilt athlete.
+
+---
+
+# FIX — STALE LINEAGE RETIREMENT CLEANUP
+
+## Files
+
+* `src/storage/athleteStore.ts`
+* `src/services/coachWeeklySyncApi.ts`
+
+## Critical sequencing rule
+
+Local linkage cleanup only occurs AFTER:
+
+* remote delete success
+  OR
+* idempotent 404 success
+
+### Exact cleanup behavior
+
+```txt
+kid.sharedAthleteId === canonicalSharedAthleteId
+→ clearKidSharedAthleteLink(kidId)
+```
+
+### Explicitly NOT changed
+
+* bootstrap semantics
+* hydration
+* reconcile
+* topology
+* authority
+
+### Logs added
+
+```txt
+[CANONICAL_LINKAGE_RETIREMENT]
+[BOOTSTRAP_RECOVERY_SOURCE]
+```
+
+---
+
+# RESULT — MAJOR QA SUCCESS
+
+Confirmed stable:
+
+## Athlete lifecycle
+
+* create
+* link
+* hydrate
+* topology sync
+* overlay sync
+* delete
+* remote retirement
+* hard close/open
+* cold start
+* re-link
+* re-delete
+
+ALL PASSED.
+
+Most important proof:
+
+```txt
+deleted athletes no longer resurrect after bootstrap
+```
+
+This is the most important stabilization achievement of the cycle.
+
+---
+
+# RUNTIME FORENSIC INSTRUMENTATION ADDED
+
+## Files
+
+* `src/hooks/useActiveAthlete.ts`
+* `src/features/summary/SummaryScreen.tsx`
+
+## Runtime logs
+
+```txt
+[ACTIVE_ROSTER_RUNTIME]
+[ACTIVE_ATHLETE_RUNTIME]
+[SUMMARY_SWITCHER_RUNTIME]
+[SUMMARY_RENDER_RUNTIME]
+```
+
+Purpose:
+
+* roster state tracing
+* active athlete mutation tracing
+* runtime resurrection tracing
+* delete timing tracing
+
+Instrumentation-heavy pass enabled full lifecycle isolation.
+
+---
+
+# FINAL QA RESULTS (END OF DAY)
+
+## PASSED
+
+### Coach Summary Metrics
+
+* topology fallback working
+* metrics survive reboot
+* metrics survive athlete switching
+
+### Competition Delete
+
+* deletes propagate correctly
+* overlays retire correctly
+* stale overlays do not replay
+
+### Athlete Delete
+
+* canonical retirement works
+* linkage cleanup works
+* bootstrap resurrection fixed
+
+### Re-Link QA
+
+* re-link into retired lineage stable
+* no duplicate authority
+* no stale topology corruption
+
+### Hard Close/Open QA
+
+* no athlete resurrection
+* no stale competition replay
+
+---
+
+# REMAINING SMALL ISSUE
+
+## Stale "Existing child profiles" candidates
+
+Deleted athletes still appear inside:
+
+```txt
+Link athletes
+→ Existing child profiles
+```
+
+BUT:
+
+* not active
+* not bootstrapped
+* not linked
+* not hydrated
+* not in summary
+* not in coach roster
+
+This is now believed to be:
+
+```txt
+stale local candidate projection
+```
+
+NOT:
+
+* authority corruption
+* bootstrap corruption
+* topology replay
+
+This is now a bounded UI/projection cleanup task.
+
+---
+
+# CURRENT STABLE STATE
+
+## Branch
+
+```bash
+rollback-pre-lineage-regression
+```
+
+## HEAD
+
+```bash
+10c6825 Stabilize canonical athlete retirement and overlay lineage cleanup
+```
+
+## Working tree
+
+Clean.
+
+---
+
+# IMPORTANT ARCHITECTURAL DECISIONS LOCKED
+
+## DO NOT:
+
+* reintroduce heuristic recovery
+* name-match lineage
+* roster-scan for canonical ids
+* mutate bootstrap authority
+* widen delete semantics
+* add hydration hacks
+* make coach authoritative
+
+## KEEP:
+
+* explicit canonical lineage
+* exact id matching
+* bounded retirement
+* topology ownership separation
+* overlay ownership separation
+
+---
+
+# TOMORROW’S PLAN (6/7)
+
+## PRIMARY QA GOAL
+
+Fresh coach app onboarding.
+
+### Reason
+
+Today validated:
+
+```txt
+dirty-state lifecycle resilience
+```
+
+Tomorrow validates:
+
+```txt
+clean-device bootstrap onboarding
+```
+
+---
+
+# TOMORROW QA PLAN
+
+## Phase 1
+
+Preserve tonight’s stable repo checkpoint.
+
+Run:
+
+```bash
+git status -sb
+git log --oneline --decorate -5
+```
+
+---
+
+# Phase 2 — Fresh Coach App
+
+On Mac:
+
+1. fully quit app
+2. delete app/container
+3. rebuild clean coach app
+4. reconnect via onboarding flow
+
+Goal:
+
+* zero stale persistence
+* fresh bootstrap
+* first-install hydrate validation
+
+---
+
+# Phase 3 — Fresh Lifecycle QA
+
+Validate:
+
+* invite accept
+* weekly hydrate
+* training proof hydrate
+* competition hydrate
+* topology metrics
+* summary metrics
+* overlay hydrate
+* hard close/open persistence
+
+Then:
+
+* delete athlete
+* confirm no resurrection
+
+---
+
+# KEY STRATEGIC NOTE
+
+This repo is no longer in:
+
+```txt
+chaotic authority collapse
+```
+
+It is now in:
+
+```txt
+bounded lifecycle stabilization + residual projection cleanup
+```
+
+That is a major engineering transition.
+
+The repo integrity floor is substantially healthier tonight than at the start of this cycle.
 
 
 
@@ -7020,6 +13903,262 @@ Keep a dedicated build terminal untouched while EAS runs; use a separate tab for
 
 ---
 
+# DEV HANDOFF — 2026-06-04 21:49
+
+## Runtime Focus
+
+Competition runtime stabilization, replay governance, topology vs aggregate convergence, and architecture governance formalization.
+
+---
+
+# Major Runtime Discoveries
+
+## Summary vs Compete Architectural Split
+
+Confirmed:
+
+* Summary renders through:
+
+  * `computeSignals`
+  * aggregate overlay
+  * `overlayCompetitionAggregateSignals`
+* Compete renders through:
+
+  * topology projection
+  * `projectCompetitionCompeteView`
+  * `CompetitionCard`
+
+Meaning:
+Summary and Compete do NOT render from the same final convergence substrate.
+
+---
+
+## Replay Asymmetry Confirmed
+
+Observed:
+
+* topology replay uses strict `>`
+* aggregate replay uses `>=`
+
+This creates deterministic divergence windows under equal timestamp conditions.
+
+---
+
+## Projection Invalidation Root Cause
+
+Grounded finding:
+`overlayCompetitionAggregateSignals`
+peeked topology state for `competitionCount`,
+BUT:
+`useSignals`
+did NOT subscribe to topology invalidation (`competitionVersion`).
+
+This caused:
+
+* Compete topology updates appearing before Summary convergence
+* stale Summary counts
+* delayed overlay recompute
+
+---
+
+# Runtime Governance Work Completed
+
+Created architecture governance suite:
+
+* `docs/architecture/hydration-orchestration-v1.md`
+* `docs/architecture/runtime-dependency-maps-v1.md`
+* `docs/architecture/recovery-systems-v1.md`
+* `docs/architecture/invalidation-cache-systems-v1.md`
+* `docs/architecture/sequence-diagrams-v1.md`
+* `docs/architecture/competition/competition-runtime-governance-v1.md`
+* `docs/architecture/competition/competition-runtime-invariants-v1.md`
+* `docs/architecture/competition/competition-stabilization-roadmap-v1.md`
+
+Governance now includes:
+
+* runtime planes P1–P6
+* ownership doctrine
+* replay doctrine
+* invalidation doctrine
+* stabilization sequencing
+* recovery governance
+* AI mutation safety zones
+* bounded Codex/Cursor governance
+
+---
+
+# Runtime Stabilization Patch Applied
+
+Commit:
+`eddc0e7`
+`Stabilize coach Summary topology overlay recompute timing`
+
+Patch:
+
+* Added `competitionVersion` subscription inside `useSignals`
+* Added coach-gated topology invalidation recompute dependency
+* Preserved:
+
+  * replay semantics
+  * hydration ordering
+  * store ownership
+  * invalidation ownership
+  * persistence boundaries
+
+Scope:
+Read-only projection invalidation alignment only.
+
+---
+
+# QA Results
+
+## PASS
+
+* Summary no longer exhibited obvious topology recompute lag
+* Athlete fast switching stable
+* Summary/Compete counts stable during navigation
+* No replay bleed observed
+* No duplicate competitions observed
+* No hydration flicker observed
+
+## REMAINING ISSUE
+
+Coach aggregate remains stale:
+
+* Summary shows `30-12`
+* Historical topology inspection indicates `30-13`
+
+Important:
+This is NOT the same issue as projection invalidation timing.
+
+Likely remaining runtime class:
+
+* aggregate publication staleness
+* aggregate replay acceptance
+* parent aggregate rebuild omission
+* equal timestamp aggregate replay behavior
+
+Projection convergence appears improved.
+Aggregate correctness remains unresolved.
+
+---
+
+# Parent App State
+
+Important runtime event:
+Parent app was deleted/reinstalled during QA.
+
+Effects:
+
+* P1 canonical local stores lost on parent device
+* Parent app relinked Luca only
+* Mikey blocked by ghost athlete detection
+* Coach app retained:
+
+  * topology artifacts
+  * aggregate artifacts
+  * overlays
+  * shared competition shells
+
+Major discovery:
+Coach mirrors already function as a bounded survivability substrate.
+
+Recovery orchestration does NOT yet exist.
+
+---
+
+# Latest Git Status
+
+```text
+## rollback-pre-lineage-regression
+?? scripts/write_dev_handoff.py
+```
+
+---
+
+# Latest Commits
+
+```text
+eddc0e7 (HEAD -> rollback-pre-lineage-regression) Stabilize coach Summary topology overlay recompute timing
+72ff5ab Establish competition runtime governance and stabilization doctrine
+921bfe9 Seed grounded hydration and recovery architecture governance docs
+a60c9e8 Stabilize canonical competition topology hydration and reactive projection
+af5ca00 Converge canonical competition detail ownership on sharedCompetitionId
+```
+
+---
+
+# Recently Changed Files
+
+```text
+docs/architecture/competition/competition-runtime-governance-v1.md
+docs/architecture/competition/competition-runtime-invariants-v1.md
+docs/architecture/competition/competition-stabilization-roadmap-v1.md
+docs/architecture/runtime-dependency-maps-v1.md
+src/hooks/useSignals.ts
+```
+
+---
+
+# Known Runtime Risks
+
+* aggregate replay asymmetry
+* equal timestamp divergence
+* stale aggregate overlays
+* hydration ordering ambiguity
+* refresh-dependent convergence
+* incomplete recovery orchestration
+* parent deletion non-recoverability
+* aggregate publication correctness
+
+---
+
+# Recommended Next Steps
+
+## Phase 1 — Replay Governance Investigation
+
+Focus:
+Why aggregate artifacts remain stale while topology/history appears newer.
+
+Priority targets:
+
+1. aggregate artifact publication path
+2. aggregate builder completeness
+3. aggregate replay acceptance behavior
+4. equal timestamp handling
+5. parent mutation → aggregate rebuild chain
+6. aggregate overwrite ordering
+7. reconcile timing
+
+DO NOT:
+
+* rewrite hydration
+* widen ownership
+* add new stores
+* introduce speculative recovery systems
+* mutate replay semantics broadly
+
+Continue operating inside:
+
+* runtime governance doctrine
+* invariant doctrine
+* stabilization roadmap sequencing
+
+---
+
+# Operational Notes
+
+Notion operationalization started:
+
+* runtime cognition layer
+* proof-of-work engineering case study
+* architecture governance capture
+* future portfolio narrative
+* AI-assisted engineering governance
+
+Current strategic transition:
+Reactive debugging → governed distributed runtime engineering.
+
 # BJJ Tracker — Developer Handoff Notes
 
 **Project:** BJJ Tracker / MatMind Jiu Jitsu  
@@ -7409,3 +14548,4 @@ When the user says:
 "Operator Spec Mode"
 
 All responses must follow this structure exactly.
+\n

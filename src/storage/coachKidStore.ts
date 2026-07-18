@@ -65,6 +65,7 @@ import {
 import { reconcileCoachMatchBreakdownArtifacts } from "../domain/competition/reconcileCoachMatchBreakdownArtifacts";
 import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
+import { deleteKidCurrentStateAssessmentForKid } from "./kidCurrentStateAssessmentStore";
 import { deleteKidStandingGuidanceForKid } from "./kidStandingGuidanceStore";
 import { clearLastAthleteKidIdIfMatches } from "./lastAthleteIdStore";
 import { deleteSessionsForKid } from "./sessionsStore";
@@ -2175,6 +2176,7 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
   await deleteAllKidCompetitionEntriesForKid(kidId);
   await deleteKidTrainingSessionsForKid(kidId);
   await deleteKidWeeklyFocusEntriesForKid(kidId);
+  await deleteKidCurrentStateAssessmentForKid(kidId);
   await deleteKidStandingGuidanceForKid(kidId);
 
   const { [kidId]: _removed, ...rest } = kids;

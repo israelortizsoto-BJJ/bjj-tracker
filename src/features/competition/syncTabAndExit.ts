@@ -4,7 +4,7 @@ import {
   type NavigationState,
   type ParamListBase,
 } from "@react-navigation/native";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 
 import { store } from "expo-router/build/global-state/router-store";
 
@@ -15,6 +15,10 @@ import {
   readFocusedTabFromRootState,
   scheduleNavStateAfterSaveLog,
 } from "./compSaveExitTelemetry";
+import {
+  type CompetitionLaunchContext,
+  resolveCompetitionExitNavigation,
+} from "./competitionNavigationContract";
 import { logAuthorityNavigationReplayDev } from "../../identity/authorityTelemetry";
 import { logSaveLifecycleTrace } from "./saveLifecycleTrace";
 
@@ -152,9 +156,9 @@ function readTabNavigatorStateForExit(
 }
 
 /**
- * After save, cancel-style back, delete, or load errors: land on the Competition tab and
- * normalize the parent/coach lane stack to root so `competition/edit` does not survive as the
- * active route when the user returns to that tab. Athlete scope is unchanged.
+ * After save, cancel-style back, delete, or load errors: honor a valid Launch Context.
+ * Athlete returns replace to same-lane athlete detail; Compete and legacy fallback returns keep
+ * the production lane-normalization and Competition-tab focus behavior. Athlete scope is unchanged.
  */
 export function exitToCompeteAfterCompetitionSave(args: {
   navigation: TabSyncScreenNavigation;
@@ -166,12 +170,36 @@ export function exitToCompeteAfterCompetitionSave(args: {
   sharedCompetitionId?: string | null;
   /** Trace-only — editor saving flag when known at call site. */
   saving?: boolean;
+  launchContext?: CompetitionLaunchContext;
 }): void {
-  const { navigation, actorRole, athleteId, competitionId, sharedCompetitionId, saving } = args;
+  const {
+    navigation,
+    actorRole,
+    athleteId,
+    competitionId,
+    sharedCompetitionId,
+    saving,
+    launchContext,
+  } = args;
+  const exitResolution = resolveCompetitionExitNavigation({
+    actorRole,
+    athleteId,
+    launchContext,
+  });
+  const certifiedLaunchContext = exitResolution.launchContext;
   const lifecycleCtx = {
     competitionId,
     sharedCompetitionId: sharedCompetitionId ?? null,
     ...(saving !== undefined ? { saving } : {}),
+    ...(certifiedLaunchContext
+      ? {
+          launchSurface: certifiedLaunchContext.launchSurface,
+          returnClass: certifiedLaunchContext.returnClass,
+          ...(certifiedLaunchContext.returnClass === "athlete"
+            ? { returnScopeId: certifiedLaunchContext.returnScopeId }
+            : {}),
+        }
+      : {}),
   };
   const logSyncStep = (
     point: "syncTabAndExit_step_before" | "syncTabAndExit_step_after",
@@ -224,10 +252,49 @@ export function exitToCompeteAfterCompetitionSave(args: {
   logCompSaveNormalized({
     actorRole,
     athleteId,
-    destination: "/compete",
+    destination: exitResolution.destination,
     competitionId,
+    ...(certifiedLaunchContext
+      ? {
+          launchSurface: certifiedLaunchContext.launchSurface,
+          returnClass: certifiedLaunchContext.returnClass,
+          ...(certifiedLaunchContext.returnClass === "athlete"
+            ? { returnScopeId: certifiedLaunchContext.returnScopeId }
+            : {}),
+        }
+      : {}),
   });
   logSyncStep("syncTabAndExit_step_after", "log_comp_save_normalized");
+
+  if (
+    exitResolution.contractApplied &&
+    exitResolution.launchContext.returnClass === "athlete"
+  ) {
+    console.log("[COMP_NAVIGATE_ATHLETE]", {
+      ts: Date.now(),
+      pathname: String(riBegin.pathname ?? ""),
+      kidId: athleteId,
+      actorRole,
+      destination: exitResolution.destination,
+      launchSurface: exitResolution.launchContext.launchSurface,
+      returnScopeId: exitResolution.launchContext.returnScopeId,
+    });
+    logSaveLifecycleTrace("syncTabAndExit_before_navigation", {
+      ...lifecycleCtx,
+      navOp: "router_replace_athlete_contract",
+    });
+    router.replace(exitResolution.destination as Href);
+    logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+      ...lifecycleCtx,
+      navOp: "router_replace_athlete_contract",
+    });
+    scheduleNavStateAfterSaveLog({ role: actorRole, kidId: athleteId });
+    logSaveLifecycleTrace("syncTabAndExit_after_navigation", {
+      ...lifecycleCtx,
+      navOp: "exit_function_complete",
+    });
+    return;
+  }
 
   logSyncStep("syncTabAndExit_step_before", "read_root_navigation_ref");
   const rootNav = store.navigationRef?.current;
@@ -514,6 +581,9 @@ export function exitToCompeteAfterCompetitionSave(args: {
             reason: "bounded_postcondition_not_met",
             activeStackAfter: laneStackScreenNames(tabLayerStateAfterRetry, laneRouteName),
           });
+          // Reset may already have landed on lane root (Coach Dashboard / This Week).
+          // Still focus Compete so cancel/save exit cannot strand the user there.
+          focusCompete();
           return;
         }
         console.log("[COMP_LANE_VERIFY_RECOVERED]", {
@@ -546,8 +616,12 @@ export function exitToCompeteAfterCompetitionSave(args: {
       logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_tabs_nav", {
         normalized: false,
       });
-      if (laneStackKey) return;
-      logLaneNormalizeBypass("missing_lane_stack");
+      // Do not return early when laneStackKey is set. Normalize may have already
+      // reset the coach/this-week stack to `index` while async verify is pending;
+      // skipping focusCompete leaves the user on that lane root (UX-001).
+      if (!laneStackKey) {
+        logLaneNormalizeBypass("missing_lane_stack");
+      }
     } else {
       logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_tabs_nav", {
         normalized: true,
@@ -562,8 +636,9 @@ export function exitToCompeteAfterCompetitionSave(args: {
       logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_root_nav", {
         normalized: false,
       });
-      if (laneStackKey) return;
-      logLaneNormalizeBypass("missing_lane_stack");
+      if (!laneStackKey) {
+        logLaneNormalizeBypass("missing_lane_stack");
+      }
     } else {
       logSyncStep("syncTabAndExit_step_after", "call_normalize_lane_root_nav", {
         normalized: true,

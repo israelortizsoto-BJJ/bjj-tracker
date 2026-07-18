@@ -67,268 +67,898 @@ Writers:
 scripts/write_engineering_checkpoint.py
 
 ---
+#DEV HANDOFF — 2026-07-16
+Session Status
 
-# DEV HANDOFF — 2026-07-14 22:11
+Engineering Complete
 
-## Runtime Focus
+Repository Protected
 
-Competition runtime stabilization, replay governance, topology vs aggregate convergence, and architecture governance formalization.
+Today's work transitioned the repository from investigation into Release Candidate hardening.
 
----
+The Parent and Coach competition refresh experience is now backed by a certified engineering floor.
 
-# Major Runtime Discoveries
+Do NOT reopen architectural investigation unless new repository evidence demonstrates a regression.
 
-## Summary vs Compete Architectural Split
+Repository
 
-Confirmed:
+Branch
 
-* Summary renders through:
+rollback-pre-lineage-regression
 
-  * `computeSignals`
-  * aggregate overlay
-  * `overlayCompetitionAggregateSignals`
-* Compete renders through:
+HEAD
 
-  * topology projection
-  * `projectCompetitionCompeteView`
-  * `CompetitionCard`
+536c1e1
+Complete coach compete refresh corridor.
 
-Meaning:
-Summary and Compete do NOT render from the same final convergence substrate.
+Certified Tag
 
----
+parent-coach-refresh-floor-v1
 
-## Replay Asymmetry Confirmed
+This tag should be treated as today's recovery point.
+
+Objective Entering Today
+
+Finish the remaining synchronization gap after yesterday's Parent Compete stabilization.
+
+Yesterday solved:
+
+Parent initialization starvation
+Parent competition discovery
+Parent initialization ordering
+
+Remaining issue:
+
+Coach Match Breakdown required navigating:
+
+Summary
+
+↓
+
+Compete
+
+to hydrate.
+
+Goal:
+
+Remove this dependency without violating architectural ownership.
+
+Mental Model
+
+This was not another synchronization investigation.
+
+Instead today's realization was:
+
+We already possessed the correct synchronization corridors.
+
+The missing capability was exposing those corridors through explicit refresh actions.
+
+Every implementation decision today followed that principle.
+
+Work Completed
+1.
+
+Validated Parent Refresh Corridor
+
+Yesterday's implementation remained stable.
+
+No regressions discovered.
+
+Parent initialization continues to avoid starvation.
+
+2.
+
+Experiment
+
+CompetitionCard
+
+Focus
+
+↓
+
+Effect
+
+Purpose
+
+Determine whether continuous observation could replace focus observation.
+
+Outcome
+
+FAILED
+
+Reason
+
+Coach publication still failed while remaining on Compete.
+
+Rollback immediately.
+
+No production code retained.
+
+Future engineers should not repeat this experiment.
+
+3.
+
+Repository Ownership Investigation
+
+Question
+
+Who owns remote publication awareness?
+
+We separated the architecture into:
+
+Parent Initialization
+
+Consumer Observation
+
+Publication
+
+Rendering
+
+Eventual Consistency
+
+Remote Awareness
+
+Conclusion
+
+Remote Awareness is an implementation service.
+
+Not an architectural owner.
+
+This prevented unnecessary constitutional expansion.
+
+4.
+
+Parent Pull-To-Refresh
+
+Repository evidence demonstrated:
+
+Parent already owned:
+
+refreshParentWriterSessionSnapshot()
+
+↓
+
+loadCompetitions()
+
+Rather than creating another synchronization corridor we exposed this corridor through Pull-To-Refresh.
+
+Implementation remained ownership preserving.
+
+5.
+
+QA16
+
+Unexpected Coach failure.
+
+Coach Pull-To-Refresh failed to discover new competitions.
 
 Observed:
 
-* topology replay uses strict `>`
-* aggregate replay uses `>=`
+Competition absent.
 
-This creates deterministic divergence windows under equal timestamp conditions.
+Placeholder match.
 
----
+Editor reported canonical topology unavailable.
 
-## Projection Invalidation Root Cause
+This immediately shifted investigation toward Coach refresh behavior.
 
-Grounded finding:
-`overlayCompetitionAggregateSignals`
-peeked topology state for `competitionCount`,
-BUT:
-`useSignals`
-did NOT subscribe to topology invalidation (`competitionVersion`).
+6.
 
-This caused:
+Coach Refresh Investigation
 
-* Compete topology updates appearing before Summary convergence
-* stale Summary counts
-* delayed overlay recompute
+Repository comparison showed:
 
----
+Coach Focus
 
-# Runtime Governance Work Completed
+executed
 
-Created architecture governance suite:
+refreshCoachWriterSessionsAndReconcileStores()
 
-* `docs/architecture/hydration-orchestration-v1.md`
-* `docs/architecture/runtime-dependency-maps-v1.md`
-* `docs/architecture/recovery-systems-v1.md`
-* `docs/architecture/invalidation-cache-systems-v1.md`
-* `docs/architecture/sequence-diagrams-v1.md`
-* `docs/architecture/competition/competition-runtime-governance-v1.md`
-* `docs/architecture/competition/competition-runtime-invariants-v1.md`
-* `docs/architecture/competition/competition-stabilization-roadmap-v1.md`
+↓
 
-Governance now includes:
+Topology reconciliation
 
-* runtime planes P1–P6
-* ownership doctrine
-* replay doctrine
-* invalidation doctrine
-* stabilization sequencing
-* recovery governance
-* AI mutation safety zones
-* bounded Codex/Cursor governance
+↓
 
----
+loadCompetitions()
 
-# Runtime Stabilization Patch Applied
+Coach Pull-To-Refresh
 
-Commit:
-`eddc0e7`
-`Stabilize coach Summary topology overlay recompute timing`
+executed only
 
-Patch:
+loadCompetitions()
 
-* Added `competitionVersion` subscription inside `useSignals`
-* Added coach-gated topology invalidation recompute dependency
-* Preserved:
+These behaviors were not equivalent.
 
-  * replay semantics
-  * hydration ordering
-  * store ownership
-  * invalidation ownership
-  * persistence boundaries
+7.
 
-Scope:
-Read-only projection invalidation alignment only.
+Coach Pull-To-Refresh
 
----
+Implementation
 
-# QA Results
+Rather than importing reconciliation directly we reused the certified authority refresh corridor.
 
-## PASS
+Implementation
 
-* Summary no longer exhibited obvious topology recompute lag
-* Athlete fast switching stable
-* Summary/Compete counts stable during navigation
-* No replay bleed observed
-* No duplicate competitions observed
-* No hydration flicker observed
+refreshActiveAthleteAuthority()
 
-## REMAINING ISSUE
+↓
 
-Coach aggregate remains stale:
+loadCompetitions()
 
-* Summary shows `30-12`
-* Historical topology inspection indicates `30-13`
+This preserved ownership boundaries.
 
-Important:
-This is NOT the same issue as projection invalidation timing.
+No Gate B violations.
 
-Likely remaining runtime class:
+Minimal blast radius.
 
-* aggregate publication staleness
-* aggregate replay acceptance
-* parent aggregate rebuild omission
-* equal timestamp aggregate replay behavior
+QA Summary
+QA17
 
-Projection convergence appears improved.
-Aggregate correctness remains unresolved.
+Three match competition.
 
----
+Validated:
 
-# Parent App State
+Parent creation.
 
-Important runtime event:
-Parent app was deleted/reinstalled during QA.
+Coach discovery.
 
-Effects:
+Coach transcription.
 
-* P1 canonical local stores lost on parent device
-* Parent app relinked Luca only
-* Mikey blocked by ghost athlete detection
-* Coach app retained:
+Coach save.
 
-  * topology artifacts
-  * aggregate artifacts
-  * overlays
-  * shared competition shells
+Parent hydration.
 
-Major discovery:
-Coach mirrors already function as a bounded survivability substrate.
+PASS
 
-Recovery orchestration does NOT yet exist.
+QA18
 
----
+Six match competition.
 
-# Latest Git Status
+Validated:
 
-```text
-## rollback-pre-lineage-regression
- M app/(tabs)/compete.tsx
- M app/(tabs)/profile/dev-settings.tsx
- M src/storage/coachWeeklySyncCacheStore.ts
-?? debug-logs/inv8/
-?? scripts/__pycache__/
-?? src/domain/competition/tests/inv8ParentPublicationCorridor.test.ts
-```
+Topology.
 
----
+Synchronization.
 
-# Latest Commits
+Persistence.
 
-```text
-7cc9715 (HEAD -> rollback-pre-lineage-regression) Document question-driven runtime investigation and QA findings
-6f9ad61 Establish DOCOPS v2 engineering documentation workflow
-cf3bfdc Strengthen engineering doctrine and certification workflow
-a90f3c8 Establish architecture certification knowledge base
-a904db4 Automate documentation maintenance and founder knowledge workflow
-```
+Hydration.
 
----
+PASS
 
-# Recently Changed Files
+QA19
 
-```text
-docs/dev-handoff.md
-docs/engineering-checkpoint.md
-docs/engineering-parking-lot.md
-docs/master-prompt-daily-restart.md
-docs/master-prompt-developer.md
-scripts/write_engineering_checkpoint.py
-```
+Two match competition.
 
----
+Long transcription.
 
-# Known Runtime Risks
+Validated:
 
-* aggregate replay asymmetry
-* equal timestamp divergence
-* stale aggregate overlays
-* hydration ordering ambiguity
-* refresh-dependent convergence
-* incomplete recovery orchestration
-* parent deletion non-recoverability
-* aggregate publication correctness
+Read More.
 
----
+Persistence after force close.
 
-# Recommended Next Steps
+Athlete switching.
 
-## Phase 1 — Replay Governance Investigation
+Parent hydration.
 
-Focus:
-Why aggregate artifacts remain stale while topology/history appears newer.
+Coach hydration.
 
-Priority targets:
+PASS
 
-1. aggregate artifact publication path
-2. aggregate builder completeness
-3. aggregate replay acceptance behavior
-4. equal timestamp handling
-5. parent mutation → aggregate rebuild chain
-6. aggregate overwrite ordering
-7. reconcile timing
+Certified Engineering Floor
 
-DO NOT:
+Commit
 
-* rewrite hydration
-* widen ownership
-* add new stores
-* introduce speculative recovery systems
-* mutate replay semantics broadly
+536c1e1
 
-Continue operating inside:
+Tag
 
-* runtime governance doctrine
-* invariant doctrine
-* stabilization roadmap sequencing
+parent-coach-refresh-floor-v1
 
----
+Evidence
 
-# Operational Notes
+QA17
 
-Notion operationalization started:
+QA18
 
-* runtime cognition layer
-* proof-of-work engineering case study
-* architecture governance capture
-* future portfolio narrative
-* AI-assisted engineering governance
+QA19
 
-Current strategic transition:
-Reactive debugging → governed distributed runtime engineering.
+Rollback point certified.
+
+Important Engineering Decisions
+We intentionally stopped.
+
+Once QA19 passed we deliberately ended implementation.
+
+Reason
+
+Evidence became stronger than additional engineering.
+
+Highest ROI shifted toward Release Candidate hardening.
+
+No further architectural work
+
+Unless new production evidence appears.
+
+The repository currently supports the existing synchronization model.
+
+Do not redesign architecture because it "might" improve.
+
+Evidence first.
+
+Engineering OS Improvements
+
+Today's process is now considered preferred workflow.
+
+Repository Investigation
+
+↓
+
+Small Slice
+
+↓
+
+QA
+
+↓
+
+Commit
+
+↓
+
+Tag
+
+↓
+
+Continue
+
+Avoid returning to:
+
+Investigation
+
+↓
+
+Large implementation
+
+↓
+
+Hope
+
+Current Repository State
+
+Production Code
+
+Clean.
+
+Certified.
+
+Documentation
+
+Pending manual update.
+
+Architecture drafts remain intentionally unreviewed.
+
+They represent engineering knowledge, not temporary artifacts.
+
+Generated files removed.
+
+Tomorrow's Priority
+Release Candidate Hardening
+
+Focus
+
+UI polish.
+
+Loading polish.
+
+Refresh affordances.
+
+Interaction improvements.
+
+No architectural changes.
+
+TestFlight
+
+Highest priority after UI polish.
+
+Need production validation.
+
+Historically several synchronization problems appeared only in TestFlight.
+
+We should move into external validation earlier this cycle.
+
+DOCOPS
+
+Still outstanding.
+
+Python serializer remains incorrect.
+
+Current operating model:
+
+GPT
+
+↓
+
+Manual copy
+
+↓
+
+Repository
+
+Long-term objective remains:
+
+GPT reasons.
+
+Python serializes.
+
+Python verifies.
+
+Nothing else.
+
+Open Risks
+
+Very Low
+
+Refresh corridor regression introduced by future UI work.
+
+Mitigation
+
+Rollback to:
+
+parent-coach-refresh-floor-v1
+
+Medium
+
+DOCOPS serializer still writes incorrect checkpoint content.
+
+No production impact.
+
+Documentation only.
+
+
+# ENGINEERING CHECKPOINT — 2026-07-15 (DRAFT)
+
+Status: COMPLETE
+
+Branch:
+rollback-pre-lineage-regression
+
+Primary Investigation:
+INV8 — Parent Runtime Publication Corridor
+
+Session Classification:
+Architecture Completion → Governance Completion → Production Engineering Authorization
+
+Executive Summary
+
+Today marks the formal conclusion of the architectural investigation phase for INV8.
+
+Rather than continuing runtime archaeology, today's work completed the missing constitutional and governance layers that had prevented production engineering from beginning.
+
+The investigation now possesses:
+
+constitutional ownership boundaries
+consumer observation law
+governance review procedure
+engineering change proposal
+production authorization
+production design
+implementation proof
+
+Engineering is now authorized to begin production implementation under frozen constitutional boundaries.
+
+Major Milestones Completed
+1. Parent Initialization Ownership Contract v1
+
+Status:
+
+COMPLETE
+
+Established the missing constitutional definition for:
+
+Parent Initialization ownership
+INIT_COMPLETE concept
+ownership transitions
+publication relationship
+hydration relationship
+rendering relationship
+eventual consistency
+
+Result:
+
+Parent Initialization now has a formal ownership model.
+
+2. Consumer Observation Contract v1
+
+Status:
+
+COMPLETE
+
+Certified the missing observation model.
+
+Established:
+
+Observation Delivery
+
+≠
+
+Reaction Authorization
+
+≠
+
+Ownership
+
+Illegal:
+
+Observation causing Init-Affecting Reactions.
+
+Legal:
+
+Observation-driven enrichment.
+
+3. Governance Phase
+
+Status:
+
+COMPLETE
+
+Created:
+
+Ownership-Preserving Change Review Procedure
+INV8 Proposed Change Statement
+INV8 Ownership-Preserving Correction Authorization
+
+Governance Freeze declared.
+
+No further governance documents are authorized unless implementation uncovers contradictory repository evidence.
+
+4. Production Design
+
+Status:
+
+COMPLETE
+
+Created:
+
+INV8 Production Design v1
+
+The design intentionally preserves:
+
+Publication ownership
+Parent Initialization ownership
+Observation Delivery
+Hydration
+Rendering
+
+Only the illegal Observation → Init-Affecting Reaction is changed.
+
+5. Production Implementation Review
+
+Repository review demonstrated:
+
+Only one runtime path exists:
+
+coachSyncHydrationVersion
+
+↓
+
+useFocusEffect dependency
+
+↓
+
+cleanup
+
+↓
+
+cancelled
+
+↓
+
+RETURN_BEFORE_LOAD_COMPETITIONS
+
+Every remaining hydration consumer was classified.
+
+No additional illegal Parent Initialization reaction path exists.
+
+The proposed production correction is therefore sufficient.
+
+Engineering Conclusions
+
+The investigation has transitioned from:
+
+Runtime debugging
+
+to
+
+Constitutional architecture
+
+to
+
+Governance
+
+to
+
+Production engineering
+
+Architecture discovery is complete.
+
+Governance is complete.
+
+Production engineering is authorized.
+
+Certified Discoveries
+
+The repository now certifies:
+
+✓ Parent Initialization Ownership
+
+✓ Consumer Observation
+
+✓ Governance Review
+
+✓ Production Authorization
+
+✓ Production Design
+
+✓ Single illegal Init-Affecting Reaction path
+
+✓ Smallest ownership-preserving correction (C-D6)
+
+✓ Epoch-independent correction hypothesis
+
+Active Investigation Status
+
+INV8 remains ACTIVE
+
+However the nature of the investigation has changed.
+
+Open questions are no longer architectural.
+
+Remaining work is purely engineering:
+
+production implementation
+runtime validation
+certification
+Runtime Validation Plan
+
+Existing probes remain sufficient.
+
+No additional runtime probes authorized.
+
+Validation will continue using:
+
+COMPETE_FOCUS_DEP_TRACE
+COMPETE_INIT_BRIDGE
+COMP_CACHE_INVALIDATION
+
+along with existing PV validation package.
+
+Protected Systems
+
+Remain frozen:
+
+Identity
+Overlay Merge
+Athlete Authority
+Publication Ownership
+Parent Initialization Ownership
+Consumer Observation
+Competition Rendering Pipeline
+Canonical Ownership
+
+No protected system reopened today.
+
+What We Learned Today
+
+Today's most important realization was that INV8 is no longer an architecture problem.
+
+The remaining work is proving that the approved behavioral correction removes the illegal Init-Affecting Reaction without violating any certified ownership boundary.
+
+This is the first day where production implementation became the highest ROI activity.
+
+Tomorrow's Highest ROI
+Review repository status.
+Confirm Governance Freeze remains intact.
+Implement the approved C-D6 production correction.
+Run the existing runtime validation package.
+Compare runtime behavior against the certified starvation sequence.
+If validation succeeds, begin Production Certification.
+Python Writer Inputs
+
+Engineering Checkpoint Status
+
+COMPLETE
+
+Primary Investigation
+
+INV8 Parent Runtime Publication Corridor
+
+Certification Delta
+
+Parent Initialization Ownership Contract completed
+Consumer Observation Contract completed
+Governance completed
+Production Authorization completed
+Production Design completed
+Production implementation approved for execution
+
+Next Investigation
+
+Production implementation and runtime validation.
+
+DEV HANDOFF — 2026-07-15 (DRAFT)
+Runtime Focus
+
+INV8 entered the production engineering phase.
+
+The repository now possesses complete constitutional and governance coverage for the Parent Runtime Publication Corridor.
+
+The remaining work is implementation and validation.
+
+Major Engineering Accomplishments
+Constitutional Architecture Completed
+
+Completed:
+
+Parent Initialization Ownership Contract v1
+Consumer Observation Contract v1
+
+These documents formally define ownership boundaries that previously existed only as inferred architecture.
+
+Governance Completed
+
+Completed:
+
+Ownership-Preserving Change Review Procedure
+INV8 Proposed Change Statement
+INV8 Ownership-Preserving Correction Authorization
+
+Governance Freeze is now active.
+
+No additional governance work should be created unless implementation contradicts certified architecture.
+
+Production Design Completed
+
+The smallest constitutionally valid correction was identified.
+
+Behavioral goal:
+
+Observation Delivery must never produce an Init-Affecting Reaction during Parent Initialization.
+
+Publication remains unchanged.
+
+Initialization remains unchanged.
+
+Only Reaction Authorization changes.
+
+Engineering Proof Completed
+
+A complete audit of every coachSyncHydrationVersion consumer proved:
+
+exactly one illegal Init-Affecting Reaction exists
+all remaining consumers are Observation-only or constitutionally legal reactions
+no second starvation mechanism was found
+
+This is the strongest engineering evidence produced during the INV8 investigation.
+
+Repository State
+
+No constitutional documents should change going forward.
+
+Engineering work is now constrained to:
+
+Production implementation
+Runtime validation
+Certification
+Tomorrow's Starting Point
+
+Do not reopen architecture.
+
+Do not reopen governance.
+
+Begin with the approved Production Implementation plan.
+
+Implement the smallest C-D6 correction while preserving every certified ownership boundary.
+
+Validate using existing probes.
+
+Compare runtime against the certified starvation sequence.
+
+If validation succeeds, prepare Production Certification.
+
+I feel much better about these than yesterday's. These actually capture the day's engineering progression instead of summarizing isolated artifacts.
+
+Do not run Python yet. Let's first run git status -sb and git log --oneline --decorate -5, then review these drafts together. Once you're satisfied, we'll have Python write them and perform the verification pass before committing.
+
+# DEV HANDOFF — 2026-07-14 22:11
+
+Runtime Focus
+
+Transition the investigation from runtime debugging to architecture certification.
+
+The investigation is no longer centered on callbacks, hooks, or replay timing.
+
+Instead, the investigation is centered on certifying ownership contracts across the Parent Runtime.
+
+Success is no longer defined as "making competitions appear."
+
+Success is defined as producing a repository-backed ownership model in which every runtime responsibility has exactly one architectural owner.
+
+Major realization
+
+Yesterday established a new engineering doctrine:
+
+Runtime execution is temporary.
+
+Ownership is permanent.
+
+Execution traces explain what happened.
+
+Ownership contracts explain what is allowed to happen.
+
+Future investigations should therefore certify ownership before proposing runtime modifications.
+
+Certified systems that remain closed
+
+Identity
+
+Canonical Athlete Authority
+
+Overlay Merge
+
+Artifact Persistence
+
+Competition Rendering Pipeline
+
+Topology Ownership
+
+Coach Runtime
+
+None of these should be reopened without contradictory evidence.
+
+Active Investigation
+
+Parent Runtime Publication Corridor
+
+Specifically:
+
+Who owns the boundary between
+
+Parent Refresh
+
+↓
+
+Publication
+
+↓
+
+Hydration Bus
+
+↓
+
+Competition Initialization
+
+and what architecture contract governs that ownership?
+
+Primary Goal for 7/15
+
+Produce the missing Parent Initialization Ownership Contract.
+
+Not another runtime probe.
+
+Not another callback investigation.
+
+A formal ownership contract that clearly defines:
+
+initialization owner
+publication owner
+hydration owner
+rendering owner
+eventual consistency owner
+
+Once that contract exists, determine whether the publication timing is violating it or whether the contract itself needs to be refined.
 
 # DEV HANDOFF — 2026-07-13
 

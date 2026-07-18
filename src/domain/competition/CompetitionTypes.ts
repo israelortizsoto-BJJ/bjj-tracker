@@ -53,7 +53,7 @@ export type KidCreateCompetitionInput = {
   resolvedSharedAthleteId: string | undefined;
   tournamentName: string;
   eventDate: string;
-  resultDraft: KidCompetitionResult;
+  resultDraft: KidCompetitionResult | undefined;
   eventStatusDraft: KidCompetitionEventStatus | undefined;
   formatDraft: KidCompetitionFormat | undefined;
   promoterDraft: string;
@@ -70,7 +70,7 @@ export type KidUpdateCompetitionInput = {
   resolvedSharedAthleteId: string | undefined;
   tournamentName: string;
   eventDate: string;
-  resultDraft: KidCompetitionResult;
+  resultDraft: KidCompetitionResult | undefined;
   eventStatusDraft: KidCompetitionEventStatus | undefined;
   formatDraft: KidCompetitionFormat | undefined;
   promoterDraft: string;

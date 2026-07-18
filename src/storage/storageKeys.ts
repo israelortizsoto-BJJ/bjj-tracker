@@ -22,6 +22,7 @@ export const StorageKeys = {
   kidWeeklyFocusEntries: "mm:v1:kidWeeklyFocusEntries",
   kidCompetitionEntries: "mm:v1:kidCompetitionEntries",
   kidStandingGuidanceByKidId: "mm:v1:kidStandingGuidanceByKidId",
+  kidCurrentStateAssessmentByKidId: "mm:v1:kidCurrentStateAssessmentByKidId",
   /** Family-facing Competition lane only: last explicit child choice on this device. */
   familyCompetitionSelectedKidId: "mm:v1:familyCompetitionSelectedKidId",
 

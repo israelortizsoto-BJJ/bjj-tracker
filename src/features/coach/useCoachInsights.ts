@@ -176,185 +176,213 @@ function sessionsForAthlete(allSessions: any[], athlete: Kid): any[] {
   });
 }
 
+/**
+ * Coach Dashboard insight load corridor.
+ *
+ * Focus and Pull-to-Refresh share this path (same pattern as Kids roster
+ * `loadKids` / Compete `runParentCompeteRefresh`): writer-session reconcile,
+ * then local insight/team-focus projection. No new sync architecture.
+ */
 export function useCoachInsights(): {
   loading: boolean;
+  refreshing: boolean;
   insights: CoachInsightRow[];
   teamFocus: CoachTeamFocusSnapshot;
+  onRefresh: () => void;
 } {
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [insights, setInsights] = useState<CoachInsightRow[]>([]);
   const [teamFocus, setTeamFocus] = useState<CoachTeamFocusSnapshot>({ athleteRows: [] });
 
+  const loadInsights = useCallback(async (options?: { isCancelled?: () => boolean }) => {
+    const isCancelled = options?.isCancelled ?? (() => false);
+
+    try {
+      const { successfulSnapshots } = await refreshCoachWriterSessionsAndReconcileStores();
+      if (isCancelled()) return;
+
+      const sessionsInWriterLinkTraversalOrder = successfulSnapshots.flatMap((snap) =>
+        snap.session ? [snap.session] : [],
+      );
+      const [kidsById, rawSessions] = await Promise.all([
+        getKidsById(),
+        AsyncStorage.getItem(StorageKeys.sessions),
+      ]);
+      if (isCancelled()) return;
+
+      const allSessions = parseSessions(rawSessions);
+      const referenceYMD = todayYMD();
+      const weekStart = startOfWeekMondayYMD(referenceYMD);
+      const normalizedSessions = normalizeSessionsLikeTraining(
+        allSessions as Session[],
+      );
+      const operatingAthleteIds = new Set(
+        Object.values(kidsById)
+          .map((kid) => kid.sharedAthleteId?.trim() ?? "")
+          .filter(Boolean),
+      );
+      await Promise.all(
+        [...operatingAthleteIds].map((id) => getCoachTrainingProof(id)),
+      );
+      if (isCancelled()) return;
+
+      const nextInsights: CoachInsightRow[] = [];
+      const nextTeamFocusRows: CoachTeamFocusAthleteRow[] = [];
+
+      for (const athlete of Object.values(kidsById)) {
+        const athleteId = athlete.id.trim();
+        if (!athleteId) continue;
+        if (kidExcludedFromCoachActiveRoster(athlete)) continue;
+
+        const [competitions, weeklyFocus] = await Promise.all([
+          getKidCompetitionEntriesWithMatchDetailForKid(athleteId),
+          getLatestKidWeeklyFocusForWeek(athleteId, weekStart),
+        ]);
+        const operatingAthleteId = athlete.sharedAthleteId?.trim() ?? "";
+        const scopedSessions = filterSessionsLikeTrainingRefresh(
+          normalizedSessions,
+          {
+            deviceRole: "coach",
+            athleteId: operatingAthleteId,
+            linkedKidId: athleteId,
+          },
+        );
+        const sessionsFiltered = sessionsForAthlete(allSessions, athlete);
+        const recentCompetitionCount = competitions.length;
+        const sessionsThisWeek = resolveOperationalSessionsThisWeek(
+          scopedSessions,
+          referenceYMD,
+          operatingAthleteId,
+        );
+        const appliedInSparring: CoachAppliedInSparring =
+          weeklyFocus?.sparringApplication ?? "no_data";
+        const derivedOutcome = deriveOutcomeFromSparring(appliedInSparring);
+        const outcome = insightOutcomeFromDerivedOutcome(derivedOutcome);
+
+        console.log("[INSIGHT INPUT]", {
+          athleteId,
+          appliedInSparring,
+          derivedOutcome,
+          outcome,
+          recentCompetitionCount,
+          sessionsThisWeek,
+        });
+
+        const insight = computeCoachInsight({
+          athleteId,
+          sessions: sessionsFiltered,
+          sessionsThisWeek,
+          competitions,
+          weeklyFocus,
+          outcome,
+        });
+
+        if (athleteId === "kid_1777331810730") {
+          console.log("[INSIGHT OUTPUT - MIKEY]", {
+            athleteId,
+            attentionLevel: insight.attentionLevel,
+            transferScore: insight.transferScore,
+            reason: insight.reason,
+          });
+        }
+
+        let parentFeedback: SyncedWeeklyParentFeedback | null | undefined;
+        if (operatingAthleteId) {
+          parentFeedback = pickPublishedWeeklyParentFeedbackForSharedAthlete(
+            sessionsInWriterLinkTraversalOrder,
+            operatingAthleteId,
+          );
+          if (__DEV__) {
+            const feedbackStatus = parentFeedback?.acknowledgedAt
+              ? "acknowledged"
+              : parentFeedback?.viewedAt
+                ? "viewed"
+                : "not_viewed";
+            console.log("[COACH_ACK_RENDER]", {
+              athleteId,
+              feedbackStatus,
+              acknowledgedAt: parentFeedback?.acknowledgedAt ?? null,
+              viewedAt: parentFeedback?.viewedAt ?? null,
+            });
+          }
+        }
+
+        nextInsights.push({
+          athlete,
+          insight: {
+            ...insight,
+            appliedInSparring,
+            derivedOutcome,
+          },
+          ...(operatingAthleteId ? { parentFeedback: parentFeedback ?? null } : {}),
+        });
+
+        const tf = deriveCompetitionTrainingSkillFocus({
+          competitionsWithMatches: competitions,
+          sessions: sessionsFiltered as Session[],
+        });
+        const { bucketOutcomeTrends } = deriveCompetitionBucketHistorySignals(competitions);
+        const placementTrend = tf?.placementTrend ?? null;
+        const coachDecision = peekCoachTrainingFocusDecision(athleteId);
+        let focusBucket: TrainingSkillBucket | null = null;
+        let usedCoachFocusOverride = false;
+        if (coachDecision && isCoachTrainingFocusDecisionFresh(coachDecision)) {
+          const fromCoachText = principalTrainingSkillBucketFromCoachFocusText(
+            coachDecision.finalCoachFocus,
+          );
+          if (fromCoachText) {
+            focusBucket = fromCoachText;
+            usedCoachFocusOverride = true;
+          }
+        }
+        if (!focusBucket) {
+          focusBucket = principalTrainingSkillBucketFromDerivedFocus(tf);
+        }
+
+        nextTeamFocusRows.push({
+          athlete,
+          focusBucket,
+          placementTrend,
+          bucketOutcomeTrends,
+          usedCoachFocusOverride,
+        });
+      }
+      if (isCancelled()) return;
+      setInsights(nextInsights);
+      setTeamFocus({ athleteRows: nextTeamFocusRows });
+    } catch {
+      if (isCancelled()) return;
+      setInsights([]);
+      setTeamFocus({ athleteRows: [] });
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
-      let mounted = true;
-
-      async function load() {
-        setLoading(true);
-
-        try {
-          const { successfulSnapshots } = await refreshCoachWriterSessionsAndReconcileStores();
-          const sessionsInWriterLinkTraversalOrder = successfulSnapshots.flatMap((snap) =>
-            snap.session ? [snap.session] : [],
-          );
-          const [kidsById, rawSessions] = await Promise.all([
-            getKidsById(),
-            AsyncStorage.getItem(StorageKeys.sessions),
-          ]);
-          const allSessions = parseSessions(rawSessions);
-          const referenceYMD = todayYMD();
-          const weekStart = startOfWeekMondayYMD(referenceYMD);
-          const normalizedSessions = normalizeSessionsLikeTraining(
-            allSessions as Session[],
-          );
-          const operatingAthleteIds = new Set(
-            Object.values(kidsById)
-              .map((kid) => kid.sharedAthleteId?.trim() ?? "")
-              .filter(Boolean),
-          );
-          await Promise.all(
-            [...operatingAthleteIds].map((id) => getCoachTrainingProof(id)),
-          );
-          const nextInsights: CoachInsightRow[] = [];
-          const nextTeamFocusRows: CoachTeamFocusAthleteRow[] = [];
-
-          for (const athlete of Object.values(kidsById)) {
-            const athleteId = athlete.id.trim();
-            if (!athleteId) continue;
-            if (kidExcludedFromCoachActiveRoster(athlete)) continue;
-
-            const [competitions, weeklyFocus] = await Promise.all([
-              getKidCompetitionEntriesWithMatchDetailForKid(athleteId),
-              getLatestKidWeeklyFocusForWeek(athleteId, weekStart),
-            ]);
-            const operatingAthleteId = athlete.sharedAthleteId?.trim() ?? "";
-            const scopedSessions = filterSessionsLikeTrainingRefresh(
-              normalizedSessions,
-              {
-                deviceRole: "coach",
-                athleteId: operatingAthleteId,
-                linkedKidId: athleteId,
-              },
-            );
-            const sessionsFiltered = sessionsForAthlete(allSessions, athlete);
-            const recentCompetitionCount = competitions.length;
-            const sessionsThisWeek = resolveOperationalSessionsThisWeek(
-              scopedSessions,
-              referenceYMD,
-              operatingAthleteId,
-            );
-            const appliedInSparring: CoachAppliedInSparring =
-              weeklyFocus?.sparringApplication ?? "no_data";
-            const derivedOutcome = deriveOutcomeFromSparring(appliedInSparring);
-            const outcome = insightOutcomeFromDerivedOutcome(derivedOutcome);
-
-            console.log("[INSIGHT INPUT]", {
-              athleteId,
-              appliedInSparring,
-              derivedOutcome,
-              outcome,
-              recentCompetitionCount,
-              sessionsThisWeek,
-            });
-
-            const insight = computeCoachInsight({
-              athleteId,
-              sessions: sessionsFiltered,
-              sessionsThisWeek,
-              competitions,
-              weeklyFocus,
-              outcome,
-            });
-
-            if (athleteId === "kid_1777331810730") {
-              console.log("[INSIGHT OUTPUT - MIKEY]", {
-                athleteId,
-                attentionLevel: insight.attentionLevel,
-                transferScore: insight.transferScore,
-                reason: insight.reason,
-              });
-            }
-
-            let parentFeedback: SyncedWeeklyParentFeedback | null | undefined;
-            if (operatingAthleteId) {
-              parentFeedback = pickPublishedWeeklyParentFeedbackForSharedAthlete(
-                sessionsInWriterLinkTraversalOrder,
-                operatingAthleteId,
-              );
-              if (__DEV__) {
-                const feedbackStatus = parentFeedback?.acknowledgedAt
-                  ? "acknowledged"
-                  : parentFeedback?.viewedAt
-                    ? "viewed"
-                    : "not_viewed";
-                console.log("[COACH_ACK_RENDER]", {
-                  athleteId,
-                  feedbackStatus,
-                  acknowledgedAt: parentFeedback?.acknowledgedAt ?? null,
-                  viewedAt: parentFeedback?.viewedAt ?? null,
-                });
-              }
-            }
-
-            nextInsights.push({
-              athlete,
-              insight: {
-                ...insight,
-                appliedInSparring,
-                derivedOutcome,
-              },
-              ...(operatingAthleteId ? { parentFeedback: parentFeedback ?? null } : {}),
-            });
-
-            const tf = deriveCompetitionTrainingSkillFocus({
-              competitionsWithMatches: competitions,
-              sessions: sessionsFiltered as Session[],
-            });
-            const { bucketOutcomeTrends } = deriveCompetitionBucketHistorySignals(competitions);
-            const placementTrend = tf?.placementTrend ?? null;
-            const coachDecision = peekCoachTrainingFocusDecision(athleteId);
-            let focusBucket: TrainingSkillBucket | null = null;
-            let usedCoachFocusOverride = false;
-            if (coachDecision && isCoachTrainingFocusDecisionFresh(coachDecision)) {
-              const fromCoachText = principalTrainingSkillBucketFromCoachFocusText(
-                coachDecision.finalCoachFocus,
-              );
-              if (fromCoachText) {
-                focusBucket = fromCoachText;
-                usedCoachFocusOverride = true;
-              }
-            }
-            if (!focusBucket) {
-              focusBucket = principalTrainingSkillBucketFromDerivedFocus(tf);
-            }
-
-            nextTeamFocusRows.push({
-              athlete,
-              focusBucket,
-              placementTrend,
-              bucketOutcomeTrends,
-              usedCoachFocusOverride,
-            });
-          }
-          if (mounted) setInsights(nextInsights);
-          if (mounted) setTeamFocus({ athleteRows: nextTeamFocusRows });
-        } catch {
-          if (mounted) {
-            setInsights([]);
-            setTeamFocus({ athleteRows: [] });
-          }
-        } finally {
-          if (mounted) setLoading(false);
-        }
-      }
-
-      void load();
-
+      let cancelled = false;
+      setLoading(true);
+      void loadInsights({ isCancelled: () => cancelled }).finally(() => {
+        if (!cancelled) setLoading(false);
+      });
       return () => {
-        mounted = false;
+        cancelled = true;
       };
-    }, []),
+    }, [loadInsights]),
   );
 
-  return { loading, insights, teamFocus };
+  // Same PTR lifecycle as Kids roster `onRosterRefresh` / Compete `onCompeteRefresh`:
+  // dedicated refreshing flag + shared load corridor (no parallel sync path).
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    void (async () => {
+      try {
+        await loadInsights();
+      } finally {
+        setRefreshing(false);
+      }
+    })();
+  }, [loadInsights]);
+
+  return { loading, refreshing, insights, teamFocus, onRefresh };
 }

@@ -1,3 +1,8 @@
+import type {
+  CompetitionLaunchSurface,
+  CompetitionReturnClass,
+} from "./competitionNavigationContract";
+
 export type SaveLifecycleTracePoint =
   | "save_handler_enter"
   | "mutation_begin"
@@ -18,6 +23,9 @@ export type SaveLifecycleTraceContext = {
   sharedCompetitionId?: string | null;
   saving?: boolean;
   navOp?: string;
+  launchSurface?: CompetitionLaunchSurface | null;
+  returnClass?: CompetitionReturnClass | null;
+  returnScopeId?: string | null;
   [key: string]: unknown;
 };
 

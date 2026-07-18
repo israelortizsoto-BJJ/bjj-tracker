@@ -1,9 +1,9 @@
 /**
- * Phase B — Production Timeline V2.
+ * Phase B - Production Timeline V2.
  *
- * Spreadsheet-native timeline: STATUS is the only editable source.
+ * Spreadsheet-native timeline: Master Schedule is the only editable source.
  * Setup writes formulas, conditional formatting, and row groups once.
- * Editing STATUS H/I recalculates instantly — no Apps Script on edit.
+ * Editing Master Schedule dates/includes recalculates instantly - no Apps Script on edit.
  */
 
 /** Short tokens emitted in week cells; drive conditional formatting. */
@@ -40,89 +40,65 @@ const TIMELINE_V2_DEPT_HEADER_FONT = '#000000';
 const TIMELINE_V2_ALT_ROW_FILL = '#F9F9F9';
 
 // ---------------------------------------------------------------------------
-// STATUS scan — structural layout only (no bar rendering)
-// ---------------------------------------------------------------------------
-
-/**
- * Walk STATUS rows and build department blocks mirroring sheet order.
- * @return {{departments: Array<{name: string, tasks: Array<{statusRow: number, taskName: string}>}>}}
- */
-function scanStatusTimelineStructure_(spreadsheet) {
-  const sheet = spreadsheet.getSheetByName(SHEET_STATUS);
-  const departments = [];
-  if (!sheet || sheet.getLastRow() < STATUS_FIRST_DATA_ROW) {
-    return { departments: departments };
-  }
-
-  const lastRow = sheet.getLastRow();
-  const numRows = lastRow - STATUS_FIRST_DATA_ROW + 1;
-  const values = sheet.getRange(STATUS_FIRST_DATA_ROW, 1, numRows, STATUS_COLUMN_COUNT).getValues();
-
-  let currentBlock = null;
-
-  values.forEach(function (row, index) {
-    const statusRow = index + STATUS_FIRST_DATA_ROW;
-
-    if (isStatusInstructionRow_(row)) {
-      return;
-    }
-
-    if (isStatusDepartmentHeaderRow_(row)) {
-      if (currentBlock) {
-        departments.push(currentBlock);
-      }
-      currentBlock = {
-        name: normalizeDepartmentLabel_(row[STATUS_COL_IUS_POC - 1]),
-        tasks: [],
-      };
-      return;
-    }
-
-    const taskName = normalizeText(row[STATUS_COL_PROJECT - 1]);
-    if (!taskName) {
-      return;
-    }
-
-    if (!currentBlock) {
-      currentBlock = { name: '', tasks: [] };
-    }
-
-    currentBlock.tasks.push({
-      statusRow: statusRow,
-      taskName: taskName,
-    });
-  });
-
-  if (currentBlock) {
-    departments.push(currentBlock);
-  }
-
-  return { departments: departments };
-}
-
-// ---------------------------------------------------------------------------
-// Formula builders — pure string generation, no runtime rendering
+// Formula builders - pure string generation, no runtime rendering
 // ---------------------------------------------------------------------------
 
 function timelineV2MetaColLetter_() {
   return columnToLetter_(TIMELINE_V2_META_COL);
 }
 
+function quotedSheetName_(sheetName) {
+  return "'" + String(sheetName).replace(/'/g, "''") + "'";
+}
+
+function masterRange_(colIndex) {
+  const col = columnToLetter_(colIndex);
+  return (
+    quotedSheetName_(SHEET_MASTER_SCHEDULE) + '!' +
+    col + MASTER_FIRST_DATA_ROW + ':' + col + MASTER_LAST_SETUP_ROW
+  );
+}
+
+function masterIncludedCondition_() {
+  const includeRange = masterRange_(MASTER_COL_INCLUDE);
+  return '(((' + includeRange + '=TRUE)+(' + includeRange + '=""))>0)';
+}
+
 function timelineV2MinStartFormula_() {
   return (
-    '=MIN(FILTER(' + SHEET_STATUS + '!H' + STATUS_FIRST_DATA_ROW + ':H1000,' +
-    SHEET_STATUS + '!D' + STATUS_FIRST_DATA_ROW + ':D1000<>""))'
+    '=IFERROR(MIN(FILTER(' + masterRange_(MASTER_COL_START_DATE) + ',' +
+    masterRange_(MASTER_COL_PHASE_TASK) + '<>"",' +
+    masterRange_(MASTER_COL_START_DATE) + '<>"",' +
+    masterIncludedCondition_() + ')),"")'
   );
 }
 
 function timelineV2MaxFinishFormula_() {
   return (
-    '=MAX(FILTER(' + SHEET_STATUS + '!I' + STATUS_FIRST_DATA_ROW + ':I1000,' +
-    SHEET_STATUS + '!D' + STATUS_FIRST_DATA_ROW + ':D1000<>""))'
+    '=IFERROR(MAX(FILTER(' + masterRange_(MASTER_COL_FINISH_DATE) + ',' +
+    masterRange_(MASTER_COL_PHASE_TASK) + '<>"",' +
+    masterRange_(MASTER_COL_FINISH_DATE) + '<>"",' +
+    masterIncludedCondition_() + ')),"")'
   );
 }
 
-/** Monday of the week containing the earliest STATUS start date. */
+function timelineV2SourceRowsFormula_() {
+  const sourceLabel = masterRange_(MASTER_COL_PHASE_TASK);
+  const duration = masterRange_(MASTER_COL_DURATION);
+  const start = masterRange_(MASTER_COL_START_DATE);
+  const finish = masterRange_(MASTER_COL_FINISH_DATE);
+  const clientLabel = masterRange_(MASTER_COL_CLIENT_LABEL);
+  return (
+    '=IFERROR(FILTER({' +
+    'IF(LEN(' + clientLabel + '),' + clientLabel + ',' + sourceLabel + '),' +
+    duration + ',' + start + ',' + finish + '},' +
+    sourceLabel + '<>"",' +
+    masterIncludedCondition_() +
+    '),{"","","",""})'
+  );
+}
+
+/** Monday of the week containing the earliest Master Schedule start date. */
 function timelineV2FirstWeekStartFormula_() {
   const meta = '$' + timelineV2MetaColLetter_() + '$1';
   return '=IF(' + meta + '="","",' + meta + '-WEEKDAY(' + meta + ',3))';
@@ -207,7 +183,7 @@ function columnToLetter_(column) {
 }
 
 // ---------------------------------------------------------------------------
-// Conditional formatting — paints category tokens only
+// Conditional formatting - paints category tokens only
 // ---------------------------------------------------------------------------
 
 function timelineV2CategoryStyles_(categories) {
@@ -256,11 +232,21 @@ function applyTimelineV2ConditionalFormatting_(sheet, firstDataRow, lastDataRow)
     );
   });
 
+  rules.push(
+    SpreadsheetApp.newConditionalFormatRule()
+      .whenFormulaSatisfied('=AND($A' + firstDataRow + '<>"",$C' + firstDataRow + '="",$D' + firstDataRow + '="")')
+      .setBackground(TIMELINE_V2_DEPT_HEADER_FILL)
+      .setFontColor(TIMELINE_V2_DEPT_HEADER_FONT)
+      .setBold(true)
+      .setRanges([sheet.getRange(firstDataRow, 1, numRows, INFO_COLUMN_COUNT)])
+      .build()
+  );
+
   sheet.setConditionalFormatRules(rules);
 }
 
 // ---------------------------------------------------------------------------
-// Row groups — structural metadata, created once during setup
+// Row groups - structural metadata, created once during setup
 // ---------------------------------------------------------------------------
 
 function applyTimelineV2RowGroups_(sheet, groups, totalCols) {
@@ -274,13 +260,12 @@ function applyTimelineV2RowGroups_(sheet, groups, totalCols) {
 }
 
 // ---------------------------------------------------------------------------
-// Setup — writes sheet structure; never runs on STATUS edit
+// Setup - writes sheet structure; never runs on Master Schedule edit
 // ---------------------------------------------------------------------------
 
 function setupTimelineV2Production_(spreadsheet) {
   const config = loadConfig(spreadsheet);
   const theme = config.theme;
-  const structure = scanStatusTimelineStructure_(spreadsheet);
 
   let sheet = spreadsheet.getSheetByName(SHEET_TIMELINE);
   if (!sheet) {
@@ -299,12 +284,12 @@ function setupTimelineV2Production_(spreadsheet) {
 
   const totalCols = TIMELINE_V2_META_COL;
 
-  // Hidden meta: earliest start / latest finish from STATUS (drives week columns).
+  // Hidden meta: earliest start / latest finish from Master Schedule (drives week columns).
   sheet.getRange(TIMELINE_V2_MONTH_ROW, TIMELINE_V2_META_COL).setFormula(timelineV2MinStartFormula_());
   sheet.getRange(TIMELINE_V2_MONTH_ROW + 1, TIMELINE_V2_META_COL).setFormula(timelineV2MaxFinishFormula_());
   sheet.hideColumns(TIMELINE_V2_META_COL);
 
-  // Row 1 — month headers (formula-derived from week starts).
+  // Row 1 - month headers (formula-derived from week starts).
   for (let col = TIMELINE_V2_FIRST_WEEK_COL; col <= TIMELINE_V2_LAST_WEEK_COL; col++) {
     sheet.getRange(TIMELINE_V2_MONTH_ROW, col).setFormula(timelineV2MonthLabelFormula_(col));
   }
@@ -319,7 +304,7 @@ function setupTimelineV2Production_(spreadsheet) {
   monthRange.setFontWeight('bold');
   monthRange.setHorizontalAlignment('center');
 
-  // Row 2 — week start dates (Monday anchors); all bar formulas reference this row.
+  // Row 2 - week start dates (Monday anchors); all bar formulas reference this row.
   for (let col = TIMELINE_V2_FIRST_WEEK_COL; col <= TIMELINE_V2_LAST_WEEK_COL; col++) {
     sheet.getRange(TIMELINE_V2_WEEK_ROW, col).setFormula(timelineV2WeekStartFormula_(col));
   }
@@ -336,8 +321,8 @@ function setupTimelineV2Production_(spreadsheet) {
   weekRange.setWrap(true);
   weekRange.setNumberFormat('mmm d');
 
-  // Row 3 — frozen column headers.
-  const headerLabels = ['Department', 'Project', 'Start', 'Finish', 'Category'];
+  // Row 3 - frozen column headers.
+  const headerLabels = ['Phase / Task', 'Duration', 'Start', 'Finish', 'Category'];
   sheet.getRange(TIMELINE_V2_HEADER_ROW, 1, 1, headerLabels.length).setValues([headerLabels]);
   for (let w = 0; w < TIMELINE_V2_MAX_WEEKS; w++) {
     const col = TIMELINE_V2_FIRST_WEEK_COL + w;
@@ -350,59 +335,27 @@ function setupTimelineV2Production_(spreadsheet) {
   headerRange.setHorizontalAlignment('center');
   headerRange.setWrap(true);
 
-  // Data rows — department blocks mirroring STATUS order.
-  let timelineRow = TIMELINE_V2_DATA_START_ROW;
-  let altToggle = false;
-  const rowGroups = [];
+  const lastDataRow = TIMELINE_V2_DATA_START_ROW + TIMELINE_V2_MAX_DATA_ROWS - 1;
+  const dataRows = lastDataRow - TIMELINE_V2_DATA_START_ROW + 1;
 
-  structure.departments.forEach(function (dept) {
-    // Department header row.
-    const deptHeaderRow = timelineRow;
-    sheet.getRange(deptHeaderRow, 1).setValue(dept.name);
-    sheet.getRange(deptHeaderRow, 1, 1, INFO_COLUMN_COUNT)
-      .setBackground(TIMELINE_V2_DEPT_HEADER_FILL)
-      .setFontColor(TIMELINE_V2_DEPT_HEADER_FONT)
-      .setFontWeight('bold');
-    timelineRow += 1;
+  // Data rows - compact live projection from Master Schedule. Add/delete/include changes recalculate natively.
+  sheet.getRange(TIMELINE_V2_DATA_START_ROW, 1).setFormula(timelineV2SourceRowsFormula_());
 
-    const taskStartRow = timelineRow;
-
-    dept.tasks.forEach(function (task) {
-      altToggle = !altToggle;
-      const rowFill = altToggle ? TIMELINE_V2_ALT_ROW_FILL : '#FFFFFF';
-      const sr = task.statusRow;
-      const projectRef = 'B' + timelineRow;
-
-      sheet.getRange(timelineRow, 1).setValue(dept.name);
-      sheet.getRange(timelineRow, 2).setFormula('=' + SHEET_STATUS + '!D' + sr);
-      sheet.getRange(timelineRow, 3).setFormula('=' + SHEET_STATUS + '!H' + sr);
-      sheet.getRange(timelineRow, 4).setFormula('=' + SHEET_STATUS + '!I' + sr);
-      sheet.getRange(timelineRow, 5).setFormula(
-        timelineV2CategoryFormula_(projectRef, config.categories)
-      );
-
-      for (let col = TIMELINE_V2_FIRST_WEEK_COL; col <= TIMELINE_V2_LAST_WEEK_COL; col++) {
-        sheet.getRange(timelineRow, col).setFormula(timelineV2WeekBarFormula_(timelineRow, col));
-      }
-
-      sheet.getRange(timelineRow, 1, 1, INFO_COLUMN_COUNT).setBackground(rowFill);
-      timelineRow += 1;
-    });
-
-    const taskEndRow = timelineRow - 1;
-    if (dept.tasks.length && taskEndRow >= taskStartRow) {
-      rowGroups.push({ start: taskStartRow, end: taskEndRow });
+  for (let row = TIMELINE_V2_DATA_START_ROW; row <= lastDataRow; row++) {
+    sheet.getRange(row, 5).setFormula(
+      timelineV2CategoryFormula_('$A' + row, config.categories)
+    );
+    for (let col = TIMELINE_V2_FIRST_WEEK_COL; col <= TIMELINE_V2_LAST_WEEK_COL; col++) {
+      sheet.getRange(row, col).setFormula(timelineV2WeekBarFormula_(row, col));
     }
-  });
-
-  const lastDataRow = timelineRow - 1;
-  if (lastDataRow >= TIMELINE_V2_DATA_START_ROW) {
-    sheet.getRange(TIMELINE_V2_DATA_START_ROW, 3, lastDataRow - TIMELINE_V2_DATA_START_ROW + 1, 2)
-      .setNumberFormat('yyyy-mm-dd');
   }
 
-  // Row groups: task rows under each department (header stays visible).
-  applyTimelineV2RowGroups_(sheet, rowGroups, TIMELINE_V2_LAST_WEEK_COL);
+  sheet.getRange(TIMELINE_V2_DATA_START_ROW, 3, dataRows, 2)
+    .setNumberFormat('yyyy-mm-dd');
+  sheet.getRange(TIMELINE_V2_DATA_START_ROW, 1, dataRows, INFO_COLUMN_COUNT)
+    .setBackground('#FFFFFF')
+    .setFontColor('#404040')
+    .setFontWeight('normal');
 
   applyTimelineV2ConditionalFormatting_(sheet, TIMELINE_V2_DATA_START_ROW, lastDataRow);
 
@@ -426,11 +379,11 @@ function protectTimelineV2Sheet_(sheet) {
   });
   sheet
     .protect()
-    .setDescription('Timeline — edit STATUS only; bars update via formulas')
+    .setDescription('Timeline - edit Master Schedule only; bars update via formulas')
     .setWarningOnly(true);
 }
 
-/** @deprecated Phase A prototype — use setupTimelineV2Production_. */
+/** @deprecated Phase A prototype - use setupTimelineV2Production_. */
 function setupTimelineV2Prototype_(spreadsheet) {
   setupTimelineV2Production_(spreadsheet);
 }

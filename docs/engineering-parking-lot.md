@@ -46,4 +46,26 @@
 
 ## Parked Items
 
-None.
+#Engineering Parking Lot (Updates)
+Documentation / Engineering Infrastructure
+High Priority
+Repair DOCOPS v2 Python serializer so Python only formats, writes, and verifies GPT-authored content.
+Decide whether docs/dev-handoff.backup.md remains a permanent recovery artifact or can be retired after DOCOPS is recertified.
+Review and formally certify today's new architecture documents:
+consumer-observation-contract-v1.md
+parent-initialization-ownership-contract-v1.md
+docs/architecture/governance/*
+docs/engineering/inv8-production-design-v1.md
+Product / UX
+Improve Pull-To-Refresh affordance and visual feedback on Parent and Coach Compete screens.
+Polish loading states during competition synchronization.
+Review spacing, labels, and interaction polish before TestFlight.
+Future Features (Post-MVP)
+Push notification when Coach publishes a Match Breakdown.
+Push notification when weekly summaries become available.
+Evaluate background synchronization versus explicit refresh after MVP stabilization.
+Continue Engineering Observatory / Digital Twin initiative once Release Candidate is stable.
+Release Readiness
+Build next TestFlight from the certified floor.
+Execute full production-device regression checklist.
+Compare TestFlight behavior against the certified QA17–QA19 scenarios.

@@ -1,10 +1,5 @@
-import { Audio } from "expo-av";
-import { File } from "expo-file-system";
-import * as FileSystem from "expo-file-system/legacy";
-import { fetch as expoFetch } from "expo/fetch";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Alert,
   type LayoutChangeEvent,
   Pressable,
   StyleSheet,
@@ -15,6 +10,11 @@ import {
 } from "react-native";
 
 import { MatchMediaAttachments } from "../../components/MatchMediaAttachments";
+import {
+  CoachVoiceNoteField,
+  type CoachVoiceRecordingControls,
+  type CoachVoiceRecordingState,
+} from "../coach/CoachVoiceNoteField";
 import {
   type CompetitionDetailMatchSnapshot,
   getCompetitionDetailByEntryId,
@@ -201,61 +201,6 @@ export function deriveInitialMatches(
   return [createEmptyMatch(`init-${idSuffix}`)];
 }
 
-const TRANSCRIBE_RUNTIME_LOG_TAG = "[TRANSCRIBE_RUNTIME_TRACE]";
-const TRANSCRIBE_UPLOAD_FILENAME = "recording.m4a";
-const TRANSCRIBE_UPLOAD_MIME_TYPE = "audio/mp4";
-
-function uriScheme(uri: string): string {
-  const idx = uri.indexOf("://");
-  return idx >= 0 ? uri.slice(0, idx + 3) : "no-scheme";
-}
-
-function transcribeRuntimeErrorFields(error: unknown): {
-  errorMessage: string;
-  errorName: string;
-  errorCode?: unknown;
-  errorStack?: string;
-} {
-  if (error instanceof Error) {
-    const codedError = error as Error & { code?: unknown };
-    return {
-      errorMessage: error.message,
-      errorName: error.name,
-      ...(typeof codedError.code !== "undefined" ? { errorCode: codedError.code } : {}),
-      ...(typeof error.stack === "string" ? { errorStack: error.stack } : {}),
-    };
-  }
-  return { errorMessage: String(error), errorName: "unknown" };
-}
-
-function logTranscribeRuntime(stage: string, payload: Record<string, unknown> = {}): void {
-  console.log(TRANSCRIBE_RUNTIME_LOG_TAG, { stage, ...payload });
-}
-
-async function describeAudioFileForUpload(uri: string): Promise<Record<string, unknown>> {
-  const base = {
-    uri,
-    filename: TRANSCRIBE_UPLOAD_FILENAME,
-    mimeType: TRANSCRIBE_UPLOAD_MIME_TYPE,
-    uriScheme: uriScheme(uri),
-  };
-  try {
-    const info = await FileSystem.getInfoAsync(uri);
-    return {
-      ...base,
-      fileExists: info.exists,
-      fileSize: info.exists ? info.size : null,
-    };
-  } catch (error) {
-    return {
-      ...base,
-      fileExists: null,
-      fileSize: null,
-      fileInfoError: transcribeRuntimeErrorFields(error).errorMessage,
-    };
-  }
-}
-
 const chipPressable = (active: boolean) =>
   ({ pressed }: { pressed: boolean }) => ({
     paddingVertical: 10,
@@ -280,6 +225,7 @@ export function MatchBlock({
   onImageChange,
   onVideoChange,
   canonicalReadOnly = false,
+  matchBreakdownDisabled = false,
 }: {
   index: number;
   match: LocalMatch;
@@ -293,11 +239,13 @@ export function MatchBlock({
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
   canonicalReadOnly?: boolean;
+  /** INV-CIL-4: block Coach Match Breakdown authoring until ParentResultsRecorded. */
+  matchBreakdownDisabled?: boolean;
 }) {
-  type RecordingState = "idle" | "recording" | "processing" | "done";
+  type RecordingState = CoachVoiceRecordingState;
   const [isPlaying, setIsPlaying] = useState(false);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recordingControlsRef = useRef<CoachVoiceRecordingControls | null>(null);
   const { width: windowWidth } = useWindowDimensions();
   /** Compact multi-column chip grid (long labels wrap); avoids a single tall column of pills. */
   const submissionChipLayout = useMemo(() => {
@@ -315,283 +263,6 @@ export function MatchBlock({
     if (match.videoUri) return;
     setIsPlaying(false);
   }, [match.videoUri]);
-
-  useEffect(() => {
-    return () => {
-      const activeRecording = recordingRef.current;
-      recordingRef.current = null;
-      if (!activeRecording) return;
-      void activeRecording.stopAndUnloadAsync().catch(() => {});
-    };
-  }, []);
-
-  const transcribeAudio = useCallback(async (uri: string): Promise<string> => {
-    const apiKey = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
-    logTranscribeRuntime("api_key_check", { hasApiKey: Boolean(apiKey) });
-    if (!apiKey) {
-      logTranscribeRuntime("missing_api_key", { stage: "transcribeAudio" });
-      throw new Error("Missing EXPO_PUBLIC_OPENAI_API_KEY");
-    }
-
-    const filename = TRANSCRIBE_UPLOAD_FILENAME;
-    const mimeType = TRANSCRIBE_UPLOAD_MIME_TYPE;
-    const fileMeta = await describeAudioFileForUpload(uri);
-    logTranscribeRuntime("uri_metadata", { stage: "pre_upload", ...fileMeta });
-    const normalizedUri = uri.startsWith("file://") ? uri : `file://${uri}`;
-    const fileInfo = await FileSystem.getInfoAsync(uri);
-    const fileSize = fileInfo.exists ? fileInfo.size : null;
-    console.log(
-      "[TRANSCRIBE_RUNTIME_TRACE]",
-      JSON.stringify({
-        stage: "upload_payload",
-        uri,
-        normalizedUri,
-        exists: fileInfo.exists,
-        size: fileSize,
-        modificationTime: fileInfo.exists ? fileInfo.modificationTime : null,
-      }),
-    );
-    if (!fileInfo.exists || typeof fileSize !== "number" || fileSize <= 0) {
-      console.log(
-        "[TRANSCRIBE_RUNTIME_TRACE]",
-        JSON.stringify({
-          stage: "invalid_audio_file",
-          uri,
-          normalizedUri,
-          exists: fileInfo.exists,
-          size: fileSize,
-        }),
-      );
-      throw new Error("Invalid audio file for transcription");
-    }
-
-    const audioFile = new File(normalizedUri);
-    const formData = new FormData();
-    formData.append("file", audioFile, filename);
-    console.log(
-      "[TRANSCRIBE_RUNTIME_TRACE]",
-      JSON.stringify({
-        stage: "formdata_append_complete",
-        mimeType,
-        filename,
-      }),
-    );
-    formData.append("model", "whisper-1");
-
-    logTranscribeRuntime("fetch_start", {
-      stage: "openai_request",
-      url: "https://api.openai.com/v1/audio/transcriptions",
-      model: "whisper-1",
-    });
-    logTranscribeRuntime("expo_file_upload_start", {
-      stage: "expo_file_upload_start",
-      filename,
-      mimeType,
-      fileSize,
-    });
-
-    let res: Response;
-    try {
-      res = await expoFetch("https://api.openai.com/v1/audio/transcriptions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-        body: formData,
-      });
-    } catch (error) {
-      const fetchError = error as { name?: unknown; message?: unknown; code?: unknown; stack?: unknown };
-      console.log(
-        "[TRANSCRIBE_RUNTIME_TRACE]",
-        JSON.stringify({
-          stage: "upload_fetch_failure",
-          name: fetchError?.name,
-          message: fetchError?.message,
-          code: fetchError?.code,
-          stack:
-            typeof fetchError?.stack === "string"
-              ? fetchError.stack.slice(0, 1200)
-              : null,
-        }),
-      );
-      logTranscribeRuntime("fetch_threw", {
-        stage: "openai_request",
-        ...transcribeRuntimeErrorFields(error),
-      });
-      throw error;
-    }
-
-    logTranscribeRuntime("fetch_response", {
-      stage: "openai_request",
-      status: res.status,
-      ok: res.ok,
-      statusText: res.statusText,
-    });
-    logTranscribeRuntime("expo_file_upload_response", {
-      stage: "expo_file_upload_response",
-      status: res.status,
-      ok: res.ok,
-      statusText: res.statusText,
-    });
-
-    let rawBody = "";
-    try {
-      rawBody = await res.text();
-    } catch (error) {
-      logTranscribeRuntime("response_body_read_failed", {
-        stage: "parse_response",
-        status: res.status,
-        ...transcribeRuntimeErrorFields(error),
-      });
-      throw error;
-    }
-
-    let json: { text?: string; error?: { message?: string; type?: string; code?: string } };
-    try {
-      json = JSON.parse(rawBody) as {
-        text?: string;
-        error?: { message?: string; type?: string; code?: string };
-      };
-    } catch (error) {
-      logTranscribeRuntime("response_json_parse_failed", {
-        stage: "parse_response",
-        status: res.status,
-        rawBodyPreview: rawBody.slice(0, 500),
-        ...transcribeRuntimeErrorFields(error),
-      });
-      throw error;
-    }
-
-    logTranscribeRuntime("response_body", {
-      stage: "parse_response",
-      status: res.status,
-      body: json,
-    });
-
-    if (!res.ok) {
-      const message = json?.error?.message ?? "Transcription request failed";
-      logTranscribeRuntime("openai_error", {
-        stage: "openai_request",
-        status: res.status,
-        error: json?.error ?? null,
-        errorMessage: message,
-      });
-      throw new Error(message);
-    }
-
-    const text = typeof json.text === "string" ? json.text.trim() : "";
-    if (!text) {
-      logTranscribeRuntime("empty_transcription_text", {
-        stage: "parse_response",
-        status: res.status,
-        body: json,
-      });
-      throw new Error("No transcription text returned");
-    }
-
-    logTranscribeRuntime("transcription_success", {
-      stage: "transcribeAudio",
-      textLength: text.length,
-    });
-    return text;
-  }, []);
-
-  const startRecording = useCallback(async () => {
-    if (recordingState === "recording" || recordingState === "processing") return;
-    try {
-      logTranscribeRuntime("permission_request", { stage: "startRecording" });
-      const { status } = await Audio.requestPermissionsAsync();
-      logTranscribeRuntime("permission_result", {
-        stage: "startRecording",
-        status,
-        granted: status === "granted",
-      });
-      if (status !== "granted") {
-        Alert.alert("Microphone access needed", "Allow microphone access to record a coach note.");
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
-      recordingRef.current = recording;
-
-      logTranscribeRuntime("recording_started", { stage: "startRecording" });
-      setIsPlaying(false);
-      setRecordingState("recording");
-    } catch (error) {
-      logTranscribeRuntime("recording_start_failed", {
-        stage: "startRecording",
-        ...transcribeRuntimeErrorFields(error),
-      });
-      console.error("Recording start failed", error);
-      Alert.alert("Recording failed", "Could not start recording. Try again.");
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-    }
-  }, [recordingState]);
-
-  const stopRecording = useCallback(async () => {
-    if (recordingState !== "recording") return;
-    setRecordingState("processing");
-    logTranscribeRuntime("recording_stop_requested", { stage: "stopRecording" });
-
-    const recording = recordingRef.current;
-    recordingRef.current = null;
-
-    try {
-      if (!recording) {
-        logTranscribeRuntime("no_active_recording", { stage: "stopRecording" });
-        throw new Error("No active recording");
-      }
-
-      await recording.stopAndUnloadAsync();
-      logTranscribeRuntime("recording_stopped", { stage: "stopRecording" });
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      logTranscribeRuntime("recording_file_finalization_delay_complete", {
-        stage: "stopRecording",
-        delayMs: 500,
-      });
-
-      const uri = recording.getURI();
-      logTranscribeRuntime("uri_capture", {
-        stage: "stopRecording",
-        hasUri: Boolean(uri),
-        uri: uri ?? null,
-        uriScheme: uri ? uriScheme(uri) : null,
-      });
-      if (!uri) {
-        logTranscribeRuntime("missing_recording_uri", { stage: "stopRecording" });
-        throw new Error("Missing recording URI");
-      }
-
-      const text = await transcribeAudio(uri);
-      onCoachNoteChange(text);
-      setRecordingState("done");
-    } catch (error) {
-      logTranscribeRuntime("pipeline_failed", {
-        stage: "stopRecording",
-        ...transcribeRuntimeErrorFields(error),
-      });
-      console.error("Transcription failed", error);
-      const errorMessage = transcribeRuntimeErrorFields(error).errorMessage.trim();
-      onCoachNoteChange(
-        `Could not transcribe.\n${errorMessage.length > 0 ? errorMessage : "Unknown transcription error"}`,
-      );
-      setRecordingState("done");
-    } finally {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-    }
-  }, [onCoachNoteChange, recordingState, transcribeAudio]);
 
   const controlsDisabled = recordingState === "processing";
   const showRecordingOverlay = recordingState === "recording";
@@ -650,7 +321,7 @@ export function MatchBlock({
             >
               <Text style={{ fontSize: 12, fontWeight: "800", color: "#ffffff" }}>Recording...</Text>
               <Pressable
-                onPress={stopRecording}
+                onPress={() => recordingControlsRef.current?.stopRecording()}
                 style={({ pressed }) => ({
                   paddingVertical: 8,
                   paddingHorizontal: 14,
@@ -669,81 +340,31 @@ export function MatchBlock({
 
       <View
         onLayout={(event: LayoutChangeEvent) => onCoachNoteLayout?.(event.nativeEvent.layout.y)}
-        style={{ marginTop: 10 }}
+        style={{
+          marginTop: 10,
+          opacity: matchBreakdownDisabled ? 0.55 : 1,
+        }}
+        pointerEvents={matchBreakdownDisabled ? "none" : "auto"}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <Text
-            style={{
-              fontSize: 12,
-              letterSpacing: 0.6,
-              fontWeight: "700",
-              color: UI.textSecondary,
-            }}
-          >
-            Coach Match Breakdown
-          </Text>
-          <Pressable
-            onPress={startRecording}
-            disabled={controlsDisabled || recordingState === "recording"}
-            style={({ pressed }) => ({
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: UI.accent,
-              backgroundColor: pressed ? "#1e40af" : UI.accent,
-              opacity: controlsDisabled || recordingState === "recording" ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
-              {recordingState === "done" ? "Re-record" : "Record"}
-            </Text>
-          </Pressable>
-        </View>
-        {recordingState === "processing" ? (
-          <Text style={{ marginTop: 6, fontSize: 11, fontWeight: "700", color: UI.textSecondary }}>
-            Transcribing...
-          </Text>
-        ) : null}
-        <TextInput
+        <CoachVoiceNoteField
+          label="Coach Match Breakdown"
           value={match.coachNote ?? ""}
           onChangeText={onCoachNoteChange}
           onFocus={onCoachNoteFocus}
           placeholder="What went well, what to improve..."
-          placeholderTextColor={UI.textSecondary}
-          editable={recordingState === "idle" || recordingState === "done"}
-          autoFocus={false}
-          multiline={true}
-          scrollEnabled={true}
-          style={{
-            marginTop: 8,
-            borderRadius: 12,
-            borderWidth: 1,
-            borderColor: UI.border,
-            backgroundColor: UI.bgCard,
-            padding: 12,
-            minHeight: 120,
-            maxHeight: 120,
-            color: UI.textPrimary,
-            textAlignVertical: "top",
+          disabled={matchBreakdownDisabled}
+          disabledHint="Waiting for parent-recorded results"
+          scrollEnabled
+          minHeight={120}
+          maxHeight={120}
+          idleStatusHint={isPlaying ? "Video playing" : "Video paused"}
+          externalStopControl
+          recordingControlsRef={recordingControlsRef}
+          onRecordingStateChange={(state) => {
+            setRecordingState(state);
+            if (state === "recording") setIsPlaying(false);
           }}
         />
-        <Text
-          style={{
-            marginTop: 6,
-            fontSize: 11,
-            color: UI.textSecondary,
-            opacity: 0.9,
-          }}
-        >
-          {recordingState === "processing"
-            ? "Transcription in progress"
-            : recordingState === "recording"
-              ? "Recording in progress"
-              : isPlaying
-                ? "Video playing"
-                : "Video paused"}
-        </Text>
       </View>
 
       <View

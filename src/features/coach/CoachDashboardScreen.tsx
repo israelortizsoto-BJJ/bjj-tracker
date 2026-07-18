@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -218,7 +219,11 @@ function AthleteCard({ row }: { row: CoachInsightRow }) {
 
   return (
     <Pressable
-      onPress={() => router.push(`/coach/kid/${athlete.id}`)}
+      onPress={() =>
+        router.push(
+          `/coach/kid/${athlete.id}?competitionLaunchOrigin=coach_dashboard_via_athlete`,
+        )
+      }
       style={({ pressed }) => [
         styles.athleteCard,
         pressed ? styles.athleteCardPressed : null,
@@ -286,7 +291,7 @@ function badgeStyleForLevel(level: AttentionLevel) {
 }
 
 export default function CoachDashboardScreen() {
-  const { loading, insights, teamFocus } = useCoachInsights();
+  const { loading, refreshing, insights, teamFocus, onRefresh } = useCoachInsights();
   const [drillBucket, setDrillBucket] = useState<TrainingSkillBucket | null>(null);
   const [classPlanCopied, setClassPlanCopied] = useState(false);
   const classPlanCopiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -368,6 +373,14 @@ export default function CoachDashboardScreen() {
         style={styles.screen}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={UI.accent}
+            colors={[UI.accent]}
+          />
+        }
       >
         <OperatingHeader
           mode="team"
@@ -533,7 +546,11 @@ export default function CoachDashboardScreen() {
                   onPress={() => {
                     const id = row.athlete.id.trim();
                     setDrillBucket(null);
-                    if (id) router.push(`/coach/kid/${id}`);
+                    if (id) {
+                      router.push(
+                        `/coach/kid/${id}?competitionLaunchOrigin=coach_dashboard_via_athlete`,
+                      );
+                    }
                   }}
                   style={({ pressed }) => [
                     styles.modalRow,

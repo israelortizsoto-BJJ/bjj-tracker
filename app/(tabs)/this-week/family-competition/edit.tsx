@@ -14,6 +14,11 @@ import {
   updateCompetition,
 } from "../../../../src/domain/competition/CompetitionSync";
 import { competitionFamilySaveTrace } from "../../../../src/domain/competition/CompetitionTypes";
+import {
+  hydrateCompetitionResultDraft,
+  newCompetitionResultDraft,
+  toggleCompetitionResultDraft,
+} from "../../../../src/domain/competition/competitionResultDraft";
 import { todayYMD } from "../../../../src/storage/coachKidStore";
 import {
   persistMediaFromCameraRoll,
@@ -26,6 +31,10 @@ import type {
   KidCompetitionResult,
 } from "../../../../src/types/coachKid";
 import { getPlacementLabel } from "../../../../src/features/competition/placementLabel";
+import {
+  logCompetitionLaunchContextValidation,
+  validateCompetitionLaunchContext,
+} from "../../../../src/features/competition/competitionNavigationContract";
 import { exitToCompeteAfterCompetitionSave } from "../../../../src/features/competition/syncTabAndExit";
 
 const UI = {
@@ -105,18 +114,39 @@ export default function FamilyCompetitionEditScreen() {
     entryId?: string | string[];
     /** New add opens pass a fresh nonce so each visit resets without wiping drafts on tab refocus. */
     openNonce?: string | string[];
+    launchSurface?: string | string[];
+    returnClass?: string | string[];
+    returnScopeId?: string | string[];
   }>();
   const kidId = searchParamOne(params.kidId);
   const entryId = searchParamOne(params.entryId);
   const openNonce = searchParamOne(params.openNonce);
   const isNew = !entryId;
+  const launchContextValidation = useMemo(
+    () =>
+      validateCompetitionLaunchContext(
+        {
+          launchSurface: params.launchSurface,
+          returnClass: params.returnClass,
+          returnScopeId: params.returnScopeId,
+        },
+        kidId,
+      ),
+    [
+      kidId,
+      params.launchSurface,
+      params.returnClass,
+      params.returnScopeId,
+    ],
+  );
+  const launchContext = launchContextValidation.launchContext;
 
   const [loading, setLoading] = useState(!isNew);
   const [nameDraft, setNameDraft] = useState("");
   /** New adds start empty (placeholder hints today); avoids carrying the last saved date across tab revisits. */
   const [dateDraft, setDateDraft] = useState("");
   const [resultDraft, setResultDraft] = useState<KidCompetitionResult | undefined>(
-    undefined,
+    newCompetitionResultDraft(),
   );
   const [eventStatusDraft, setEventStatusDraft] = useState<
     KidCompetitionEventStatus | undefined
@@ -147,6 +177,18 @@ export default function FamilyCompetitionEditScreen() {
   saveTraceKidIdRef.current = kidId;
   saveTraceIsNewRef.current = isNew;
 
+  const exitEditor = useCallback(
+    (args: Parameters<typeof exitToCompeteAfterCompetitionSave>[0]) => {
+      const forwardedArgs = { ...args, launchContext };
+      exitToCompeteAfterCompetitionSave(forwardedArgs);
+    },
+    [launchContext],
+  );
+
+  useEffect(() => {
+    logCompetitionLaunchContextValidation("parent_family", launchContextValidation);
+  }, [launchContextValidation]);
+
   useEffect(() => {
     mountedRef.current = true;
     return () => {
@@ -168,7 +210,7 @@ export default function FamilyCompetitionEditScreen() {
       const found = await getKidCompetitionEntryById(entryId);
       if (!found || found.kidId !== kidId) {
         Alert.alert("Not found", "This competition is missing or belongs to another athlete.");
-        exitToCompeteAfterCompetitionSave({
+        exitEditor({
           navigation,
           actorRole: "parent",
           athleteId: kidId,
@@ -190,7 +232,7 @@ export default function FamilyCompetitionEditScreen() {
       }
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
-      setResultDraft(found.result);
+      setResultDraft(hydrateCompetitionResultDraft(found.result));
       setEventStatusDraft(found.status ?? found.eventStatus);
       setFormatDraft(found.format);
       setPromoterDraft(found.organizationOrPromoter ?? "");
@@ -198,19 +240,19 @@ export default function FamilyCompetitionEditScreen() {
     } finally {
       setLoading(false);
     }
-  }, [entryId, kidId, navigation]);
+  }, [entryId, kidId, navigation, exitEditor]);
 
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing athlete", "Go back to This week together and try again.");
-      exitToCompeteAfterCompetitionSave({
+      exitEditor({
         navigation,
         actorRole: "parent",
         athleteId: "",
         competitionId: null,
       });
     }
-  }, [kidId, navigation]);
+  }, [kidId, navigation, exitEditor]);
 
   useLayoutEffect(() => {
     if (!kidId || !isNew) return;
@@ -226,7 +268,7 @@ export default function FamilyCompetitionEditScreen() {
     }
     setNameDraft("");
     setDateDraft("");
-    setResultDraft(undefined);
+    setResultDraft(newCompetitionResultDraft());
     setEventStatusDraft(undefined);
     setFormatDraft(undefined);
     setPromoterDraft("");
@@ -433,7 +475,7 @@ export default function FamilyCompetitionEditScreen() {
         savedCompetitionId,
         mounted: mountedRef.current,
       });
-      exitToCompeteAfterCompetitionSave({
+      exitEditor({
         navigation,
         actorRole: "parent",
         athleteId: kidId,
@@ -468,7 +510,7 @@ export default function FamilyCompetitionEditScreen() {
 
   function onDelete() {
     if (isNew) {
-      exitToCompeteAfterCompetitionSave({
+      exitEditor({
         navigation,
         actorRole: "parent",
         athleteId: kidId,
@@ -499,7 +541,7 @@ export default function FamilyCompetitionEditScreen() {
               Alert.alert(outcome.alertTitle, outcome.alertMessage);
               return;
             }
-            exitToCompeteAfterCompetitionSave({
+            exitEditor({
               navigation,
               actorRole: "parent",
               athleteId: kidId,
@@ -535,7 +577,7 @@ export default function FamilyCompetitionEditScreen() {
         >
           <Pressable
             onPress={() =>
-              exitToCompeteAfterCompetitionSave({
+              exitEditor({
                 navigation,
                 actorRole: "parent",
                 athleteId: kidId,
@@ -763,7 +805,7 @@ export default function FamilyCompetitionEditScreen() {
                     <Pressable
                       key={r}
                       onPress={() =>
-                        setResultDraft((prev) => (prev === r ? undefined : r))
+                        setResultDraft((prev) => toggleCompetitionResultDraft(prev, r))
                       }
                       style={({ pressed }) => ({
                         paddingVertical: 10,

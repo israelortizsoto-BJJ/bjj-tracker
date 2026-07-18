@@ -39,6 +39,12 @@ import type {
 import { getPlacementLabel } from "../../../../../../src/features/competition/placementLabel";
 import { medalTierFromKidResult } from "../../../../../../src/types/coachKid";
 import {
+  competitionResultPersistFields,
+  hydrateCompetitionResultDraft,
+  newCompetitionResultDraft,
+  toggleCompetitionResultDraft,
+} from "../../../../../../src/domain/competition/competitionResultDraft";
+import {
   createEmptyMatch,
   deriveInitialMatches,
   HOW_ENDED_OPTIONS,
@@ -50,6 +56,10 @@ import {
   type LocalMatch,
 } from "@/src/features/competition/competitionMatchEditor";
 import { logCompSaveRouteState } from "@/src/features/competition/compSaveExitTelemetry";
+import {
+  logCompetitionLaunchContextValidation,
+  validateCompetitionLaunchContext,
+} from "@/src/features/competition/competitionNavigationContract";
 import { exitToCompeteAfterCompetitionSave } from "@/src/features/competition/syncTabAndExit";
 import { logSaveLifecycleTrace } from "@/src/features/competition/saveLifecycleTrace";
 import { deleteCompetition } from "@/src/domain/competition/CompetitionSync";
@@ -65,6 +75,7 @@ import { logMatchBreakdownBoundaryProbe } from "@/src/dev/matchBreakdownBoundary
 import { logMatchBreakdownAuthorityTrace } from "@/src/dev/matchBreakdownAuthorityTrace";
 import { createOverlayForensicTraceId } from "@/src/dev/overlayForensicTrace";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
+import { parentResultsRecorded } from "@/src/domain/competition/parentResultsRecorded";
 import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
 import type { CoachMatchBreakdownOverlay } from "@/src/types/coachMatchBreakdownOverlay";
 
@@ -140,18 +151,41 @@ export default function KidCompetitionEditScreen() {
     kidId?: string;
     entryId?: string;
     openNonce?: string;
+    launchSurface?: string | string[];
+    returnClass?: string | string[];
+    returnScopeId?: string | string[];
   }>();
   const kidId = params.kidId ? String(params.kidId) : "";
   const entryId = params.entryId ? String(params.entryId) : "";
   const openNonce = params.openNonce ? String(params.openNonce) : "";
   const isNew = !entryId;
+  const launchContextValidation = useMemo(
+    () =>
+      validateCompetitionLaunchContext(
+        {
+          launchSurface: params.launchSurface,
+          returnClass: params.returnClass,
+          returnScopeId: params.returnScopeId,
+        },
+        kidId,
+      ),
+    [
+      kidId,
+      params.launchSurface,
+      params.returnClass,
+      params.returnScopeId,
+    ],
+  );
+  const launchContext = launchContextValidation.launchContext;
   const reactId = useId();
   const lastProcessedOpenNonceRef = useRef<string | null>(null);
 
   const [loading, setLoading] = useState(!isNew);
   const [nameDraft, setNameDraft] = useState("");
   const [dateDraft, setDateDraft] = useState(todayYMD());
-  const [resultDraft, setResultDraft] = useState<KidCompetitionResult>("participated");
+  const [resultDraft, setResultDraft] = useState<KidCompetitionResult | undefined>(
+    newCompetitionResultDraft(),
+  );
   const [eventStatusDraft, setEventStatusDraft] = useState<
     KidCompetitionEventStatus | undefined
   >(undefined);
@@ -177,6 +211,18 @@ export default function KidCompetitionEditScreen() {
   const headerHeight = useHeaderHeight();
   const keyboardAwareRef = useRef<InstanceType<typeof KeyboardAwareScrollView> | null>(null);
 
+  const exitEditor = useCallback(
+    (args: Parameters<typeof exitToCompeteAfterCompetitionSave>[0]) => {
+      const forwardedArgs = { ...args, launchContext };
+      exitToCompeteAfterCompetitionSave(forwardedArgs);
+    },
+    [launchContext],
+  );
+
+  useEffect(() => {
+    logCompetitionLaunchContextValidation("coach_kid", launchContextValidation);
+  }, [launchContextValidation]);
+
   /** Single nudge after focus — avoid keyboard frame + content-size loops (dictation overscrolls). */
   const onNotesFocusScroll = useCallback(() => {
     requestAnimationFrame(() => {
@@ -198,7 +244,7 @@ export default function KidCompetitionEditScreen() {
       const found = await getKidCompetitionEntryById(entryId);
       if (!found || found.kidId !== kidId) {
         Alert.alert("Not found", "This competition entry is missing or belongs to another kid.");
-        exitToCompeteAfterCompetitionSave({
+        exitEditor({
           navigation,
           actorRole: "coach",
           athleteId: kidId,
@@ -208,7 +254,7 @@ export default function KidCompetitionEditScreen() {
       }
       setNameDraft(found.tournamentName);
       setDateDraft(found.eventDate);
-      setResultDraft(found.result ?? "participated");
+      setResultDraft(hydrateCompetitionResultDraft(found.result));
       setEventStatusDraft(found.status ?? found.eventStatus);
       setPromoterDraft(found.organizationOrPromoter ?? "");
       setFormatDraft(found.format);
@@ -294,19 +340,19 @@ export default function KidCompetitionEditScreen() {
         timestamp: Date.now(),
       });
     }
-  }, [entryId, kidId, reactId, navigation, pathname]);
+  }, [entryId, kidId, reactId, navigation, pathname, exitEditor]);
 
   useEffect(() => {
     if (!kidId) {
       Alert.alert("Missing kid id", "This pilot route requires a kid selection.");
-      exitToCompeteAfterCompetitionSave({
+      exitEditor({
         navigation,
         actorRole: "coach",
         athleteId: "",
         competitionId: null,
       });
     }
-  }, [kidId, navigation]);
+  }, [kidId, navigation, exitEditor]);
 
   useLayoutEffect(() => {
     if (!isNew || !openNonce) return;
@@ -314,7 +360,7 @@ export default function KidCompetitionEditScreen() {
     lastProcessedOpenNonceRef.current = openNonce;
     setNameDraft("");
     setDateDraft(todayYMD());
-    setResultDraft("participated");
+    setResultDraft(newCompetitionResultDraft());
     setEventStatusDraft(undefined);
     setPromoterDraft("");
     setFormatDraft(undefined);
@@ -384,7 +430,7 @@ export default function KidCompetitionEditScreen() {
         if (!openNonce) {
           setNameDraft("");
           setDateDraft(todayYMD());
-          setResultDraft("participated");
+          setResultDraft(newCompetitionResultDraft());
           setEventStatusDraft(undefined);
           setPromoterDraft("");
           setFormatDraft(undefined);
@@ -455,8 +501,26 @@ export default function KidCompetitionEditScreen() {
     return nameDraft.trim().length > 0 && isValidYMD(dateDraft);
   }, [nameDraft, dateDraft]);
 
+  /** INV-CIL-4: Coach Match Breakdown authoring/publish requires ParentResultsRecorded. */
+  const parentResultsOk = useMemo(
+    () =>
+      parentResultsRecorded({
+        eventDate: dateDraft,
+        eventStatus: eventStatusDraft,
+        result: resultDraft,
+        matches,
+      }),
+    [dateDraft, eventStatusDraft, resultDraft, matches],
+  );
+
+  const matchBreakdownAuthoringBlocked =
+    Boolean(canonicalReadOnly && overlayScope) && !parentResultsOk;
+
   const savePressDisabled =
-    (!canonicalReadOnly && !canSave) || saving || loading;
+    (!canonicalReadOnly && !canSave) ||
+    saving ||
+    loading ||
+    matchBreakdownAuthoringBlocked;
 
   console.log("[SAVE_PRESS_TRACE] render_state", {
     saving,
@@ -465,10 +529,15 @@ export default function KidCompetitionEditScreen() {
     canonicalReadOnly,
     overlayScope: !!overlayScope,
     canSave,
+    parentResultsOk,
+    matchBreakdownAuthoringBlocked,
     timestamp: Date.now(),
   });
 
   const saveDisabledHint = useMemo(() => {
+    if (matchBreakdownAuthoringBlocked) {
+      return "Parent must record a competition result or match outcomes before Match Breakdown can be saved.";
+    }
     if (canSave) return null;
     const missingName = nameDraft.trim().length === 0;
     const badDate = !isValidYMD(dateDraft);
@@ -477,7 +546,7 @@ export default function KidCompetitionEditScreen() {
     }
     if (missingName) return "Add a tournament name to enable Save.";
     return "Use a valid event date (YYYY-MM-DD) to enable Save.";
-  }, [canSave, nameDraft, dateDraft]);
+  }, [matchBreakdownAuthoringBlocked, canSave, nameDraft, dateDraft]);
 
   const setMatchOutcome = useCallback((matchIndex: number, label: (typeof HOW_ENDED_OPTIONS)[number]) => {
     if (canonicalReadOnly) {
@@ -703,6 +772,33 @@ export default function KidCompetitionEditScreen() {
       return;
     }
     if (canonicalReadOnly && overlayScope) {
+      if (
+        !parentResultsRecorded({
+          eventDate: dateDraft,
+          eventStatus: eventStatusDraft,
+          result: resultDraft,
+          matches,
+        })
+      ) {
+        logCompPublishGuard({
+          competitionId: entryId,
+          athleteId: kidId,
+          operationKind: "canonical",
+          surface: "coachCompetitionEdit.canonical_overlay_only",
+          phaseDetail: "parent_results_recorded_required_for_match_breakdown",
+        });
+        Alert.alert(
+          "Results required",
+          "Parent must record a competition result or match outcomes before Match Breakdown can be saved.",
+        );
+        console.log("[SAVE_PRESS_TRACE] early_return_parent_results_gate", {
+          eventDate: dateDraft,
+          eventStatus: eventStatusDraft ?? null,
+          hasResult: typeof resultDraft !== "undefined",
+          matchCount: matches.length,
+        });
+        return;
+      }
       logCompSave("BEGIN", {
         competitionId: entryId,
         athleteId: kidId,
@@ -848,7 +944,7 @@ export default function KidCompetitionEditScreen() {
           pathname: String(pathname ?? ""),
           canGoBack: router.canGoBack(),
         });
-        exitToCompeteAfterCompetitionSave({
+        exitEditor({
           navigation,
           actorRole: "coach",
           athleteId: kidId,
@@ -967,7 +1063,7 @@ export default function KidCompetitionEditScreen() {
           kidId,
           tournamentName: name,
           eventDate,
-          result: resultDraft,
+          ...competitionResultPersistFields(resultDraft),
           medal: medalTierFromKidResult(resultDraft),
           medalImageUri: medalImageDraft,
           status: eventStatusDraft,
@@ -1023,7 +1119,7 @@ export default function KidCompetitionEditScreen() {
         overlayCount: snapshots.length,
         localStoreAffected: "kidCompetitionStore+competitionDetailStore",
       });
-      exitToCompeteAfterCompetitionSave({
+      exitEditor({
         navigation,
         actorRole: "coach",
         athleteId: kidId,
@@ -1075,7 +1171,7 @@ export default function KidCompetitionEditScreen() {
 
   function onDelete() {
     if (isNew) {
-      exitToCompeteAfterCompetitionSave({
+      exitEditor({
         navigation,
         actorRole: "coach",
         athleteId: kidId,
@@ -1095,7 +1191,7 @@ export default function KidCompetitionEditScreen() {
               Alert.alert(outcome.alertTitle, outcome.alertMessage);
               return;
             }
-            exitToCompeteAfterCompetitionSave({
+            exitEditor({
               navigation,
               actorRole: "coach",
               athleteId: kidId,
@@ -1119,7 +1215,7 @@ export default function KidCompetitionEditScreen() {
             surface: "coachCompetitionEdit.onDelete",
             phaseDetail: "local_only_no_remote_delete",
           });
-          exitToCompeteAfterCompetitionSave({
+          exitEditor({
             navigation,
             actorRole: "coach",
             athleteId: kidId,
@@ -1155,7 +1251,7 @@ export default function KidCompetitionEditScreen() {
         >
         <Pressable
           onPress={() => {
-            exitToCompeteAfterCompetitionSave({
+            exitEditor({
               navigation,
               actorRole: "coach",
               athleteId: kidId,
@@ -1365,7 +1461,12 @@ export default function KidCompetitionEditScreen() {
                 color: UI.textSecondary,
               }}
             >
-              RESULT
+              RESULT (OPTIONAL)
+            </Text>
+            <Text
+              style={{ marginTop: 4, fontSize: 11, color: UI.textSecondary, lineHeight: 15 }}
+            >
+              Tap again to clear.
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
               {RESULTS.map((r) => {
@@ -1373,7 +1474,9 @@ export default function KidCompetitionEditScreen() {
                 return (
                   <Pressable
                     key={r}
-                    onPress={() => setResultDraft(r)}
+                    onPress={() =>
+                      setResultDraft((prev) => toggleCompetitionResultDraft(prev, r))
+                    }
                     style={({ pressed }) => ({
                       paddingVertical: 10,
                       paddingHorizontal: 12,
@@ -1475,6 +1578,7 @@ export default function KidCompetitionEditScreen() {
                     index={i}
                     match={m}
                     canonicalReadOnly={canonicalReadOnly}
+                    matchBreakdownDisabled={matchBreakdownAuthoringBlocked}
                     onToggleMatchResult={(v) => setMatchResult(i, v)}
                     onToggleOutcome={(label) => setMatchOutcome(i, label)}
                     onSubmissionTimeChange={(text) => setMatchSubmissionTime(i, text)}
@@ -1574,7 +1678,7 @@ export default function KidCompetitionEditScreen() {
               </Text>
             </Pressable>
 
-            {!canonicalReadOnly && saveDisabledHint && !loading && !saving ? (
+            {saveDisabledHint && !loading && !saving ? (
               <Text
                 style={{
                   marginTop: 10,

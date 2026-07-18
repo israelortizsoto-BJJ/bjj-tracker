@@ -9,6 +9,7 @@ import {
 } from "../../competition-state-auditor/competitionTransitionContext";
 import { scheduleParentCanonicalSnapshot } from "../../competition-state-auditor/emitParentCanonicalSnapshot";
 import { medalTierFromKidResult } from "../../types/coachKid";
+import { competitionResultPersistFields } from "./competitionResultDraft";
 import { getKidsById } from "../../storage/coachKidStore";
 import {
   setCompetitionDetailForEntry,
@@ -289,7 +290,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
           sharedAthleteId: linkedAthleteId,
           tournamentName: name,
           eventDate,
-          ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+          ...competitionResultPersistFields(resultDraft),
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim() ? promoterDraft.trim() : undefined,
           format: formatDraft,
@@ -319,7 +320,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
         sharedCompetitionId: remote.competition.id,
         tournamentName: name,
         eventDate,
-        ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+        ...competitionResultPersistFields(resultDraft),
         medal: medalTierFromKidResult(resultDraft),
         medalImageUri: medalImageDraft,
         status: eventStatusDraft,
@@ -390,7 +391,7 @@ async function createCompetitionFamily(input: FamilyCreateCompetitionInput): Pro
     kidId,
     tournamentName: name,
     eventDate,
-    ...(typeof resultDraft !== "undefined" ? { result: resultDraft } : {}),
+    ...competitionResultPersistFields(resultDraft),
     medal: medalTierFromKidResult(resultDraft),
     medalImageUri: medalImageDraft,
     status: eventStatusDraft,
@@ -470,7 +471,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
           sharedAthleteId: trimmedResolved,
           tournamentName: name,
           eventDate,
-          result: resultDraft,
+          ...competitionResultPersistFields(resultDraft),
           eventStatus: eventStatusDraft,
           organizationOrPromoter: promoterDraft.trim() ? promoterDraft.trim() : undefined,
           format: formatDraft,
@@ -494,7 +495,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         sharedCompetitionId: remote.competition.id,
         tournamentName: name,
         eventDate,
-        result: resultDraft,
+        ...competitionResultPersistFields(resultDraft),
         medal: medalTierFromKidResult(resultDraft),
         medalImageUri: medalImageDraft,
         status: eventStatusDraft,
@@ -563,7 +564,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
     kidId,
     tournamentName: name,
     eventDate,
-    result: resultDraft,
+    ...competitionResultPersistFields(resultDraft),
     medal: medalTierFromKidResult(resultDraft),
     medalImageUri: medalImageDraft,
     status: eventStatusDraft,

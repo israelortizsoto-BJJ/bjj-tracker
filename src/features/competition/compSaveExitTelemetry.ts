@@ -3,6 +3,10 @@ import type { NavigationState } from "@react-navigation/native";
 
 // Post-save reads must not rely on the competition screen's hooks (it unmounts on replace).
 import { store } from "expo-router/build/global-state/router-store";
+import type {
+  CompetitionLaunchSurface,
+  CompetitionReturnClass,
+} from "./competitionNavigationContract";
 
 /** Lane for save-exit sync (tab names from `app/(tabs)/_layout.tsx` plus compete). */
 export type CompSaveExitLane = "this-week" | "coach" | "compete";
@@ -11,14 +15,24 @@ export type CompSaveExitLane = "this-week" | "coach" | "compete";
 export function logCompSaveNormalized(payload: {
   actorRole: "parent" | "coach";
   athleteId: string;
-  destination: "/compete";
+  destination: string;
   competitionId: string | null;
+  launchSurface?: CompetitionLaunchSurface | null;
+  returnClass?: CompetitionReturnClass | null;
+  returnScopeId?: string | null;
 }): void {
   console.log("[COMP_SAVE_NORMALIZED]", {
     actorRole: payload.actorRole,
     athleteId: payload.athleteId,
     destination: payload.destination,
     competitionId: payload.competitionId,
+    ...(payload.launchSurface !== undefined
+      ? { launchSurface: payload.launchSurface }
+      : {}),
+    ...(payload.returnClass !== undefined ? { returnClass: payload.returnClass } : {}),
+    ...(payload.returnScopeId !== undefined
+      ? { returnScopeId: payload.returnScopeId }
+      : {}),
   });
 }
 

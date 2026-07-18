@@ -1,43 +1,16 @@
 /**
- * Validate STATUS sheet rows and extract timeline tasks.
+ * Validate Master Schedule rows and extract timeline tasks.
  */
 
-function statusRowValues_(row, department) {
+function masterRowValues_(row) {
   return {
-    Project: department || '',
-    'Task Name': normalizeText(row[STATUS_COL_PROJECT - 1]),
-    'Start Date': formatIsoDate(parseCellDate(row[STATUS_COL_START_DATE - 1])),
-    'Finish Date': formatIsoDate(parseCellDate(row[STATUS_COL_FINISH_DATE - 1])),
-    'Critical Date': '',
+    'Phase / Task': normalizeText(row[MASTER_COL_PHASE_TASK - 1]),
+    Duration: normalizeText(row[MASTER_COL_DURATION - 1]),
+    'Start Date': formatIsoDate(parseCellDate(row[MASTER_COL_START_DATE - 1])),
+    'Finish Date': formatIsoDate(parseCellDate(row[MASTER_COL_FINISH_DATE - 1])),
+    'Include in Timeline': row[MASTER_COL_INCLUDE - 1],
+    'Client Label': normalizeText(row[MASTER_COL_CLIENT_LABEL - 1]),
   };
-}
-
-function normalizeDepartmentLabel_(label) {
-  return String(label).replace(/:$/, '').trim();
-}
-
-function isStatusDepartmentHeaderRow_(row) {
-  const label = normalizeText(row[STATUS_COL_IUS_POC - 1]);
-  if (!label) {
-    return false;
-  }
-  if (/^HOT ITEMS:?$/i.test(label)) {
-    return true;
-  }
-  const projectCell = normalizeText(row[STATUS_COL_PROJECT - 1]);
-  return !projectCell;
-}
-
-function isStatusInstructionRow_(row) {
-  const poc = normalizeText(row[STATUS_COL_IUS_POC - 1]);
-  const project = normalizeText(row[STATUS_COL_PROJECT - 1]);
-  if (poc && poc.indexOf('[DROPDOWN]') === 0) {
-    return true;
-  }
-  if (project && project.indexOf('[PROJECT NAME]') === 0) {
-    return true;
-  }
-  return false;
 }
 
 function createEmptyReport_() {
@@ -60,42 +33,35 @@ function validateDataSheet(spreadsheet) {
   const report = createEmptyReport_();
   const tasks = [];
 
-  if (!sheet || sheet.getLastRow() < STATUS_FIRST_DATA_ROW) {
+  if (!sheet || sheet.getLastRow() < MASTER_FIRST_DATA_ROW) {
     return { tasks: tasks, report: report };
   }
 
   const lastRow = sheet.getLastRow();
-  const numRows = lastRow - STATUS_FIRST_DATA_ROW + 1;
-  const values = sheet.getRange(STATUS_FIRST_DATA_ROW, 1, numRows, STATUS_COLUMN_COUNT).getValues();
+  const numRows = Math.min(lastRow, MASTER_LAST_SETUP_ROW) - MASTER_FIRST_DATA_ROW + 1;
+  const values = sheet.getRange(MASTER_FIRST_DATA_ROW, 1, numRows, MASTER_COLUMN_COUNT).getValues();
   report.totalRows = values.length;
 
-  let currentDepartment = null;
-
   values.forEach(function (row, index) {
-    const rowNumber = index + STATUS_FIRST_DATA_ROW;
+    const rowNumber = index + MASTER_FIRST_DATA_ROW;
+    const taskName = normalizeText(row[MASTER_COL_PHASE_TASK - 1]);
+    const include = row[MASTER_COL_INCLUDE - 1];
 
-    if (isStatusInstructionRow_(row)) {
-      return;
-    }
-
-    if (isStatusDepartmentHeaderRow_(row)) {
-      currentDepartment = normalizeDepartmentLabel_(row[STATUS_COL_IUS_POC - 1]);
-      return;
-    }
-
-    const taskName = normalizeText(row[STATUS_COL_PROJECT - 1]);
     if (!taskName) {
       return;
     }
 
-    const hasStart = !isBlankText(row[STATUS_COL_START_DATE - 1]);
-    const hasFinish = !isBlankText(row[STATUS_COL_FINISH_DATE - 1]);
+    if (include === false) {
+      return;
+    }
+
+    const hasStart = !isBlankText(row[MASTER_COL_START_DATE - 1]);
+    const hasFinish = !isBlankText(row[MASTER_COL_FINISH_DATE - 1]);
     if (!hasStart && !hasFinish) {
       return;
     }
 
-    const valuesSnapshot = statusRowValues_(row, currentDepartment);
-    const project = currentDepartment || taskName;
+    const valuesSnapshot = masterRowValues_(row);
 
     if (!hasStart) {
       report.issues.push({
@@ -118,7 +84,7 @@ function validateDataSheet(spreadsheet) {
       return;
     }
 
-    let startDate = parseCellDate(row[STATUS_COL_START_DATE - 1]);
+    let startDate = parseCellDate(row[MASTER_COL_START_DATE - 1]);
     if (!startDate) {
       report.issues.push({
         rowNumber: rowNumber,
@@ -131,10 +97,10 @@ function validateDataSheet(spreadsheet) {
     }
 
     if (rowNumber === QA004_SOURCE_ROW && taskName === QA004_TASK_NAME) {
-      qa004Log_(1, row[STATUS_COL_FINISH_DATE - 1]);
+      qa004Log_(1, row[MASTER_COL_FINISH_DATE - 1]);
     }
 
-    let finishDate = parseCellDate(row[STATUS_COL_FINISH_DATE - 1]);
+    let finishDate = parseCellDate(row[MASTER_COL_FINISH_DATE - 1]);
     if (rowNumber === QA004_SOURCE_ROW && taskName === QA004_TASK_NAME) {
       qa004Log_(2, finishDate);
     }
@@ -163,7 +129,7 @@ function validateDataSheet(spreadsheet) {
     }
 
     tasks.push({
-      project: project,
+      project: taskName,
       taskName: taskName,
       startDate: startDate,
       finishDate: finishDate,
@@ -196,7 +162,7 @@ function writeValidationSheet(spreadsheet, report) {
     ['Errors', report.errorCount],
     ['Timeline Generated', report.timelineGenerated ? 'Yes' : 'No'],
     [''],
-    ['Row Number', 'Kind', 'Reason', 'Project', 'Task Name', 'Start Date', 'Finish Date', 'Critical Date'],
+    ['Row Number', 'Kind', 'Reason', 'Phase / Task', 'Duration', 'Start Date', 'Finish Date', 'Client Label'],
   ];
 
   report.issues.forEach(function (issue) {
@@ -204,11 +170,11 @@ function writeValidationSheet(spreadsheet, report) {
       issue.rowNumber,
       issue.kind,
       issue.reason,
-      issue.values.Project || '',
-      issue.values['Task Name'] || '',
+      issue.values['Phase / Task'] || '',
+      issue.values.Duration || '',
       issue.values['Start Date'] || '',
       issue.values['Finish Date'] || '',
-      issue.values['Critical Date'] || '',
+      issue.values['Client Label'] || '',
     ]);
   });
 
@@ -216,4 +182,17 @@ function writeValidationSheet(spreadsheet, report) {
   sheet.getRange(1, 1, normalized.length, COLS).setValues(normalized);
   sheet.getRange(2, 2).setNumberFormat('yyyy-mm-dd hh:mm:ss');
   sheet.setFrozenRows(11);
+}
+
+function validateMasterSchedule_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const result = validateDataSheet(ss);
+  result.report.updatedAt = new Date();
+  writeValidationSheet(ss, result.report);
+  ss.toast(
+    'Master Schedule validated - ' + result.report.warningCount + ' warnings, ' +
+      result.report.errorCount + ' errors.',
+    'Timeline Planner',
+    5
+  );
 }

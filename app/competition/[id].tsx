@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
 
 import { useDeviceRole } from "../../src/deviceRole/DeviceRoleProvider";
+import { appendCompetitionLaunchContext } from "../../src/features/competition/competitionNavigationContract";
 import { getKidCompetitionEntryById } from "../../src/storage/kidCompetitionStore";
 
 /**
@@ -34,10 +35,15 @@ export default function CompetitionEntryDeepLink() {
         return;
       }
       const q = `?entryId=${encodeURIComponent(idText)}`;
-      const href: Href =
+      const editorHref =
         role === "coach"
-          ? (`/coach/kid/${found.kidId}/competition/edit${q}` as Href)
-          : (`/this-week/kid/${found.kidId}/competition/edit${q}` as Href);
+          ? `/coach/kid/${found.kidId}/competition/edit${q}`
+          : `/this-week/kid/${found.kidId}/competition/edit${q}`;
+      const href: Href =
+        appendCompetitionLaunchContext(editorHref, {
+          launchSurface: "deep_link",
+          returnClass: "compete",
+        }) as Href;
       router.replace(href);
     })();
     return () => {

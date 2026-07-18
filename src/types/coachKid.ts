@@ -109,6 +109,21 @@ export type KidStandingGuidance = {
 
 export type KidStandingGuidanceByKidId = Record<KidId, KidStandingGuidance>;
 
+/** Coach-authored current-state baseline; narrative is canonical, fields are optional metadata. */
+export type KidCurrentStateAssessment = {
+  narrative: string;
+  confidence?: string;
+  execution?: string;
+  consistency?: string;
+  pressureResponse?: string;
+  updatedAt: string;
+};
+
+export type KidCurrentStateAssessmentByKidId = Record<
+  KidId,
+  KidCurrentStateAssessment
+>;
+
 /** Simple pilot-only tournament outcome (no bracket / match modeling). */
 export type KidCompetitionResult =
   | "gold"
