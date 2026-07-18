@@ -2,6 +2,7 @@ import { Audio } from "expo-av";
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Alert, Pressable, Text, TextInput, View, type TextInputProps } from "react-native";
 
+import { persistCoachVoiceAudio } from "../../media/persistCoachVoiceAudio";
 import {
   logTranscribeRuntime,
   transcribeCoachAudio,
@@ -47,11 +48,22 @@ type CoachVoiceNoteFieldProps = {
   externalStopControl?: boolean;
   recordingControlsRef?: MutableRefObject<CoachVoiceRecordingControls | null>;
   onRecordingStateChange?: (state: CoachVoiceRecordingState) => void;
+  /**
+   * Durable local audio URI for coach-device replay (Phase 1 companion artifact).
+   * When present, shows a simple Play / Pause control. Missing audio never blocks transcript.
+   */
+  playbackUri?: string | null;
+  /**
+   * Fired after a recording is copied into durable local storage (before or with transcript).
+   * Match Breakdown attaches this as voiceNoteRefs; other surfaces may omit.
+   */
+  onAudioPersisted?: (localUri: string) => void;
 };
 
 /**
  * Certified coach voice note field: Record → Whisper transcript → editable text.
  * Reuses the single transcription corridor in coachVoiceTranscription.ts.
+ * Phase 1: also preserves companion audio locally for coach-device replay.
  */
 export function CoachVoiceNoteField({
   label,
@@ -69,9 +81,13 @@ export function CoachVoiceNoteField({
   externalStopControl = false,
   recordingControlsRef,
   onRecordingStateChange,
+  playbackUri = null,
+  onAudioPersisted,
 }: CoachVoiceNoteFieldProps) {
   const [recordingState, setRecordingState] = useState<CoachVoiceRecordingState>("idle");
+  const [playbackState, setPlaybackState] = useState<"idle" | "playing" | "paused">("idle");
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   const updateRecordingState = useCallback(
     (next: CoachVoiceRecordingState) => {
@@ -81,19 +97,43 @@ export function CoachVoiceNoteField({
     [onRecordingStateChange],
   );
 
+  const unloadPlayback = useCallback(async () => {
+    const sound = soundRef.current;
+    soundRef.current = null;
+    setPlaybackState("idle");
+    if (!sound) return;
+    try {
+      await sound.stopAsync();
+    } catch {
+      // ignore
+    }
+    try {
+      await sound.unloadAsync();
+    } catch {
+      // ignore
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       const activeRecording = recordingRef.current;
       recordingRef.current = null;
-      if (!activeRecording) return;
-      void activeRecording.stopAndUnloadAsync().catch(() => {});
+      if (activeRecording) {
+        void activeRecording.stopAndUnloadAsync().catch(() => {});
+      }
+      void unloadPlayback();
     };
-  }, []);
+  }, [unloadPlayback]);
+
+  useEffect(() => {
+    void unloadPlayback();
+  }, [playbackUri, unloadPlayback]);
 
   const startRecording = useCallback(async () => {
     if (disabled) return;
     if (recordingState === "recording" || recordingState === "processing") return;
     try {
+      await unloadPlayback();
       logTranscribeRuntime("permission_request", { stage: "startRecording" });
       const { status } = await Audio.requestPermissionsAsync();
       logTranscribeRuntime("permission_result", {
@@ -129,7 +169,7 @@ export function CoachVoiceNoteField({
         allowsRecordingIOS: false,
       });
     }
-  }, [disabled, recordingState, updateRecordingState]);
+  }, [disabled, recordingState, unloadPlayback, updateRecordingState]);
 
   const stopRecording = useCallback(async () => {
     if (recordingState !== "recording") return;
@@ -166,6 +206,24 @@ export function CoachVoiceNoteField({
         throw new Error("Missing recording URI");
       }
 
+      let durableUri = uri;
+      try {
+        durableUri = await persistCoachVoiceAudio(uri);
+        logTranscribeRuntime("audio_persisted_locally", {
+          stage: "stopRecording",
+          sourceUriScheme: uriScheme(uri),
+          durableUriScheme: uriScheme(durableUri),
+          durableUri,
+        });
+        onAudioPersisted?.(durableUri);
+      } catch (persistError) {
+        logTranscribeRuntime("audio_persist_failed", {
+          stage: "stopRecording",
+          ...transcribeRuntimeErrorFields(persistError),
+        });
+        // Transcript remains canonical; missing audio must never block transcription.
+      }
+
       const text = await transcribeCoachAudio(uri);
       onChangeText(text);
       updateRecordingState("done");
@@ -185,7 +243,52 @@ export function CoachVoiceNoteField({
         allowsRecordingIOS: false,
       });
     }
-  }, [onChangeText, recordingState, updateRecordingState]);
+  }, [onAudioPersisted, onChangeText, recordingState, updateRecordingState]);
+
+  const togglePlayback = useCallback(async () => {
+    const uri = playbackUri?.trim();
+    if (!uri || disabled || recordingState === "recording" || recordingState === "processing") {
+      return;
+    }
+
+    try {
+      if (playbackState === "playing" && soundRef.current) {
+        await soundRef.current.pauseAsync();
+        setPlaybackState("paused");
+        return;
+      }
+
+      if (playbackState === "paused" && soundRef.current) {
+        await soundRef.current.playAsync();
+        setPlaybackState("playing");
+        return;
+      }
+
+      await unloadPlayback();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri },
+        { shouldPlay: true },
+        (status) => {
+          if (!status.isLoaded) return;
+          if (status.didJustFinish) {
+            setPlaybackState("idle");
+            void sound.unloadAsync().catch(() => {});
+            if (soundRef.current === sound) soundRef.current = null;
+          }
+        },
+      );
+      soundRef.current = sound;
+      setPlaybackState("playing");
+    } catch (error) {
+      console.error("Coach commentary playback failed", error);
+      setPlaybackState("idle");
+      Alert.alert("Playback failed", "Could not play the saved commentary audio.");
+    }
+  }, [disabled, playbackState, playbackUri, recordingState, unloadPlayback]);
 
   useEffect(() => {
     if (!recordingControlsRef) return;
@@ -207,6 +310,9 @@ export function CoachVoiceNoteField({
   const showInlineStop = recordingState === "recording" && !externalStopControl;
   const recordDisabled =
     controlsDisabled || (externalStopControl && recordingState === "recording");
+  const showPlayback = Boolean(playbackUri?.trim()) && recordingState !== "recording";
+  const playbackDisabled =
+    disabled || recordingState === "processing" || recordingState === "recording";
 
   const statusText =
     recordingState === "processing"
@@ -229,39 +335,60 @@ export function CoachVoiceNoteField({
         >
           {label}
         </Text>
-        {showInlineStop ? (
-          <Pressable
-            onPress={() => void stopRecording()}
-            style={({ pressed }) => ({
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: "#dc2626",
-              backgroundColor: pressed ? "#b91c1c" : "#dc2626",
-            })}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>Stop</Text>
-          </Pressable>
-        ) : (
-          <Pressable
-            onPress={() => void startRecording()}
-            disabled={recordDisabled}
-            style={({ pressed }) => ({
-              paddingVertical: 8,
-              paddingHorizontal: 12,
-              borderRadius: 10,
-              borderWidth: 1,
-              borderColor: UI.accent,
-              backgroundColor: pressed ? "#1e40af" : UI.accent,
-              opacity: recordDisabled ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
-              {recordingState === "done" ? "Re-record" : "Record"}
-            </Text>
-          </Pressable>
-        )}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          {showPlayback ? (
+            <Pressable
+              onPress={() => void togglePlayback()}
+              disabled={playbackDisabled}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: pressed ? "#f3f4f6" : UI.bgCard,
+                opacity: playbackDisabled ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: UI.textPrimary }}>
+                {playbackState === "playing" ? "Pause" : playbackState === "paused" ? "Resume" : "▶ Play"}
+              </Text>
+            </Pressable>
+          ) : null}
+          {showInlineStop ? (
+            <Pressable
+              onPress={() => void stopRecording()}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: "#dc2626",
+                backgroundColor: pressed ? "#b91c1c" : "#dc2626",
+              })}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>Stop</Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              onPress={() => void startRecording()}
+              disabled={recordDisabled}
+              style={({ pressed }) => ({
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: UI.accent,
+                backgroundColor: pressed ? "#1e40af" : UI.accent,
+                opacity: recordDisabled ? 0.6 : 1,
+              })}
+            >
+              <Text style={{ fontSize: 11, fontWeight: "800", color: "#ffffff" }}>
+                {recordingState === "done" || showPlayback ? "Re-record" : "Record"}
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
       {disabled && disabledHint ? (
         <Text style={{ marginTop: 6, fontSize: 11, fontWeight: "700", color: UI.textSecondary }}>

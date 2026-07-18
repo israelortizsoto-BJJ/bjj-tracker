@@ -43,35 +43,48 @@ Why:
 - keeps changes explicit
 - improves operating discipline
 - supports better product-quality work
-## Handoff-first startup
+## Engineering OS vNext
+
+Effective 2026-07-17. The old EOD workflow is retired.
+
+### Document responsibilities
+
+Authoritative ownership rules: `docs/documentation-governance.md`.
+
+| Document | Owner | Role | Never |
+| --- | --- | --- | --- |
+| `docs/product/product-roadmap.md` | Product | Product SSOT — Epics, sequencing, product intent | Git commits; engineering investigations; debugging |
+| `docs/engineering-checkpoint.md` | Engineering | Session snapshot — updated every engineering session | Product roadmap duplication |
+| `docs/dev-handoff.md` | Engineering | Permanent engineering history — append-only | Rewrites of history |
+| `docs/engineering-parking-lot.md` | Engineering | Deferred work only | Bugs; active work |
+| `docs/architecture/certification/` | Architecture | Certification register — updated only after certification | Ad-hoc session notes |
+| `docs/master-prompt-developer.md` | Engineering Leadership | Developer operating doctrine — changes rarely | Session noise |
+| `docs/master-prompt-daily-restart.md` | Engineering Leadership | Startup procedure only | Non-startup content |
+
+Product documents are no longer duplicated inside engineering documents. Product intent lives in Product Roadmap (and Product OS). Engineering documents record execution, evidence, and deferral only.
+
+### Daily startup order (mandatory)
 
 Before any coding plan:
-1. `git status -sb`
-2. `git log -8 --oneline`
-3. `sed -n '1,280p' "docs/dev-handoff.md"`
-4. Read latest recap if needed: `docs/recaps/YYYY-MM-DD_dev-recap.md`
-5. State assumptions explicitly before proposing work
 
-Current slice truth lives in `docs/dev-handoff.md` — not in prompt memory.
+1. Inspect repository (`git status -sb`, `git log -8 --oneline`)
+2. Read Product Roadmap (`docs/product/product-roadmap.md`)
+3. Read Engineering Checkpoint (`docs/engineering-checkpoint.md`)
+4. Read Engineering Parking Lot (`docs/engineering-parking-lot.md`)
+5. Read latest Dev Handoff entry (`docs/dev-handoff.md`)
+6. Resume active Epic
+7. Execute engineering
+8. Engineering OS closeout (Checkpoint + Dev Handoff + Parking Lot as needed — not a separate EOD artifact)
 
-## Current restart workflow
+After reading the stack above:
 
-Before coding each day:
-1. check repo state
-2. read latest dev handoff (commands above)
-3. read latest recap only if the dev handoff references it
-4. Identify the narrowest highest-ROI slice from the current handoff.
+- Identify the narrowest highest-ROI slice for the active Epic.
+- Validate: investigation is inside the Active Investigation Register; subsystem is not already CERTIFIED.
+- Define today's evidence target before opening source code. The sprint ends when that boundary becomes CERTIFIED or NARROWED.
+- Confirm what must not break and validation gates before editing.
+- State assumptions explicitly before proposing work.
 
-   Validate:
-   - the investigation is inside the Active Investigation Register
-   - the subsystem is not already CERTIFIED
-   4A. Define today's evidence target before opening source code.
-
-    State the single uncertified boundary you intend to prove or narrow today. The sprint ends when that boundary becomes either CERTIFIED or NARROWED. Do not expand scope until the documentation has been updated or the investigation has been explicitly re-scoped.
-5. confirm what must not break
-6. confirm validation gates before editing
-
-Current blockers (verify against latest handoff before planning):
+Current blockers (verify against Checkpoint + latest handoff before planning):
 - coach sync base URL must be present in the **running** app for connect flows
 - validate connect E2E: Paste → Connect → Parent-athletes → Success strip → **This Week**
 - QA **This Week** tab without regressing weekly sync, training, or competition
@@ -99,7 +112,7 @@ Workflow order must remain identical:
 2. Reuse existing script if available.
 3. Otherwise generate a terminal-first inline Python updater.
 4. Update canonical living documents.
-5. Create/update the dated checkpoint/EOD artifact.
+5. Engineering OS closeout (update Engineering Checkpoint; append Dev Handoff; park deferred work if needed). Do not create a separate EOD artifact.
 6. Preview changes.
 7. Provide git checkpoint commands.
 8. End with the next restart prompt.
@@ -192,7 +205,7 @@ The current operating model is:
 Do not default back into Cursor-led broad implementation.
 
 ## Current development truth
-Follow **Handoff-first startup** and **Current restart workflow** above — they supersede this checklist.
+Follow **Engineering OS vNext** daily startup order above — it supersedes handoff-first / EOD checklists.
 
 Founder Execution Doctrine
 
@@ -286,11 +299,15 @@ Before ending the day, be ready to summarize:
 - risks / open loops
 - next product block
 
-Before ending today's sprint:
+Before ending today's sprint (Engineering OS closeout):
 
 If a previously uncertified boundary became proven:
 
 1. Update CertifiedArchitectureRegister-v1.md
 2. Update protected-systems-register.md if protection changes
 3. Remove or narrow the item from active-investigation-register.md
-4. Update docs/dev-handoff.md
+4. Update docs/engineering-checkpoint.md
+5. Update docs/dev-handoff.md
+6. Park deferred work in docs/engineering-parking-lot.md only when founder-approved with a Resume Trigger
+
+Do not create a separate EOD artifact. Do not duplicate Product Roadmap content into engineering documents.

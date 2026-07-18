@@ -67,6 +67,74 @@ Writers:
 scripts/write_engineering_checkpoint.py
 
 ---
+# DEV HANDOFF — 2026-07-17
+
+## Engineering OS vNext Adoption
+
+This entry records an operational milestone, not a normal engineering coding session.
+
+MatMind adopted Engineering OS vNext effective 2026-07-17 to separate Product Single Source of Truth from engineering execution memory, and to retire process that forced product narrative into dated EOD artifacts.
+
+The legacy EOD workflow is retired. Separate dated checkpoint/EOD artifacts are no longer created at closeout.
+
+Engineering OS vNext is now the official engineering operating model: Product Roadmap owns product intent; Engineering Checkpoint, Dev Handoff, and Parking Lot own execution, history, and intentional deferral.
+
+## Documentation Architecture
+
+| Document | Responsibility |
+| --- | --- |
+| `docs/product/product-roadmap.md` | Product Single Source of Truth — Epics, sequencing, Releases, Product Decisions |
+| `docs/engineering-checkpoint.md` | Engineering session snapshot — recoverable record of the active session / investigation |
+| `docs/dev-handoff.md` | Permanent engineering history — living execution memory and resume truth |
+| `docs/engineering-parking-lot.md` | Intentionally deferred engineering work only — founder-approved park with Resume Trigger |
+| `docs/master-prompt-developer.md` | Developer operating doctrine under Engineering OS vNext (debug, certification, closeout) |
+| `docs/master-prompt-daily-restart.md` | Mandatory daily startup order and Engineering OS closeout rules |
+
+Product documents are no longer duplicated inside engineering documents.
+
+## Product OS
+
+Product Roadmap (`docs/product/product-roadmap.md`) is now the Product Single Source of Truth.
+
+It governs Product Mission, Epics, Releases, and Product Decisions. Engineering documents must reference it — not restate Epic narrative.
+
+## Engineering OS
+
+Engineering Checkpoint replaces standalone EOD artifacts as the engineering session snapshot.
+
+Dev Handoff is the permanent engineering history (this register). Append newest-first; do not rewrite prior entries.
+
+Parking Lot contains intentionally deferred engineering work only — not backlog dump, not investigation register, not handoff substitute.
+
+Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed. Do not create a separate EOD artifact.
+
+## Product Work Completed
+
+- Voice-first Coach Workspace certification (completed Epic / Release 2 floor)
+- Product Roadmap creation (`docs/product/product-roadmap.md`)
+- Coach Commentary investigation (product + architecture; implementation deferred per Roadmap)
+- Engineering OS adoption (vNext effective 2026-07-17)
+
+## Active Engineering
+
+Current Product Epic authority: `docs/product/product-roadmap.md` — primary active Epic: Coach Workspace Evolution / Release 1 Coach Foundations.
+
+Do not duplicate Product Roadmap details here. Resume from the Active Epics section of the Product Roadmap.
+
+## Friday Restart
+
+Exact startup order:
+
+1. `git status` / `git log`
+2. Product Roadmap (`docs/product/product-roadmap.md`)
+3. Engineering Checkpoint (`docs/engineering-checkpoint.md`)
+4. Engineering Parking Lot (`docs/engineering-parking-lot.md`)
+5. Latest Dev Handoff (this entry)
+6. Resume active Epic
+
+Then execute engineering and perform Engineering OS closeout (Checkpoint + Dev Handoff + Parking Lot as needed — not a separate EOD).
+
+---
 #DEV HANDOFF — 2026-07-16
 Session Status
 

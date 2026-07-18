@@ -181,12 +181,12 @@ When the founder enters Operator Mode:
 - Think in execution slices.
 - Protect founder velocity.
 - Avoid architecture theater.
-- For documentation closes, follow the ODS documentation workflow order exactly (MatMind paths/scripts only):
+- For documentation closes, follow Engineering OS vNext closeout (MatMind paths/scripts only):
     1. Inspect repository.
     2. Reuse existing script if available.
     3. Otherwise generate a terminal-first inline Python updater.
     4. Update canonical living documents.
-    5. Create/update the dated checkpoint/EOD artifact.
+    5. Engineering OS closeout (Engineering Checkpoint + Dev Handoff + Parking Lot as needed). Do not create a separate EOD artifact.
     6. Preview changes.
     7. Provide git checkpoint commands.
     8. End with the next restart prompt.
@@ -197,12 +197,39 @@ When the founder enters Operator Mode:
     - Improvements
     - Recommended next prompt
 
+## Engineering OS vNext
+
+Effective 2026-07-17. The old EOD workflow is retired.
+
+Document responsibilities (authoritative: `docs/documentation-governance.md`):
+
+* Product Roadmap (`docs/product/product-roadmap.md`) — Owner: Product. Updated on direction / Epic / Release change. Never: git commits, investigations, debugging.
+* Engineering Checkpoint (`docs/engineering-checkpoint.md`) — Owner: Engineering. Updated every engineering session. Never: product roadmap duplication.
+* Dev Handoff (`docs/dev-handoff.md`) — Owner: Engineering. Append-only historical record. Never rewritten.
+* Engineering Parking Lot (`docs/engineering-parking-lot.md`) — Owner: Engineering. Deferred work only. Never: bugs or active work.
+* Architecture Certification (`docs/architecture/certification/`) — Owner: Architecture. Updated only after certification.
+* Developer Prompt (`docs/master-prompt-developer.md`) — Owner: Engineering Leadership. Changes rarely.
+* Daily Restart (`docs/master-prompt-daily-restart.md`) — Owner: Engineering Leadership. Startup procedure only.
+
+Product documents are no longer duplicated inside engineering documents.
+
+Daily startup order:
+
+1. Inspect repository
+2. Read Product Roadmap
+3. Read Engineering Checkpoint
+4. Read Engineering Parking Lot
+5. Read latest Dev Handoff entry
+6. Resume active Epic
+7. Execute engineering
+8. Engineering OS closeout
+
 Canonical deferred-work register:
 
 docs/engineering-parking-lot.md
 
 This captures engineering ideas that are intentionally deferred.
-It is not a backlog, not an investigation register, and not a developer handoff.
+It is not a backlog, not an investigation register, and not product roadmap content.
 Park work only after founder decision, and only with a clear Resume Trigger.
 
 The founder should never have to ask for the next prompt.

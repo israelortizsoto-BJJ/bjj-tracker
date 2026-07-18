@@ -31,6 +31,90 @@ These principles govern release order and capability priority. They should remai
 - **Build complete workflows rather than isolated features.** Each release should close a meaningful coaching loop, not leave half-finished habits behind.
 
 ---
+#EPIC — Coach Commentary 7/17/26
+Status
+
+Investigated
+
+Architecture Certified
+
+Implementation Deferred
+
+Repository Investigation Findings
+
+Completed.
+
+Investigation determined:
+
+Already Certified
+Voice recording
+Whisper transcription
+Transcript editing
+Match Breakdown persistence
+Parent transcript hydration
+Missing Capability
+
+Audio artifact persistence.
+
+Specifically:
+
+Permanent audio storage
+Audio metadata
+Sync metadata
+Parent playback
+Offline lifecycle
+Architectural Decision
+
+Do NOT build a second voice pipeline.
+
+Instead extend the certified Match Breakdown corridor.
+
+Current
+
+Record
+
+↓
+
+Transcript
+
+↓
+
+coachNote
+
+Future
+
+Record
+
+├── Transcript
+
+└── Audio Artifact
+
+↓
+
+Match Breakdown
+Future Milestones
+Phase 1
+
+Audio Artifact Infrastructure
+
+persistence
+metadata
+sync
+offline
+Phase 2
+
+Coach Commentary UX
+
+playback
+duration
+parent experience
+Phase 3
+
+Premium Coaching
+
+waveform
+AI highlights
+playback improvements
 
 # Release 1
 

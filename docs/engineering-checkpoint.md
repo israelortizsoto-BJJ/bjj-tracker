@@ -8,8 +8,116 @@
 > ChatGPT supplies the engineering model.
 > Python writes and verifies this document.
 
+Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
-Per our certified workflow, this is Step 5 (Engineering Checkpoint / EOD), not the living docs themselves.
+# Engineering Checkpoint
+
+Date: 2026-07-17  
+Status: INAUGURAL — Engineering OS vNext  
+Note: This is not an EOD. It is the first checkpoint under Engineering OS vNext.
+
+## Engineering OS Version
+
+Engineering OS vNext  
+Effective 2026-07-17
+
+## Repository State
+
+- Branch: `rollback-pre-lineage-regression`
+- Current certified commit: `536c1e1` (`parent-coach-refresh-floor-v1` — Complete coach compete refresh corridor)
+- HEAD: `bf79690` (Extend certified coach voice across Release 1 coaching loop)
+- Working tree: dirty
+  - Modified: `docs/master-prompt-daily-restart.md`, `docs/master-prompt-developer.md`, `docs/product/coach-experience-vision.md`, `docs/product/coach-workspace-roadmap.md`, `timeline-builder/google-sheets-live/src/TimelineEngine.gs`, `timeline-builder/google-sheets-live/src/TimelineV2.gs`
+  - Untracked: `docs/product/product-roadmap.md`
+
+## Current Product Epic
+
+Active product Epic authority: `docs/product/product-roadmap.md`
+
+Do not duplicate Epic narrative here. Resume from the Active Epics section of the Product Roadmap (primary active Epic: Coach Workspace Evolution / Release 1 Coach Foundations).
+
+## Session Objective
+
+Officially adopt Engineering OS vNext effective 2026-07-17: retire the old EOD workflow, lock document responsibilities, and establish the inaugural Engineering Checkpoint as the engineering session snapshot.
+
+## Repository Changes
+
+Engineering OS vNext Migration (Steps 1–2):
+
+- Updated `docs/master-prompt-developer.md` and `docs/master-prompt-daily-restart.md` to adopt Engineering OS vNext: Product Roadmap as Product SSOT; Checkpoint as session snapshot; Dev Handoff as permanent engineering history; Parking Lot for deferred work; mandatory daily startup order; Engineering OS closeout replaces EOD.
+- Created this inaugural 2026-07-17 Engineering Checkpoint under Engineering OS vNext.
+
+Working-tree product/timeline edits present at closeout are recorded under Repository State only; they are not claimed as certified engineering outcomes of this checkpoint.
+
+## Certified Architecture
+
+No new runtime or architecture certifications in this session.
+
+Process floor established:
+
+- Engineering OS vNext is the governing engineering operating system effective 2026-07-17.
+- Separate EOD artifacts are retired.
+
+Prior certified engineering floor remains: `536c1e1` / `parent-coach-refresh-floor-v1`.
+
+## Investigations
+
+- Confirmed master prompts previously instructed a dated checkpoint/EOD artifact and handoff-first startup; both are superseded by Engineering OS vNext daily startup + closeout.
+- Confirmed Product Roadmap (`docs/product/product-roadmap.md`) exists as Product Single Source of Truth and must not be duplicated into engineering documents.
+- Confirmed historical checkpoints in this register remain recoverable memory and must be preserved.
+
+## Engineering Decisions
+
+1. Retire the old EOD workflow effective 2026-07-17.
+2. Adopt Engineering OS vNext document responsibilities:
+   - Product Roadmap → Product Single Source of Truth
+   - Engineering Checkpoint → engineering session snapshot
+   - Dev Handoff → permanent engineering history
+   - Engineering Parking Lot → deferred engineering work
+3. Product documents are no longer duplicated inside engineering documents.
+4. Daily startup order is mandatory: Inspect repository → Product Roadmap → Engineering Checkpoint → Engineering Parking Lot → latest Dev Handoff entry → Resume active Epic → Execute engineering → Engineering OS closeout.
+
+## Open Risks
+
+- Engineering OS vNext is adopted in master prompts and this inaugural Checkpoint; remaining living docs (Dev Handoff header language, Checkpoint register “Current Release” product fields, script wording) may still contain pre-vNext / EOD phrasing until later migration steps.
+- `docs/product/product-roadmap.md` is present but untracked at Checkpoint write time — Product SSOT must be committed before treating repo HEAD as product-doc complete.
+- Working tree includes non-migration edits (product vision/roadmap narrative, timeline-builder Apps Script); do not conflate those with the certified parent-coach refresh floor.
+- Migration Steps 3–5 (if planned) are not yet executed in this Checkpoint.
+
+## Deferred Engineering
+
+Deferred engineering work lives only in `docs/engineering-parking-lot.md`.
+
+Do not duplicate Parking Lot contents here. No new parking items were added in this session.
+
+## Friday Morning Resume
+
+Exact startup instructions:
+
+1. Inspect repository: `git status -sb` and `git log -8 --oneline`
+2. Read Product Roadmap: `docs/product/product-roadmap.md`
+3. Read this Engineering Checkpoint (2026-07-17 inaugural vNext entry above)
+4. Read Engineering Parking Lot: `docs/engineering-parking-lot.md`
+5. Read latest Dev Handoff entry: `docs/dev-handoff.md`
+6. Resume active Epic from Product Roadmap (Coach Workspace Evolution / Release 1 Foundations)
+7. Execute engineering against repo truth; do not reopen certified architecture without new evidence
+8. Close with Engineering OS closeout (Checkpoint + Dev Handoff + Parking Lot as needed — never a separate EOD)
+
+## Engineering OS Closeout
+
+Verification checklist for this session:
+
+| Document | Updated this session? |
+| --- | --- |
+| `docs/master-prompt-developer.md` | Yes (Step 1 — Engineering OS vNext) |
+| `docs/master-prompt-daily-restart.md` | Yes (Step 1 — Engineering OS vNext) |
+| `docs/engineering-checkpoint.md` | Yes (Step 2 — inaugural vNext Checkpoint) |
+| `docs/dev-handoff.md` | No |
+| `docs/engineering-parking-lot.md` | No |
+| `docs/product/product-roadmap.md` | Present / untracked — not modified by this Checkpoint write |
+| Separate EOD artifact | Not created (retired) |
+
+---
 
 # Current Release
 

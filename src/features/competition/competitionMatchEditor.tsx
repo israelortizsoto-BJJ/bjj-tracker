@@ -20,6 +20,8 @@ import {
   getCompetitionDetailByEntryId,
 } from "../../storage/competitionStore";
 import type { KidCompetitionEntry } from "../../types/coachKid";
+import type { VoiceNoteRef } from "../../types/coachMatchBreakdownOverlay";
+import { normalizeVoiceNoteRefs } from "../../types/coachMatchBreakdownOverlay";
 import { normalizeStoredSubmissionType, SUBMISSION_TYPE_CHIPS } from "./submissionTypes";
 
 /** UI tokens mirror the coach competition editor. */
@@ -53,6 +55,8 @@ export type LocalMatch = {
   /** Canonical key from `SUBMISSION_TYPE_CHIPS` when outcome is Submission */
   submissionType: string | null;
   coachNote?: string;
+  /** Phase 1 companion audio refs (coach-local). Transcript remains canonical. */
+  voiceNoteRefs?: VoiceNoteRef[];
   imageUri: string | null;
   videoUri: string | null;
   imageAssetId: string | null;
@@ -74,6 +78,7 @@ export function createEmptyMatch(idSuffix: string): LocalMatch {
     submissionTime: null,
     submissionType: null,
     coachNote: "",
+    voiceNoteRefs: undefined,
     imageUri: null,
     videoUri: null,
     imageAssetId: null,
@@ -89,6 +94,7 @@ export function snapshotFromLocal(m: LocalMatch): CompetitionDetailMatchSnapshot
   const st = normalizeStoredSubmissionType(m.submissionType);
   const coachNote =
     typeof m.coachNote === "string" && m.coachNote.trim().length > 0 ? m.coachNote.trim() : undefined;
+  const voiceNoteRefs = normalizeVoiceNoteRefs(m.voiceNoteRefs);
   return {
     id: m.id,
     matchResult: m.matchResult,
@@ -96,6 +102,7 @@ export function snapshotFromLocal(m: LocalMatch): CompetitionDetailMatchSnapshot
     submissionTime,
     ...(st ? { submissionType: st } : {}),
     coachNote,
+    ...(voiceNoteRefs ? { voiceNoteRefs } : {}),
     imageUri: m.imageUri,
     videoUri: m.videoUri,
     imageAssetId: m.imageAssetId,
@@ -128,6 +135,7 @@ export function localMatchFromSnapshot(m: CompetitionDetailMatchSnapshot): Local
   }
   const rawCoachNote = (m as { coachNote?: unknown }).coachNote;
   const coachNote = typeof rawCoachNote === "string" ? rawCoachNote : "";
+  const voiceNoteRefs = normalizeVoiceNoteRefs((m as { voiceNoteRefs?: unknown }).voiceNoteRefs);
   const submissionType = normalizeStoredSubmissionType((m as { submissionType?: unknown }).submissionType);
   return {
     id: m.id,
@@ -136,6 +144,7 @@ export function localMatchFromSnapshot(m: CompetitionDetailMatchSnapshot): Local
     submissionTime,
     submissionType,
     coachNote,
+    ...(voiceNoteRefs ? { voiceNoteRefs } : {}),
     imageUri: m.imageUri,
     videoUri: m.videoUri,
     imageAssetId: m.imageAssetId,
@@ -222,6 +231,7 @@ export function MatchBlock({
   onCoachNoteChange,
   onCoachNoteFocus,
   onCoachNoteLayout,
+  onVoiceNotePersisted,
   onImageChange,
   onVideoChange,
   canonicalReadOnly = false,
@@ -236,6 +246,7 @@ export function MatchBlock({
   onCoachNoteChange: (text: string) => void;
   onCoachNoteFocus?: () => void;
   onCoachNoteLayout?: (y: number) => void;
+  onVoiceNotePersisted?: (localUri: string) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
   canonicalReadOnly?: boolean;
@@ -360,6 +371,8 @@ export function MatchBlock({
           idleStatusHint={isPlaying ? "Video playing" : "Video paused"}
           externalStopControl
           recordingControlsRef={recordingControlsRef}
+          playbackUri={match.voiceNoteRefs?.[0]?.localUri ?? null}
+          onAudioPersisted={onVoiceNotePersisted}
           onRecordingStateChange={(state) => {
             setRecordingState(state);
             if (state === "recording") setIsPlaying(false);

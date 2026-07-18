@@ -6,6 +6,7 @@ import type {
   CoachMatchBreakdownOverlayIdentity,
   CoachMatchBreakdownOverlayPatch,
 } from "../types/coachMatchBreakdownOverlay";
+import { normalizeVoiceNoteRefs } from "../types/coachMatchBreakdownOverlay";
 import { logMatchBreakdownAuthorityTrace } from "../dev/matchBreakdownAuthorityTrace";
 import { StorageKeys } from "./storageKeys";
 
@@ -31,6 +32,7 @@ function normalizeOverlay(value: unknown): CoachMatchBreakdownOverlay | null {
   const matchLineageKey = trimmed(row.matchLineageKey);
   const updatedAt = trimmed(row.updatedAt);
   if (!sharedAthleteId || !sharedCompetitionId || !matchLineageKey || !updatedAt) return null;
+  const voiceNoteRefs = normalizeVoiceNoteRefs(row.voiceNoteRefs);
   return {
     sharedAthleteId,
     sharedCompetitionId,
@@ -40,6 +42,7 @@ function normalizeOverlay(value: unknown): CoachMatchBreakdownOverlay | null {
       ? { dictatedReflection: trimmed(row.dictatedReflection) }
       : {}),
     ...(trimmed(row.analysis) ? { analysis: trimmed(row.analysis) } : {}),
+    ...(voiceNoteRefs ? { voiceNoteRefs } : {}),
     updatedAt,
   };
 }
@@ -266,6 +269,9 @@ export async function writeCoachMatchBreakdownOverlay(input: {
       ? { dictatedReflection: existing.dictatedReflection }
       : {}),
     ...(existing?.analysis ? { analysis: existing.analysis } : {}),
+    ...(existing?.voiceNoteRefs?.length
+      ? { voiceNoteRefs: existing.voiceNoteRefs }
+      : {}),
     updatedAt,
   };
 
@@ -276,12 +282,19 @@ export async function writeCoachMatchBreakdownOverlay(input: {
     else delete overlay[field];
   }
 
+  if (Object.prototype.hasOwnProperty.call(input.patch, "voiceNoteRefs")) {
+    const nextRefs = normalizeVoiceNoteRefs(input.patch.voiceNoteRefs);
+    if (nextRefs) overlay.voiceNoteRefs = nextRefs;
+    else delete overlay.voiceNoteRefs;
+  }
+
   map[key] = overlay;
   await writeStore(map);
   const storeOverlayCountForAthlete = Object.values(map).filter(
     (row) => row.sharedAthleteId.trim() === sharedAthleteId,
   ).length;
   const coachNote = overlay.coachNote?.trim() ?? "";
+  const voiceNoteRefCount = overlay.voiceNoteRefs?.length ?? 0;
   logMatchBreakdownAuthorityTrace("OVERLAY_STORE_WRITE_COMPLETE", {
     traceId: input.traceId ?? null,
     sharedAthleteId,
@@ -302,6 +315,7 @@ export async function writeCoachMatchBreakdownOverlay(input: {
     matchLineageKey,
     coachNotePresent: Boolean(coachNote),
     coachNoteLength: coachNote.length,
+    voiceNoteRefCount,
     storeOverlayCountForAthlete,
     compositeKey: key,
   });

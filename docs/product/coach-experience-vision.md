@@ -43,6 +43,78 @@ Screens, tabs, and workflows exist only to support developmental thinking. They 
 
 ---
 
+#Coach Commentary Vision 7/17/2026
+Why Coach Commentary Exists
+
+MatMind is not trying to become another notes application.
+
+The goal is to preserve the coach's personality immediately after competition.
+
+The transcript captures coaching knowledge.
+
+The audio captures coaching emotion.
+
+Together they create a coaching experience that parents and athletes will remember long after the tournament.
+
+Product Philosophy
+
+The transcript remains the canonical coaching record.
+
+It powers:
+
+AI Coach
+Search
+Dashboards
+Analytics
+Longitudinal athlete intelligence
+
+The audio is a companion artifact.
+
+It preserves:
+
+tone
+excitement
+encouragement
+pauses
+emphasis
+authenticity
+
+The athlete should feel like the coach is speaking directly to them after the match.
+
+Match Breakdown Experience
+Coach Commentary
+
+▶ Play Coach Commentary
+
+Recorded immediately after Match 3
+
+-----------------------
+
+Transcript
+
+...
+
+Parents may:
+
+read
+
+or
+
+listen
+
+The experience should support both.
+
+Product Principles
+Transcript is always editable.
+Transcript is always the source of truth.
+Audio is never required to understand coaching.
+Audio exists to strengthen coach-athlete-parent connection.
+Coach Commentary only exists where emotion is highest.
+
+Current scope:
+
+✅ Competition Match Breakdown
+
 # Coach Mental Model
 
 MatMind should mirror the real coaching loop.

@@ -1,5 +1,6 @@
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import type { KidCompetitionEntry } from "../../types/coachKid";
+import type { VoiceNoteRef } from "../../types/coachMatchBreakdownOverlay";
 import type {
   SyncedCompetitionMatchTopology,
   SyncedCompetitionTopologyArtifact,
@@ -10,6 +11,7 @@ import { logBreakdownPropagationForMatch } from "./competitionProjectionBreakdow
 export type CompetitionMatchOverlayAnnotation = {
   matchLineageKey: string;
   coachNote?: string;
+  voiceNoteRefs?: VoiceNoteRef[];
 };
 
 export type CompetitionCompeteView = KidCompetitionEntry & {
@@ -31,6 +33,7 @@ export function competitionOverlayAnnotationsFromEmbeddedMatches(
   return matches.map((match) => ({
     matchLineageKey: match.id,
     coachNote: match.coachNote,
+    ...(match.voiceNoteRefs?.length ? { voiceNoteRefs: match.voiceNoteRefs } : {}),
   }));
 }
 
@@ -143,6 +146,7 @@ function snapshotFromTopologyMatch(
   const image = mediaRefForKind(match, "image");
   const video = mediaRefForKind(match, "video");
   const coachNote = overlay?.coachNote?.trim();
+  const voiceNoteRefs = overlay?.voiceNoteRefs;
   return {
     id: match.matchLineageKey,
     matchResult: match.result,
@@ -150,6 +154,7 @@ function snapshotFromTopologyMatch(
     submissionTime: match.durationSeconds === null ? null : String(match.durationSeconds),
     ...(match.submissionType ? { submissionType: match.submissionType } : {}),
     ...(coachNote ? { coachNote } : {}),
+    ...(voiceNoteRefs?.length ? { voiceNoteRefs } : {}),
     imageUri: image.uri,
     videoUri: video.uri,
     imageAssetId: image.assetId,

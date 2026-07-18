@@ -19,6 +19,7 @@ import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../../../../../../src/media/persistCameraRollMedia";
+import { bestEffortDeletePersistedCoachVoice } from "../../../../../../src/media/persistCoachVoiceAudio";
 import {
   createKidCompetitionEntry,
   deleteKidCompetitionEntry,
@@ -77,7 +78,10 @@ import { createOverlayForensicTraceId } from "@/src/dev/overlayForensicTrace";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
 import { parentResultsRecorded } from "@/src/domain/competition/parentResultsRecorded";
 import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
-import type { CoachMatchBreakdownOverlay } from "@/src/types/coachMatchBreakdownOverlay";
+import type {
+  CoachMatchBreakdownOverlay,
+  VoiceNoteRef,
+} from "@/src/types/coachMatchBreakdownOverlay";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -599,6 +603,27 @@ export default function KidCompetitionEditScreen() {
     setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, coachNote: text } : m)));
   }, []);
 
+  const setMatchVoiceNotePersisted = useCallback((matchIndex: number, localUri: string) => {
+    const uri = localUri.trim();
+    if (!uri) return;
+    setMatches((prev) =>
+      prev.map((m, i) => {
+        if (i !== matchIndex) return m;
+        const previousUri = m.voiceNoteRefs?.[0]?.localUri;
+        if (previousUri && previousUri !== uri) {
+          void bestEffortDeletePersistedCoachVoice(previousUri);
+        }
+        const nextRef: VoiceNoteRef = {
+          id: `voice-${Date.now().toString(16)}`,
+          localUri: uri,
+          createdAt: new Date().toISOString(),
+          mimeType: "audio/mp4",
+        };
+        return { ...m, voiceNoteRefs: [nextRef] };
+      }),
+    );
+  }, []);
+
   const updateMatchMedia = useCallback(
     (matchIndex: number, patch: Partial<Pick<LocalMatch, "imageUri" | "videoUri" | "imageAssetId" | "videoAssetId">>) => {
       if (canonicalReadOnly) {
@@ -676,22 +701,25 @@ export default function KidCompetitionEditScreen() {
             style: "destructive",
             onPress: () =>
               setMatches((prev) =>
-                prev.map((m) =>
-                  m.id === matchId
-                    ? {
-                        ...m,
-                        videoUri: null,
-                        imageUri: null,
-                        imageAssetId: null,
-                        videoAssetId: null,
-                        matchResult: null,
-                        outcome: null,
-                        submissionTime: null,
-                        submissionType: null,
-                        coachNote: "",
-                      }
-                    : m,
-                ),
+                prev.map((m) => {
+                  if (m.id !== matchId) return m;
+                  for (const ref of m.voiceNoteRefs ?? []) {
+                    void bestEffortDeletePersistedCoachVoice(ref.localUri);
+                  }
+                  return {
+                    ...m,
+                    videoUri: null,
+                    imageUri: null,
+                    imageAssetId: null,
+                    videoAssetId: null,
+                    matchResult: null,
+                    outcome: null,
+                    submissionTime: null,
+                    submissionType: null,
+                    coachNote: "",
+                    voiceNoteRefs: undefined,
+                  };
+                }),
               ),
           },
         ]);
@@ -702,7 +730,15 @@ export default function KidCompetitionEditScreen() {
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => setMatches((prev) => (prev.length <= 1 ? prev : prev.filter((m) => m.id !== matchId))),
+          onPress: () =>
+            setMatches((prev) => {
+              if (prev.length <= 1) return prev;
+              const target = prev.find((m) => m.id === matchId);
+              for (const ref of target?.voiceNoteRefs ?? []) {
+                void bestEffortDeletePersistedCoachVoice(ref.localUri);
+              }
+              return prev.filter((m) => m.id !== matchId);
+            }),
         },
       ]);
     },
@@ -854,6 +890,7 @@ export default function KidCompetitionEditScreen() {
             },
             patch: {
               coachNote: match.coachNote?.trim() || null,
+              voiceNoteRefs: match.voiceNoteRefs?.length ? match.voiceNoteRefs : null,
             },
             traceId: overlayForensicTraceId,
           });
@@ -1585,6 +1622,7 @@ export default function KidCompetitionEditScreen() {
                     onSubmissionTypeChange={(key) => setMatchSubmissionType(i, key)}
                     onCoachNoteChange={(text) => setMatchCoachNote(i, text)}
                     onCoachNoteFocus={onNotesFocusScroll}
+                    onVoiceNotePersisted={(localUri) => setMatchVoiceNotePersisted(i, localUri)}
                     onImageChange={(uri, assetId) => updateMatchMedia(i, { imageUri: uri, imageAssetId: assetId })}
                     onVideoChange={(uri, assetId) => updateMatchMedia(i, { videoUri: uri, videoAssetId: assetId })}
                   />

@@ -9,6 +9,7 @@ import type {
   KidCompetitionResult,
   KidCompetitionVideoRef,
 } from "../types/coachKid";
+import type { VoiceNoteRef } from "../types/coachMatchBreakdownOverlay";
 import { logCompOverlayMaterialize, logCompSave } from "../dev/competitionMutationDevLog";
 import {
   emitCompetitionChange,
@@ -32,6 +33,8 @@ export type CompetitionDetailMatchSnapshot = {
    */
   submissionType?: string | null;
   coachNote?: string;
+  /** Phase 1 companion audio refs from coach overlay projection (coach-local only). */
+  voiceNoteRefs?: VoiceNoteRef[];
   imageUri: string | null;
   videoUri: string | null;
   imageAssetId: string | null;
