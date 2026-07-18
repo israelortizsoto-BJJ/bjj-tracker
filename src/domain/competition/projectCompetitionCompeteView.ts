@@ -12,6 +12,10 @@ export type CompetitionMatchOverlayAnnotation = {
   matchLineageKey: string;
   coachNote?: string;
   voiceNoteRefs?: VoiceNoteRef[];
+  /** Remote companion audio metadata from synced Match Breakdown artifact. */
+  mediaId?: string;
+  durationMs?: number;
+  mimeType?: string;
 };
 
 export type CompetitionCompeteView = KidCompetitionEntry & {
@@ -34,6 +38,9 @@ export function competitionOverlayAnnotationsFromEmbeddedMatches(
     matchLineageKey: match.id,
     coachNote: match.coachNote,
     ...(match.voiceNoteRefs?.length ? { voiceNoteRefs: match.voiceNoteRefs } : {}),
+    ...(match.mediaId?.trim() ? { mediaId: match.mediaId.trim() } : {}),
+    ...(match.durationMs !== undefined ? { durationMs: match.durationMs } : {}),
+    ...(match.mimeType?.trim() ? { mimeType: match.mimeType.trim() } : {}),
   }));
 }
 
@@ -147,6 +154,7 @@ function snapshotFromTopologyMatch(
   const video = mediaRefForKind(match, "video");
   const coachNote = overlay?.coachNote?.trim();
   const voiceNoteRefs = overlay?.voiceNoteRefs;
+  const mediaId = overlay?.mediaId?.trim();
   return {
     id: match.matchLineageKey,
     matchResult: match.result,
@@ -155,6 +163,9 @@ function snapshotFromTopologyMatch(
     ...(match.submissionType ? { submissionType: match.submissionType } : {}),
     ...(coachNote ? { coachNote } : {}),
     ...(voiceNoteRefs?.length ? { voiceNoteRefs } : {}),
+    ...(mediaId ? { mediaId } : {}),
+    ...(overlay?.durationMs !== undefined ? { durationMs: overlay.durationMs } : {}),
+    ...(overlay?.mimeType?.trim() ? { mimeType: overlay.mimeType.trim() } : {}),
     imageUri: image.uri,
     videoUri: video.uri,
     imageAssetId: image.assetId,

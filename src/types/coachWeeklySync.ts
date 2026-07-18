@@ -161,6 +161,13 @@ export type SyncedCoachMatchBreakdownArtifact = {
   sharedCompetitionId: SharedCompetitionId;
   matchLineageKey: string;
   coachNote?: string;
+  /**
+   * Remote companion audio id (worker R2). Domain metadata only.
+   * Never a URL, localUri, or audio bytes.
+   */
+  mediaId?: string;
+  durationMs?: number;
+  mimeType?: string;
   updatedAt: string;
 };
 

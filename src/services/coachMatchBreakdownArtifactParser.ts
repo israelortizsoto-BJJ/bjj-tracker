@@ -9,13 +9,37 @@ function isSyncedCoachMatchBreakdownArtifact(
 ): value is SyncedCoachMatchBreakdownArtifact {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const artifact = value as Record<string, unknown>;
-  return (
-    typeof artifact.sharedAthleteId === "string" &&
-    typeof artifact.sharedCompetitionId === "string" &&
-    typeof artifact.matchLineageKey === "string" &&
-    typeof artifact.updatedAt === "string" &&
-    (artifact.coachNote === undefined || typeof artifact.coachNote === "string")
-  );
+  if (
+    typeof artifact.sharedAthleteId !== "string" ||
+    typeof artifact.sharedCompetitionId !== "string" ||
+    typeof artifact.matchLineageKey !== "string" ||
+    typeof artifact.updatedAt !== "string" ||
+    (artifact.coachNote !== undefined && typeof artifact.coachNote !== "string")
+  ) {
+    return false;
+  }
+  // Infrastructure URLs and local paths must never enter the canonical artifact.
+  if (
+    typeof artifact.localUri === "string" ||
+    typeof artifact.url === "string" ||
+    typeof artifact.audioUrl === "string" ||
+    "voiceNoteRefs" in artifact
+  ) {
+    return false;
+  }
+  if (artifact.mediaId !== undefined) {
+    if (typeof artifact.mediaId !== "string" || !/^[a-f0-9]{32}$/i.test(artifact.mediaId.trim())) {
+      return false;
+    }
+  }
+  if (artifact.mimeType !== undefined && typeof artifact.mimeType !== "string") return false;
+  if (
+    artifact.durationMs !== undefined &&
+    !(typeof artifact.durationMs === "number" && Number.isFinite(artifact.durationMs) && artifact.durationMs >= 0)
+  ) {
+    return false;
+  }
+  return true;
 }
 
 function isSyncedCoachMatchBreakdownArtifactSet(

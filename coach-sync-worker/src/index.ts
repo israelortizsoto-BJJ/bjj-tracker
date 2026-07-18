@@ -15,6 +15,8 @@ import {
 
 export interface Env {
   SESSIONS: KVNamespace;
+  /** Coach commentary audio objects. Metadata (mediaId) syncs via Match Breakdown artifacts. */
+  MEDIA: R2Bucket;
 }
 
 type WeeklyParentFeedback = {
@@ -165,6 +167,10 @@ type CoachMatchBreakdownArtifact = {
   sharedCompetitionId: string;
   matchLineageKey: string;
   coachNote?: string;
+  /** Remote companion audio id (R2). Never a URL or localUri. */
+  mediaId?: string;
+  durationMs?: number;
+  mimeType?: string;
   updatedAt: string;
 };
 
@@ -394,6 +400,19 @@ const MAX_TOPOLOGY_PAYLOAD_CHARS = 256_000;
 const MAX_TOPOLOGY_ID_CHARS = 200;
 const MAX_TOPOLOGY_URI_CHARS = 2_000;
 const MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE = 2048;
+const MAX_COACH_MEDIA_BYTES = 15 * 1024 * 1024;
+const MEDIA_ID_RE = /^[a-f0-9]{32}$/i;
+const MEDIA_CONTENT_TTL_SECONDS = 15 * 60;
+const MEDIA_DURATION_HEADER = "X-MatMind-Duration-Ms";
+const ALLOWED_COACH_MEDIA_MIME = new Set([
+  "audio/mp4",
+  "audio/m4a",
+  "audio/x-m4a",
+  "audio/aac",
+  "audio/mpeg",
+  "audio/mp3",
+  "application/octet-stream",
+]);
 const OVERLAY_FORENSIC_TRACE_HEADER = "X-Overlay-Forensic-Trace-Id";
 const MATCH_BREAKDOWN_AUTHORITY_TRACE_PREFIX =
   "[MATCH_BREAKDOWN_AUTHORITY_TRACE]";
@@ -472,7 +491,8 @@ function json(data: unknown, status = 200, cors = true, auditSnapshot?: string):
   if (cors) {
     headers["Access-Control-Allow-Origin"] = "*";
     headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS";
-    headers["Access-Control-Allow-Headers"] = `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}`;
+    headers["Access-Control-Allow-Headers"] =
+      `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}, ${MEDIA_DURATION_HEADER}`;
     headers["Access-Control-Expose-Headers"] = MATMIND_AUDIT_SNAPSHOT_HEADER;
   }
   return new Response(JSON.stringify(data), { status, headers });
@@ -1256,13 +1276,85 @@ function parseCoachMatchBreakdownArtifact(raw: unknown): CoachMatchBreakdownArti
   const coachNoteRaw = typeof o.coachNote === "string" ? o.coachNote.trim() : "";
   if (!sharedAthleteId || !sharedCompetitionId || !matchLineageKey || !updatedAt) return null;
   if (coachNoteRaw.length > MAX_COACH_BREAKDOWN_TEXT_CHARS) return null;
+  // Domain metadata only — reject any attempt to sync URLs or local paths.
+  if (typeof o.localUri === "string" || typeof o.url === "string" || typeof o.audioUrl === "string") {
+    return null;
+  }
+  if ("voiceNoteRefs" in o) return null;
+  const mediaIdRaw = typeof o.mediaId === "string" ? o.mediaId.trim() : "";
+  const mediaId = mediaIdRaw && MEDIA_ID_RE.test(mediaIdRaw) ? mediaIdRaw.toLowerCase() : "";
+  if (mediaIdRaw && !mediaId) return null;
+  const mimeTypeRaw = typeof o.mimeType === "string" ? o.mimeType.trim().toLowerCase() : "";
+  const mimeType =
+    mimeTypeRaw && mimeTypeRaw.length <= 80 && ALLOWED_COACH_MEDIA_MIME.has(mimeTypeRaw)
+      ? mimeTypeRaw
+      : "";
+  if (mimeTypeRaw && !mimeType) return null;
+  const durationMs =
+    typeof o.durationMs === "number" && Number.isFinite(o.durationMs) && o.durationMs >= 0
+      ? Math.min(Math.floor(o.durationMs), 24 * 60 * 60 * 1000)
+      : undefined;
   return {
     sharedAthleteId,
     sharedCompetitionId,
     matchLineageKey,
     ...(coachNoteRaw ? { coachNote: coachNoteRaw } : {}),
+    ...(mediaId ? { mediaId } : {}),
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(mimeType ? { mimeType } : {}),
     updatedAt,
   };
+}
+
+function mediaObjectKey(token: string, mediaId: string): string {
+  return `sessions/${token}/media/${mediaId}`;
+}
+
+async function hmacHex(secret: string, message: string): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return Array.from(new Uint8Array(sig), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function signMediaContentAccess(
+  writerSecret: string,
+  token: string,
+  mediaId: string,
+  expUnix: number,
+): Promise<string> {
+  return hmacHex(writerSecret, `media-content:${token}:${mediaId}:${expUnix}`);
+}
+
+async function verifyMediaContentAccess(
+  writerSecret: string,
+  token: string,
+  mediaId: string,
+  expUnix: number,
+  sig: string,
+): Promise<boolean> {
+  if (!sig || !MEDIA_ID_RE.test(mediaId)) return false;
+  if (!Number.isFinite(expUnix) || expUnix <= Math.floor(Date.now() / 1000)) return false;
+  const expected = await signMediaContentAccess(writerSecret, token, mediaId, expUnix);
+  if (expected.length !== sig.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < expected.length; i += 1) {
+    mismatch |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
+
+function parseDurationMsHeader(request: Request): number | undefined {
+  const raw = request.headers.get(MEDIA_DURATION_HEADER)?.trim() ?? "";
+  if (!raw) return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.min(Math.floor(n), 24 * 60 * 60 * 1000);
 }
 
 function parseCoachMatchBreakdownArtifactSet(
@@ -1652,7 +1744,8 @@ export default {
     const corsHeaders = {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}`,
+      "Access-Control-Allow-Headers":
+        `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}, ${MEDIA_DURATION_HEADER}`,
       "Access-Control-Expose-Headers": MATMIND_AUDIT_SNAPSHOT_HEADER,
     };
 
@@ -3371,6 +3464,132 @@ export default {
           path,
           method: request.method,
         });
+      }
+
+      const mediaUpload = path.match(/^\/v1\/sessions\/([^/]+)\/media$/);
+      if (mediaUpload && request.method === "POST") {
+        const token = decodeURIComponent(mediaUpload[1] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
+        const auth = request.headers.get("Authorization") ?? "";
+        const m = /^Bearer\s+(.+)$/.exec(auth.trim());
+        const secret = m?.[1]?.trim() ?? "";
+        if (!secret) return error("Unauthorized", 401);
+
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec || rec.writerSecret !== secret) return error("Unauthorized", 401);
+
+        const contentTypeRaw = (request.headers.get("Content-Type") ?? "").split(";")[0]?.trim().toLowerCase() || "";
+        const mimeType = ALLOWED_COACH_MEDIA_MIME.has(contentTypeRaw)
+          ? contentTypeRaw
+          : "";
+        if (!mimeType) return error("Unsupported media Content-Type", 415);
+
+        const contentLengthHeader = request.headers.get("Content-Length");
+        if (contentLengthHeader) {
+          const declared = Number(contentLengthHeader);
+          if (Number.isFinite(declared) && declared > MAX_COACH_MEDIA_BYTES) {
+            return error("Media payload too large", 413);
+          }
+        }
+
+        const body = await request.arrayBuffer();
+        if (!body.byteLength) return error("Empty media body", 400);
+        if (body.byteLength > MAX_COACH_MEDIA_BYTES) return error("Media payload too large", 413);
+
+        const mediaId = randomHex(16);
+        const durationMs = parseDurationMsHeader(request);
+        const key = mediaObjectKey(token, mediaId);
+        await env.MEDIA.put(key, body, {
+          httpMetadata: { contentType: mimeType },
+          customMetadata: {
+            sessionTokenTail: token.slice(-8),
+            ...(durationMs !== undefined ? { durationMs: String(durationMs) } : {}),
+          },
+        });
+
+        console.log("[COACH_MEDIA_TRACE]", {
+          stage: "worker_media_upload_ok",
+          tokenSuffix: token.slice(-8),
+          mediaId,
+          mimeType,
+          byteLength: body.byteLength,
+          durationMs: durationMs ?? null,
+        });
+
+        return json(
+          {
+            mediaId,
+            mimeType,
+            ...(durationMs !== undefined ? { durationMs } : {}),
+          },
+          201,
+        );
+      }
+
+      const mediaResolve = path.match(/^\/v1\/sessions\/([^/]+)\/media\/([^/]+)$/);
+      if (mediaResolve && request.method === "GET") {
+        const token = decodeURIComponent(mediaResolve[1] ?? "").trim().toLowerCase();
+        const mediaId = decodeURIComponent(mediaResolve[2] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token) || !MEDIA_ID_RE.test(mediaId)) {
+          return error("Invalid media request", 400);
+        }
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec) return error("Not found", 404);
+
+        const key = mediaObjectKey(token, mediaId);
+        const head = await env.MEDIA.head(key);
+        if (!head) return error("Not found", 404);
+
+        const expUnix = Math.floor(Date.now() / 1000) + MEDIA_CONTENT_TTL_SECONDS;
+        const sig = await signMediaContentAccess(rec.writerSecret, token, mediaId, expUnix);
+        const url = new URL(request.url);
+        url.pathname = `/v1/sessions/${encodeURIComponent(token)}/media/${encodeURIComponent(mediaId)}/content`;
+        url.search = "";
+        url.searchParams.set("exp", String(expUnix));
+        url.searchParams.set("sig", sig);
+
+        const mimeType = head.httpMetadata?.contentType?.trim() || undefined;
+        const durationRaw = head.customMetadata?.durationMs;
+        const durationMs =
+          typeof durationRaw === "string" && Number.isFinite(Number(durationRaw))
+            ? Math.floor(Number(durationRaw))
+            : undefined;
+
+        return json({
+          mediaId,
+          url: url.toString(),
+          expiresAt: new Date(expUnix * 1000).toISOString(),
+          ...(mimeType ? { mimeType } : {}),
+          ...(durationMs !== undefined ? { durationMs } : {}),
+        });
+      }
+
+      const mediaContent = path.match(/^\/v1\/sessions\/([^/]+)\/media\/([^/]+)\/content$/);
+      if (mediaContent && request.method === "GET") {
+        const token = decodeURIComponent(mediaContent[1] ?? "").trim().toLowerCase();
+        const mediaId = decodeURIComponent(mediaContent[2] ?? "").trim().toLowerCase();
+        if (!TOKEN_RE.test(token) || !MEDIA_ID_RE.test(mediaId)) {
+          return error("Invalid media request", 400);
+        }
+        const url = new URL(request.url);
+        const expUnix = Number(url.searchParams.get("exp") ?? "");
+        const sig = (url.searchParams.get("sig") ?? "").trim().toLowerCase();
+        const rec = await readSession(env.SESSIONS, token);
+        if (!rec) return error("Not found", 404);
+        const ok = await verifyMediaContentAccess(rec.writerSecret, token, mediaId, expUnix, sig);
+        if (!ok) return error("Unauthorized", 401);
+
+        const object = await env.MEDIA.get(mediaObjectKey(token, mediaId));
+        if (!object) return error("Not found", 404);
+
+        const headers = new Headers();
+        object.writeHttpMetadata(headers);
+        headers.set("Cache-Control", "private, max-age=60");
+        headers.set("Access-Control-Allow-Origin", "*");
+        if (!headers.has("Content-Type")) {
+          headers.set("Content-Type", "application/octet-stream");
+        }
+        return new Response(object.body, { status: 200, headers });
       }
 
       return error("Not found", 404);

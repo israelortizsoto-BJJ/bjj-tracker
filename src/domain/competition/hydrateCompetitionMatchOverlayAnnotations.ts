@@ -1,4 +1,5 @@
 import type { CompetitionMatchOverlayAnnotation } from "./projectCompetitionCompeteView";
+import { extractCoachCommentaryMediaMetadata } from "./extractCoachCommentaryMediaMetadata";
 import { readMatchBreakdownOverlay } from "./readMatchBreakdownOverlay";
 
 /** Read-only overlay materialization for ephemeral competition projections. */
@@ -37,7 +38,23 @@ export async function hydrateCompetitionMatchOverlayAnnotations(input: {
       ),
     ),
   );
-  const hydrated = overlays.filter((overlay): overlay is NonNullable<typeof overlay> => overlay !== null);
+  const hydrated = overlays
+    .filter((overlay): overlay is NonNullable<typeof overlay> => overlay !== null)
+    .map((overlay): CompetitionMatchOverlayAnnotation => {
+      const media = extractCoachCommentaryMediaMetadata(overlay);
+      return {
+        matchLineageKey: overlay.matchLineageKey,
+        ...(overlay.coachNote?.trim() ? { coachNote: overlay.coachNote.trim() } : {}),
+        ...(overlay.voiceNoteRefs?.length ? { voiceNoteRefs: overlay.voiceNoteRefs } : {}),
+        ...(media
+          ? {
+              mediaId: media.mediaId,
+              ...(media.durationMs !== undefined ? { durationMs: media.durationMs } : {}),
+              ...(media.mimeType ? { mimeType: media.mimeType } : {}),
+            }
+          : {}),
+      };
+    });
   console.log("[COACH_OVERLAY_SYNC_TRACE]", {
     stage: "overlay_hydrate_local_store_complete",
     sharedAthleteId,

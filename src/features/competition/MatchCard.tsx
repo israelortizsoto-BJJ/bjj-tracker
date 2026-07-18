@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { Audio } from "expo-av";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatSubmissionTimeDisplay } from "../../domain/competition/matchDurationFormat";
 import { logBreakdownPropagationForMatch } from "../../domain/competition/competitionProjectionBreakdownTrace";
+import { coachSyncResolveCoachMedia } from "../../services/coachMediaApi";
+import { resolveCoachMediaSessionTarget } from "../../services/resolveParentCoachMediaSessionTarget";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import { labelForSubmissionTypeKey } from "./submissionTypes";
 
@@ -22,6 +25,14 @@ function videoLabel(snapshot: CompetitionDetailMatchSnapshot): string {
   return u.length > 0 ? "Attached" : "None";
 }
 
+function formatCommentaryDuration(durationMs: number | undefined): string | null {
+  if (durationMs === undefined || !Number.isFinite(durationMs) || durationMs < 0) return null;
+  const totalSec = Math.floor(durationMs / 1000);
+  const minutes = Math.floor(totalSec / 60);
+  const seconds = totalSec % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
 export function MatchCard({
   snapshot,
   index,
@@ -35,7 +46,14 @@ export function MatchCard({
 }) {
   const won = snapshot.matchResult === "win";
   const [coachBreakdownExpanded, setCoachBreakdownExpanded] = useState(false);
+  const [playbackState, setPlaybackState] = useState<"idle" | "loading" | "playing" | "paused">(
+    "idle",
+  );
+  const soundRef = useRef<Audio.Sound | null>(null);
+  const playableUrlRef = useRef<string | null>(null);
   const coachBreakdown = snapshot.coachNote?.trim() ?? "";
+  const mediaId = snapshot.mediaId?.trim() ?? "";
+  const durationLabel = formatCommentaryDuration(snapshot.durationMs);
 
   logBreakdownPropagationForMatch({
     stage: "match_card_render",
@@ -55,8 +73,103 @@ export function MatchCard({
     })(),
     index,
     hasCoachNote: Boolean(coachBreakdown),
+    hasMediaId: Boolean(mediaId),
     coachNotePreview: coachBreakdown ? coachBreakdown.slice(0, 40) : null,
   });
+
+  const unloadPlayback = useCallback(async () => {
+    const sound = soundRef.current;
+    soundRef.current = null;
+    playableUrlRef.current = null;
+    setPlaybackState("idle");
+    if (!sound) return;
+    try {
+      await sound.stopAsync();
+    } catch {
+      // ignore
+    }
+    try {
+      await sound.unloadAsync();
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      void unloadPlayback();
+    };
+  }, [unloadPlayback]);
+
+  useEffect(() => {
+    void unloadPlayback();
+  }, [mediaId, unloadPlayback]);
+
+  const toggleCoachCommentaryPlayback = useCallback(async () => {
+    if (!mediaId) return;
+    if (playbackState === "playing" && soundRef.current) {
+      await soundRef.current.pauseAsync();
+      setPlaybackState("paused");
+      return;
+    }
+    if (playbackState === "paused" && soundRef.current) {
+      await soundRef.current.playAsync();
+      setPlaybackState("playing");
+      return;
+    }
+
+    setPlaybackState("loading");
+    try {
+      const target = await resolveCoachMediaSessionTarget();
+      if (!target) {
+        setPlaybackState("idle");
+        return;
+      }
+      const resolved = await coachSyncResolveCoachMedia(
+        target.linkToken,
+        mediaId,
+        target.apiBaseUrl,
+      );
+      // Ephemeral playable URL — never written into the Match Breakdown artifact.
+      const previous = soundRef.current;
+      soundRef.current = null;
+      if (previous) {
+        try {
+          await previous.stopAsync();
+        } catch {
+          // ignore
+        }
+        try {
+          await previous.unloadAsync();
+        } catch {
+          // ignore
+        }
+      }
+      playableUrlRef.current = resolved.url;
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: resolved.url },
+        { shouldPlay: true },
+      );
+      soundRef.current = sound;
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (!status.isLoaded) return;
+        if (status.didJustFinish) {
+          setPlaybackState("idle");
+          void sound.unloadAsync().catch(() => undefined);
+          if (soundRef.current === sound) soundRef.current = null;
+        }
+      });
+      setPlaybackState("playing");
+    } catch (error) {
+      console.log("[COACH_MEDIA_TRACE]", {
+        stage: "parent_media_playback_failed",
+        mediaId,
+        matchLineageKey: snapshot.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      setPlaybackState("idle");
+    }
+  }, [mediaId, playbackState, snapshot.id]);
 
   const methodLines: string[] = [];
   const submissionTimeDisplay = formatSubmissionTimeDisplay(snapshot.submissionTime);
@@ -70,6 +183,15 @@ export function MatchCard({
   const subLabel = labelForSubmissionTypeKey(
     typeof snapshot.submissionType === "string" ? snapshot.submissionType : null,
   );
+
+  const listenLabel =
+    playbackState === "loading"
+      ? "Loading…"
+      : playbackState === "playing"
+        ? "❚❚ Pause Coach Commentary"
+        : playbackState === "paused"
+          ? "▶ Resume Coach Commentary"
+          : "▶ Listen to Coach Commentary";
 
   return (
     <View style={styles.match}>
@@ -122,6 +244,27 @@ export function MatchCard({
       {coachBreakdown ? (
         <View style={styles.coachSection}>
           <Text style={styles.coachLabel}>Coach Match Breakdown</Text>
+          {mediaId ? (
+            <View style={styles.commentaryControls}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${listenLabel} for match ${index + 1}`}
+                disabled={playbackState === "loading"}
+                onPress={() => {
+                  void toggleCoachCommentaryPlayback();
+                }}
+                style={({ pressed }) => [
+                  styles.listenButton,
+                  pressed ? styles.listenButtonPressed : null,
+                ]}
+              >
+                <Text style={styles.listenButtonText}>{listenLabel}</Text>
+              </Pressable>
+              {durationLabel ? (
+                <Text style={styles.durationText}>⏱ {durationLabel}</Text>
+              ) : null}
+            </View>
+          ) : null}
           <Text
             numberOfLines={coachBreakdownExpanded ? undefined : 3}
             style={styles.coachText}
@@ -227,6 +370,27 @@ const styles = StyleSheet.create({
     color: FEED.text,
     fontSize: 12,
     fontWeight: "900",
+  },
+  commentaryControls: {
+    marginTop: 8,
+    gap: 4,
+  },
+  listenButton: {
+    alignSelf: "flex-start",
+    paddingVertical: 4,
+  },
+  listenButtonPressed: {
+    opacity: 0.76,
+  },
+  listenButtonText: {
+    color: FEED.text,
+    fontSize: 12,
+    fontWeight: "900",
+  },
+  durationText: {
+    color: FEED.muted,
+    fontSize: 12,
+    fontWeight: "700",
   },
   coachText: {
     marginTop: 7,

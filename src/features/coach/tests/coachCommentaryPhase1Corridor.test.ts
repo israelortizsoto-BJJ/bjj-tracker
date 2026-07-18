@@ -72,9 +72,18 @@ describe("Coach Commentary Phase 1 — coach-device persistence corridor (source
     assert.doesNotMatch(matchEditor, /Audio\.Sound/);
   });
 
-  it("Phase 1 boundary: no audio bytes or voiceNoteRefs in sync/worker contracts", () => {
+  it("Phase 1 boundary: no audio bytes or voiceNoteRefs in sync publish contracts", () => {
     assert.doesNotMatch(artifacts, /voiceNoteRefs/);
-    assert.doesNotMatch(worker, /voiceNoteRefs/);
+    assert.doesNotMatch(artifacts, /localUri/);
+    // Worker may mention voiceNoteRefs/localUri only to reject them from artifacts.
+    assert.match(worker, /if \("voiceNoteRefs" in o\) return null;/);
+    assert.match(worker, /typeof o\.localUri === "string"/);
     assert.doesNotMatch(worker, /coach-voice/);
+  });
+
+  it("Phase 1 certified recording corridor remains the single voice pipeline", () => {
+    assert.match(voiceField, /persistCoachVoiceAudio/);
+    assert.match(voiceField, /transcribeCoachAudio/);
+    assert.doesNotMatch(matchEditor, /Audio\.Recording/);
   });
 });

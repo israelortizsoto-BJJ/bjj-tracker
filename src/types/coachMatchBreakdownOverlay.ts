@@ -8,6 +8,7 @@ export type CoachMatchBreakdownOverlayIdentity = {
  * Companion audio reference for coach commentary.
  * Transcript (`coachNote`) remains canonical; this is metadata + local URI only.
  * Phase 1: coach-device local persistence. No blob sync.
+ * Phase 2: optional `mediaId` after best-effort remote upload (never sync localUri).
  */
 export type VoiceNoteRef = {
   id: string;
@@ -15,6 +16,8 @@ export type VoiceNoteRef = {
   createdAt: string;
   mimeType?: string;
   durationMs?: number;
+  /** Remote object id from worker media upload. Domain metadata only — never a URL. */
+  mediaId?: string;
 };
 
 /** Coach-owned interpretation only. Canonical competition facts must never enter this row. */
@@ -49,12 +52,17 @@ export function normalizeVoiceNoteRef(value: unknown): VoiceNoteRef | null {
     typeof row.durationMs === "number" && Number.isFinite(row.durationMs) && row.durationMs >= 0
       ? row.durationMs
       : undefined;
+  const mediaId =
+    typeof row.mediaId === "string" && /^[a-f0-9]{32}$/i.test(row.mediaId.trim())
+      ? row.mediaId.trim().toLowerCase()
+      : undefined;
   return {
     id,
     localUri,
     createdAt,
     ...(mimeType ? { mimeType } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(mediaId ? { mediaId } : {}),
   };
 }
 

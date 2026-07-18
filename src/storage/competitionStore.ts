@@ -35,6 +35,10 @@ export type CompetitionDetailMatchSnapshot = {
   coachNote?: string;
   /** Phase 1 companion audio refs from coach overlay projection (coach-local only). */
   voiceNoteRefs?: VoiceNoteRef[];
+  /** Remote companion audio id from Match Breakdown sync (never a URL). */
+  mediaId?: string;
+  durationMs?: number;
+  mimeType?: string;
   imageUri: string | null;
   videoUri: string | null;
   imageAssetId: string | null;

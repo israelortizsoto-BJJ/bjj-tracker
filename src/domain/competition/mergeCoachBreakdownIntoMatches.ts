@@ -104,9 +104,13 @@ export function overlayAnnotationsFromCoachMatchBreakdownArtifactSet(input: {
     });
 
     if (skipReason) continue;
+    const mediaId = artifact.mediaId?.trim().toLowerCase() ?? "";
     annotations.push({
       matchLineageKey: artifactLineageKey,
       coachNote: artifact.coachNote?.trim(),
+      ...(mediaId ? { mediaId } : {}),
+      ...(artifact.durationMs !== undefined ? { durationMs: artifact.durationMs } : {}),
+      ...(artifact.mimeType?.trim() ? { mimeType: artifact.mimeType.trim() } : {}),
     });
   }
 
@@ -185,8 +189,15 @@ export function mergeCoachBreakdownIntoMatches(input: {
       overlayCount: input.overlayAnnotations.length,
       matchId,
       artifactMatchLineageKey: overlay.matchLineageKey,
+      hasMediaId: Boolean(overlay.mediaId?.trim()),
     });
-    return { ...match, coachNote };
+    return {
+      ...match,
+      coachNote,
+      ...(overlay.mediaId?.trim() ? { mediaId: overlay.mediaId.trim() } : {}),
+      ...(overlay.durationMs !== undefined ? { durationMs: overlay.durationMs } : {}),
+      ...(overlay.mimeType?.trim() ? { mimeType: overlay.mimeType.trim() } : {}),
+    };
   });
 
   console.log("[COACH_OVERLAY_SYNC_TRACE]", {

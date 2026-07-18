@@ -9,6 +9,7 @@ import { logMatchBreakdownBoundaryProbe } from "../../dev/matchBreakdownBoundary
 import { coachSyncPutCoachMatchBreakdownArtifacts } from "../../services/coachWeeklySyncApi";
 import { getCoachLinks } from "../../storage/coachShareStore";
 import { getKidsById } from "../../storage/coachKidStore";
+import { bestEffortUploadCoachCommentaryMedia } from "./bestEffortUploadCoachCommentaryMedia";
 import { buildCoachMatchBreakdownArtifacts } from "./buildCoachMatchBreakdownArtifacts";
 import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
 
@@ -114,6 +115,30 @@ export function schedulePublishCoachMatchBreakdownArtifacts(input: {
         kidId: input.kidId ?? null,
         resolvedWriterTokenSuffix,
       });
+      // Best-effort audio upload before artifact build. Transcript publish continues on failure.
+      try {
+        const uploadSummary = await bestEffortUploadCoachCommentaryMedia({
+          sharedAthleteId,
+          linkToken: target.weeklySync.linkToken,
+          writerSecret: target.weeklySync.writerSecret,
+          apiBaseUrl: target.weeklySync.apiBaseUrl,
+          traceId,
+        });
+        console.log("[COACH_MEDIA_TRACE]", {
+          stage: "coach_media_upload_batch",
+          sharedAthleteId,
+          attempted: uploadSummary.attempted,
+          uploaded: uploadSummary.uploaded,
+          traceId,
+        });
+      } catch (uploadError) {
+        console.log("[COACH_MEDIA_TRACE]", {
+          stage: "coach_media_upload_batch_failed",
+          sharedAthleteId,
+          traceId,
+          error: uploadError instanceof Error ? uploadError.message : String(uploadError),
+        });
+      }
       const artifactSet = await buildCoachMatchBreakdownArtifacts(sharedAthleteId, {
         updatedAtOverride: input.updatedAtOverride ?? null,
         traceId,

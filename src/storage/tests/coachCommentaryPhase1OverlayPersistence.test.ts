@@ -22,6 +22,7 @@ describe("Coach Commentary Phase 1 — overlay voiceNoteRefs persistence", () =>
     assert.match(overlayTypes, /export type VoiceNoteRef = \{/);
     assert.match(overlayTypes, /localUri: string;/);
     assert.match(overlayTypes, /createdAt: string;/);
+    assert.match(overlayTypes, /mediaId\?: string;/);
     assert.doesNotMatch(overlayTypes, /audioBytes|base64Audio|audioBlob/);
   });
 

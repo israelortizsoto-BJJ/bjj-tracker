@@ -1,0 +1,28 @@
+import type { CoachMatchBreakdownOverlay } from "../../types/coachMatchBreakdownOverlay";
+
+/** Domain media metadata publishable on Match Breakdown artifacts (never URLs or localUri). */
+export type CoachCommentaryMediaMetadata = {
+  mediaId: string;
+  durationMs?: number;
+  mimeType?: string;
+};
+
+/**
+ * Reads companion media metadata from a coach-local overlay.
+ * Prefers the first voice note that already has a remote mediaId.
+ */
+export function extractCoachCommentaryMediaMetadata(
+  overlay: CoachMatchBreakdownOverlay,
+): CoachCommentaryMediaMetadata | null {
+  const refs = overlay.voiceNoteRefs;
+  if (!refs?.length) return null;
+  const withMedia = refs.find((ref) => Boolean(ref.mediaId?.trim()));
+  const ref = withMedia ?? refs[0];
+  const mediaId = ref?.mediaId?.trim().toLowerCase() ?? "";
+  if (!mediaId || !/^[a-f0-9]{32}$/i.test(mediaId)) return null;
+  return {
+    mediaId,
+    ...(ref.durationMs !== undefined ? { durationMs: ref.durationMs } : {}),
+    ...(ref.mimeType?.trim() ? { mimeType: ref.mimeType.trim() } : {}),
+  };
+}

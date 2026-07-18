@@ -1,6 +1,7 @@
 import { logMatchBreakdownAuthorityTrace } from "../../dev/matchBreakdownAuthorityTrace";
 import { listCoachMatchBreakdownOverlaysForAthlete } from "../../storage/coachMatchBreakdownOverlayStore";
 import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
+import { extractCoachCommentaryMediaMetadata } from "./extractCoachCommentaryMediaMetadata";
 
 export async function buildCoachMatchBreakdownArtifacts(
   sharedAthleteId: string,
@@ -43,13 +44,23 @@ export async function buildCoachMatchBreakdownArtifacts(
     })),
   });
   const artifacts = overlays
-    .map((overlay) => ({
-      sharedAthleteId: overlay.sharedAthleteId.trim(),
-      sharedCompetitionId: overlay.sharedCompetitionId.trim(),
-      matchLineageKey: overlay.matchLineageKey.trim(),
-      ...(overlay.coachNote?.trim() ? { coachNote: overlay.coachNote.trim() } : {}),
-      updatedAt: overlay.updatedAt,
-    }))
+    .map((overlay) => {
+      const media = extractCoachCommentaryMediaMetadata(overlay);
+      return {
+        sharedAthleteId: overlay.sharedAthleteId.trim(),
+        sharedCompetitionId: overlay.sharedCompetitionId.trim(),
+        matchLineageKey: overlay.matchLineageKey.trim(),
+        ...(overlay.coachNote?.trim() ? { coachNote: overlay.coachNote.trim() } : {}),
+        ...(media
+          ? {
+              mediaId: media.mediaId,
+              ...(media.durationMs !== undefined ? { durationMs: media.durationMs } : {}),
+              ...(media.mimeType ? { mimeType: media.mimeType } : {}),
+            }
+          : {}),
+        updatedAt: overlay.updatedAt,
+      };
+    })
     .filter(
       (artifact) =>
         artifact.sharedAthleteId &&
@@ -78,6 +89,7 @@ export async function buildCoachMatchBreakdownArtifacts(
       sharedAthleteId: artifact.sharedAthleteId,
       sharedCompetitionId: artifact.sharedCompetitionId,
       matchLineageKey: artifact.matchLineageKey,
+      hasMediaId: Boolean(artifact.mediaId),
     })),
   });
 
@@ -117,6 +129,7 @@ export async function buildCoachMatchBreakdownArtifacts(
       sharedCompetitionId: artifact.sharedCompetitionId,
       matchLineageKey: artifact.matchLineageKey,
       hasCoachNote: Boolean(artifact.coachNote?.trim()),
+      hasMediaId: Boolean(artifact.mediaId),
     })),
   });
 
