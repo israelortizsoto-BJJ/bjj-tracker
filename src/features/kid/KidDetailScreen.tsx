@@ -51,6 +51,7 @@ import {
   buildReadTogetherStoryCards,
 } from "../../family/readTogetherStoryCards";
 import { ReadTogetherStoryModal } from "../../family/ReadTogetherStoryModal";
+import { CoachVoiceNoteField } from "../coach/CoachVoiceNoteField";
 import { deriveWeeklyNarrative } from "../coach/deriveWeeklyNarrative";
 import WeeklySuggestionCard from "../coach/components/WeeklySuggestionCard";
 import {
@@ -169,6 +170,12 @@ function pad2(n: number) {
 
 function collapseFocusText(s: string): string {
   return s.replace(/\s+/g, " ").trim();
+}
+
+function excerptText(s: string, maxLength: number): string {
+  const collapsed = collapseFocusText(s);
+  if (collapsed.length <= maxLength) return collapsed;
+  return `${collapsed.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
 function addDaysYMDLocal(ymd: string, delta: number) {
@@ -1437,6 +1444,9 @@ export default function KidDetailScreen() {
         day: "numeric",
       })
     : null;
+  const currentStateDirectionCue = currentStateNarrative
+    ? excerptText(currentStateNarrative, 150)
+    : "";
 
   const onSaveHousehold = useCallback(async () => {
     if (!kidId) return;
@@ -2662,16 +2672,35 @@ export default function KidDetailScreen() {
                 Direction of growth
               </Text>
               <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
-                The shift you keep shaping through class, rounds, and competition.
+                Given your read today, name the shift you are coaching toward.
               </Text>
             </View>
+            {currentStateDirectionCue ? (
+              <View
+                style={{
+                  padding: 12,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: "#e2e8f0",
+                  backgroundColor: "#f8fafc",
+                  gap: 4,
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: "800", color: UI.textSecondary }}>
+                  From your current read
+                </Text>
+                <Text style={{ fontSize: 13, color: UI.textPrimary, lineHeight: 19 }}>
+                  {currentStateDirectionCue}
+                </Text>
+              </View>
+            ) : null}
             {standingIsActive ? (
               <Text style={{ fontSize: 17, fontWeight: "800", color: UI.textPrimary, lineHeight: 23 }}>
                 {standingPrimary}
               </Text>
             ) : (
               <Text style={{ fontSize: 15, color: UI.textSecondary, lineHeight: 22, fontWeight: "700" }}>
-                Name what they are now and where you are guiding them next.
+                Start from the current assessment and name where you want their game to move next.
               </Text>
             )}
             {standingSecondaryMuted ? (
@@ -2779,27 +2808,17 @@ export default function KidDetailScreen() {
                 Capture commitment, hesitation, composure, or old habits as they show up.
               </Text>
 
-              <TextInput
+              <CoachVoiceNoteField
                 key={progressNotesInputKey}
+                label="Notes"
                 value={notesDraft}
-                scrollEnabled={false}
                 onChangeText={setNotesDraft}
                 onFocus={bumpScrollToFocusedInput}
                 onContentSizeChange={bumpScrollToFocusedInput}
                 placeholder="Add what you saw on the mat"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                style={{
-                  marginTop: 6,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  padding: 12,
-                  minHeight: 92,
-                  color: UI.textPrimary,
-                  textAlignVertical: "top",
-                }}
+                scrollEnabled={false}
+                minHeight={92}
+                disabled={savingOutcome}
               />
 
               <Pressable

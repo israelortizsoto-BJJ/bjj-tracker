@@ -11,7 +11,6 @@ import {
   Pressable,
   ScrollView,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-aware-scroll-view";
@@ -20,6 +19,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getDefaultWhatMattersNextDraftGenerator } from "../../../../../src/ai-coach/whatMattersNextDraftGenerator";
 import { loadWhatMattersNextDraftPayload } from "../../../../../src/ai-coach/loadWhatMattersNextDraftPayload";
 import type { WhatMattersNextDraftResult } from "../../../../../src/ai-coach/whatMattersNextDraftTypes";
+import { CoachVoiceNoteField } from "../../../../../src/features/coach/CoachVoiceNoteField";
+import { getKidCurrentStateAssessment } from "../../../../../src/storage/kidCurrentStateAssessmentStore";
 import {
   getKidStandingGuidance,
   saveKidStandingGuidance,
@@ -37,6 +38,16 @@ const UI = {
 
 const CARD_RADIUS = 16;
 
+function collapseSpace(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+function excerptText(s: string, maxLength: number): string {
+  const collapsed = collapseSpace(s);
+  if (collapsed.length <= maxLength) return collapsed;
+  return `${collapsed.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
+}
+
 export default function WhatMattersNextScreen() {
   const params = useLocalSearchParams<{ kidId?: string }>();
   const kidId = params.kidId ? String(params.kidId) : "";
@@ -44,6 +55,7 @@ export default function WhatMattersNextScreen() {
   const [ready, setReady] = useState(false);
   const [headlineDraft, setHeadlineDraft] = useState("");
   const [detailDraft, setDetailDraft] = useState("");
+  const [currentStateNarrative, setCurrentStateNarrative] = useState("");
   const [saving, setSaving] = useState(false);
 
   const draftGenerator = useMemo(() => getDefaultWhatMattersNextDraftGenerator(), []);
@@ -69,9 +81,13 @@ export default function WhatMattersNextScreen() {
     if (!kidId) return;
     setReady(false);
     try {
-      const row = await getKidStandingGuidance(kidId);
+      const [row, currentStateRow] = await Promise.all([
+        getKidStandingGuidance(kidId),
+        getKidCurrentStateAssessment(kidId),
+      ]);
       setHeadlineDraft(row?.headline ?? "");
       setDetailDraft(row?.detail ?? "");
+      setCurrentStateNarrative(currentStateRow?.narrative ?? "");
     } finally {
       setReady(true);
     }
@@ -157,9 +173,11 @@ export default function WhatMattersNextScreen() {
     }
   }, [kidId, headlineDraft, detailDraft]);
 
+  const currentStateExcerpt = excerptText(currentStateNarrative, 320);
+
   return (
     <>
-      <Stack.Screen options={{ title: "What matters next" }} />
+      <Stack.Screen options={{ title: "Direction of growth" }} />
       <KeyboardAwareScrollView
         ref={keyboardAwareRef}
         enableOnAndroid
@@ -191,13 +209,40 @@ export default function WhatMattersNextScreen() {
         </Pressable>
 
         <Text style={{ fontSize: 22, fontWeight: "800", color: UI.textPrimary, marginBottom: 8 }}>
-          What matters next
+          Direction of growth
         </Text>
         <Text style={{ fontSize: 14, color: UI.textSecondary, lineHeight: 20 }}>
-          A steady message for this athlete that stays until you change it.
+          Given what is true today, name the shift you are coaching toward.
         </Text>
 
         <View style={{ height: 14 }} />
+
+        {currentStateExcerpt ? (
+          <>
+            <View
+              style={{
+                padding: 14,
+                borderRadius: CARD_RADIUS,
+                borderWidth: 1,
+                borderColor: UI.border,
+                backgroundColor: "#f8fafc",
+                gap: 8,
+              }}
+            >
+              <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textPrimary }}>
+                Current read
+              </Text>
+              <Text style={{ fontSize: 14, color: UI.textPrimary, lineHeight: 21 }}>
+                {currentStateExcerpt}
+              </Text>
+              <Text style={{ fontSize: 12, color: UI.textSecondary, lineHeight: 17 }}>
+                Use this as context only. Saving below updates the direction, not the assessment.
+              </Text>
+            </View>
+
+            <View style={{ height: 14 }} />
+          </>
+        ) : null}
 
         <View
           style={{
@@ -219,7 +264,7 @@ export default function WhatMattersNextScreen() {
           </Text>
           <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 20 }}>
             It’s a draft only. Tap Help me phrase this to generate suggestions from this kid’s
-            info—a quick way to save time. Edit as needed, then tap Save Note to keep it.
+            info—a quick way to save time. Edit as needed, then tap Save direction to keep it.
             Runs on your device; does not message parents.
           </Text>
         </View>
@@ -257,56 +302,32 @@ export default function WhatMattersNextScreen() {
           }}
         >
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
-              Coach Note
-            </Text>
-            <TextInput
+            <CoachVoiceNoteField
+              label="Coaching direction"
               value={headlineDraft}
               onChangeText={setHeadlineDraft}
               onFocus={bumpScrollToFocusedInput}
               onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="Short note for this athlete"
-              placeholderTextColor={UI.textSecondary}
-              multiline
+              placeholder="What shift are you guiding next?"
               scrollEnabled
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                padding: 12,
-                minHeight: 88,
-                maxHeight: 152,
-                color: UI.textPrimary,
-                textAlignVertical: "top",
-              }}
+              minHeight={88}
+              maxHeight={152}
+              disabled={!ready || saving || draftLoading}
             />
           </View>
 
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
-              Optional detail
-            </Text>
-            <TextInput
+            <CoachVoiceNoteField
+              label="Why this direction"
               value={detailDraft}
               onChangeText={setDetailDraft}
               onFocus={bumpScrollToFocusedInput}
               onContentSizeChange={bumpScrollToFocusedInput}
-              placeholder="Add more context if helpful."
-              placeholderTextColor={UI.textSecondary}
-              multiline
+              placeholder="Connect the current read to the next coaching emphasis."
               scrollEnabled
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                padding: 12,
-                minHeight: 88,
-                maxHeight: 152,
-                color: UI.textPrimary,
-                textAlignVertical: "top",
-              }}
+              minHeight={88}
+              maxHeight={152}
+              disabled={!ready || saving || draftLoading}
             />
           </View>
 
@@ -325,7 +346,9 @@ export default function WhatMattersNextScreen() {
               alignSelf: "flex-start",
             })}
           >
-            <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>Save Note</Text>
+            <Text style={{ fontSize: 14, color: "#ffffff", fontWeight: "800" }}>
+              Save direction
+            </Text>
           </Pressable>
         </View>
       </KeyboardAwareScrollView>
@@ -376,7 +399,7 @@ export default function WhatMattersNextScreen() {
             </Text>
             <Text style={{ fontSize: 13, color: UI.textSecondary, lineHeight: 18, marginBottom: 14 }}>
               Apply the headline, detail, or both below. Then tap{" "}
-              <Text style={{ fontWeight: "800", color: UI.textPrimary }}>Save Note</Text> on the
+              <Text style={{ fontWeight: "800", color: UI.textPrimary }}>Save direction</Text> on the
               main screen under this sheet to save it for this kid.
             </Text>
 
@@ -429,7 +452,7 @@ export default function WhatMattersNextScreen() {
               >
                 <View style={{ gap: 6 }}>
                   <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
-                    Coach Note
+                    Coaching direction
                   </Text>
                   <Text style={{ fontSize: 15, color: UI.textPrimary, lineHeight: 22 }}>
                     {draftResult.suggestedHeadline || "—"}
@@ -437,7 +460,7 @@ export default function WhatMattersNextScreen() {
                 </View>
                 <View style={{ gap: 6 }}>
                   <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
-                    Optional detail
+                    Why this direction
                   </Text>
                   <Text style={{ fontSize: 15, color: UI.textPrimary, lineHeight: 22 }}>
                     {draftResult.suggestedDetail || "—"}

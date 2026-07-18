@@ -7,6 +7,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { normalizeFamilyResourceUrl } from "../../../../../src/coach/familyResourceUrl";
 import { normalizePublishableSystemKey } from "../../../../../src/lib/taxonomy/publishableSystemKey";
 import { FUNDAMENTALS_TAXONOMY } from "../../../../../src/fundamentals/taxonomy";
+import { CoachVoiceNoteField } from "../../../../../src/features/coach/CoachVoiceNoteField";
 import {
   appendKidWeeklyFocus,
   getKidWeeklyFocusEntryById,
@@ -585,35 +586,22 @@ export default function KidWeeklyFocusScreen() {
             </View>
 
             <View style={{ marginTop: 16, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: "800", color: "#047857", letterSpacing: 0.3 }}>
-                WHAT WE SHARPENED WITH COACH
-              </Text>
               <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
                 Supporting context
               </Text>
               <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
                 Reflection / recap for families — not private mat notes. Publishes in the shared weekly note.
               </Text>
-              <TextInput
+              <CoachVoiceNoteField
+                label="WHAT WE SHARPENED WITH COACH"
                 value={familyCoachRecapNote}
                 onChangeText={setFamilyCoachRecapNote}
                 onFocus={bumpScrollToFocusedInput}
                 onContentSizeChange={bumpScrollToFocusedInput}
                 placeholder="e.g. We drilled base and one clean stand-up escape…"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                style={{
-                  marginTop: 8,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#6ee7b7",
-                  backgroundColor: "#f0fdf4",
-                  color: UI.textPrimary,
-                  minHeight: 88,
-                  textAlignVertical: "top",
-                }}
+                scrollEnabled
+                minHeight={88}
+                disabled={!ready}
               />
             </View>
 
@@ -741,29 +729,16 @@ export default function KidWeeklyFocusScreen() {
             </View>
 
             <View>
-              <Text style={{ fontSize: 13, color: UI.textSecondary, fontWeight: "700" }}>
-                FAMILY NOTE (OPTIONAL)
-              </Text>
-              <TextInput
+              <CoachVoiceNoteField
+                label="FAMILY NOTE (OPTIONAL)"
                 value={customNote}
                 onChangeText={setCustomNote}
                 placeholder="Optional short note for this kid’s emphasis"
-                placeholderTextColor={UI.textSecondary}
-                multiline
                 onFocus={bumpScrollToFocusedInput}
                 onContentSizeChange={bumpScrollToFocusedInput}
-                style={{
-                  marginTop: 6,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: UI.border,
-                  backgroundColor: UI.bgCard,
-                  color: UI.textPrimary,
-                  minHeight: 92,
-                  textAlignVertical: "top",
-                }}
+                scrollEnabled
+                minHeight={92}
+                disabled={!ready}
               />
             </View>
 
@@ -815,35 +790,22 @@ export default function KidWeeklyFocusScreen() {
             </View>
 
             <View style={{ marginTop: 16, gap: 6 }}>
-              <Text style={{ fontSize: 12, fontWeight: "800", color: "#047857", letterSpacing: 0.3 }}>
-                WHAT WE SHARPENED WITH COACH
-              </Text>
               <Text style={{ fontSize: 14, fontWeight: "800", color: UI.textPrimary }}>
                 Supporting context
               </Text>
               <Text style={{ fontSize: 11, color: UI.textSecondary, lineHeight: 16 }}>
                 Reflection / recap for families — not private mat notes. Publishes in the shared weekly note.
               </Text>
-              <TextInput
+              <CoachVoiceNoteField
+                label="WHAT WE SHARPENED WITH COACH"
                 value={familyCoachRecapNote}
                 onChangeText={setFamilyCoachRecapNote}
                 onFocus={bumpScrollToFocusedInput}
                 onContentSizeChange={bumpScrollToFocusedInput}
                 placeholder="e.g. We drilled base and one clean stand-up escape…"
-                placeholderTextColor={UI.textSecondary}
-                multiline
-                style={{
-                  marginTop: 8,
-                  paddingVertical: 10,
-                  paddingHorizontal: 12,
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: "#6ee7b7",
-                  backgroundColor: "#f0fdf4",
-                  color: UI.textPrimary,
-                  minHeight: 88,
-                  textAlignVertical: "top",
-                }}
+                scrollEnabled
+                minHeight={88}
+                disabled={!ready}
               />
             </View>
 

@@ -18,6 +18,7 @@ import {
   getKidCurrentStateAssessment,
   saveKidCurrentStateAssessment,
 } from "../../../../../src/storage/kidCurrentStateAssessmentStore";
+import { CoachVoiceNoteField } from "../../../../../src/features/coach/CoachVoiceNoteField";
 
 const UI = {
   screenBg: "#f3f4f6",
@@ -187,29 +188,17 @@ export default function KidCurrentStateScreen() {
           }}
         >
           <View style={{ gap: 6 }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", color: UI.textSecondary }}>
-              Coach assessment
-            </Text>
-            <TextInput
+            <CoachVoiceNoteField
+              label="What you saw"
               value={narrativeDraft}
               onChangeText={setNarrativeDraft}
               onFocus={bumpScrollToFocusedInput}
               onContentSizeChange={bumpScrollToFocusedInput}
               placeholder="What is true about this athlete right now?"
-              placeholderTextColor={UI.textSecondary}
-              multiline
               scrollEnabled
-              style={{
-                borderRadius: 12,
-                borderWidth: 1,
-                borderColor: UI.border,
-                backgroundColor: UI.bgCard,
-                padding: 12,
-                minHeight: 156,
-                maxHeight: 260,
-                color: UI.textPrimary,
-                textAlignVertical: "top",
-              }}
+              minHeight={156}
+              maxHeight={260}
+              disabled={!ready || saving}
             />
           </View>
 
