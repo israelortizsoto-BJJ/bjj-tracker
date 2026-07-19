@@ -434,6 +434,7 @@ export function CompetitionCard({
               key={match.id}
               snapshot={match}
               index={index}
+              sharedAthleteId={sharedAthleteId}
               sharedCompetitionId={sharedCompetitionId}
               overlaySource={breakdownOverlaySource}
             />

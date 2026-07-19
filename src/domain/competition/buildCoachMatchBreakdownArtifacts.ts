@@ -1,3 +1,4 @@
+import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
 import { logMatchBreakdownAuthorityTrace } from "../../dev/matchBreakdownAuthorityTrace";
 import { listCoachMatchBreakdownOverlaysForAthlete } from "../../storage/coachMatchBreakdownOverlayStore";
 import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
@@ -92,6 +93,17 @@ export async function buildCoachMatchBreakdownArtifacts(
       hasMediaId: Boolean(artifact.mediaId),
     })),
   });
+  for (const artifact of artifacts) {
+    const artifactMediaId = artifact.mediaId?.trim() || null;
+    logCoachMediaCorridorTrace("ARTIFACT_BUILT", {
+      traceId,
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasMediaId: Boolean(artifactMediaId),
+      mediaId: artifactMediaId,
+    });
+  }
 
   const updatedAt =
     options?.updatedAtOverride?.trim() ||

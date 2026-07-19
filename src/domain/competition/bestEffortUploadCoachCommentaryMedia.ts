@@ -1,3 +1,4 @@
+import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
 import { listCoachMatchBreakdownOverlaysForAthlete } from "../../storage/coachMatchBreakdownOverlayStore";
 import { upsertMatchBreakdownOverlay } from "./upsertMatchBreakdownOverlay";
 import { coachSyncUploadCoachMedia } from "../../services/coachMediaApi";
@@ -31,6 +32,17 @@ export async function bestEffortUploadCoachCommentaryMedia(input: {
     if (!ref?.localUri?.trim() || ref.mediaId?.trim()) continue;
 
     attempted += 1;
+    const voiceNoteId = ref.id?.trim() || null;
+    const identity = {
+      traceId: input.traceId ?? null,
+      sharedAthleteId,
+      sharedCompetitionId: overlay.sharedCompetitionId,
+      matchLineageKey: overlay.matchLineageKey,
+    };
+    logCoachMediaCorridorTrace("UPLOAD_BEGIN", {
+      ...identity,
+      voiceNoteId,
+    });
     try {
       const result = await coachSyncUploadCoachMedia(
         input.linkToken,
@@ -65,6 +77,13 @@ export async function bestEffortUploadCoachCommentaryMedia(input: {
         traceId: input.traceId ?? null,
       });
       uploaded += 1;
+      logCoachMediaCorridorTrace("UPLOAD_SUCCESS", {
+        ...identity,
+        voiceNoteId,
+        mediaId: result.mediaId,
+        durationMs: result.durationMs ?? ref.durationMs ?? null,
+        mimeType: result.mimeType || ref.mimeType || null,
+      });
       console.log("[COACH_MEDIA_TRACE]", {
         stage: "coach_media_upload_ok",
         sharedAthleteId,
@@ -73,12 +92,18 @@ export async function bestEffortUploadCoachCommentaryMedia(input: {
         traceId: input.traceId ?? null,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logCoachMediaCorridorTrace("UPLOAD_FAILED", {
+        ...identity,
+        voiceNoteId,
+        error: errorMessage,
+      });
       console.log("[COACH_MEDIA_TRACE]", {
         stage: "coach_media_upload_failed",
         sharedAthleteId,
         matchLineageKey: overlay.matchLineageKey,
         traceId: input.traceId ?? null,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage,
       });
     }
   }

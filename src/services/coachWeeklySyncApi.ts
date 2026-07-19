@@ -4,6 +4,7 @@ import {
   recordCoachSyncCompetitionResponse,
 } from "../competition-state-auditor/coachSyncAuditWire";
 import { generateCompetitionTransitionId } from "../competition-state-auditor/generateCompetitionTransitionId";
+import { logCoachMediaCorridorTrace } from "../dev/coachMediaCorridorTrace";
 import { logParentCompPayload } from "../dev/parentCompPayloadTrace";
 import {
   inviteTokenSuffix,
@@ -494,6 +495,18 @@ export async function coachSyncFetchSession(
     artifactSetCount: Object.keys(coachMatchBreakdownArtifacts).length,
     hasRawField: Object.prototype.hasOwnProperty.call(p, "coachMatchBreakdownArtifacts"),
   });
+  for (const artifact of coachMatchBreakdownArtifactList) {
+    const artifactMediaId = artifact.mediaId?.trim() || null;
+    logCoachMediaCorridorTrace("WORKER_GET", {
+      // Parent GET has no coach-save corridor traceId; correlate via lineage keys.
+      traceId: null,
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasMediaId: Boolean(artifactMediaId),
+      mediaId: artifactMediaId,
+    });
+  }
   const rawCoachMatchBreakdownArtifacts = p.coachMatchBreakdownArtifacts;
   if (rawCompetitionsArray.length > 0) {
     for (const raw of rawCompetitionsArray) {
@@ -704,6 +717,17 @@ export async function coachSyncPutCoachMatchBreakdownArtifacts(
     artifactCount: body.artifacts.length,
     updatedAt: body.updatedAt,
   });
+  for (const artifact of body.artifacts) {
+    const artifactMediaId = artifact.mediaId?.trim() || null;
+    logCoachMediaCorridorTrace("WORKER_PUT", {
+      traceId: overlayTraceId,
+      sharedAthleteId: artifact.sharedAthleteId,
+      sharedCompetitionId: artifact.sharedCompetitionId,
+      matchLineageKey: artifact.matchLineageKey,
+      hasMediaId: Boolean(artifactMediaId),
+      mediaId: artifactMediaId,
+    });
+  }
   const res = await fetch(url, {
     method: "PUT",
     headers: {

@@ -1349,6 +1349,101 @@ async function verifyMediaContentAccess(
   return mismatch === 0;
 }
 
+/** Inclusive byte range resolved against an object size. */
+type ResolvedMediaByteRange = {
+  offset: number;
+  end: number;
+  length: number;
+};
+
+type ParsedMediaBytesRange =
+  | { kind: "none" }
+  | { kind: "invalid" }
+  | { kind: "bounded"; offset: number; end: number | null }
+  | { kind: "suffix"; suffix: number };
+
+/**
+ * Parse a single HTTP Range bytes unit. Multipart or malformed → invalid.
+ * Open-ended `bytes=start-` uses end=null until resolved against object size.
+ */
+function parseMediaBytesRangeHeader(header: string | null): ParsedMediaBytesRange {
+  if (header === null) return { kind: "none" };
+  const raw = header.trim();
+  if (!raw) return { kind: "none" };
+  // Reject multipart ("bytes=0-1,2-3") and non-bytes units.
+  const m = /^bytes=(\d*)-(\d*)$/i.exec(raw);
+  if (!m) return { kind: "invalid" };
+  const startRaw = m[1] ?? "";
+  const endRaw = m[2] ?? "";
+  if (startRaw === "" && endRaw === "") return { kind: "invalid" };
+  if (startRaw === "") {
+    const suffix = Number(endRaw);
+    if (!Number.isInteger(suffix) || suffix <= 0) return { kind: "invalid" };
+    return { kind: "suffix", suffix };
+  }
+  const offset = Number(startRaw);
+  if (!Number.isInteger(offset) || offset < 0) return { kind: "invalid" };
+  if (endRaw === "") return { kind: "bounded", offset, end: null };
+  const end = Number(endRaw);
+  if (!Number.isInteger(end) || end < 0 || end < offset) return { kind: "invalid" };
+  return { kind: "bounded", offset, end };
+}
+
+function resolveMediaBytesRange(
+  parsed: Exclude<ParsedMediaBytesRange, { kind: "none" }>,
+  size: number,
+): ResolvedMediaByteRange | null {
+  if (parsed.kind === "invalid") return null;
+  if (size <= 0) return null;
+  if (parsed.kind === "suffix") {
+    const length = Math.min(parsed.suffix, size);
+    const offset = size - length;
+    return { offset, end: size - 1, length };
+  }
+  if (parsed.offset >= size) return null;
+  const end = parsed.end === null ? size - 1 : Math.min(parsed.end, size - 1);
+  if (end < parsed.offset) return null;
+  return { offset: parsed.offset, end, length: end - parsed.offset + 1 };
+}
+
+function applyMediaContentCommonHeaders(headers: Headers, object: R2Object): void {
+  object.writeHttpMetadata(headers);
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("etag", object.httpEtag);
+  headers.set("Cache-Control", "private, max-age=60");
+  headers.set("Access-Control-Allow-Origin", "*");
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/octet-stream");
+  }
+}
+
+function mediaContentFullResponse(object: R2ObjectBody): Response {
+  const headers = new Headers();
+  applyMediaContentCommonHeaders(headers, object);
+  headers.set("Content-Length", String(object.size));
+  return new Response(object.body, { status: 200, headers });
+}
+
+function mediaContentPartialResponse(
+  object: R2ObjectBody,
+  range: ResolvedMediaByteRange,
+): Response {
+  const headers = new Headers();
+  applyMediaContentCommonHeaders(headers, object);
+  headers.set("Content-Length", String(range.length));
+  headers.set("Content-Range", `bytes ${range.offset}-${range.end}/${object.size}`);
+  return new Response(object.body, { status: 206, headers });
+}
+
+function mediaContentRangeNotSatisfiableResponse(size: number): Response {
+  const headers = new Headers();
+  headers.set("Accept-Ranges", "bytes");
+  headers.set("Content-Range", `bytes */${size}`);
+  headers.set("Cache-Control", "private, max-age=60");
+  headers.set("Access-Control-Allow-Origin", "*");
+  return new Response(null, { status: 416, headers });
+}
+
 function parseDurationMsHeader(request: Request): number | undefined {
   const raw = request.headers.get(MEDIA_DURATION_HEADER)?.trim() ?? "";
   if (!raw) return undefined;
@@ -3579,17 +3674,26 @@ export default {
         const ok = await verifyMediaContentAccess(rec.writerSecret, token, mediaId, expUnix, sig);
         if (!ok) return error("Unauthorized", 401);
 
-        const object = await env.MEDIA.get(mediaObjectKey(token, mediaId));
-        if (!object) return error("Not found", 404);
+        // Auth complete. Ownership is enforced by mediaObjectKey(token, mediaId).
+        const key = mediaObjectKey(token, mediaId);
+        const parsedRange = parseMediaBytesRangeHeader(request.headers.get("Range"));
 
-        const headers = new Headers();
-        object.writeHttpMetadata(headers);
-        headers.set("Cache-Control", "private, max-age=60");
-        headers.set("Access-Control-Allow-Origin", "*");
-        if (!headers.has("Content-Type")) {
-          headers.set("Content-Type", "application/octet-stream");
+        if (parsedRange.kind === "none") {
+          const object = await env.MEDIA.get(key);
+          if (!object) return error("Not found", 404);
+          return mediaContentFullResponse(object);
         }
-        return new Response(object.body, { status: 200, headers });
+
+        const head = await env.MEDIA.head(key);
+        if (!head) return error("Not found", 404);
+        const resolved = resolveMediaBytesRange(parsedRange, head.size);
+        if (!resolved) return mediaContentRangeNotSatisfiableResponse(head.size);
+
+        const object = await env.MEDIA.get(key, {
+          range: { offset: resolved.offset, length: resolved.length },
+        });
+        if (!object) return error("Not found", 404);
+        return mediaContentPartialResponse(object, resolved);
       }
 
       return error("Not found", 404);

@@ -1,5 +1,6 @@
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import type { SyncedCoachMatchBreakdownArtifactSet } from "../../types/coachWeeklySync";
+import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
 import { logMatchBreakdownBoundaryProbe } from "../../dev/matchBreakdownBoundaryProbe";
 import type { CompetitionMatchOverlayAnnotation } from "./projectCompetitionCompeteView";
 
@@ -180,6 +181,7 @@ export function mergeCoachBreakdownIntoMatches(input: {
     const coachNote = overlay?.coachNote?.trim();
     if (!overlay || !coachNote) return match;
     mergeCount += 1;
+    const mergedMediaId = overlay.mediaId?.trim() || null;
     console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
       stage: "parent_merge_match_success",
       sharedAthleteId: input.sharedAthleteId || null,
@@ -189,12 +191,21 @@ export function mergeCoachBreakdownIntoMatches(input: {
       overlayCount: input.overlayAnnotations.length,
       matchId,
       artifactMatchLineageKey: overlay.matchLineageKey,
-      hasMediaId: Boolean(overlay.mediaId?.trim()),
+      hasMediaId: Boolean(mergedMediaId),
+    });
+    logCoachMediaCorridorTrace("PARENT_MERGE", {
+      // Parent merge has no coach-save corridor traceId; correlate via lineage keys.
+      traceId: null,
+      sharedAthleteId: input.sharedAthleteId || null,
+      sharedCompetitionId: input.sharedCompetitionId || null,
+      matchLineageKey: overlay.matchLineageKey,
+      hasMediaId: Boolean(mergedMediaId),
+      mediaId: mergedMediaId,
     });
     return {
       ...match,
       coachNote,
-      ...(overlay.mediaId?.trim() ? { mediaId: overlay.mediaId.trim() } : {}),
+      ...(mergedMediaId ? { mediaId: mergedMediaId } : {}),
       ...(overlay.durationMs !== undefined ? { durationMs: overlay.durationMs } : {}),
       ...(overlay.mimeType?.trim() ? { mimeType: overlay.mimeType.trim() } : {}),
     };

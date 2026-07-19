@@ -7,6 +7,7 @@ import type {
   CoachMatchBreakdownOverlayPatch,
 } from "../types/coachMatchBreakdownOverlay";
 import { normalizeVoiceNoteRefs } from "../types/coachMatchBreakdownOverlay";
+import { logCoachMediaCorridorTrace } from "../dev/coachMediaCorridorTrace";
 import { logMatchBreakdownAuthorityTrace } from "../dev/matchBreakdownAuthorityTrace";
 import { StorageKeys } from "./storageKeys";
 
@@ -319,6 +320,19 @@ export async function writeCoachMatchBreakdownOverlay(input: {
     storeOverlayCountForAthlete,
     compositeKey: key,
   });
+  if (voiceNoteRefCount > 0) {
+    const overlayMediaId =
+      overlay.voiceNoteRefs?.find((ref) => Boolean(ref.mediaId?.trim()))?.mediaId?.trim() ??
+      null;
+    logCoachMediaCorridorTrace("OVERLAY_UPDATED", {
+      traceId: input.traceId?.trim() || null,
+      sharedAthleteId,
+      sharedCompetitionId,
+      matchLineageKey,
+      hasMediaId: Boolean(overlayMediaId),
+      mediaId: overlayMediaId,
+    });
+  }
   logCompOverlayMaterialize({
     sharedAthleteId,
     canonicalPayloadIds: [sharedCompetitionId],
