@@ -13,6 +13,8 @@ Edit these each session
 * Constraints today: [Short note]
 
 ⸻
+Major product subsystems require certified Product Architecture before implementation begins. Engineering should derive from certified product principles rather than inventing them during implementation.
+
 # BUILD / TESTFLIGHT DOCTRINE
 
 ## Purpose

@@ -7,6 +7,7 @@
 - Lane I am working in: [Coding / QA / Release / Architecture / Bug Fix / UX]
 - Main intended coding outcome today: [Short note]
 - Constraints today: [Short note]
+# Before implementation, verify whether today's objective already has a certified Product Architecture. If yes, implementation must conform to that architecture rather than redefining it.
 
 # Architecture Certification
 
@@ -64,6 +65,12 @@ Authoritative ownership rules: `docs/documentation-governance.md`.
 Product documents are no longer duplicated inside engineering documents. Product intent lives in Product Roadmap (and Product OS). Engineering documents record execution, evidence, and deferral only.
 
 ### Daily startup order (mandatory)
+Before implementing a strategic subsystem:
+
+1. Verify whether certified Product Architecture already exists.
+2. If not, establish Product Architecture before implementation.
+3. Trace engineering decisions back to certified principles.
+4. Only then begin runtime design and implementation.
 
 Before any coding plan:
 

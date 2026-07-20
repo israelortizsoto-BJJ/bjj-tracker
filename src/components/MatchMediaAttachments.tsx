@@ -6,6 +6,12 @@ import {
   persistMediaFromCameraRoll,
   requestMediaLibraryPermission,
 } from "../media/persistCameraRollMedia";
+import { createAudioAdapter } from "../playback/AudioAdapter";
+import {
+  createPlaybackCoordinator,
+  type PlaybackCoordinator,
+} from "../playback/PlaybackCoordinator";
+import { createVideoAdapter } from "../playback/VideoAdapter";
 
 const UI = {
   bgCard: "#ffffff",
@@ -23,6 +29,8 @@ export type MatchMediaCallbacks = {
   onPlay?: () => void;
   onPause?: () => void;
   onReplay?: () => void;
+  /** First consumer migration: expose coordinator authority for subscribe/getSnapshot. */
+  onPlaybackCoordinator?: (coordinator: PlaybackCoordinator) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
 };
@@ -43,11 +51,24 @@ export function MatchMediaAttachments({
   onPlay,
   onPause,
   onReplay,
+  onPlaybackCoordinator,
   onImageChange,
   onVideoChange,
 }: MatchMediaCallbacks) {
   const videoRef = useRef<Video>(null);
+  // Video-only binding for this slice. Audio stays unbound (no-op) so play/pause/replay
+  // do not fan out to commentary engines (CoachVoiceNoteField / MatchCard own their own).
+  const playbackRef = useRef(
+    createPlaybackCoordinator({
+      video: createVideoAdapter(() => videoRef.current),
+      audio: createAudioAdapter(() => null),
+    }),
+  );
   const [videoLinkDraft, setVideoLinkDraft] = useState("");
+
+  useEffect(() => {
+    onPlaybackCoordinator?.(playbackRef.current);
+  }, [onPlaybackCoordinator]);
 
   useEffect(() => {
     if (videoUri && looksLikeHttpVideoUrl(videoUri)) {
@@ -56,6 +77,17 @@ export function MatchMediaAttachments({
       setVideoLinkDraft("");
     }
   }, [videoUri]);
+
+  // Coordinator-owned lifecycle: reset snapshot when media goes away or source changes.
+  useEffect(() => {
+    void playbackRef.current.unload();
+  }, [videoUri]);
+
+  useEffect(() => {
+    return () => {
+      void playbackRef.current.unload();
+    };
+  }, []);
 
   async function ensureMediaPermissions() {
     const ok = await requestMediaLibraryPermission();
@@ -118,11 +150,16 @@ export function MatchMediaAttachments({
     ]);
   }
 
+  async function clearVideoMedia() {
+    await playbackRef.current.unload();
+    onVideoChange(null, null);
+  }
+
   function commitVideoLink() {
     const raw = videoLinkDraft.trim();
     if (!raw) {
       if (videoUri && looksLikeHttpVideoUrl(videoUri)) {
-        onVideoChange(null, null);
+        void clearVideoMedia();
       }
       return;
     }
@@ -146,6 +183,7 @@ export function MatchMediaAttachments({
     if (!result.canceled && result.assets?.[0]?.uri) {
       const asset = result.assets[0];
       const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
+      await playbackRef.current.unload();
       onVideoChange(persisted, asset.assetId ?? null);
     }
   }
@@ -153,8 +191,7 @@ export function MatchMediaAttachments({
   async function replayVideo() {
     try {
       if (!videoRef.current) return;
-      await videoRef.current.setPositionAsync(0);
-      await videoRef.current.playAsync();
+      await playbackRef.current.replay();
       onReplay?.();
     } catch {
       // ignore
@@ -164,7 +201,7 @@ export function MatchMediaAttachments({
   async function playVideo() {
     try {
       if (!videoRef.current) return;
-      await videoRef.current.playAsync();
+      await playbackRef.current.play();
       onPlay?.();
     } catch {
       // ignore
@@ -174,7 +211,7 @@ export function MatchMediaAttachments({
   async function pauseVideo() {
     try {
       if (!videoRef.current) return;
-      await videoRef.current.pauseAsync();
+      await playbackRef.current.pause();
       onPause?.();
     } catch {
       // ignore
@@ -236,6 +273,10 @@ export function MatchMediaAttachments({
             isLooping={false}
             onPlaybackStatusUpdate={(status) => {
               if (!status || typeof status !== "object") return;
+              // Coordinator owns video status truth; preserve existing finish → onPause UI.
+              if ("isLoaded" in status && status.isLoaded) {
+                playbackRef.current.applyVideoStatus(status);
+              }
               // @ts-ignore didJustFinish on playback status
               if (status.didJustFinish) {
                 onPause?.();
@@ -258,7 +299,9 @@ export function MatchMediaAttachments({
 
             <TouchableOpacity
               style={styles.attachmentButton}
-              onPress={() => onVideoChange(null, null)}
+              onPress={() => {
+                void clearVideoMedia();
+              }}
             >
               <Text style={styles.attachmentDangerText}>Remove Video</Text>
             </TouchableOpacity>

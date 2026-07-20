@@ -3,6 +3,12 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { Alert, Pressable, Text, TextInput, View, type TextInputProps } from "react-native";
 
 import { persistCoachVoiceAudio } from "../../media/persistCoachVoiceAudio";
+import { createAudioAdapter } from "../../playback/AudioAdapter";
+import {
+  createPlaybackCoordinator,
+  type PlaybackCoordinator,
+} from "../../playback/PlaybackCoordinator";
+import { createVideoAdapter } from "../../playback/VideoAdapter";
 import {
   logTranscribeRuntime,
   transcribeCoachAudio,
@@ -58,12 +64,15 @@ type CoachVoiceNoteFieldProps = {
    * Match Breakdown attaches this as voiceNoteRefs; other surfaces may omit.
    */
   onAudioPersisted?: (localUri: string) => void;
+  /** Optional: expose field-local audio coordinator for session membership wiring. */
+  onPlaybackCoordinator?: (coordinator: PlaybackCoordinator) => void;
 };
 
 /**
  * Certified coach voice note field: Record → Whisper transcript → editable text.
  * Reuses the single transcription corridor in coachVoiceTranscription.ts.
  * Phase 1: also preserves companion audio locally for coach-device replay.
+ * Playback intent/status/lifecycle are owned by PlaybackCoordinator (audio-only bind).
  */
 export function CoachVoiceNoteField({
   label,
@@ -83,11 +92,24 @@ export function CoachVoiceNoteField({
   onRecordingStateChange,
   playbackUri = null,
   onAudioPersisted,
+  onPlaybackCoordinator,
 }: CoachVoiceNoteFieldProps) {
   const [recordingState, setRecordingState] = useState<CoachVoiceRecordingState>("idle");
   const [playbackState, setPlaybackState] = useState<"idle" | "playing" | "paused">("idle");
   const recordingRef = useRef<Audio.Recording | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
+  // Audio-only binding for coach authoring. Video stays unbound so play/pause/unload
+  // do not fan out to MatchMediaAttachments. MatchCard owns a separate field-local coordinator.
+  const playbackRef = useRef(
+    createPlaybackCoordinator({
+      video: createVideoAdapter(() => null),
+      audio: createAudioAdapter(() => soundRef.current),
+    }),
+  );
+
+  useEffect(() => {
+    onPlaybackCoordinator?.(playbackRef.current);
+  }, [onPlaybackCoordinator]);
 
   const updateRecordingState = useCallback(
     (next: CoachVoiceRecordingState) => {
@@ -97,21 +119,24 @@ export function CoachVoiceNoteField({
     [onRecordingStateChange],
   );
 
+  // UI reflects coordinator snapshot authority (not direct Sound mutations).
+  useEffect(() => {
+    const coordinator = playbackRef.current;
+    const mapState = (state: string): "idle" | "playing" | "paused" => {
+      if (state === "playing") return "playing";
+      if (state === "paused") return "paused";
+      return "idle";
+    };
+    setPlaybackState(mapState(coordinator.getSnapshot().playbackState));
+    return coordinator.subscribe((snapshot) => {
+      setPlaybackState(mapState(snapshot.playbackState));
+    });
+  }, []);
+
   const unloadPlayback = useCallback(async () => {
-    const sound = soundRef.current;
+    // Coordinator owns termination; clear binding after adapter stop+unload.
+    await playbackRef.current.unload();
     soundRef.current = null;
-    setPlaybackState("idle");
-    if (!sound) return;
-    try {
-      await sound.stopAsync();
-    } catch {
-      // ignore
-    }
-    try {
-      await sound.unloadAsync();
-    } catch {
-      // ignore
-    }
   }, []);
 
   useEffect(() => {
@@ -253,14 +278,12 @@ export function CoachVoiceNoteField({
 
     try {
       if (playbackState === "playing" && soundRef.current) {
-        await soundRef.current.pauseAsync();
-        setPlaybackState("paused");
+        await playbackRef.current.pause();
         return;
       }
 
       if (playbackState === "paused" && soundRef.current) {
-        await soundRef.current.playAsync();
-        setPlaybackState("playing");
+        await playbackRef.current.play();
         return;
       }
 
@@ -271,21 +294,25 @@ export function CoachVoiceNoteField({
       });
       const { sound } = await Audio.Sound.createAsync(
         { uri },
-        { shouldPlay: true },
+        { shouldPlay: false },
         (status) => {
           if (!status.isLoaded) return;
+          playbackRef.current.applyAudioStatus(status);
           if (status.didJustFinish) {
-            setPlaybackState("idle");
-            void sound.unloadAsync().catch(() => {});
-            if (soundRef.current === sound) soundRef.current = null;
+            // Lifecycle termination stays coordinator-owned (stop + unload + idle snapshot).
+            void (async () => {
+              if (soundRef.current !== sound) return;
+              await playbackRef.current.unload();
+              soundRef.current = null;
+            })();
           }
         },
       );
       soundRef.current = sound;
-      setPlaybackState("playing");
+      await playbackRef.current.play();
     } catch (error) {
       console.error("Coach commentary playback failed", error);
-      setPlaybackState("idle");
+      await unloadPlayback();
       Alert.alert("Playback failed", "Could not play the saved commentary audio.");
     }
   }, [disabled, playbackState, playbackUri, recordingState, unloadPlayback]);

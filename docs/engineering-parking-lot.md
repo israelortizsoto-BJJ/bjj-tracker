@@ -64,7 +64,17 @@ Future Features (Post-MVP)
 Push notification when Coach publishes a Match Breakdown.
 Push notification when weekly summaries become available.
 Evaluate background synchronization versus explicit refresh after MVP stabilization.
-Continue Engineering Observatory / Digital Twin initiative once Release Candidate is stable.
+
+Engineering Observatory / Digital Twin
+
+Status:
+PARKED
+
+Resume Trigger:
+Coach Film Room Runtime Architecture is implemented and the Parent/Coach coaching loop is operational.
+
+Priority:
+Medium
 Release Readiness
 Build next TestFlight from the certified floor.
 Execute full production-device regression checklist.

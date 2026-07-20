@@ -5,6 +5,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { formatSubmissionTimeDisplay } from "../../domain/competition/matchDurationFormat";
 import { logBreakdownPropagationForMatch } from "../../domain/competition/competitionProjectionBreakdownTrace";
 import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
+import { createAudioAdapter } from "../../playback/AudioAdapter";
+import { createPlaybackCoordinator } from "../../playback/PlaybackCoordinator";
+import { createVideoAdapter } from "../../playback/VideoAdapter";
 import { coachSyncResolveCoachMedia } from "../../services/coachMediaApi";
 import { resolveCoachMediaSessionTarget } from "../../services/resolveParentCoachMediaSessionTarget";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
@@ -54,6 +57,14 @@ export function MatchCard({
   );
   const soundRef = useRef<Audio.Sound | null>(null);
   const playableUrlRef = useRef<string | null>(null);
+  // Audio-only binding for parent commentary. Video stays unbound so play/pause/unload
+  // do not fan out to MatchMediaAttachments. Media resolution stays outside the coordinator.
+  const playbackRef = useRef(
+    createPlaybackCoordinator({
+      video: createVideoAdapter(() => null),
+      audio: createAudioAdapter(() => soundRef.current),
+    }),
+  );
   const coachBreakdown = snapshot.coachNote?.trim() ?? "";
   const mediaId = snapshot.mediaId?.trim() ?? "";
   const durationLabel = formatCommentaryDuration(snapshot.durationMs);
@@ -94,23 +105,22 @@ export function MatchCard({
 
   const playbackStatusLoggedRef = useRef(false);
 
+  // UI reflects coordinator snapshot authority (not direct Sound mutations).
+  // "loading" remains a MatchCard-local resolve-phase overlay; coordinator never emits it.
+  useEffect(() => {
+    const coordinator = playbackRef.current;
+    setPlaybackState(coordinator.getSnapshot().playbackState);
+    return coordinator.subscribe((snapshot) => {
+      setPlaybackState(snapshot.playbackState);
+    });
+  }, []);
+
   const unloadPlayback = useCallback(async () => {
-    const sound = soundRef.current;
+    // Coordinator owns termination; clear binding after adapter stop+unload.
+    await playbackRef.current.unload();
     soundRef.current = null;
     playableUrlRef.current = null;
     playbackStatusLoggedRef.current = false;
-    setPlaybackState("idle");
-    if (!sound) return;
-    try {
-      await sound.stopAsync();
-    } catch {
-      // ignore
-    }
-    try {
-      await sound.unloadAsync();
-    } catch {
-      // ignore
-    }
   }, []);
 
   useEffect(() => {
@@ -149,39 +159,37 @@ export function MatchCard({
     });
 
     if (!mediaId) {
-      logPlayback( { stage: "PLAYBACK_RETURN_NO_MEDIA_ID" });
+      logPlayback({ stage: "PLAYBACK_RETURN_NO_MEDIA_ID" });
       return;
     }
     if (playbackState === "playing" && soundRef.current) {
-      await soundRef.current.pauseAsync();
-      setPlaybackState("paused");
-      logPlayback( { stage: "PLAYBACK_RETURN_PAUSE" });
+      await playbackRef.current.pause();
+      logPlayback({ stage: "PLAYBACK_RETURN_PAUSE" });
       return;
     }
     if (playbackState === "paused" && soundRef.current) {
-      await soundRef.current.playAsync();
-      setPlaybackState("playing");
-      logPlayback( { stage: "PLAYBACK_RETURN_RESUME" });
+      await playbackRef.current.play();
+      logPlayback({ stage: "PLAYBACK_RETURN_RESUME" });
       return;
     }
 
     setPlaybackState("loading");
     let failingBoundary: "target" | "resolve" | "audio" = "target";
     try {
-      // Stage 2 — resolveCoachMediaSessionTarget
-      logPlayback( { stage: "PLAYBACK_TARGET_BEGIN" });
+      // Stage 2 — resolveCoachMediaSessionTarget (adapter responsibility; outside coordinator)
+      logPlayback({ stage: "PLAYBACK_TARGET_BEGIN" });
       const targetStartedAt = Date.now();
       const target = await resolveCoachMediaSessionTarget();
       if (!target) {
-        logPlayback( {
+        logPlayback({
           stage: "PLAYBACK_TARGET_NULL",
           elapsedMs: Date.now() - targetStartedAt,
         });
-        logPlayback( { stage: "PLAYBACK_RETURN_NO_LINK" });
+        logPlayback({ stage: "PLAYBACK_RETURN_NO_LINK" });
         setPlaybackState("idle");
         return;
       }
-      logPlayback( {
+      logPlayback({
         stage: "PLAYBACK_TARGET_END",
         success: true,
         linkToken: target.linkToken,
@@ -191,7 +199,7 @@ export function MatchCard({
 
       // Stage 3 — coachSyncResolveCoachMedia (HTTP/JSON stages logged inside API)
       failingBoundary = "resolve";
-      logPlayback( {
+      logPlayback({
         stage: "PLAYBACK_RESOLVE_BEGIN",
         mediaId,
         linkToken: target.linkToken,
@@ -202,23 +210,12 @@ export function MatchCard({
         target.apiBaseUrl,
       );
       // Ephemeral playable URL — never written into the Match Breakdown artifact.
-      const previous = soundRef.current;
-      soundRef.current = null;
-      if (previous) {
-        try {
-          await previous.stopAsync();
-        } catch {
-          // ignore
-        }
-        try {
-          await previous.unloadAsync();
-        } catch {
-          // ignore
-        }
-      }
+      // Coordinator-owned termination of any prior engine before binding a new one.
+      await unloadPlayback();
+      setPlaybackState("loading");
       playableUrlRef.current = resolved.url;
 
-      // Stage 4 — Audio.Sound.createAsync
+      // Stage 4 — Audio.Sound.createAsync (engine bind; play intent via coordinator)
       failingBoundary = "audio";
       let resolvedUrlHost: string | null = null;
       try {
@@ -226,61 +223,67 @@ export function MatchCard({
       } catch {
         resolvedUrlHost = null;
       }
-      logPlayback( {
+      logPlayback({
         stage: "PLAYBACK_AUDIO_CREATE_BEGIN",
         hasResolvedUrl: Boolean(resolved.url?.trim()),
         urlHost: resolvedUrlHost,
       });
+      playbackStatusLoggedRef.current = false;
       const { sound } = await Audio.Sound.createAsync(
         { uri: resolved.url },
-        { shouldPlay: true },
+        { shouldPlay: false },
+        (status) => {
+          // Stage 5 — first status callback only (forensics)
+          if (!playbackStatusLoggedRef.current) {
+            playbackStatusLoggedRef.current = true;
+            logPlayback({
+              stage: "PLAYBACK_STATUS",
+              isLoaded: status.isLoaded,
+              isPlaying: status.isLoaded ? status.isPlaying : null,
+              positionMillis: status.isLoaded ? status.positionMillis : null,
+              durationMillis: status.isLoaded ? status.durationMillis : null,
+              didJustFinish: status.isLoaded ? status.didJustFinish : null,
+              error: status.isLoaded ? null : (status.error ?? null),
+            });
+          }
+          if (!status.isLoaded) return;
+          playbackRef.current.applyAudioStatus(status);
+          if (status.didJustFinish) {
+            // Lifecycle termination stays coordinator-owned (stop + unload + idle snapshot).
+            void (async () => {
+              if (soundRef.current !== sound) return;
+              await playbackRef.current.unload();
+              soundRef.current = null;
+              playableUrlRef.current = null;
+              playbackStatusLoggedRef.current = false;
+            })();
+          }
+        },
       );
-      logPlayback( { stage: "PLAYBACK_AUDIO_CREATE_SUCCESS" });
+      logPlayback({ stage: "PLAYBACK_AUDIO_CREATE_SUCCESS" });
       soundRef.current = sound;
-      playbackStatusLoggedRef.current = false;
-      sound.setOnPlaybackStatusUpdate((status) => {
-        // Stage 5 — first status callback only
-        if (!playbackStatusLoggedRef.current) {
-          playbackStatusLoggedRef.current = true;
-          logPlayback( {
-            stage: "PLAYBACK_STATUS",
-            isLoaded: status.isLoaded,
-            isPlaying: status.isLoaded ? status.isPlaying : null,
-            positionMillis: status.isLoaded ? status.positionMillis : null,
-            durationMillis: status.isLoaded ? status.durationMillis : null,
-            didJustFinish: status.isLoaded ? status.didJustFinish : null,
-            error: status.isLoaded ? null : (status.error ?? null),
-          });
-        }
-        if (!status.isLoaded) return;
-        if (status.didJustFinish) {
-          setPlaybackState("idle");
-          void sound.unloadAsync().catch(() => undefined);
-          if (soundRef.current === sound) soundRef.current = null;
-        }
-      });
-      setPlaybackState("playing");
+      await playbackRef.current.play();
     } catch (error) {
       const errMsg = error instanceof Error ? error.message : String(error);
       const errStack = error instanceof Error ? error.stack ?? null : null;
       if (failingBoundary === "audio") {
-        logPlayback( {
+        logPlayback({
           stage: "PLAYBACK_AUDIO_CREATE_ERROR",
           error: errMsg,
           stack: errStack,
         });
-        logPlayback( { stage: "PLAYBACK_RETURN_AUDIO_ERROR", error: errMsg });
+        logPlayback({ stage: "PLAYBACK_RETURN_AUDIO_ERROR", error: errMsg });
       } else if (failingBoundary === "resolve") {
-        logPlayback( {
+        logPlayback({
           stage: "PLAYBACK_RESOLVE_ERROR",
           error: errMsg,
         });
-        logPlayback( {
+        logPlayback({
           stage: "PLAYBACK_RETURN_RESOLVE_FAILED",
           error: errMsg,
         });
       } else {
-        logPlayback( {
+        logPlayback({
           stage: "PLAYBACK_RETURN_TARGET_FAILED",
           error: errMsg,
         });
@@ -291,9 +294,9 @@ export function MatchCard({
         matchLineageKey: snapshot.id,
         error: errMsg,
       });
-      setPlaybackState("idle");
+      await unloadPlayback();
     }
-  }, [mediaId, playbackState, snapshot.id]);
+  }, [mediaId, playbackState, snapshot.id, unloadPlayback]);
 
   const methodLines: string[] = [];
   const submissionTimeDisplay = formatSubmissionTimeDisplay(snapshot.submissionTime);

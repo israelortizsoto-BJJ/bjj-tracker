@@ -15,6 +15,8 @@ import {
   type CoachVoiceRecordingControls,
   type CoachVoiceRecordingState,
 } from "../coach/CoachVoiceNoteField";
+import { createFilmRoomSessionCoordinator } from "../../playback/FilmRoomSessionCoordinator";
+import type { PlaybackCoordinator } from "../../playback/PlaybackCoordinator";
 import {
   type CompetitionDetailMatchSnapshot,
   getCompetitionDetailByEntryId,
@@ -255,8 +257,20 @@ export function MatchBlock({
 }) {
   type RecordingState = CoachVoiceRecordingState;
   const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackCoordinator, setPlaybackCoordinator] = useState<PlaybackCoordinator | null>(
+    null,
+  );
+  const [coachAudioCoordinator, setCoachAudioCoordinator] = useState<PlaybackCoordinator | null>(
+    null,
+  );
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const recordingControlsRef = useRef<CoachVoiceRecordingControls | null>(null);
+  // One Film Room session per MatchBlock — membership + exclusivity arbitration.
+  const sessionRef = useRef(
+    createFilmRoomSessionCoordinator({
+      sessionId: match.id,
+    }),
+  );
   const { width: windowWidth } = useWindowDimensions();
   /** Compact multi-column chip grid (long labels wrap); avoids a single tall column of pills. */
   const submissionChipLayout = useMemo(() => {
@@ -270,13 +284,47 @@ export function MatchBlock({
     return { chipWidth, gap };
   }, [windowWidth]);
 
+  // Session lifetime owned by MatchBlock.
   useEffect(() => {
-    if (match.videoUri) return;
-    setIsPlaying(false);
-  }, [match.videoUri]);
+    const session = sessionRef.current;
+    return () => {
+      session.destroy();
+    };
+  }, []);
+
+  // Playback UI state from coordinator authority (not MatchMedia onPlay/onPause/onReplay).
+  useEffect(() => {
+    if (!playbackCoordinator) return;
+    setIsPlaying(playbackCoordinator.getSnapshot().playbackState === "playing");
+    return playbackCoordinator.subscribe((snapshot) => {
+      setIsPlaying(snapshot.playbackState === "playing");
+    });
+  }, [playbackCoordinator]);
+
+  // Register field coordinators when surfaces expose them (session installs play-intent hooks).
+  useEffect(() => {
+    if (!playbackCoordinator) return;
+    const session = sessionRef.current;
+    session.register(playbackCoordinator, "video");
+    return () => {
+      session.unregister(playbackCoordinator, "video");
+    };
+  }, [playbackCoordinator]);
+
+  useEffect(() => {
+    if (!coachAudioCoordinator) return;
+    const session = sessionRef.current;
+    session.register(coachAudioCoordinator, "coach_audio");
+    return () => {
+      session.unregister(coachAudioCoordinator, "coach_audio");
+    };
+  }, [coachAudioCoordinator]);
 
   const controlsDisabled = recordingState === "processing";
   const showRecordingOverlay = recordingState === "recording";
+  // Preserve legacy hint gates: no video → paused; recording → paused (optimistic).
+  const videoPlayingHint =
+    Boolean(match.videoUri) && recordingState !== "recording" && isPlaying;
 
   return (
     <View
@@ -300,9 +348,7 @@ export function MatchBlock({
           <MatchMediaAttachments
             imageUri={match.imageUri}
             videoUri={match.videoUri}
-            onPlay={() => setIsPlaying(true)}
-            onPause={() => setIsPlaying(false)}
-            onReplay={() => setIsPlaying(true)}
+            onPlaybackCoordinator={setPlaybackCoordinator}
             onImageChange={onImageChange}
             onVideoChange={onVideoChange}
             shouldPausePlayback={recordingState === "recording"}
@@ -368,15 +414,13 @@ export function MatchBlock({
           scrollEnabled
           minHeight={120}
           maxHeight={120}
-          idleStatusHint={isPlaying ? "Video playing" : "Video paused"}
+          idleStatusHint={videoPlayingHint ? "Video playing" : "Video paused"}
           externalStopControl
           recordingControlsRef={recordingControlsRef}
           playbackUri={match.voiceNoteRefs?.[0]?.localUri ?? null}
           onAudioPersisted={onVoiceNotePersisted}
-          onRecordingStateChange={(state) => {
-            setRecordingState(state);
-            if (state === "recording") setIsPlaying(false);
-          }}
+          onRecordingStateChange={setRecordingState}
+          onPlaybackCoordinator={setCoachAudioCoordinator}
         />
       </View>
 

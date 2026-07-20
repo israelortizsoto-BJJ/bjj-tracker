@@ -1,4 +1,16 @@
 # BJJ Tracker - Dev Handoff Notes
+
+# Certified Product Architecture
+Contents:
+
+Product Architecture Foundation v1 established.
+Five foundational documents certified.
+Product Architecture is now a first-class architectural layer.
+Future strategic subsystems should follow the same methodology.
+Observatory is expected to be the first subsystem developed under this model.
+
+That gives any incoming engineer immediate context.
+
 # DEBUGGING REMINDER
 
 Facts before fixes.
@@ -67,6 +79,135 @@ Writers:
 scripts/write_engineering_checkpoint.py
 
 ---
+# DEV HANDOFF — 2026-07-18
+
+## Session Summary
+
+Today's work completed two significant engineering milestones.
+
+First, Coach Commentary successfully crossed the Coach → Parent boundary, establishing the first working coaching communication path between devices. This represents the beginning of the coaching intelligence runtime rather than another isolated application feature.
+
+Second, Product Architecture Foundation v1 was completed, reviewed, and formally integrated into the Engineering Certification System as a certified architectural discipline alongside Runtime Architecture.
+
+The session intentionally stopped before runtime implementation so the next phase of engineering can inherit from a certified product architecture rather than defining product behavior while coding.
+
+---
+
+## Engineering Work Completed
+
+### Coach Commentary Runtime Progress
+
+Validated the first working Coach → Parent coaching communication corridor.
+
+Current conceptual runtime:
+
+Coach
+
+↓
+
+Coach Commentary
+
+↓
+
+Synchronization
+
+↓
+
+Parent Playback
+
+This milestone demonstrates that coaching intelligence can move across device boundaries and establishes the foundation for the future Coach Film Room.
+
+---
+
+### Product Architecture Foundation
+
+Completed and certified the Product Architecture constitutional layer.
+
+Certified documents:
+
+- ProductArchitectureCertification-v1.md
+- MatMindCoachingIntelligenceCharter-v1.md
+- CoachFilmRoom-ProductVision-v1.md
+- CoachFilmRoom-ArchitectureCertification-v1.md
+- MatMindLearningLoop-v1.md
+
+These documents now define product intent before runtime implementation.
+
+Future strategic systems should inherit from these principles rather than recreating product behavior during engineering.
+
+---
+
+### Engineering Certification System
+
+Updated:
+
+- CertifiedArchitectureRegister-v1.md
+- CERTIFICATION_HISTORY.md
+
+Reviewed but intentionally left unchanged:
+
+- active-investigation-register.md
+- protected-systems-register.md
+
+Reason:
+
+Today's work certified Product Architecture.
+
+It did not close any runtime investigations, nor did it establish sufficient runtime evidence to certify a new protected system.
+
+---
+
+## Engineering Decisions
+
+Product Architecture is now a certified architectural discipline.
+
+Engineering startup order now becomes:
+
+Product Architecture
+
+↓
+
+Runtime Architecture
+
+↓
+
+Engineering Investigation
+
+↓
+
+Implementation
+
+This becomes the canonical engineering workflow for future strategic product work.
+
+---
+
+## Current Engineering State
+
+The project has transitioned from proving communication between devices to designing a complete coaching intelligence runtime.
+
+Coach Commentary has demonstrated that the first cross-device coaching corridor is viable.
+
+The next engineering challenge is no longer proving synchronization.
+
+The next engineering challenge is designing the runtime that transforms Coach Commentary into a complete Coach Film Room experience.
+
+---
+
+## Next Engineering Objective
+
+Coach Film Room Runtime Architecture & Coaching Loop Mapping
+
+Objectives:
+
+- Define canonical runtime objects.
+- Define authority boundaries.
+- Define publication lifecycle.
+- Define playback lifecycle.
+- Map the complete Coach → Parent → Athlete → Coach learning loop.
+- Preserve existing certified runtime boundaries.
+
+Engineering intentionally deferred Observatory work until the Coach Film Room runtime architecture is complete.
+
 # DEV HANDOFF — 2026-07-17
 
 ## Engineering OS vNext Adoption

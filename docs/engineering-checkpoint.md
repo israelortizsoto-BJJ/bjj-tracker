@@ -10,6 +10,225 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# Engineering Checkpoint — 2026-07-19
+
+## Session Outcome
+
+Seek Authority v0 landed on `FilmRoomSessionCoordinator`.
+
+Session owns seek intent via `requestSeek(timeMs)` and routes only to the active participant's existing `seek()` API. Inactive participants are untouched. No broadcast, sync, playback-state change, or engine-ownership move. Session playhead continues to update exclusively from active-participant snapshot publication.
+
+## Certified Film Room Runtime Roadmap
+
+✅ PlaybackCoordinator
+
+↓
+
+✅ FilmRoomSessionCoordinator
+
+↓
+
+✅ Registration
+
+↓
+
+✅ Observability
+
+↓
+
+✅ Exclusivity
+
+↓
+
+✅ Active Participant
+
+↓
+
+✅ Session Snapshot
+
+↓
+
+✅ Timeline Authority
+
+↓
+
+✅ Session Playhead Publication
+
+↓
+
+✅ Seek Authority
+
+↓
+
+Synchronization Fan-out
+
+↓
+
+Transcript Following
+
+↓
+
+Waveform Following
+
+↓
+
+Film Room v1
+
+## Next Slice
+
+Synchronization Fan-out — still deferred; Seek Authority does not introduce sync.
+
+# Engineering Checkpoint — 2026-07-19 (earlier)
+
+## Session Outcome
+
+Session Playhead Publication v0 landed on `FilmRoomSessionCoordinator`.
+
+Canonical session playhead `{ currentTimeMs, playbackState }` is published from the active participant only via existing field `subscribe()`. Inactive measurements are ignored. No fan-out, sync, seek, or replay routing.
+
+## Certified Film Room Runtime Roadmap
+
+✅ PlaybackCoordinator
+
+↓
+
+✅ FilmRoomSessionCoordinator
+
+↓
+
+✅ Registration
+
+↓
+
+✅ Observability
+
+↓
+
+✅ Exclusivity
+
+↓
+
+✅ Active Participant
+
+↓
+
+✅ Session Snapshot
+
+↓
+
+✅ Timeline Authority
+
+↓
+
+✅ Session Playhead Publication
+
+↓
+
+Seek Authority
+
+↓
+
+Synchronization Fan-out
+
+↓
+
+Transcript Following
+
+↓
+
+Waveform
+
+↓
+
+Film Room v1
+
+## Next Slice
+
+Seek Authority — session owns seek target; fields apply. Still no sync fan-out until the following slice.
+
+# Engineering Checkpoint — 2026-07-18
+
+## Session Outcome
+
+Today's session established two major engineering milestones.
+
+1. Coach Commentary successfully crossed the Coach → Parent boundary, proving the first end-to-end coaching communication path.
+
+2. Product Architecture Foundation v1 was certified and incorporated into the Engineering Certification System.
+
+Rather than continuing implementation immediately, engineering paused to certify the product constitution so future runtime work inherits from stable architectural principles.
+
+---
+
+## Architectural Progress
+
+Certified:
+
+- Product Architecture Foundation v1
+
+Engineering Certification updates:
+
+- Certified Architecture Register updated.
+- Certification History updated.
+
+No changes were made to:
+
+- Active Investigation Register
+- Protected Systems Register
+
+These remain governed by runtime evidence rather than architectural planning.
+
+---
+
+## Runtime Status
+
+Coach Commentary now demonstrates the first viable coaching communication corridor.
+
+Conceptually:
+
+Coach
+
+↓
+
+Coach Commentary
+
+↓
+
+Synchronization
+
+↓
+
+Parent Playback
+
+This establishes the foundation for the future Coach Film Room.
+
+The complete coaching intelligence runtime remains to be designed.
+
+---
+
+## Current Focus
+
+Next engineering objective:
+
+Coach Film Room Runtime Architecture & Coaching Loop Mapping.
+
+The immediate goal is to define:
+
+- runtime objects
+- authority boundaries
+- publication flow
+- playback flow
+- coaching lifecycle
+
+before additional implementation work begins.
+
+---
+
+## Ready To Resume
+
+Tomorrow should begin with runtime architecture mapping rather than additional implementation work.
+
+Observatory and Digital Twin initiatives remain deferred until the Coach Film Room runtime reaches architectural maturity.
 # Engineering Checkpoint
 
 Date: 2026-07-17  

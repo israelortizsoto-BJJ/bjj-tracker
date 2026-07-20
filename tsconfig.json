@@ -25,6 +25,7 @@
     "src/domain/competition/tests/parentResultsRecordedGateWiring.test.ts",
     "src/features/coach/tests/coachDashboardPullToRefreshWiring.test.ts",
     "src/features/coach/tests/ux002CoachVoiceReuseWiring.test.ts",
-    "src/features/coach/tests/coachCommentaryMediaCorridor.test.ts"
+    "src/features/coach/tests/coachCommentaryMediaCorridor.test.ts",
+    "src/playback/tests/filmRoomExclusivity.v0.test.ts"
   ]
 }
