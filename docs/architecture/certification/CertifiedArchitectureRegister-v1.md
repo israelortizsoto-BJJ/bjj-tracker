@@ -197,6 +197,51 @@ Defines the constitutional product principles governing the Coach Film Room and 
 
 ---
 
+## 7. Media Runtime Foundation
+
+Status
+
+CERTIFIED
+
+Protected by
+
+media-runtime-certified-floor-v1
+
+Version
+
+v1
+
+Certification Date
+
+2026-07-19
+
+Confidence
+
+High
+
+Repository References
+
+- docs/architecture/certification/MediaRuntimeFoundation-v1-Certification.md
+- src/playback/PlaybackCoordinator.ts
+- src/playback/FilmRoomSessionCoordinator.ts
+- src/playback/tests/filmRoomExclusivity.v0.test.ts
+
+Certification Summary
+
+Media Runtime Foundation is a protected certified subsystem.
+
+Ownership boundaries (repository-certified):
+
+- `PlaybackCoordinator` owns field engine lifecycle, field-local playback intent (including `replay`), field `seek` as engine I/O / sync execution, and measurement.
+- `FilmRoomSessionCoordinator` owns synchronization, session playhead, seek authority (`requestSeek`), active participant, and cross-media coordination.
+- Timeline remains a domain addressing model, not the playback clock.
+
+Owning architectural floor: `media-runtime-certified-floor-v1`.
+
+Engineering rule: changes to Media Runtime ownership boundaries require a new architecture certification against this floor. Do not reopen PlaybackCoordinator / FilmRoomSessionCoordinator ownership without repository evidence and a certified amendment.
+
+---
+
 # Master Certification Table
 
 | Architecture Area | Status | Confidence |
@@ -207,6 +252,7 @@ Defines the constitutional product principles governing the Coach Film Room and 
 | Overlay Merge Contract | CERTIFIED | High |
 | Competition Rendering Pipeline | PARTIALLY CERTIFIED | High |
 | Product Architecture | CERTIFIED | High |
+| Media Runtime Foundation | CERTIFIED | High |
 
 ---
 

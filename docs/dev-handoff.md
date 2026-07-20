@@ -1,5 +1,16 @@
 # BJJ Tracker - Dev Handoff Notes
 
+# Certified Media Runtime Foundation
+Contents:
+
+Media Runtime Foundation is certified.
+Runtime ownership is protected by `media-runtime-certified-floor-v1`.
+Film Room product work must consume Session APIs (`getPlayhead`, `requestSeek`).
+Runtime ownership is no longer under investigation.
+
+Canonical reference:
+docs/architecture/certification/MediaRuntimeFoundation-v1-Certification.md
+
 # Certified Product Architecture
 Contents:
 
@@ -79,6 +90,82 @@ Writers:
 scripts/write_engineering_checkpoint.py
 
 ---
+# DEV HANDOFF — 2026-07-19
+
+## Session Summary
+
+Media Runtime Foundation is certified.
+
+Repository checkpoint:
+
+- HEAD `92fde3f` — Complete Media Runtime Foundation certification and MatchBlock adoption
+- Tags: `media-runtime-foundation-floor-v1`, `media-runtime-certified-floor-v1`
+
+Runtime ownership is protected. Film Room product engineering should consume Session APIs. Runtime ownership is no longer under investigation.
+
+---
+
+## Engineering Work Completed
+
+### Media Runtime Foundation Certification
+
+Certified ownership:
+
+- `PlaybackCoordinator` — playback engine lifecycle, field-local playback intent, playback measurement
+- `FilmRoomSessionCoordinator` — synchronization, session playhead, seek authority, active participant, cross-media coordination
+- Timeline — domain addressing model; not the playback clock
+
+Closed exceptions evidenced in repository:
+
+- EX-1 — single-engine binding enforced
+- EX-3 — MatchBlock Session adoption (`getPlayhead` read, `requestSeek` write)
+- EX-4 — Film Room architecture documentation reconciled with certified runtime ownership
+
+Remaining intentional exception:
+
+- EX-5 — dual seek entry points (`PlaybackCoordinator.seek` for field/engine I/O + sync; product session seeks use `requestSeek`)
+
+### Engineering Certification System
+
+Updated:
+
+- `MediaRuntimeFoundation-v1-Certification.md`
+- `CertifiedArchitectureRegister-v1.md` (Media Runtime Foundation entry; protected by `media-runtime-certified-floor-v1`)
+- `CERTIFICATION_HISTORY.md`
+- `CoachFilmRoom-ArchitectureCertification-v1.md`
+- `docs/engineering-checkpoint.md`
+
+---
+
+## Engineering Decisions
+
+Media Runtime Foundation is a protected certified subsystem.
+
+Film Room product features must:
+
+- consume `session.getPlayhead()` for temporal following
+- consume `session.requestSeek()` for product seeks
+- not reopen PlaybackCoordinator / Session ownership without new repository evidence
+
+---
+
+## Current Engineering State
+
+Current Initiative: Film Room Product
+
+Media Runtime ownership work is complete. Next engineering focuses on Film Room product surfaces that consume the certified Session APIs.
+
+---
+
+## Next Engineering Objective
+
+Film Room Product — Session API consumption
+
+- Transcript following via `getPlayhead()`
+- Waveform following via `getPlayhead()`
+- Scrubbing / markers via `requestSeek`
+- Preserve certified runtime ownership boundaries
+
 # DEV HANDOFF — 2026-07-18
 
 ## Session Summary

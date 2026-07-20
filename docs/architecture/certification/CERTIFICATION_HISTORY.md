@@ -90,3 +90,47 @@ Session temporal APIs are now product-consumed by MatchBlock without runtime own
 Outcome
 
 EX-3 is fully closed (read + write). Remaining Media Runtime Foundation exceptions: EX-4, EX-5 (EX-2/EX-6 residual, non-blocking ownership).
+
+---
+
+## 2026-07-19
+
+Certification
+
+Media Runtime Foundation v1 — Certified Floor & Runtime Adoption
+
+Summary
+
+Repository evidence establishes Media Runtime Foundation as a certified architectural floor.
+
+- **EX-1 closed:** single-engine binding enforced via `assertSingleEngineBound` / `PlaybackCoordinatorDualBindError`.
+- **MatchBlock Session adoption (EX-3):** `getPlayhead()` read path and `requestSeek(0)` write path in MatchBlock; field `replay()` remains field-local.
+- **Runtime adoption certification:** PlaybackCoordinator / FilmRoomSessionCoordinator / adapters / MatchBlock wiring certified under `MediaRuntimeFoundation-v1-Certification.md`.
+- **Certified floor tag:** `media-runtime-certified-floor-v1` (HEAD `92fde3f`).
+- **EX-4 closed:** `CoachFilmRoom-ArchitectureCertification-v1.md` reconciled — timeline is domain addressing; Session owns playhead/seek/sync; PlaybackCoordinator owns field intent/measurement.
+
+Outcome
+
+Media Runtime Foundation is certified and protected by `media-runtime-certified-floor-v1`. Remaining Media Runtime Foundation exception: EX-5 (intentional dual seek entry points; EX-2/EX-6 residual, non-blocking ownership).
+
+---
+
+## 2026-07-19
+
+Certification
+
+Media Runtime Foundation v1 — Exception EX-5 Closed
+
+Summary
+
+Repository evidence closes EX-5 as a certified architectural invariant (layered seek / replay), not an open dual-authority exception.
+
+- **Field `PlaybackCoordinator.seek`:** engine I/O and sync execution primitive; Session routes leader seek and inactive sync through this API (`FilmRoomSessionCoordinator.ts`).
+- **Session `requestSeek`:** owns synchronized session seek authority (leader-only); MatchBlock is the certified product consumer.
+- **Field `PlaybackCoordinator.replay`:** owns field-local replay (Invariant 21); Session does not intercept (`MatchMediaAttachments` → `replay()`; MatchBlock `onReplay` → `requestSeek(0)` re-asserts session authority after field replay).
+- No repository evidence of unresolved architectural ambiguity between these surfaces.
+- Floor tag remains `media-runtime-certified-floor-v1`; EX-5 closure is an allowed certified amendment within that floor.
+
+Outcome
+
+EX-5 is fully closed as Invariant 25. Media Runtime Foundation status is **CERTIFIED**. Residual non-blocking findings: EX-2, EX-6.

@@ -1,6 +1,6 @@
 # Media Runtime Foundation v1 — Certification Report
 
-> Status: **CERTIFIED WITH EXCEPTIONS**
+> Status: **CERTIFIED**
 >
 > Classification: Runtime Architecture Certification
 >
@@ -28,11 +28,15 @@ The Media Runtime Foundation is a layered, single-owner runtime:
 
 Repository inspection found **no circular dependencies**, **no peer-aware field coordinators**, **no session engine ownership**, and **no adapter-owned playback state**. Core invariants are proven by code and by `src/playback/tests/filmRoomExclusivity.v0.test.ts` (29 passing).
 
-Certification is **WITH EXCEPTIONS** because: (1) field `seek()` remains a parallel entry point by design; (2) product Film Room architecture docs still claim timeline/PlaybackCoordinator temporal authority that the runtime has superseded.
+Certification is **CERTIFIED**. Field `seek()` / `replay()` and Session `requestSeek` are layered responsibilities (Invariant 25), not competing temporal authorities.
 
 **EX-1 closed (2026-07-19):** single-engine binding is repository-enforced via `assertSingleEngineBound` / `PlaybackCoordinatorDualBindError` (video XOR audio).
 
 **EX-3 closed (2026-07-19):** MatchBlock consumes session `getPlayhead()` (read) and `requestSeek` (write). Field `replay()` remains field-local (Invariant 21).
+
+**EX-4 closed (2026-07-19):** Product Film Room architecture certification reconciled — timeline is domain addressing; Session owns playhead/seek/sync; PlaybackCoordinator owns field intent/measurement.
+
+**EX-5 closed (2026-07-19):** dual seek surfaces closed as certified design invariant — field `seek` is engine I/O + sync execution; Session `requestSeek` is synchronized session seek authority; field `replay()` remains field-local.
 
 ---
 
@@ -52,7 +56,7 @@ Certification is **WITH EXCEPTIONS** because: (1) field `seek()` remains a paral
 | Adapter translation | Adapters | Thin I/O façade over expo-av | Intent arbitration, snapshot publication | Certified |
 | **PlaybackCoordinator Layer** | | | | |
 | Playback intent | Field `PlaybackCoordinator.play` | Notifies optional play-intent handler, then adapter play | Session (arbitrates via handler only), UI | Certified |
-| Replay intent | Field `PlaybackCoordinator.replay` | Seek(0)+play; same play-intent path | Session (does not intercept replay) | Certified |
+| Replay intent | Field `PlaybackCoordinator.replay` | Seek(0)+play; same play-intent path | Session (does not intercept replay) | Certified (**EX-5 closed** / Invariant 21) |
 | Pause intent | Field `PlaybackCoordinator.pause` | Adapter pause + snapshot paused | Session may *invoke* pause for exclusivity; does not own field pause API | Certified |
 | Playback snapshot | Field `PlaybackCoordinator` | Private `snapshot` + `publish` / `getSnapshot` / `subscribe` | Adapters, Session (session has separate playhead), UI mirrors only | Certified |
 | Status publication | Field coordinator `applyVideoStatus` / `applyAudioStatus` | Engine status → field snapshot | Adapters do not publish; Session filters to active | Certified |
@@ -66,7 +70,7 @@ Certification is **WITH EXCEPTIONS** because: (1) field `seek()` remains a paral
 | Exclusivity | Session `handlePlayIntent` | Pause other *playing* participants | Field peers, adapters | Certified |
 | Active participant | Session `setActiveParticipant` | Set on play intent; clear on unregister/destroy; pause does not clear | Measurement, sync | Certified |
 | Session playhead | Session `playhead` via `applyPlayheadFromActive` | Active snapshot only; MatchBlock polls `getPlayhead()` | Inactive measurements, sync | Certified (**EX-3 closed**) |
-| Seek authority | Session `requestSeek` | Routes to active `seek()` only; MatchBlock `onReplay` → `requestSeek(0)` | Inactive (follow via sync); field `replay()` stays field-local | Certified (**EX-3 closed**) |
+| Seek authority | Session `requestSeek` | Routes to active `seek()` only; MatchBlock `onReplay` → `requestSeek(0)` | Inactive (follow via sync); field `replay()` stays field-local | Certified (**EX-3 / EX-5 closed**) |
 | Synchronization propagation | Session `propagateSyncToInactive` | After playhead update → inactive `seek(time)` | Playhead ownership, play/pause, engines | Certified |
 | **Domain Layer** | | | | |
 | Timeline artifacts | *Not present in runtime* | No timeline clock module under `src/playback` | Must not become playback clock | Outside runtime (intentional) |
@@ -147,8 +151,8 @@ Attempted disproof checklist and results:
 | **EX-1** | `PlaybackCoordinator.ts` | Single-engine binding | — | **Closed** — runtime `assertSingleEngineBound` rejects dual live engines |
 | **EX-2** | `MatchCard.tsx` | Ephemeral `loading` UI state written outside coordinator snapshot | Low | Keep as resolve-phase presentation; do not promote into coordinator snapshot unless loading becomes field truth |
 | **EX-3** | `competitionMatchEditor.tsx` (`MatchBlock`) | Session playhead/seek product integration | — | **Closed** — `getPlayhead()` chrome + `requestSeek(0)` via MatchBlock `onReplay`; field `replay()` preserved |
-| **EX-4** | `CoachFilmRoom-ArchitectureCertification-v1.md` | Claims timeline SoT + PlaybackCoordinator owns current time/sync | High (doc contradiction) | Reconcile product cert with session-owned playhead/sync before product features land |
-| **EX-5** | `PlaybackCoordinator.seek` vs `requestSeek` | Dual seek entry points | Low (intentional) | Keep field seek for engine I/O + sync; product session seeks must use `requestSeek` |
+| **EX-4** | `CoachFilmRoom-ArchitectureCertification-v1.md` | Timeline / PlaybackCoordinator temporal ownership claims | — | **Closed** — product cert reconciled with Session playhead/seek/sync and field PlaybackCoordinator ownership |
+| **EX-5** | `PlaybackCoordinator.seek` / `replay` vs `requestSeek` | Layered seek / replay responsibilities | — | **Closed** — certified design invariant (Invariant 25): field `seek` = engine I/O + sync execution; Session `requestSeek` = synchronized seek authority; field `replay()` = field-local |
 | **EX-6** | `VideoAdapter.unload` | Pause-only vs audio stop+unload | Low | Preserve media-kind asymmetry; surface owns Video mount lifecycle |
 
 **No additional ownership leaks found** beyond the exceptions above.
@@ -189,6 +193,7 @@ Attempted disproof checklist and results:
 22. **Engines remain field-owned**.
 23. Field coordinators remain peer-unaware.
 24. Finish semantics diverge by media kind: video → paused; coach/parent audio → idle + unload.
+25. **Layered seek / replay (EX-5 closed)** — `PlaybackCoordinator.seek` is field engine I/O and the execution primitive Session sync / `requestSeek` route through; `FilmRoomSessionCoordinator.requestSeek` owns synchronized session seek authority (leader-only); `PlaybackCoordinator.replay` owns field-local replay. These are distinct architectural responsibilities, not dual product temporal authorities.
 
 ---
 
@@ -278,7 +283,7 @@ Approved rule: extensions plug **above** Session (product) or **beside** field s
 
 ## Architecture Verdict
 
-### CERTIFIED WITH EXCEPTIONS
+### CERTIFIED
 
 **Proven:**
 
@@ -288,25 +293,20 @@ Approved rule: extensions plug **above** Session (product) or **beside** field s
 - Session playhead, seek authority, and sync fan-out honor Measurement ≠ Authority and Synchronization ≠ Authority.
 - Test suite certifies exclusivity, active participant, playhead, seek, sync, and single-engine binding behaviors.
 - **EX-1 closed:** dual live engine binding is rejected fail-fast by the repository.
+- **EX-5 closed:** field `seek` / `replay` and Session `requestSeek` are certified layered responsibilities (Invariant 25), not unresolved dual authority.
 
-**Exceptions (blocking full CERTIFIED):**
+**EX-1 / EX-3 / EX-4 / EX-5 closed.** Session `getPlayhead()` and `requestSeek` are product-consumed by MatchBlock. Field `replay()` remains field-local. Product Film Room architecture docs no longer contradict runtime temporal ownership. Residual non-blocking findings: EX-2 (MatchCard loading UI), EX-6 (adapter unload asymmetry).
 
-1. **EX-4** — Product Film Room architecture certification contradicts runtime temporal ownership (timeline / PlaybackCoordinator vs Session).
-2. **EX-5** — Dual seek entry points remain (intentional, but product must not confuse them).
-
-**EX-3 closed:** Session `getPlayhead()` and `requestSeek` are product-consumed by MatchBlock. Field `replay()` remains field-local.
-
-No implementation work is authorized by this report except reconciliation of EX-4 documentation and future product integration against certified extension points.
+No implementation work is authorized by this report except future product integration against certified extension points.
 
 ---
 
 ## Recommended Next Phase (Product Integration)
 
-1. **Reconcile product architecture docs** with session-owned playhead and sync (close EX-4).
-2. **Wire scrubbing / markers** exclusively through `session.requestSeek` (extend EX-3 write consumers; do not use field `seek` from product).
-3. **Consume `getPlayhead()`** for transcript/waveform following (read-only).
-4. **Do not** dual-bind adapters or move engines into Session (now runtime-enforced).
-5. **Keep MatchCard** outside Film Room session until a deliberate parent Film Room product scope exists.
+1. **Wire scrubbing / markers** exclusively through `session.requestSeek` (extend EX-3 write consumers; do not use field `seek` from product).
+2. **Consume `getPlayhead()`** for transcript/waveform following (read-only).
+3. **Do not** dual-bind adapters or move engines into Session (now runtime-enforced).
+4. **Keep MatchCard** outside Film Room session until a deliberate parent Film Room product scope exists.
 
 ---
 

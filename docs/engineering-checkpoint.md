@@ -12,6 +12,81 @@ Under Engineering OS vNext, this register is the engineering session snapshot. C
 
 # Engineering Checkpoint — 2026-07-19
 
+## Current Initiative
+
+Film Room Product
+
+## Session Outcome
+
+Media Runtime Foundation is certified. Runtime ownership is no longer the active engineering initiative.
+
+Repository evidence:
+
+- HEAD `92fde3f` — Complete Media Runtime Foundation certification and MatchBlock adoption
+- Tags: `media-runtime-foundation-floor-v1`, `media-runtime-certified-floor-v1`
+- EX-1 closed (single-engine binding)
+- EX-3 closed (MatchBlock Session `getPlayhead` / `requestSeek` adoption)
+- EX-4 closed (Film Room architecture docs reconciled with certified ownership)
+- Synchronization fan-out present and certified in `src/playback/tests/filmRoomExclusivity.v0.test.ts`
+
+## Certified Film Room Runtime Roadmap
+
+✅ PlaybackCoordinator
+
+↓
+
+✅ FilmRoomSessionCoordinator
+
+↓
+
+✅ Registration
+
+↓
+
+✅ Observability
+
+↓
+
+✅ Exclusivity
+
+↓
+
+✅ Active Participant
+
+↓
+
+✅ Session Snapshot
+
+↓
+
+✅ Session Playhead Publication
+
+↓
+
+✅ Seek Authority
+
+↓
+
+✅ Synchronization Fan-out
+
+↓
+
+Transcript Following
+
+↓
+
+Waveform Following
+
+↓
+
+Film Room v1
+
+## Next Slice
+
+Film Room Product consumption of Session APIs — transcript following, waveform following, and product scrubbing/markers via `session.requestSeek` / `getPlayhead()`. Do not reopen Media Runtime ownership without new repository evidence.
+
+# Engineering Checkpoint — 2026-07-19 (Seek Authority)
+
 ## Session Outcome
 
 Seek Authority v0 landed on `FilmRoomSessionCoordinator`.
