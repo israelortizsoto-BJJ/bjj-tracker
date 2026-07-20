@@ -25,6 +25,8 @@ export type AudioEngineStatus = {
 };
 
 export type AudioAdapter = {
+  /** True when getEngine currently returns a live engine. */
+  isBound: () => boolean;
   play: () => Promise<void>;
   pause: () => Promise<void>;
   seek: (positionMs: number) => Promise<void>;
@@ -39,6 +41,10 @@ export type AudioAdapter = {
  */
 export function createAudioAdapter(getEngine: () => AudioEngine | null): AudioAdapter {
   return {
+    isBound() {
+      return getEngine() !== null;
+    },
+
     async play() {
       const engine = getEngine();
       if (!engine) return;

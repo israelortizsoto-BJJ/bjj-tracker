@@ -23,6 +23,8 @@ export type VideoEngineStatus = {
 };
 
 export type VideoAdapter = {
+  /** True when getEngine currently returns a live engine. */
+  isBound: () => boolean;
   play: () => Promise<void>;
   pause: () => Promise<void>;
   seek: (positionMs: number) => Promise<void>;
@@ -37,6 +39,10 @@ export type VideoAdapter = {
  */
 export function createVideoAdapter(getEngine: () => VideoEngine | null): VideoAdapter {
   return {
+    isBound() {
+      return getEngine() !== null;
+    },
+
     async play() {
       const engine = getEngine();
       if (!engine) return;

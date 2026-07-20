@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createAudioAdapter } from "../AudioAdapter.ts";
+import { createAudioAdapter, type AudioEngine } from "../AudioAdapter.ts";
 import { createFilmRoomSessionCoordinator } from "../FilmRoomSessionCoordinator.ts";
-import { createPlaybackCoordinator } from "../PlaybackCoordinator.ts";
-import { createVideoAdapter } from "../VideoAdapter.ts";
+import {
+  createPlaybackCoordinator,
+  PlaybackCoordinatorDualBindError,
+} from "../PlaybackCoordinator.ts";
+import { createVideoAdapter, type VideoEngine } from "../VideoAdapter.ts";
 
 Object.defineProperty(globalThis, "__DEV__", {
   configurable: true,
@@ -16,6 +19,42 @@ function createFieldCoordinator() {
     video: createVideoAdapter(() => null),
     audio: createAudioAdapter(() => null),
   });
+}
+
+function createFakeVideoEngine(): VideoEngine {
+  let positionMillis = 0;
+  return {
+    playAsync: async () => undefined,
+    pauseAsync: async () => undefined,
+    setPositionAsync: async (next) => {
+      positionMillis = next;
+    },
+    getStatusAsync: async () => ({
+      isLoaded: true,
+      positionMillis,
+      durationMillis: 1000,
+      isPlaying: false,
+    }),
+  };
+}
+
+function createFakeAudioEngine(): AudioEngine {
+  let positionMillis = 0;
+  return {
+    playAsync: async () => undefined,
+    pauseAsync: async () => undefined,
+    setPositionAsync: async (next) => {
+      positionMillis = next;
+    },
+    stopAsync: async () => undefined,
+    unloadAsync: async () => undefined,
+    getStatusAsync: async () => ({
+      isLoaded: true,
+      positionMillis,
+      durationMillis: 1000,
+      isPlaying: false,
+    }),
+  };
 }
 
 /** Allow void-propagated inactive seeks from sync fan-out to settle. */
@@ -32,6 +71,116 @@ function trackSeekCalls(coordinator: ReturnType<typeof createFieldCoordinator>) 
   };
   return calls;
 }
+
+describe("PlaybackCoordinator single-engine invariant (EX-1)", () => {
+  it("allows a single video engine bind", async () => {
+    const videoEngine = createFakeVideoEngine();
+    const coordinator = createPlaybackCoordinator({
+      video: createVideoAdapter(() => videoEngine),
+      audio: createAudioAdapter(() => null),
+    });
+
+    await coordinator.play();
+    assert.equal(coordinator.getSnapshot().playbackState, "playing");
+
+    await coordinator.pause();
+    assert.equal(coordinator.getSnapshot().playbackState, "paused");
+
+    await coordinator.seek(250);
+    assert.equal(coordinator.getSnapshot().currentTimeMs, 250);
+
+    await coordinator.unload();
+    assert.deepEqual(coordinator.getSnapshot(), {
+      playbackState: "idle",
+      currentTimeMs: 0,
+      durationMs: null,
+    });
+  });
+
+  it("allows a single audio engine bind", async () => {
+    const audioEngine = createFakeAudioEngine();
+    const coordinator = createPlaybackCoordinator({
+      video: createVideoAdapter(() => null),
+      audio: createAudioAdapter(() => audioEngine),
+    });
+
+    await coordinator.play();
+    assert.equal(coordinator.getSnapshot().playbackState, "playing");
+
+    await coordinator.unload();
+    assert.equal(coordinator.getSnapshot().playbackState, "idle");
+  });
+
+  it("rejects intent when video and audio engines are both bound", async () => {
+    const coordinator = createPlaybackCoordinator({
+      video: createVideoAdapter(() => createFakeVideoEngine()),
+      audio: createAudioAdapter(() => createFakeAudioEngine()),
+    });
+
+    await assert.rejects(() => coordinator.play(), PlaybackCoordinatorDualBindError);
+    await assert.rejects(() => coordinator.pause(), PlaybackCoordinatorDualBindError);
+    await assert.rejects(() => coordinator.seek(100), PlaybackCoordinatorDualBindError);
+    await assert.rejects(() => coordinator.replay(), PlaybackCoordinatorDualBindError);
+    await assert.rejects(() => coordinator.unload(), PlaybackCoordinatorDualBindError);
+
+    // Dual-bind never mutates snapshot ownership via intent.
+    assert.deepEqual(coordinator.getSnapshot(), {
+      playbackState: "idle",
+      currentTimeMs: 0,
+      durationMs: null,
+    });
+  });
+
+  it("rejects status application when both engines are bound", () => {
+    const coordinator = createPlaybackCoordinator({
+      video: createVideoAdapter(() => createFakeVideoEngine()),
+      audio: createAudioAdapter(() => createFakeAudioEngine()),
+    });
+
+    assert.throws(
+      () =>
+        coordinator.applyVideoStatus({
+          isLoaded: true,
+          positionMillis: 10,
+          isPlaying: true,
+        }),
+      PlaybackCoordinatorDualBindError,
+    );
+    assert.throws(
+      () =>
+        coordinator.applyAudioStatus({
+          isLoaded: true,
+          positionMillis: 20,
+          isPlaying: true,
+        }),
+      PlaybackCoordinatorDualBindError,
+    );
+  });
+
+  it("allows both adapters unbound (zero engines)", async () => {
+    const coordinator = createFieldCoordinator();
+    await coordinator.play();
+    assert.equal(coordinator.getSnapshot().playbackState, "playing");
+    await coordinator.unload();
+    assert.equal(coordinator.getSnapshot().playbackState, "idle");
+  });
+
+  it("rejects when a second engine becomes bound after a valid single bind", async () => {
+    let audioEngine: AudioEngine | null = null;
+    const videoEngine = createFakeVideoEngine();
+    const coordinator = createPlaybackCoordinator({
+      video: createVideoAdapter(() => videoEngine),
+      audio: createAudioAdapter(() => audioEngine),
+    });
+
+    await coordinator.play();
+    assert.equal(coordinator.getSnapshot().playbackState, "playing");
+
+    // Lifecycle dual-bind: second engine appears while first remains live.
+    audioEngine = createFakeAudioEngine();
+    await assert.rejects(() => coordinator.pause(), PlaybackCoordinatorDualBindError);
+  });
+});
 
 describe("Film Room exclusivity v0", () => {
   it("pauses other playing participants on play intent; leaves initiator playing", async () => {

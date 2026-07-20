@@ -292,14 +292,20 @@ export function MatchBlock({
     };
   }, []);
 
-  // Playback UI state from coordinator authority (not MatchMedia onPlay/onPause/onReplay).
+  // Session playhead observation (EX-3 read path).
+  // Session has no subscribe API — poll getPlayhead for existing chrome only.
+  // Field subscribe remains field-local (MatchMedia / CoachVoiceNoteField).
   useEffect(() => {
-    if (!playbackCoordinator) return;
-    setIsPlaying(playbackCoordinator.getSnapshot().playbackState === "playing");
-    return playbackCoordinator.subscribe((snapshot) => {
-      setIsPlaying(snapshot.playbackState === "playing");
-    });
-  }, [playbackCoordinator]);
+    const session = sessionRef.current;
+    const syncFromSessionPlayhead = () => {
+      setIsPlaying(session.getPlayhead().playbackState === "playing");
+    };
+    syncFromSessionPlayhead();
+    const id = setInterval(syncFromSessionPlayhead, 250);
+    return () => {
+      clearInterval(id);
+    };
+  }, []);
 
   // Register field coordinators when surfaces expose them (session installs play-intent hooks).
   useEffect(() => {
@@ -352,6 +358,13 @@ export function MatchBlock({
             onImageChange={onImageChange}
             onVideoChange={onVideoChange}
             shouldPausePlayback={recordingState === "recording"}
+            // EX-3 write path: session owns seek intent via requestSeek.
+            // Field Replay stays field-local (Invariant 21 / MatchMedia → replay()).
+            // After replay, video is the active leader at t=0 — session seek re-asserts
+            // authority at that time (first certified product consumer of requestSeek).
+            onReplay={() => {
+              void sessionRef.current.requestSeek(0);
+            }}
           />
         </View>
         {showRecordingOverlay ? (

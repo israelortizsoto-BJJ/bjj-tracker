@@ -14,7 +14,10 @@
  * - Do not synchronize video and commentary timelines
  * - Do not modify Film Room UI, hydration, or media resolution
  *
- * Adapters no-op when unbound. Bind exactly one engine per coordinator instance:
+ * Adapters no-op when unbound. Runtime invariant (EX-1 closed):
+ * a coordinator may have at most one live engine bound (video XOR audio).
+ * Dual-binding is rejected fail-fast via assertSingleEngineBound.
+ * Call-site convention remains:
  * - MatchMediaAttachments: video bound, audio unbound
  * - CoachVoiceNoteField: audio bound, video unbound
  * - MatchCard (parent commentary): audio bound, video unbound
@@ -22,6 +25,18 @@
 
 import type { AudioAdapter, AudioEngineStatus } from "./AudioAdapter";
 import type { VideoAdapter, VideoEngineStatus } from "./VideoAdapter";
+
+/** Thrown when both video and audio adapters report a live engine. */
+export class PlaybackCoordinatorDualBindError extends Error {
+  readonly code = "PLAYBACK_COORDINATOR_DUAL_BIND" as const;
+
+  constructor() {
+    super(
+      "PlaybackCoordinator invariant violated: video and audio engines must not be bound simultaneously (video XOR audio).",
+    );
+    this.name = "PlaybackCoordinatorDualBindError";
+  }
+}
 
 export type PlaybackState = "idle" | "loading" | "playing" | "paused";
 
@@ -70,6 +85,17 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
 
   const listeners = new Set<(snapshot: PlaybackSnapshot) => void>();
 
+  /**
+   * Repository-enforced single-engine invariant.
+   * Binding is lifecycle-driven via adapter getEngine closures; both adapter
+   * objects remain present, but at most one may report isBound() === true.
+   */
+  function assertSingleEngineBound() {
+    if (video.isBound() && audio.isBound()) {
+      throw new PlaybackCoordinatorDualBindError();
+    }
+  }
+
   async function notifyPlayIntent() {
     if (!playIntentHandler) return;
     await playIntentHandler();
@@ -87,6 +113,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
   }
 
   function applyVideoStatus(status: VideoEngineStatus) {
+    assertSingleEngineBound();
     if (!status.isLoaded) return;
 
     const currentTimeMs =
@@ -106,6 +133,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
   }
 
   function applyAudioStatus(status: AudioEngineStatus) {
+    assertSingleEngineBound();
     if (!status.isLoaded) return;
 
     const currentTimeMs =
@@ -125,6 +153,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
   }
 
   async function refreshClockFromAdapters() {
+    assertSingleEngineBound();
     // Video is the primary Film Room artifact; fall back to audio position.
     const videoPosition = await video.getPositionMs();
     const audioPosition = await audio.getPositionMs();
@@ -142,8 +171,8 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
   return {
     async play() {
       // Forward intent only. Unbound adapters no-op.
-      // Bind exactly one engine per session until a later wiring slice —
-      // do not bind both (would fan-out play without timeline sync).
+      // Dual-bind is rejected before any engine I/O (EX-1).
+      assertSingleEngineBound();
       await notifyPlayIntent();
       await video.play();
       await audio.play();
@@ -152,6 +181,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
     },
 
     async pause() {
+      assertSingleEngineBound();
       await video.pause();
       await audio.pause();
       setPlaybackState("paused");
@@ -160,6 +190,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
 
     async seek(positionMs: number) {
       // Today only video exercises seek (replay → 0). Audio seek is forward-only.
+      assertSingleEngineBound();
       await video.seek(positionMs);
       await audio.seek(positionMs);
       publish({ ...snapshot, currentTimeMs: positionMs });
@@ -169,6 +200,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
     async replay() {
       // Existing MatchMediaAttachments.replayVideo = seek(0) + play.
       // Replay begins playback — same exclusivity intent path as play.
+      assertSingleEngineBound();
       await notifyPlayIntent();
       await video.seek(0);
       await audio.seek(0);
@@ -179,6 +211,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
     },
 
     async unload() {
+      assertSingleEngineBound();
       await video.unload();
       await audio.unload();
       publish({
