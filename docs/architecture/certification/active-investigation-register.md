@@ -10,7 +10,7 @@ FUTURE PROOF — NOT IMPLEMENTED
 
 Current Understanding
 
-Shared Match Media architecture and contracts are certified in `SharedMatchMedia-ArchitectureDecision-v1.md` and `SharedMatchMedia-CertifiedBoundaries-v1.md`.
+Shared Match Media architecture, domain boundaries, and service responsibilities are certified in `SharedMatchMedia-ArchitectureDecision-v1.md`, `SharedMatchMedia-CertifiedBoundaries-v1.md`, and `SharedMatchMedia-ServiceContracts-v1.md`.
 
 Unknown
 

@@ -264,6 +264,7 @@ Repository References
 
 - docs/architecture/certification/SharedMatchMedia-ArchitectureDecision-v1.md
 - docs/architecture/certification/SharedMatchMedia-CertifiedBoundaries-v1.md
+- docs/architecture/certification/SharedMatchMedia-ServiceContracts-v1.md
 
 Certification Summary
 
@@ -272,6 +273,8 @@ Parent Competition owns canonical Match attachment authority. Shared Match Media
 Media Resolution rechecks current authorization and passes only a short-lived, range-capable playable URI into Film Room. Local paths, object keys, and signed delivery URLs never enter synchronized state.
 
 PlaybackCoordinator and FilmRoomSessionCoordinator ownership remain unchanged and protected. This entry certifies architecture and contracts; it does not certify production functionality or authorize implementation before Required Proof and privacy approval.
+
+Service ownership is certified across Upload, Verification, Publication, Resolution, Storage, and Projection. Each durable transition and failure-recovery path has one owner. Service orchestration, retry, delivery, and measurement do not transfer playback or synchronization authority.
 
 ---
 

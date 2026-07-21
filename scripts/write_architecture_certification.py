@@ -22,6 +22,7 @@ OWNED_FILES = (
     "active-investigation-register.md",
     "SharedMatchMedia-ArchitectureDecision-v1.md",
     "SharedMatchMedia-CertifiedBoundaries-v1.md",
+    "SharedMatchMedia-ServiceContracts-v1.md",
 )
 
 REQUIRED_TEXT = {
@@ -30,6 +31,7 @@ REQUIRED_TEXT = {
         "CERTIFIED — architecture and contracts only",
         "PlaybackCoordinator",
         "FilmRoomSessionCoordinator",
+        "SharedMatchMedia-ServiceContracts-v1.md",
     ),
     "CERTIFICATION_HISTORY.md": (
         "Shared Match Media Architecture v1 — Architecture and Contracts",
@@ -41,10 +43,12 @@ REQUIRED_TEXT = {
         "Match Media Resolution Boundary",
         "PlaybackCoordinator Authority",
         "FilmRoomSessionCoordinator Authority",
+        "Shared Match Media Service Ownership",
     ),
     "active-investigation-register.md": (
         "Shared Match Media Production Corridor",
         "FUTURE PROOF — NOT IMPLEMENTED",
+        "SharedMatchMedia-ServiceContracts-v1.md",
     ),
     "SharedMatchMedia-ArchitectureDecision-v1.md": (
         "CERTIFIED — Shared Match Media Architecture v1",
@@ -59,6 +63,16 @@ REQUIRED_TEXT = {
         "PlaybackCoordinator",
         "Session",
         "## 9. Change-control rule",
+    ),
+    "SharedMatchMedia-ServiceContracts-v1.md": (
+        "CERTIFIED — service ownership and backend contracts only",
+        "## 12. Failure ownership",
+        "Each failure has one recovery owner.",
+        "## 13. Operational architecture metrics",
+        "No Shared Match Media service may:",
+        "PlaybackCoordinator",
+        "FilmRoomSessionCoordinator",
+        "Implementation readiness | CONDITIONAL PASS",
     ),
 }
 
@@ -102,6 +116,24 @@ def verify_file(name: str, content: str) -> None:
         verify_history_newest_first(content)
     if name == "SharedMatchMedia-ArchitectureDecision-v1.md":
         verify_shared_media_contract(content)
+    if name == "SharedMatchMedia-ServiceContracts-v1.md":
+        verify_service_contract(content)
+
+
+def verify_service_contract(content: str) -> None:
+    services = (
+        "Upload Service",
+        "Verification Service",
+        "Publication Service",
+        "Resolution Service",
+        "Storage Service",
+        "Projection Service",
+    )
+    for service in services:
+        if service not in content:
+            raise ValidationError(f"Service contract is missing {service}.")
+    if "No service in this sequence starts, pauses, replays, synchronizes, or seeks media." not in content:
+        raise ValidationError("Service contract does not protect runtime authority.")
 
 
 def load_owned() -> dict[str, str]:

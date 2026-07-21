@@ -4,6 +4,35 @@
 
 Certification
 
+Shared Match Media Service Contracts v1
+
+Summary
+
+Certified the service ownership and backend interaction boundaries required before Shared Match Media implementation.
+
+- Upload owns resumability and upload-session recovery.
+- Verification owns binary eligibility and verified/rejected transitions.
+- Publication exclusively owns attachment CAS, replacement, tombstones, and revision advancement.
+- Resolution owns authorization recheck and ephemeral range-capable delivery.
+- Storage owns binary object lifecycle, orphan cleanup, and delayed deletion.
+- Projection owns the read-only Coach attachment view and hydration reconciliation.
+- Every failure-recovery path has one owner.
+- PlaybackCoordinator, FilmRoomSessionCoordinator, Film Room runtime, and Coach playback authority remain unchanged.
+
+Artifact
+
+- SharedMatchMedia-ServiceContracts-v1.md
+
+Outcome
+
+Status is **CERTIFIED — service ownership and backend contracts only**. Production services remain unimplemented and conditional on Required Proof, privacy approval, and implementation evidence.
+
+---
+
+## 2026-07-20
+
+Certification
+
 Shared Match Media Architecture v1 — Architecture and Contracts
 
 Summary
