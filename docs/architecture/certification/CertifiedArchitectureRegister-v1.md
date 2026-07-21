@@ -242,6 +242,39 @@ Engineering rule: changes to Media Runtime ownership boundaries require a new ar
 
 ---
 
+## 8. Shared Match Media Architecture
+
+Status
+
+CERTIFIED — architecture and contracts only
+
+Version
+
+v1
+
+Certification Date
+
+2026-07-20
+
+Confidence
+
+High
+
+Repository References
+
+- docs/architecture/certification/SharedMatchMedia-ArchitectureDecision-v1.md
+- docs/architecture/certification/SharedMatchMedia-CertifiedBoundaries-v1.md
+
+Certification Summary
+
+Parent Competition owns canonical Match attachment authority. Shared Match Media owns immutable binary identity, verification, storage identity, delivery metadata, and lifecycle. Coach receives a read-only projection; device caches are disposable and non-authoritative.
+
+Media Resolution rechecks current authorization and passes only a short-lived, range-capable playable URI into Film Room. Local paths, object keys, and signed delivery URLs never enter synchronized state.
+
+PlaybackCoordinator and FilmRoomSessionCoordinator ownership remain unchanged and protected. This entry certifies architecture and contracts; it does not certify production functionality or authorize implementation before Required Proof and privacy approval.
+
+---
+
 # Master Certification Table
 
 | Architecture Area | Status | Confidence |
@@ -253,6 +286,7 @@ Engineering rule: changes to Media Runtime ownership boundaries require a new ar
 | Competition Rendering Pipeline | PARTIALLY CERTIFIED | High |
 | Product Architecture | CERTIFIED | High |
 | Media Runtime Foundation | CERTIFIED | High |
+| Shared Match Media Architecture (contracts only) | CERTIFIED | High |
 
 ---
 

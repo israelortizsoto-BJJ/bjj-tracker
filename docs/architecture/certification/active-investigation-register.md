@@ -2,6 +2,26 @@
 
 These systems intentionally remain uncertified.
 
+## Shared Match Media Production Corridor
+
+Status
+
+FUTURE PROOF — NOT IMPLEMENTED
+
+Current Understanding
+
+Shared Match Media architecture and contracts are certified in `SharedMatchMedia-ArchitectureDecision-v1.md` and `SharedMatchMedia-CertifiedBoundaries-v1.md`.
+
+Unknown
+
+Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, and mobile background behavior satisfy every Required Proof and privacy gate in production conditions.
+
+Required Evidence
+
+Complete the certified Required Proof and privacy approval before implementation authorization or production certification.
+
+---
+
 ## Parent Competition Runtime
 
 Status
