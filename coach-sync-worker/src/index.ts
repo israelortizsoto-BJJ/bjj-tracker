@@ -12,11 +12,14 @@ import {
   serializeWorkerPersistSnapshot,
   type WorkerPersistLane,
 } from "./competitionStateAuditor";
+import { handleCreateSharedMatchMediaUploadIntent } from "./sharedMatchMediaUpload";
 
 export interface Env {
   SESSIONS: KVNamespace;
   /** Coach commentary audio objects. Metadata (mediaId) syncs via Match Breakdown artifacts. */
   MEDIA: R2Bucket;
+  /** Independent server kill switch. Upload Foundation is inert unless exactly "1". */
+  SHARED_MATCH_MEDIA_UPLOAD_ENABLED?: string;
 }
 
 type WeeklyParentFeedback = {
@@ -1840,7 +1843,7 @@ export default {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers":
-        `Content-Type, Authorization, ${MATMIND_TRANSITION_HEADER}, ${MEDIA_DURATION_HEADER}`,
+        `Content-Type, Authorization, Idempotency-Key, ${MATMIND_TRANSITION_HEADER}, ${MEDIA_DURATION_HEADER}`,
       "Access-Control-Expose-Headers": MATMIND_AUDIT_SNAPSHOT_HEADER,
     };
 
@@ -3558,6 +3561,37 @@ export default {
         console.log("[TRAINING_PROOF_TRACE] worker_route_miss_training_proof", {
           path,
           method: request.method,
+        });
+      }
+
+      const sharedMatchMediaUploadIntent = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/uploads$/,
+      );
+      if (sharedMatchMediaUploadIntent && request.method === "POST") {
+        const token = decodeURIComponent(sharedMatchMediaUploadIntent[1] ?? "")
+          .trim()
+          .toLowerCase();
+        if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
+        return handleCreateSharedMatchMediaUploadIntent(request, token, {
+          enabled: env.SHARED_MATCH_MEDIA_UPLOAD_ENABLED === "1",
+          metadataStore: {
+            get: async (key) => {
+              const object = await env.MEDIA.get(key);
+              return object ? object.text() : null;
+            },
+            putIfAbsent: async (key, value) => {
+              const object = await env.MEDIA.put(key, value, {
+                onlyIf: { etagDoesNotMatch: "*" },
+                httpMetadata: { contentType: "application/json" },
+                customMetadata: { recordType: "match-media-upload-intent-v1" },
+              });
+              return object !== null;
+            },
+          },
+          bucket: env.MEDIA,
+          readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
+          now: () => new Date(),
+          randomUuid: () => crypto.randomUUID(),
         });
       }
 
