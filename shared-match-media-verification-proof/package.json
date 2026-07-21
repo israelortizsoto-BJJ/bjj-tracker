@@ -1,0 +1,16 @@
+{
+  "name": "matmind-shared-media-verification-proof",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "types": "wrangler types",
+    "dry-run": "wrangler deploy --dry-run"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "wrangler": "4.112.0"
+  }
+}
