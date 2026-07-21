@@ -41,6 +41,28 @@ describe("Coach Commentary Phase 1 — coach-device persistence corridor (source
     assert.ok(persistFailIdx > 0 && transcribeIdx > persistFailIdx);
   });
 
+  it("Timed Transcript Phase A: local evidence persist never blocks coachNote", () => {
+    const persistTimed = source("src/media/persistTimedTranscript.ts");
+    const timedTypes = source("src/types/timedTranscript.ts");
+    const transcription = source("src/features/coach/coachVoiceTranscription.ts");
+
+    assert.match(timedTypes, /export type TimedTranscript/);
+    assert.match(timedTypes, /export type TimedTranscriptSegment/);
+    assert.match(timedTypes, /export function parseTimedTranscript/);
+    assert.match(persistTimed, /media\/coach-timed-transcript\//);
+    assert.match(persistTimed, /persistTimedTranscript/);
+    assert.match(transcription, /verbose_json/);
+    assert.match(voiceField, /await persistTimedTranscript/);
+    assert.match(voiceField, /onChangeText\(text\)/);
+    assert.match(voiceField, /timed_transcript_persist_failed/);
+
+    const onChangeIdx = voiceField.indexOf("onChangeText(text)");
+    const timedPersistIdx = voiceField.indexOf("await persistTimedTranscript");
+    const timedFailIdx = voiceField.indexOf("timed_transcript_persist_failed");
+    assert.ok(onChangeIdx > 0 && timedPersistIdx > onChangeIdx);
+    assert.ok(timedFailIdx > timedPersistIdx);
+  });
+
   it("CC-002: overlay schema supports coachNote + voiceNoteRefs without migration", () => {
     assert.match(overlayTypes, /export type VoiceNoteRef/);
     assert.match(overlayTypes, /voiceNoteRefs\?: VoiceNoteRef\[\]/);

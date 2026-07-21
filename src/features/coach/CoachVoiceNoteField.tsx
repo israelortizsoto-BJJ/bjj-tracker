@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { Alert, Pressable, Text, TextInput, View, type TextInputProps } from "react-native";
 
 import { persistCoachVoiceAudio } from "../../media/persistCoachVoiceAudio";
+import { persistTimedTranscript } from "../../media/persistTimedTranscript";
 import { createAudioAdapter } from "../../playback/AudioAdapter";
 import {
   createPlaybackCoordinator,
@@ -10,11 +11,16 @@ import {
 } from "../../playback/PlaybackCoordinator";
 import { createVideoAdapter } from "../../playback/VideoAdapter";
 import {
+  TIMED_TRANSCRIPT_SOURCE_WHISPER,
+  TIMED_TRANSCRIPT_VERSION,
+} from "../../types/timedTranscript";
+import {
   logTranscribeRuntime,
   transcribeCoachAudio,
   transcribeRuntimeErrorFields,
   uriScheme,
 } from "./coachVoiceTranscription";
+import { TimedTranscriptInspector } from "./TimedTranscriptInspector";
 
 const UI = {
   bgCard: "#ffffff",
@@ -72,6 +78,7 @@ type CoachVoiceNoteFieldProps = {
  * Certified coach voice note field: Record → Whisper transcript → editable text.
  * Reuses the single transcription corridor in coachVoiceTranscription.ts.
  * Phase 1: also preserves companion audio locally for coach-device replay.
+ * Phase A: also persists a coach-local TimedTranscript (evidence only; never blocks coachNote).
  * Playback intent/status/lifecycle are owned by PlaybackCoordinator (audio-only bind).
  */
 export function CoachVoiceNoteField({
@@ -249,8 +256,31 @@ export function CoachVoiceNoteField({
         // Transcript remains canonical; missing audio must never block transcription.
       }
 
-      const text = await transcribeCoachAudio(uri);
+      const { text, segments } = await transcribeCoachAudio(uri);
       onChangeText(text);
+
+      try {
+        const timedTranscriptUri = await persistTimedTranscript({
+          version: TIMED_TRANSCRIPT_VERSION,
+          source: TIMED_TRANSCRIPT_SOURCE_WHISPER,
+          audioUri: durableUri,
+          createdAt: new Date().toISOString(),
+          segments,
+        });
+        logTranscribeRuntime("timed_transcript_persisted_locally", {
+          stage: "stopRecording",
+          audioUriScheme: uriScheme(durableUri),
+          timedTranscriptUri,
+          segmentCount: segments.length,
+        });
+      } catch (timedTranscriptError) {
+        logTranscribeRuntime("timed_transcript_persist_failed", {
+          stage: "stopRecording",
+          ...transcribeRuntimeErrorFields(timedTranscriptError),
+        });
+        // coachNote remains canonical; missing TimedTranscript must never block it.
+      }
+
       updateRecordingState("done");
     } catch (error) {
       logTranscribeRuntime("pipeline_failed", {
@@ -463,6 +493,7 @@ export function CoachVoiceNoteField({
           {statusText}
         </Text>
       ) : null}
+      {__DEV__ ? <TimedTranscriptInspector audioUri={playbackUri} /> : null}
     </View>
   );
 }

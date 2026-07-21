@@ -29,6 +29,9 @@ describe("UX-002 coach voice-first wiring (source)", () => {
     assert.match(transcription, /whisper-1/);
     assert.match(transcription, /expo\/fetch/);
     assert.match(transcription, /TRANSCRIBE_UPLOAD_FILENAME/);
+    assert.match(transcription, /response_format/);
+    assert.match(transcription, /verbose_json/);
+    assert.match(transcription, /parseWhisperVerboseSegments/);
   });
 
   it("CoachVoiceNoteField is the only Audio.Recording owner among coach voice surfaces", () => {

@@ -15,7 +15,15 @@ describe("MatchBlock session playhead observation (EX-3 read path)", () => {
 
   it("derives MatchBlock play chrome from session.getPlayhead()", () => {
     assert.match(matchEditor, /session\.getPlayhead\(\)/);
-    assert.match(matchEditor, /getPlayhead\(\)\.playbackState === "playing"/);
+    assert.match(matchEditor, /playhead\.playbackState === "playing"/);
+  });
+
+  it("Transcript Following consumes session playhead only while coach_audio is active", () => {
+    assert.match(matchEditor, /TimedTranscriptFollowing/);
+    assert.match(matchEditor, /getActiveParticipant\(\)/);
+    assert.match(matchEditor, /active === coachAudioCoordinator/);
+    assert.match(matchEditor, /setTranscriptFollowTimeMs\(playhead\.currentTimeMs\)/);
+    assert.match(matchEditor, /setTranscriptFollowTimeMs\(null\)/);
   });
 
   it("does not mirror video field subscribe into MatchBlock isPlaying chrome", () => {

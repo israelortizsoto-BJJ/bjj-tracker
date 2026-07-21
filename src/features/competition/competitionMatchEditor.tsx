@@ -15,6 +15,7 @@ import {
   type CoachVoiceRecordingControls,
   type CoachVoiceRecordingState,
 } from "../coach/CoachVoiceNoteField";
+import { TimedTranscriptFollowing } from "../coach/TimedTranscriptFollowing";
 import { createFilmRoomSessionCoordinator } from "../../playback/FilmRoomSessionCoordinator";
 import type { PlaybackCoordinator } from "../../playback/PlaybackCoordinator";
 import {
@@ -263,6 +264,8 @@ export function MatchBlock({
   const [coachAudioCoordinator, setCoachAudioCoordinator] = useState<PlaybackCoordinator | null>(
     null,
   );
+  /** Session playhead time while coach_audio is active; null otherwise (Following gate). */
+  const [transcriptFollowTimeMs, setTranscriptFollowTimeMs] = useState<number | null>(null);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const recordingControlsRef = useRef<CoachVoiceRecordingControls | null>(null);
   // One Film Room session per MatchBlock — membership + exclusivity arbitration.
@@ -295,17 +298,26 @@ export function MatchBlock({
   // Session playhead observation (EX-3 read path).
   // Session has no subscribe API — poll getPlayhead for existing chrome only.
   // Field subscribe remains field-local (MatchMedia / CoachVoiceNoteField).
+  // Transcript Following also consumes getPlayhead, gated to coach_audio leader
+  // so video playhead never drives coach-audio TimedTranscript segments.
   useEffect(() => {
     const session = sessionRef.current;
     const syncFromSessionPlayhead = () => {
-      setIsPlaying(session.getPlayhead().playbackState === "playing");
+      const playhead = session.getPlayhead();
+      setIsPlaying(playhead.playbackState === "playing");
+      const active = session.getActiveParticipant();
+      if (coachAudioCoordinator && active === coachAudioCoordinator) {
+        setTranscriptFollowTimeMs(playhead.currentTimeMs);
+      } else {
+        setTranscriptFollowTimeMs(null);
+      }
     };
     syncFromSessionPlayhead();
     const id = setInterval(syncFromSessionPlayhead, 250);
     return () => {
       clearInterval(id);
     };
-  }, []);
+  }, [coachAudioCoordinator]);
 
   // Register field coordinators when surfaces expose them (session installs play-intent hooks).
   useEffect(() => {
@@ -434,6 +446,10 @@ export function MatchBlock({
           onAudioPersisted={onVoiceNotePersisted}
           onRecordingStateChange={setRecordingState}
           onPlaybackCoordinator={setCoachAudioCoordinator}
+        />
+        <TimedTranscriptFollowing
+          audioUri={match.voiceNoteRefs?.[0]?.localUri ?? null}
+          currentTimeMs={transcriptFollowTimeMs}
         />
       </View>
 
