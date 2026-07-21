@@ -14,6 +14,7 @@ import {
 } from "./competitionStateAuditor";
 import {
   handleAbortSharedMatchMediaUpload,
+  handleCompleteSharedMatchMediaUpload,
   handleCreateSharedMatchMediaUploadIntent,
   handleInspectSharedMatchMediaUpload,
   handleUploadSharedMatchMediaPart,
@@ -3616,8 +3617,10 @@ export default {
                 abort: () => multipart.abort(),
                 uploadPart: (partNumber, value, options) =>
                   multipart.uploadPart(partNumber, value, options),
+                complete: (parts) => multipart.complete([...parts]),
               };
             },
+            head: (key) => env.MEDIA.head(key),
           },
           readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
           now: () => new Date(),
@@ -3632,11 +3635,18 @@ export default {
       const sharedMatchMediaUploadPart = path.match(
         /^\/v1\/sessions\/([^/]+)\/match-media\/uploads\/([^/]+)\/parts\/([^/]+)$/,
       );
+      const sharedMatchMediaUploadCompletion = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/uploads\/([^/]+)\/complete$/,
+      );
       if (
         (sharedMatchMediaUploadSession && ["GET", "DELETE"].includes(request.method)) ||
-        (sharedMatchMediaUploadPart && request.method === "PUT")
+        (sharedMatchMediaUploadPart && request.method === "PUT") ||
+        (sharedMatchMediaUploadCompletion && request.method === "POST")
       ) {
-        const route = sharedMatchMediaUploadPart ?? sharedMatchMediaUploadSession!;
+        const route =
+          sharedMatchMediaUploadPart ??
+          sharedMatchMediaUploadCompletion ??
+          sharedMatchMediaUploadSession!;
         const token = decodeURIComponent(route[1] ?? "").trim().toLowerCase();
         const uploadSessionId = decodeURIComponent(route[2] ?? "").trim();
         const assetId = url.searchParams.get("assetId")?.trim() ?? "";
@@ -3679,8 +3689,10 @@ export default {
                 abort: () => multipart.abort(),
                 uploadPart: (partNumber, value, options) =>
                   multipart.uploadPart(partNumber, value, options),
+                complete: (parts) => multipart.complete([...parts]),
               };
             },
+            head: (key) => env.MEDIA.head(key),
           },
           readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
           now: () => new Date(),
@@ -3697,15 +3709,25 @@ export default {
             dependencies,
           );
         }
-        return request.method === "GET"
-          ? handleInspectSharedMatchMediaUpload(
+        if (request.method === "GET") {
+          return handleInspectSharedMatchMediaUpload(
               request,
               token,
               uploadSessionId,
               assetId,
               dependencies,
-            )
-          : handleAbortSharedMatchMediaUpload(
+            );
+        }
+        if (sharedMatchMediaUploadCompletion) {
+          return handleCompleteSharedMatchMediaUpload(
+            request,
+            token,
+            uploadSessionId,
+            assetId,
+            dependencies,
+          );
+        }
+        return handleAbortSharedMatchMediaUpload(
               request,
               token,
               uploadSessionId,

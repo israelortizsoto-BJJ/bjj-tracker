@@ -17,6 +17,7 @@ const VIDEO_MIME_TYPES = new Set([
 export type SharedMatchMediaUploadStatus =
   | "upload_pending"
   | "uploading"
+  | "upload_complete"
   | "upload_aborted";
 
 export type SharedMatchMediaAsset = Readonly<{
@@ -26,7 +27,7 @@ export type SharedMatchMediaAsset = Readonly<{
   sharedCompetitionId: string;
   matchLineageKey: string;
   creatorAuthority: "parent";
-  status: SharedMatchMediaUploadStatus;
+  status: "upload_pending";
   storageObjectKey: string;
   declaredMimeType: string;
   declaredByteCount: number;
@@ -84,6 +85,12 @@ type StoredUploadSessionState = Readonly<{
   acknowledgedParts: Readonly<Record<string, AcknowledgedUploadPart>>;
   partReservations: Readonly<Record<string, UploadPartReservation>>;
   providerAbortConfirmed?: boolean;
+  completedObject?: Readonly<{
+    providerVersion: string;
+    providerEtag: string;
+    byteCount: number;
+    completedAt: string;
+  }>;
 }>;
 
 export type MatchMediaParentSession = Readonly<{
@@ -124,6 +131,9 @@ export type UploadPartsMultipart = UploadIntentMultipart & {
     value: ReadableStream,
     options: { sha256: string },
   ): Promise<{ partNumber: number; etag: string }>;
+  complete(
+    parts: ReadonlyArray<{ partNumber: number; etag: string }>,
+  ): Promise<{ version: string; etag: string; size: number; uploaded: Date }>;
 };
 
 export type UploadIntentBucket = {
@@ -135,6 +145,9 @@ export type UploadIntentBucket = {
     },
   ): Promise<UploadIntentMultipart>;
   resumeMultipartUpload(key: string, uploadId: string): UploadPartsMultipart;
+  head(key: string): Promise<
+    { version: string; etag: string; size: number; uploaded: Date } | null
+  >;
 };
 
 export type SharedMatchMediaUploadDependencies = {
@@ -388,7 +401,7 @@ function parseStoredSessionState(raw: string | null): StoredUploadSessionState |
       parsed.declaredByteCount <= 0 ||
       !parsed.storageObjectKey ||
       !parsed.providerUploadId ||
-      !["upload_pending", "uploading", "upload_aborted"].includes(parsed.status) ||
+      !["upload_pending", "uploading", "upload_complete", "upload_aborted"].includes(parsed.status) ||
       !parsed.acknowledgedParts ||
       !parsed.partReservations
     ) {
@@ -440,8 +453,16 @@ function publicSessionState(state: StoredUploadSessionState): Record<string, unk
       expiresAt: state.expiresAt,
       acknowledgedParts: parts,
       uploadedByteCount: parts.reduce((sum, part) => sum + part.byteCount, 0),
+      ...(state.completedObject
+        ? {
+            completedByteCount: state.completedObject.byteCount,
+            completedAt: state.completedObject.completedAt,
+          }
+        : {}),
       allowedNextActions:
-        state.status === "upload_aborted" ? [] : ["upload_part", "abort"],
+        state.status === "upload_aborted" || state.status === "upload_complete"
+          ? []
+          : ["upload_part", "complete", "abort"],
     },
   };
 }
@@ -586,7 +607,10 @@ export async function handleInspectSharedMatchMediaUpload(
     dependencies,
   );
   if (found instanceof Response) return found;
-  if (dependencies.now().getTime() >= Date.parse(found.state.expiresAt)) {
+  if (
+    found.state.status !== "upload_complete" &&
+    dependencies.now().getTime() >= Date.parse(found.state.expiresAt)
+  ) {
     return uploadError("Upload session expired", 410);
   }
   return response(publicSessionState(found.state), 200);
@@ -652,6 +676,7 @@ export async function handleUploadSharedMatchMediaPart(
     return uploadError("Upload session expired", 410);
   }
   if (found.state.status === "upload_aborted") return uploadError("Upload aborted", 409);
+  if (found.state.status === "upload_complete") return uploadError("Upload complete", 409);
   if (!request.body) return uploadError("Part body required", 400);
 
   const byteCount = positiveIntegerHeader(request, "X-MatMind-Part-Bytes");
@@ -764,6 +789,7 @@ export async function handleAbortSharedMatchMediaUpload(
   const stateKey = uploadSessionStateKey(token, uploadSessionId);
   let state = found.state;
   let version = found.version;
+  if (state.status === "upload_complete") return uploadError("Upload complete", 409);
   if (state.status !== "upload_aborted") {
     const aborted: StoredUploadSessionState = {
       ...state,
@@ -797,4 +823,127 @@ export async function handleAbortSharedMatchMediaUpload(
     state = confirmed;
   }
   return response(publicSessionState(state), 200);
+}
+
+function reconciledParts(
+  state: StoredUploadSessionState,
+): ReadonlyArray<{ partNumber: number; etag: string }> | null {
+  if (
+    state.status !== "uploading" ||
+    !state.standardPartByteCount ||
+    Object.keys(state.partReservations).length > 0
+  ) {
+    return null;
+  }
+  const parts = Object.values(state.acknowledgedParts).sort(
+    (left, right) => left.partNumber - right.partNumber,
+  );
+  const expectedCount = Math.ceil(state.declaredByteCount / state.standardPartByteCount);
+  if (parts.length !== expectedCount) return null;
+  let total = 0;
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index]!;
+    const expectedNumber = index + 1;
+    const expectedBytes =
+      expectedNumber === expectedCount
+        ? state.declaredByteCount - state.standardPartByteCount * (expectedCount - 1)
+        : state.standardPartByteCount;
+    if (part.partNumber !== expectedNumber || part.byteCount !== expectedBytes) return null;
+    total += part.byteCount;
+  }
+  if (total !== state.declaredByteCount) return null;
+  return parts.map((part) => ({ partNumber: part.partNumber, etag: part.providerEtag }));
+}
+
+function completionResponse(
+  state: StoredUploadSessionState,
+  idempotentReplay: boolean,
+): Response {
+  return response(
+    {
+      asset: { matchMediaAssetId: state.matchMediaAssetId },
+      uploadSession: {
+        uploadSessionId: state.uploadSessionId,
+        status: "upload_complete",
+        completedByteCount: state.completedObject?.byteCount,
+        completedAt: state.completedObject?.completedAt,
+      },
+      idempotentReplay,
+    },
+    idempotentReplay ? 200 : 201,
+  );
+}
+
+export async function handleCompleteSharedMatchMediaUpload(
+  request: Request,
+  token: string,
+  uploadSessionId: string,
+  assetId: string,
+  dependencies: SharedMatchMediaUploadDependencies,
+): Promise<Response> {
+  const found = await readAuthorizedState(
+    request,
+    token,
+    uploadSessionId,
+    assetId,
+    dependencies,
+  );
+  if (found instanceof Response) return found;
+  let state = found.state;
+  if (state.status === "upload_complete" && state.completedObject) {
+    return completionResponse(state, true);
+  }
+  if (dependencies.now().getTime() >= Date.parse(state.expiresAt)) {
+    return uploadError("Upload session expired", 410);
+  }
+  if (state.status === "upload_aborted") return uploadError("Upload aborted", 409);
+  const parts = reconciledParts(state);
+  if (!parts) return uploadError("Upload parts incomplete", 409);
+
+  let object: { version: string; etag: string; size: number; uploaded: Date } | null = null;
+  try {
+    object = await dependencies.bucket
+      .resumeMultipartUpload(state.storageObjectKey, state.providerUploadId)
+      .complete(parts);
+  } catch {
+    // Completion may have succeeded before session metadata was finalized.
+    object = await dependencies.bucket.head(state.storageObjectKey);
+    if (!object) return uploadError("Upload completion unavailable", 503);
+  }
+  if (object.size !== state.declaredByteCount) {
+    return uploadError("Completed object size mismatch", 502);
+  }
+
+  const stateKey = uploadSessionStateKey(token, uploadSessionId);
+  for (let attempt = 0; attempt < MAX_METADATA_CAS_ATTEMPTS; attempt += 1) {
+    const current = await dependencies.metadataStore.getVersioned(stateKey);
+    state = parseStoredSessionState(current?.value ?? null) ?? state;
+    if (!current) return uploadError("Upload completion unavailable", 503);
+    if (state.status === "upload_complete" && state.completedObject) {
+      return completionResponse(state, true);
+    }
+    if (state.status === "upload_aborted") return uploadError("Upload aborted", 409);
+    const completedAt = object.uploaded.toISOString();
+    const completed: StoredUploadSessionState = {
+      ...state,
+      status: "upload_complete",
+      partReservations: {},
+      completedObject: {
+        providerVersion: object.version,
+        providerEtag: object.etag,
+        byteCount: object.size,
+        completedAt,
+      },
+    };
+    if (
+      await dependencies.metadataStore.compareAndSwap(
+        stateKey,
+        current.version,
+        JSON.stringify(completed),
+      )
+    ) {
+      return completionResponse(completed, false);
+    }
+  }
+  return uploadError("Upload completion unavailable", 503);
 }

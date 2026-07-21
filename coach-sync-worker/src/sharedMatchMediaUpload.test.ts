@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   handleAbortSharedMatchMediaUpload,
+  handleCompleteSharedMatchMediaUpload,
   handleCreateSharedMatchMediaUploadIntent,
   handleInspectSharedMatchMediaUpload,
   handleUploadSharedMatchMediaPart,
@@ -64,12 +65,14 @@ function harness(
   multipartKeys: string[];
   aborts: string[];
   uploadedParts: Array<{ partNumber: number; sha256: string }>;
+  completions: Array<ReadonlyArray<{ partNumber: number; etag: string }>>;
 } {
   const records = new Map<string, string>();
   const versions = new Map<string, number>();
   const multipartKeys: string[] = [];
   const aborts: string[] = [];
   const uploadedParts: Array<{ partNumber: number; sha256: string }> = [];
+  const completions: Array<ReadonlyArray<{ partNumber: number; etag: string }>> = [];
   const dependencies: SharedMatchMediaUploadDependencies = {
     enabled: true,
     metadataStore: {
@@ -112,14 +115,24 @@ function harness(
           uploadedParts.push({ partNumber, sha256: options.sha256 });
           return { partNumber, etag: `etag-${partNumber}-${options.sha256.slice(0, 8)}` };
         },
+        complete: async (parts) => {
+          completions.push(parts);
+          return {
+            version: "object-version-1",
+            etag: "completed-provider-etag",
+            size: 12_345_678,
+            uploaded: new Date("2026-07-20T12:05:00.000Z"),
+          };
+        },
       }),
+      head: async () => null,
     },
     readParentSession: async () => validSession,
     now: () => new Date("2026-07-20T12:00:00.000Z"),
     randomUuid: () => "11111111-2222-4333-8444-555555555555",
     ...overrides,
   };
-  return { dependencies, records, multipartKeys, aborts, uploadedParts };
+  return { dependencies, records, multipartKeys, aborts, uploadedParts, completions };
 }
 
 async function payload(response: Response): Promise<Record<string, unknown>> {
@@ -419,6 +432,9 @@ describe("Shared Match Media resumable upload parts", () => {
         await gate;
         return { partNumber, etag: "etag-race" };
       },
+      complete: async () => {
+        throw new Error("not used");
+      },
     });
     const first = handleUploadSharedMatchMediaPart(
       partRequest(firstPartBytes), TOKEN, ids.uploadSessionId, ids.assetId, 1, state.dependencies,
@@ -494,5 +510,127 @@ describe("Shared Match Media resumable upload parts", () => {
     assert.equal(second.status, 200);
     assert.equal(laterPart.status, 409);
     assert.equal(state.aborts.length, 1);
+  });
+});
+
+describe("Shared Match Media upload completion", () => {
+  const firstPartBytes = 6 * 1024 * 1024;
+  const finalPartBytes = 12_345_678 - firstPartBytes;
+
+  async function uploadAll(state: ReturnType<typeof harness>) {
+    const ids = await createUpload(state);
+    await handleUploadSharedMatchMediaPart(
+      partRequest(firstPartBytes, "c".repeat(64)), TOKEN, ids.uploadSessionId, ids.assetId, 1, state.dependencies,
+    );
+    await handleUploadSharedMatchMediaPart(
+      partRequest(finalPartBytes, "d".repeat(64)), TOKEN, ids.uploadSessionId, ids.assetId, 2, state.dependencies,
+    );
+    return ids;
+  }
+
+  it("reconciles ordered parts and bytes before completing one immutable object", async () => {
+    const state = harness();
+    const ids = await uploadAll(state);
+    const result = await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, ids.uploadSessionId, ids.assetId, state.dependencies,
+    );
+    const body = await result.text();
+    assert.equal(result.status, 201);
+    assert.deepEqual(state.completions[0]?.map((part) => part.partNumber), [1, 2]);
+    assert.match(body, /"status":"upload_complete"/);
+    assert.match(body, /"completedByteCount":12345678/);
+    assert.doesNotMatch(body, /provider|etag|storageObjectKey|match-media\/assets/);
+  });
+
+  it("rejects missing parts and incorrect acknowledged byte totals", async () => {
+    const missing = harness();
+    const missingIds = await createUpload(missing);
+    await handleUploadSharedMatchMediaPart(
+      partRequest(firstPartBytes), TOKEN, missingIds.uploadSessionId, missingIds.assetId, 1, missing.dependencies,
+    );
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, missingIds.uploadSessionId, missingIds.assetId, missing.dependencies,
+    )).status, 409);
+
+    const wrong = harness();
+    const wrongIds = await uploadAll(wrong);
+    const sessionKey = [...wrong.records.keys()].find((key) => key.includes("upload-sessions"))!;
+    const stored = JSON.parse(wrong.records.get(sessionKey)!) as { acknowledgedParts: Record<string, { byteCount: number }> };
+    stored.acknowledgedParts["2"]!.byteCount -= 1;
+    wrong.records.set(sessionKey, JSON.stringify(stored));
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, wrongIds.uploadSessionId, wrongIds.assetId, wrong.dependencies,
+    )).status, 409);
+    assert.equal(wrong.completions.length, 0);
+  });
+
+  it("rejects expired, aborted, unauthorized, and incorrectly rebound uploads", async () => {
+    const expired = harness();
+    const expiredIds = await uploadAll(expired);
+    expired.dependencies.now = () => new Date("2026-07-27T12:00:00.000Z");
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, expiredIds.uploadSessionId, expiredIds.assetId, expired.dependencies,
+    )).status, 410);
+
+    const aborted = harness();
+    const abortedIds = await uploadAll(aborted);
+    await handleAbortSharedMatchMediaUpload(
+      authorizedRequest("DELETE"), TOKEN, abortedIds.uploadSessionId, abortedIds.assetId, aborted.dependencies,
+    );
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, abortedIds.uploadSessionId, abortedIds.assetId, aborted.dependencies,
+    )).status, 409);
+
+    const denied = harness();
+    const deniedIds = await uploadAll(denied);
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST", "wrong"), TOKEN, deniedIds.uploadSessionId, deniedIds.assetId, denied.dependencies,
+    )).status, 401);
+    denied.dependencies.readParentSession = async () => ({ ...validSession, competitionTopologyByAthleteId: {} });
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, deniedIds.uploadSessionId, deniedIds.assetId, denied.dependencies,
+    )).status, 404);
+  });
+
+  it("makes duplicate completion idempotent without calling R2 again", async () => {
+    const state = harness();
+    const ids = await uploadAll(state);
+    const first = await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, ids.uploadSessionId, ids.assetId, state.dependencies,
+    );
+    const duplicate = await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, ids.uploadSessionId, ids.assetId, state.dependencies,
+    );
+    assert.equal(first.status, 201);
+    assert.equal(duplicate.status, 200);
+    assert.equal((await payload(duplicate)).idempotentReplay, true);
+    assert.equal(state.completions.length, 1);
+  });
+
+  it("recovers provider-success metadata gaps and fails deterministically otherwise", async () => {
+    const recovered = harness();
+    const recoveredIds = await uploadAll(recovered);
+    recovered.dependencies.bucket.resumeMultipartUpload = () => ({
+      uploadId: "private",
+      abort: async () => {},
+      uploadPart: async () => { throw new Error("not used"); },
+      complete: async () => { throw new Error("NoSuchUpload"); },
+    });
+    recovered.dependencies.bucket.head = async () => ({
+      version: "recovered-version",
+      etag: "recovered-etag",
+      size: 12_345_678,
+      uploaded: new Date("2026-07-20T12:06:00.000Z"),
+    });
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, recoveredIds.uploadSessionId, recoveredIds.assetId, recovered.dependencies,
+    )).status, 201);
+
+    const failed = harness();
+    const failedIds = await uploadAll(failed);
+    failed.dependencies.bucket.resumeMultipartUpload = recovered.dependencies.bucket.resumeMultipartUpload;
+    assert.equal((await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"), TOKEN, failedIds.uploadSessionId, failedIds.assetId, failed.dependencies,
+    )).status, 503);
   });
 });
