@@ -12,7 +12,13 @@ import {
   serializeWorkerPersistSnapshot,
   type WorkerPersistLane,
 } from "./competitionStateAuditor";
-import { handleCreateSharedMatchMediaUploadIntent } from "./sharedMatchMediaUpload";
+import {
+  handleAbortSharedMatchMediaUpload,
+  handleCreateSharedMatchMediaUploadIntent,
+  handleInspectSharedMatchMediaUpload,
+  handleUploadSharedMatchMediaPart,
+  type SharedMatchMediaUploadDependencies,
+} from "./sharedMatchMediaUpload";
 
 export interface Env {
   SESSIONS: KVNamespace;
@@ -1843,7 +1849,7 @@ export default {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers":
-        `Content-Type, Authorization, Idempotency-Key, ${MATMIND_TRANSITION_HEADER}, ${MEDIA_DURATION_HEADER}`,
+        `Content-Type, Content-Length, Authorization, Idempotency-Key, X-MatMind-Part-Bytes, X-MatMind-Part-SHA256, ${MATMIND_TRANSITION_HEADER}, ${MEDIA_DURATION_HEADER}`,
       "Access-Control-Expose-Headers": MATMIND_AUDIT_SNAPSHOT_HEADER,
     };
 
@@ -3572,7 +3578,7 @@ export default {
           .trim()
           .toLowerCase();
         if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
-        return handleCreateSharedMatchMediaUploadIntent(request, token, {
+        const dependencies: SharedMatchMediaUploadDependencies = {
           enabled: env.SHARED_MATCH_MEDIA_UPLOAD_ENABLED === "1",
           metadataStore: {
             get: async (key) => {
@@ -3587,12 +3593,125 @@ export default {
               });
               return object !== null;
             },
+            getVersioned: async (key) => {
+              const object = await env.MEDIA.get(key);
+              return object ? { value: await object.text(), version: object.etag } : null;
+            },
+            compareAndSwap: async (key, version, value) => {
+              const object = await env.MEDIA.put(key, value, {
+                onlyIf: { etagMatches: version },
+                httpMetadata: { contentType: "application/json" },
+                customMetadata: { recordType: "match-media-upload-session-v1" },
+              });
+              return object !== null;
+            },
           },
-          bucket: env.MEDIA,
+          bucket: {
+            createMultipartUpload: (key, options) =>
+              env.MEDIA.createMultipartUpload(key, options),
+            resumeMultipartUpload: (key, uploadId) => {
+              const multipart = env.MEDIA.resumeMultipartUpload(key, uploadId);
+              return {
+                uploadId: multipart.uploadId,
+                abort: () => multipart.abort(),
+                uploadPart: (partNumber, value, options) =>
+                  multipart.uploadPart(partNumber, value, options),
+              };
+            },
+          },
           readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
           now: () => new Date(),
           randomUuid: () => crypto.randomUUID(),
-        });
+        };
+        return handleCreateSharedMatchMediaUploadIntent(request, token, dependencies);
+      }
+
+      const sharedMatchMediaUploadSession = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/uploads\/([^/]+)$/,
+      );
+      const sharedMatchMediaUploadPart = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/uploads\/([^/]+)\/parts\/([^/]+)$/,
+      );
+      if (
+        (sharedMatchMediaUploadSession && ["GET", "DELETE"].includes(request.method)) ||
+        (sharedMatchMediaUploadPart && request.method === "PUT")
+      ) {
+        const route = sharedMatchMediaUploadPart ?? sharedMatchMediaUploadSession!;
+        const token = decodeURIComponent(route[1] ?? "").trim().toLowerCase();
+        const uploadSessionId = decodeURIComponent(route[2] ?? "").trim();
+        const assetId = url.searchParams.get("assetId")?.trim() ?? "";
+        if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
+        const dependencies: SharedMatchMediaUploadDependencies = {
+          enabled: env.SHARED_MATCH_MEDIA_UPLOAD_ENABLED === "1",
+          metadataStore: {
+            get: async (key) => {
+              const object = await env.MEDIA.get(key);
+              return object ? object.text() : null;
+            },
+            putIfAbsent: async (key, value) => {
+              const object = await env.MEDIA.put(key, value, {
+                onlyIf: { etagDoesNotMatch: "*" },
+                httpMetadata: { contentType: "application/json" },
+                customMetadata: { recordType: "match-media-upload-session-v1" },
+              });
+              return object !== null;
+            },
+            getVersioned: async (key) => {
+              const object = await env.MEDIA.get(key);
+              return object ? { value: await object.text(), version: object.etag } : null;
+            },
+            compareAndSwap: async (key, version, value) => {
+              const object = await env.MEDIA.put(key, value, {
+                onlyIf: { etagMatches: version },
+                httpMetadata: { contentType: "application/json" },
+                customMetadata: { recordType: "match-media-upload-session-v1" },
+              });
+              return object !== null;
+            },
+          },
+          bucket: {
+            createMultipartUpload: (key, options) =>
+              env.MEDIA.createMultipartUpload(key, options),
+            resumeMultipartUpload: (key, uploadId) => {
+              const multipart = env.MEDIA.resumeMultipartUpload(key, uploadId);
+              return {
+                uploadId: multipart.uploadId,
+                abort: () => multipart.abort(),
+                uploadPart: (partNumber, value, options) =>
+                  multipart.uploadPart(partNumber, value, options),
+              };
+            },
+          },
+          readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
+          now: () => new Date(),
+          randomUuid: () => crypto.randomUUID(),
+        };
+        if (sharedMatchMediaUploadPart) {
+          const partNumber = Number(route[3]);
+          return handleUploadSharedMatchMediaPart(
+            request,
+            token,
+            uploadSessionId,
+            assetId,
+            partNumber,
+            dependencies,
+          );
+        }
+        return request.method === "GET"
+          ? handleInspectSharedMatchMediaUpload(
+              request,
+              token,
+              uploadSessionId,
+              assetId,
+              dependencies,
+            )
+          : handleAbortSharedMatchMediaUpload(
+              request,
+              token,
+              uploadSessionId,
+              assetId,
+              dependencies,
+            );
       }
 
       const mediaUpload = path.match(/^\/v1\/sessions\/([^/]+)\/media$/);
