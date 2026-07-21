@@ -388,44 +388,45 @@ export function CompetitionCard({
     });
   }
 
+  // Match list sits outside the open-entry Pressable so PD-FR-001 Listen
+  // (Film Room) and Read More cannot also open the competition editor.
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`Open ${entry.tournamentName}`}
-      onPress={() => onOpenEntry(entry)}
-      style={({ pressed }) => [
-        styles.card,
-        { borderColor: cardBorderColor(tier), opacity: pressed ? 0.92 : 1 },
-      ]}
-    >
-      <View style={styles.row}>
-        <View style={styles.titleBlock}>
-          <Text style={styles.h3}>{entry.tournamentName}</Text>
-          <Text style={styles.meta}>
-            {[entry.organizationOrPromoter, entry.eventDate].filter(Boolean).join(" • ")}
-          </Text>
+    <View style={[styles.card, { borderColor: cardBorderColor(tier) }]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Open ${entry.tournamentName}`}
+        onPress={() => onOpenEntry(entry)}
+        style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
+      >
+        <View style={styles.row}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.h3}>{entry.tournamentName}</Text>
+            <Text style={styles.meta}>
+              {[entry.organizationOrPromoter, entry.eventDate].filter(Boolean).join(" • ")}
+            </Text>
+          </View>
+          {isPastCompetition ? (
+            <CompetitionMedalMark medal={tier} medalImageUri={entry.medalImageUri} size={38} />
+          ) : null}
         </View>
-        {isPastCompetition ? (
-          <CompetitionMedalMark medal={tier} medalImageUri={entry.medalImageUri} size={38} />
-        ) : null}
-      </View>
 
-      {isPastCompetition ? (
-        <View style={styles.chips}>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>Result: {getPlacementLabel(tier)}</Text>
+        {isPastCompetition ? (
+          <View style={styles.chips}>
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>Result: {getPlacementLabel(tier)}</Text>
+            </View>
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>Saved locally</Text>
+            </View>
           </View>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>Saved locally</Text>
+        ) : (
+          <View style={styles.chips}>
+            <View style={styles.chip}>
+              <Text style={styles.chipText}>Upcoming</Text>
+            </View>
           </View>
-        </View>
-      ) : (
-        <View style={styles.chips}>
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>Upcoming</Text>
-          </View>
-        </View>
-      )}
+        )}
+      </Pressable>
 
       {isPastCompetition ? (
         <View style={styles.matchList}>
@@ -441,7 +442,7 @@ export function CompetitionCard({
           ))}
         </View>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 

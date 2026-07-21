@@ -20,7 +20,7 @@
  * Call-site convention remains:
  * - MatchMediaAttachments: video bound, audio unbound
  * - CoachVoiceNoteField: audio bound, video unbound
- * - MatchCard (parent commentary): audio bound, video unbound
+ * - FilmRoomCoachCommentaryControls (parent Film Room): audio bound, video unbound
  */
 
 import type { AudioAdapter, AudioEngineStatus } from "./AudioAdapter";

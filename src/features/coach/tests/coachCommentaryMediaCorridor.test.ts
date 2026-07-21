@@ -21,6 +21,9 @@ describe("Coach Commentary media metadata corridor", () => {
   const worker = source("coach-sync-worker/src/index.ts");
   const wrangler = source("coach-sync-worker/wrangler.toml");
   const matchCard = source("src/features/competition/MatchCard.tsx");
+  const filmRoomCommentary = source(
+    "src/features/filmRoom/FilmRoomCoachCommentaryControls.tsx",
+  );
   const mediaApi = source("src/services/coachMediaApi.ts");
 
   it("sync artifact may carry mediaId/durationMs/mimeType but never URL fields", () => {
@@ -57,9 +60,12 @@ describe("Coach Commentary media metadata corridor", () => {
   it("client resolves mediaId to ephemeral URL and never stores URL in artifact helpers", () => {
     assert.match(mediaApi, /coachSyncResolveCoachMedia/);
     assert.match(mediaApi, /never write it into the Match Breakdown artifact/);
-    assert.match(matchCard, /Listen to Coach Commentary/);
-    assert.match(matchCard, /coachSyncResolveCoachMedia/);
+    // PD-FR-001: Match Card Watch CTA launches Film Room; resolve lives on Film Room controls.
+    assert.match(matchCard, /Watch Coach Match Breakdown/);
+    assert.match(matchCard, /\/competition\/film-room/);
+    assert.doesNotMatch(matchCard, /coachSyncResolveCoachMedia/);
     assert.doesNotMatch(matchCard, /localUri/);
+    assert.match(filmRoomCommentary, /coachSyncResolveCoachMedia/);
   });
 
   it("extractCoachCommentaryMediaMetadata returns mediaId only when present", () => {

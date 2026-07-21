@@ -1,15 +1,10 @@
-import { Audio } from "expo-av";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { router, type Href } from "expo-router";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatSubmissionTimeDisplay } from "../../domain/competition/matchDurationFormat";
 import { logBreakdownPropagationForMatch } from "../../domain/competition/competitionProjectionBreakdownTrace";
 import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
-import { createAudioAdapter } from "../../playback/AudioAdapter";
-import { createPlaybackCoordinator } from "../../playback/PlaybackCoordinator";
-import { createVideoAdapter } from "../../playback/VideoAdapter";
-import { coachSyncResolveCoachMedia } from "../../services/coachMediaApi";
-import { resolveCoachMediaSessionTarget } from "../../services/resolveParentCoachMediaSessionTarget";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
 import { labelForSubmissionTypeKey } from "./submissionTypes";
 
@@ -37,6 +32,34 @@ function formatCommentaryDuration(durationMs: number | undefined): string | null
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
+/** PD-FR-001: Match Card Listen CTA launches dedicated Film Room (not inline playback). */
+export function buildFilmRoomHref(input: {
+  matchLineageKey: string;
+  matchIndex: number;
+  sharedAthleteId?: string;
+  sharedCompetitionId?: string;
+  mediaId?: string;
+  coachNote?: string;
+  videoUri?: string | null;
+  durationMs?: number;
+}): Href {
+  const params = new URLSearchParams();
+  params.set("matchLineageKey", input.matchLineageKey);
+  params.set("matchIndex", String(input.matchIndex));
+  if (input.sharedAthleteId?.trim()) params.set("sharedAthleteId", input.sharedAthleteId.trim());
+  if (input.sharedCompetitionId?.trim()) {
+    params.set("sharedCompetitionId", input.sharedCompetitionId.trim());
+  }
+  if (input.mediaId?.trim()) params.set("mediaId", input.mediaId.trim());
+  if (input.coachNote?.trim()) params.set("coachNote", input.coachNote.trim());
+  const videoUri = input.videoUri?.trim();
+  if (videoUri) params.set("videoUri", videoUri);
+  if (input.durationMs !== undefined && Number.isFinite(input.durationMs)) {
+    params.set("durationMs", String(input.durationMs));
+  }
+  return `/competition/film-room?${params.toString()}` as Href;
+}
+
 export function MatchCard({
   snapshot,
   index,
@@ -52,19 +75,6 @@ export function MatchCard({
 }) {
   const won = snapshot.matchResult === "win";
   const [coachBreakdownExpanded, setCoachBreakdownExpanded] = useState(false);
-  const [playbackState, setPlaybackState] = useState<"idle" | "loading" | "playing" | "paused">(
-    "idle",
-  );
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const playableUrlRef = useRef<string | null>(null);
-  // Audio-only binding for parent commentary. Video stays unbound so play/pause/unload
-  // do not fan out to MatchMediaAttachments. Media resolution stays outside the coordinator.
-  const playbackRef = useRef(
-    createPlaybackCoordinator({
-      video: createVideoAdapter(() => null),
-      audio: createAudioAdapter(() => soundRef.current),
-    }),
-  );
   const coachBreakdown = snapshot.coachNote?.trim() ?? "";
   const mediaId = snapshot.mediaId?.trim() ?? "";
   const durationLabel = formatCommentaryDuration(snapshot.durationMs);
@@ -78,7 +88,9 @@ export function MatchCard({
   });
 
   console.log("[COACH_OVERLAY_PIPELINE_TRACE]", {
-    stage: coachBreakdown ? "competition_detail_match_card_overlay_visible" : "competition_detail_match_card_overlay_hidden",
+    stage: coachBreakdown
+      ? "competition_detail_match_card_overlay_visible"
+      : "competition_detail_match_card_overlay_hidden",
     matchId: snapshot.id,
     matchLineageKey: snapshot.id,
     slotKey: (() => {
@@ -103,201 +115,6 @@ export function MatchCard({
     });
   }
 
-  const playbackStatusLoggedRef = useRef(false);
-
-  // UI reflects coordinator snapshot authority (not direct Sound mutations).
-  // "loading" remains a MatchCard-local resolve-phase overlay; coordinator never emits it.
-  useEffect(() => {
-    const coordinator = playbackRef.current;
-    setPlaybackState(coordinator.getSnapshot().playbackState);
-    return coordinator.subscribe((snapshot) => {
-      setPlaybackState(snapshot.playbackState);
-    });
-  }, []);
-
-  const unloadPlayback = useCallback(async () => {
-    // Coordinator owns termination; clear binding after adapter stop+unload.
-    await playbackRef.current.unload();
-    soundRef.current = null;
-    playableUrlRef.current = null;
-    playbackStatusLoggedRef.current = false;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      void unloadPlayback();
-    };
-  }, [unloadPlayback]);
-
-  useEffect(() => {
-    void unloadPlayback();
-  }, [mediaId, unloadPlayback]);
-
-  const toggleCoachCommentaryPlayback = useCallback(async () => {
-    // Stage 1 — PLAYBACK_BEGIN (instrumentation only)
-    const logPlayback = (payload: Record<string, unknown>) => {
-      console.log("[PLAYBACK_FORENSICS]", payload);
-      try {
-        const g = globalThis as typeof globalThis & {
-          __PLAYBACK_FORENSICS_LOG__?: Array<Record<string, unknown>>;
-        };
-        if (!Array.isArray(g.__PLAYBACK_FORENSICS_LOG__)) g.__PLAYBACK_FORENSICS_LOG__ = [];
-        g.__PLAYBACK_FORENSICS_LOG__.push({
-          ...payload,
-          ts: new Date().toISOString(),
-        });
-      } catch {
-        // ignore ring-buffer failures
-      }
-    };
-    logPlayback({
-      stage: "PLAYBACK_BEGIN",
-      mediaId: mediaId || null,
-      currentPlaybackState: playbackState,
-      hasSound: Boolean(soundRef.current),
-      isPlaying: playbackState === "playing",
-    });
-
-    if (!mediaId) {
-      logPlayback({ stage: "PLAYBACK_RETURN_NO_MEDIA_ID" });
-      return;
-    }
-    if (playbackState === "playing" && soundRef.current) {
-      await playbackRef.current.pause();
-      logPlayback({ stage: "PLAYBACK_RETURN_PAUSE" });
-      return;
-    }
-    if (playbackState === "paused" && soundRef.current) {
-      await playbackRef.current.play();
-      logPlayback({ stage: "PLAYBACK_RETURN_RESUME" });
-      return;
-    }
-
-    setPlaybackState("loading");
-    let failingBoundary: "target" | "resolve" | "audio" = "target";
-    try {
-      // Stage 2 — resolveCoachMediaSessionTarget (adapter responsibility; outside coordinator)
-      logPlayback({ stage: "PLAYBACK_TARGET_BEGIN" });
-      const targetStartedAt = Date.now();
-      const target = await resolveCoachMediaSessionTarget();
-      if (!target) {
-        logPlayback({
-          stage: "PLAYBACK_TARGET_NULL",
-          elapsedMs: Date.now() - targetStartedAt,
-        });
-        logPlayback({ stage: "PLAYBACK_RETURN_NO_LINK" });
-        setPlaybackState("idle");
-        return;
-      }
-      logPlayback({
-        stage: "PLAYBACK_TARGET_END",
-        success: true,
-        linkToken: target.linkToken,
-        apiBaseUrl: target.apiBaseUrl,
-        elapsedMs: Date.now() - targetStartedAt,
-      });
-
-      // Stage 3 — coachSyncResolveCoachMedia (HTTP/JSON stages logged inside API)
-      failingBoundary = "resolve";
-      logPlayback({
-        stage: "PLAYBACK_RESOLVE_BEGIN",
-        mediaId,
-        linkToken: target.linkToken,
-      });
-      const resolved = await coachSyncResolveCoachMedia(
-        target.linkToken,
-        mediaId,
-        target.apiBaseUrl,
-      );
-      // Ephemeral playable URL — never written into the Match Breakdown artifact.
-      // Coordinator-owned termination of any prior engine before binding a new one.
-      await unloadPlayback();
-      setPlaybackState("loading");
-      playableUrlRef.current = resolved.url;
-
-      // Stage 4 — Audio.Sound.createAsync (engine bind; play intent via coordinator)
-      failingBoundary = "audio";
-      let resolvedUrlHost: string | null = null;
-      try {
-        resolvedUrlHost = new URL(resolved.url).host;
-      } catch {
-        resolvedUrlHost = null;
-      }
-      logPlayback({
-        stage: "PLAYBACK_AUDIO_CREATE_BEGIN",
-        hasResolvedUrl: Boolean(resolved.url?.trim()),
-        urlHost: resolvedUrlHost,
-      });
-      playbackStatusLoggedRef.current = false;
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: resolved.url },
-        { shouldPlay: false },
-        (status) => {
-          // Stage 5 — first status callback only (forensics)
-          if (!playbackStatusLoggedRef.current) {
-            playbackStatusLoggedRef.current = true;
-            logPlayback({
-              stage: "PLAYBACK_STATUS",
-              isLoaded: status.isLoaded,
-              isPlaying: status.isLoaded ? status.isPlaying : null,
-              positionMillis: status.isLoaded ? status.positionMillis : null,
-              durationMillis: status.isLoaded ? status.durationMillis : null,
-              didJustFinish: status.isLoaded ? status.didJustFinish : null,
-              error: status.isLoaded ? null : (status.error ?? null),
-            });
-          }
-          if (!status.isLoaded) return;
-          playbackRef.current.applyAudioStatus(status);
-          if (status.didJustFinish) {
-            // Lifecycle termination stays coordinator-owned (stop + unload + idle snapshot).
-            void (async () => {
-              if (soundRef.current !== sound) return;
-              await playbackRef.current.unload();
-              soundRef.current = null;
-              playableUrlRef.current = null;
-              playbackStatusLoggedRef.current = false;
-            })();
-          }
-        },
-      );
-      logPlayback({ stage: "PLAYBACK_AUDIO_CREATE_SUCCESS" });
-      soundRef.current = sound;
-      await playbackRef.current.play();
-    } catch (error) {
-      const errMsg = error instanceof Error ? error.message : String(error);
-      const errStack = error instanceof Error ? error.stack ?? null : null;
-      if (failingBoundary === "audio") {
-        logPlayback({
-          stage: "PLAYBACK_AUDIO_CREATE_ERROR",
-          error: errMsg,
-          stack: errStack,
-        });
-        logPlayback({ stage: "PLAYBACK_RETURN_AUDIO_ERROR", error: errMsg });
-      } else if (failingBoundary === "resolve") {
-        logPlayback({
-          stage: "PLAYBACK_RESOLVE_ERROR",
-          error: errMsg,
-        });
-        logPlayback({
-          stage: "PLAYBACK_RETURN_RESOLVE_FAILED",
-          error: errMsg,
-        });
-      } else {
-        logPlayback({
-          stage: "PLAYBACK_RETURN_TARGET_FAILED",
-          error: errMsg,
-        });
-      }
-      console.log("[COACH_MEDIA_TRACE]", {
-        stage: "parent_media_playback_failed",
-        mediaId,
-        matchLineageKey: snapshot.id,
-        error: errMsg,
-      });
-      await unloadPlayback();
-    }
-  }, [mediaId, playbackState, snapshot.id, unloadPlayback]);
-
   const methodLines: string[] = [];
   const submissionTimeDisplay = formatSubmissionTimeDisplay(snapshot.submissionTime);
   if (snapshot.outcome) {
@@ -311,14 +128,20 @@ export function MatchCard({
     typeof snapshot.submissionType === "string" ? snapshot.submissionType : null,
   );
 
-  const listenLabel =
-    playbackState === "loading"
-      ? "Loading…"
-      : playbackState === "playing"
-        ? "❚❚ Pause Coach Commentary"
-        : playbackState === "paused"
-          ? "▶ Resume Coach Commentary"
-          : "▶ Listen to Coach Commentary";
+  const openFilmRoom = () => {
+    router.push(
+      buildFilmRoomHref({
+        matchLineageKey: snapshot.id,
+        matchIndex: index,
+        sharedAthleteId,
+        sharedCompetitionId,
+        mediaId,
+        coachNote: coachBreakdown,
+        videoUri: snapshot.videoUri,
+        durationMs: snapshot.durationMs,
+      }),
+    );
+  };
 
   return (
     <View style={styles.match}>
@@ -344,9 +167,7 @@ export function MatchCard({
         <View style={styles.matchField}>
           <Text style={styles.label}>Submission type</Text>
           <Text style={styles.value}>
-            {snapshot.outcome === "Submission"
-              ? subLabel ?? "—"
-              : "—"}
+            {snapshot.outcome === "Submission" ? subLabel ?? "—" : "—"}
           </Text>
         </View>
         <View style={styles.matchField}>
@@ -375,17 +196,14 @@ export function MatchCard({
             <View style={styles.commentaryControls}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`${listenLabel} for match ${index + 1}`}
-                disabled={playbackState === "loading"}
-                onPress={() => {
-                  void toggleCoachCommentaryPlayback();
-                }}
+                accessibilityLabel={`Watch Coach Match Breakdown for match ${index + 1}`}
+                onPress={openFilmRoom}
                 style={({ pressed }) => [
                   styles.listenButton,
                   pressed ? styles.listenButtonPressed : null,
                 ]}
               >
-                <Text style={styles.listenButtonText}>{listenLabel}</Text>
+                <Text style={styles.listenButtonText}>▶ Watch Coach Match Breakdown</Text>
               </Pressable>
               {durationLabel ? (
                 <Text style={styles.durationText}>⏱ {durationLabel}</Text>
