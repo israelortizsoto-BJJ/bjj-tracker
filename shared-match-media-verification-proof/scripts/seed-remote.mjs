@@ -8,13 +8,19 @@ import {
 const sizeGiB = Number(process.argv[2]);
 const baseUrl = process.argv[3];
 const secretPath = process.argv[4];
-if (![1, 5, 10, 20].includes(sizeGiB) || !baseUrl || !secretPath) {
-  throw new Error("usage: node scripts/seed-remote.mjs <1|5|10|20> <worker-url> <secret-file>");
+const usage = "usage: node scripts/seed-remote.mjs <1|5|10|20> <worker-url> <secret-file>";
+if (!baseUrl || !secretPath) {
+  throw new Error(usage);
 }
 
+let plan;
+try {
+  plan = createBenchmarkProvisioningPlan(sizeGiB);
+} catch {
+  throw new Error(usage);
+}
 const secret = (await readFile(secretPath, "utf8")).trim();
 const objectKey = `benchmarks/${sizeGiB}gib-v1.mp4`;
-const plan = createBenchmarkProvisioningPlan(sizeGiB);
 const expectedBytes = plan.totalBytes;
 const prefix = Buffer.from([0,0,0,24,102,116,121,112,105,115,111,109,0,0,2,0,105,115,111,109,105,115,111,50]);
 const zeroPart = Buffer.alloc(plan.standardPartBytes);
