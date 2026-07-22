@@ -4,7 +4,103 @@ Date: 2026-07-21
 
 ## Conclusion
 
-**Container hashing required.**
+**REJECTED: Container verification failed at the 1 GiB rung and did not
+satisfy the certified 20 GiB contract.**
+
+The isolated Container topology was deployed on 2026-07-21. The retained,
+independently hashed 1 GiB object was admitted, but each of the three
+`invoke-container-verifier` attempts returned the same nonterminal response:
+`Error: container returned nonterminal response 503`. No attempt produced
+executor-terminal evidence, a byte count, a digest, MIME evidence, or EOF
+evidence. The Workflow therefore did not execute its release step and ended
+errored. In accordance with the hard-stop rule, the proof was disabled and the
+5/10/20 GiB rungs were not run.
+
+This result does not assign a root cause that Cloudflare did not expose. It
+certifies only the observed result: this deployed topology did not complete the
+1 GiB contract and therefore cannot be certified for 20 GiB.
+
+## Container runtime hard-stop evidence
+
+### Deployed topology
+
+- Worker version deployed disabled: `ba2ee1a5-aa08-4b4a-8211-1df6dd06530b`
+- Worker version deployed enabled: `9e0e4b54-5d14-44ec-9a9e-6f5e42645041`
+- Worker version restored disabled: `e8383d18-2131-4628-900b-54e6b2d11770`
+- Container application: `a038ee2d-e06f-4831-bcea-c6874f9fc684`
+- Container image: `sha256:d981681964d2bbbb168f0de8b5e2b4f7c3c646805941207f6e07416ed7a53a1e`
+- Container class: `standard-1` (`0.5` vCPU, `4 GiB` memory, `8 GB` disk)
+- Container network: private, no assigned IPv4 or IPv6
+- Container SSH: disabled
+- Container maximum instances: `1`
+- Container instance observed: `f850e5803cf6bfe7e26d9fc37bc7008e9cbf1d631754109ceb95441670123299`
+- Admission Durable Object namespace: `d8715f3ee4224cd5918cbc67d9bbac04`
+- Workflow execution version: `d921c09e-2fc2-47d3-b17c-3b24e8b68768`
+
+The deployed binding manifest contained only `PROOF_ADMISSION`,
+`PROOF_CONTAINER`, `VERIFICATION_PROOF`, and the
+`matmind-shared-media-verification-proof` R2 bucket. The production bucket
+`matmind-coach-media` was absent.
+
+### Sequential Container ladder
+
+| Rung | Object bytes | Independent SHA-256 | Immutable R2 version | Upload | Workflow result | Container result | Admission release |
+|---:|---:|---|---|---:|---|---|---|
+| 1 GiB | 1,073,741,824 | `74ead4979e013f981cf2c7b6eae53f4edf6fc626bf858f8c51b81327ae1af574` | `7e60793e18a8b5f612df1ff5e4edbf8a` | Existing retained object; original upload 83,870 ms | Errored after 13 seconds | Three nonterminal `503` responses; no terminal output | Not attempted; admission remained held |
+| 5 GiB | 5,368,709,120 | `1de4231789c9191a7ef8b85f7f73023274a598fbcfca731bb73af71dccae2636` | `7e60793b1927b617ed1a44fb54b11afa` | Existing retained object; not read | Not run after hard stop | Not run | Not applicable |
+| 10 GiB | Not created | — | — | Not uploaded | Not run | Not run | Not applicable |
+| 20 GiB | Not created | — | — | Not uploaded | Not run | Not run | Not applicable |
+
+The 1 GiB Workflow identity was
+`proof-0be85e9a2f11a3b1877edf3d540714cb71fb3fc9da11190849752edc2a35ac3e`.
+Its admission step completed in one second with
+`{"outcome":"admitted","idempotent":false}`. Container invocation ran from
+17:37:08 through 17:37:20 America/Los_Angeles. Its attempts failed after two
+seconds, zero seconds, and zero seconds respectively. Each attempt returned the
+same recorded error and persisted `Output: null`.
+
+### Admission-control runtime evidence
+
+- The distinct proof identity
+  `proof-ecf83b4c04a538c2a7c65cb330a2dd184d480830b0a9a5adeb7de68d580c1d0e`
+  requested admission after the first Workflow errored without terminal
+  executor evidence.
+- Admission returned `busy` and identified the original 1 GiB proof as owner.
+- The competing Workflow ended immediately with
+  `ProofFailure: another verification runtime owns admission` and contained no
+  Container invocation step.
+- A duplicate trigger converged on the original deterministic Workflow identity
+  and returned `duplicate:true`; it did not create a second Workflow. It was
+  observed after that Workflow had already errored, so no claim is made that
+  this particular duplicate was submitted during active hashing.
+- Missing/nonterminal evidence remained fail closed in the deployed runtime:
+  the original admission was still held after all Container attempts failed.
+- Wrong-identity and malformed-evidence release rejection passed the local
+  protocol suite. They were not directly invoked against deployed state because
+  the architecture intentionally exposes no HTTP or operator mutation path to
+  the Admission Durable Object, and the 1 GiB hard stop prohibited adding one.
+- Terminal-evidence release was not exercised because the Container emitted no
+  terminal evidence. No release-without-evidence occurred.
+
+### Read, storage, and cost evidence
+
+- No benchmark object was created or uploaded during the Container run.
+- Existing completed proof storage remained 6 GiB under the three-day
+  application lifecycle.
+- Exact R2 bytes read by the failed Container attempts were not exposed. With
+  three attempts against a 1 GiB immutable object, read exposure is unknown and
+  bounded above by 3 GiB.
+- No successful EOF or read-amplification measurement was produced.
+- The Workflow exposed 13 seconds total duration and 12 seconds in the
+  Container invocation step. Immediate billing data and exact Container CPU
+  consumption were not exposed, so no fabricated charge is reported.
+- The proof Worker was restored to `PROOF_ENABLED="0"` immediately after the
+  hard stop. Completed objects remain under three-day retention; incomplete
+  multipart uploads remain under Cloudflare's provider-managed seven-day rule.
+
+## Prior Worker runtime conclusion
+
+**Container hashing was required by the prior Worker proof.**
 
 The exact Worker/Workflow path passed at 1 GiB but failed all three attempts at
 5 GiB with the authoritative Cloudflare outcome `Worker exceeded memory limit`.
@@ -30,7 +126,7 @@ the hashing executor for the next proof.
 - Workflow success/error retention: 3 days
 - Concurrency used: 1
 
-## Data path exercised
+## Prior Worker data path exercised
 
 ```text
 immutable R2 object
@@ -58,7 +154,7 @@ multipart upload began. R2 completion then supplied the immutable version.
 | 10 GiB | Not created after 5 GiB rejection | — | — | — | — |
 | 20 GiB | Not created after 5 GiB rejection | — | — | — | — |
 
-## Runtime results
+## Prior Worker runtime results
 
 | Size | Outcome | Attempts | Streamed bytes | Hash-step wall time | Observed total | CPU evidence |
 |---:|---|---:|---:|---:|---:|---|

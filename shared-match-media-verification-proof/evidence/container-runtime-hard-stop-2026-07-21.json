@@ -1,0 +1,83 @@
+{
+  "verdict": "REJECTED",
+  "reason": "Container verification returned nonterminal HTTP 503 on all three attempts at the 1 GiB rung",
+  "accountId": "9014361709b3169cc261237c717ec0b6",
+  "worker": {
+    "name": "matmind-shared-media-verification-proof",
+    "disabledDeploymentVersion": "ba2ee1a5-aa08-4b4a-8211-1df6dd06530b",
+    "enabledDeploymentVersion": "9e0e4b54-5d14-44ec-9a9e-6f5e42645041",
+    "finalDisabledDeploymentVersion": "e8383d18-2131-4628-900b-54e6b2d11770",
+    "finalEnabled": false
+  },
+  "workflow": {
+    "name": "matmind-shared-media-verification-proof-workflow",
+    "versionId": "d921c09e-2fc2-47d3-b17c-3b24e8b68768",
+    "proofId": "proof-0be85e9a2f11a3b1877edf3d540714cb71fb3fc9da11190849752edc2a35ac3e",
+    "status": "errored",
+    "durationSeconds": 13,
+    "error": "Error: container returned nonterminal response 503",
+    "admission": {
+      "outcome": "admitted",
+      "idempotent": false
+    },
+    "containerAttempts": [
+      { "durationSeconds": 2, "status": 503, "terminalEvidence": false },
+      { "durationSeconds": 0, "status": 503, "terminalEvidence": false },
+      { "durationSeconds": 0, "status": 503, "terminalEvidence": false }
+    ],
+    "releaseStepExecuted": false
+  },
+  "competingWorkflow": {
+    "proofId": "proof-ecf83b4c04a538c2a7c65cb330a2dd184d480830b0a9a5adeb7de68d580c1d0e",
+    "status": "errored",
+    "admissionOutcome": "busy",
+    "activeProofId": "proof-0be85e9a2f11a3b1877edf3d540714cb71fb3fc9da11190849752edc2a35ac3e",
+    "containerInvoked": false
+  },
+  "duplicateTrigger": {
+    "proofId": "proof-0be85e9a2f11a3b1877edf3d540714cb71fb3fc9da11190849752edc2a35ac3e",
+    "duplicate": true,
+    "observedStatus": "errored",
+    "secondWorkflowCreated": false,
+    "observedAfterOriginalErrored": true
+  },
+  "container": {
+    "applicationId": "a038ee2d-e06f-4831-bcea-c6874f9fc684",
+    "instanceId": "f850e5803cf6bfe7e26d9fc37bc7008e9cbf1d631754109ceb95441670123299",
+    "imageDigest": "sha256:d981681964d2bbbb168f0de8b5e2b4f7c3c646805941207f6e07416ed7a53a1e",
+    "instanceType": "standard-1",
+    "maxInstances": 1,
+    "sshEnabled": false,
+    "publicIpAssigned": false
+  },
+  "rungResults": [
+    {
+      "sizeGiB": 1,
+      "expectedBytes": 1073741824,
+      "expectedSha256": "74ead4979e013f981cf2c7b6eae53f4edf6fc626bf858f8c51b81327ae1af574",
+      "objectVersion": "7e60793e18a8b5f612df1ff5e4edbf8a",
+      "outcome": "rejected_nonterminal_503",
+      "eof": false,
+      "streamedBytes": null,
+      "computedSha256": null,
+      "detectedMime": null
+    },
+    { "sizeGiB": 5, "outcome": "not_run_after_hard_stop" },
+    { "sizeGiB": 10, "outcome": "not_created_or_run" },
+    { "sizeGiB": 20, "outcome": "not_created_or_run" }
+  ],
+  "productionBucketBound": false,
+  "newBenchmarkUploads": 0,
+  "exactReadBytesExposed": false,
+  "maximumReadExposureBytes": 3221225472,
+  "retention": {
+    "completedObjectsDays": 3,
+    "completedObjectsOwner": "application",
+    "incompleteMultipartDays": 7,
+    "incompleteMultipartOwner": "cloudflare-platform"
+  },
+  "finalHealth": {
+    "enabled": false,
+    "triggerHttpStatus": 404
+  }
+}
