@@ -16,7 +16,7 @@
   },
   "vars": {
     "PROOF_ENABLED": "0",
-    "PROOF_HARNESS_VERSION": "verification-runtime-proof-v1"
+    "PROOF_HARNESS_VERSION": "verification-container-runtime-proof-v1"
   },
   "r2_buckets": [
     {
@@ -29,6 +29,34 @@
       "binding": "VERIFICATION_PROOF",
       "name": "matmind-shared-media-verification-proof-workflow",
       "class_name": "VerificationProofWorkflow"
+    }
+  ],
+  "containers": [
+    {
+      "name": "matmind-shared-media-verification-proof-container",
+      "class_name": "VerificationProofContainer",
+      "image": "./Dockerfile",
+      "instance_type": "standard-1",
+      "max_instances": 1,
+      "ssh": { "enabled": false }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PROOF_ADMISSION",
+        "class_name": "VerificationProofAdmission"
+      },
+      {
+        "name": "PROOF_CONTAINER",
+        "class_name": "VerificationProofContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "proof-runtime-v1",
+      "new_sqlite_classes": ["VerificationProofAdmission", "VerificationProofContainer"]
     }
   ]
 }

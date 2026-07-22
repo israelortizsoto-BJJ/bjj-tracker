@@ -1,5 +1,5 @@
 export const MIME_PREFIX_LIMIT = 4096;
-export const HARNESS_VERSION = "verification-runtime-proof-v1";
+export const HARNESS_VERSION = "verification-container-runtime-proof-v1";
 
 export type ProofFailureCode =
   | "disabled"
@@ -11,7 +11,10 @@ export type ProofFailureCode =
   | "stream_failed"
   | "byte_count_mismatch"
   | "digest_mismatch"
-  | "unsupported_mime";
+  | "unsupported_mime"
+  | "admission_busy"
+  | "admission_release_failed"
+  | "container_execution_failed";
 
 export class ProofFailure extends Error {
   readonly code: ProofFailureCode;
@@ -43,13 +46,12 @@ export function isProofRequest(value: unknown): value is ProofRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Record<string, unknown>;
   return (
-    typeof request.objectKey === "string" &&
-    request.objectKey.startsWith("benchmarks/") &&
+    validBenchmarkObjectKey(request.objectKey) &&
     typeof request.objectVersion === "string" &&
     request.objectVersion.length > 0 &&
     typeof request.expectedBytes === "number" &&
     Number.isSafeInteger(request.expectedBytes) &&
-    request.expectedBytes > 0 &&
+    request.expectedBytes === benchmarkExpectedBytes(request.objectKey) &&
     typeof request.expectedSha256 === "string" &&
     /^[a-f0-9]{64}$/.test(request.expectedSha256) &&
     request.expectedMime === "video/mp4" &&
@@ -135,6 +137,11 @@ export function redactObjectIdentity(objectKey: string): Promise<string> {
 
 export function validBenchmarkObjectKey(value: unknown): value is string {
   return typeof value === "string" && /^benchmarks\/(1|5|10|20)gib-v1\.mp4$/.test(value);
+}
+
+export function benchmarkExpectedBytes(objectKey: string): number | undefined {
+  const match = /^benchmarks\/(1|5|10|20)gib-v1\.mp4$/.exec(objectKey);
+  return match ? Number(match[1]) * 1024 * 1024 * 1024 : undefined;
 }
 
 export function validMultipartUploadId(value: unknown): value is string {

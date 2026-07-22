@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test src/*.test.ts",
+    "test": "node --experimental-strip-types --test src/*.test.ts container/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types",
     "dry-run": "wrangler deploy --dry-run"
@@ -12,5 +12,8 @@
   "devDependencies": {
     "typescript": "5.9.3",
     "wrangler": "4.112.0"
+  },
+  "dependencies": {
+    "@cloudflare/containers": "0.3.7"
   }
 }

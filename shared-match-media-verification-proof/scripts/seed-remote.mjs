@@ -68,7 +68,7 @@ const completeResponse = await fetch(`${baseUrl}/seed/complete`, {
 if (!completeResponse.ok) throw new Error(`seed complete failed: ${completeResponse.status} ${await completeResponse.text()}`);
 const completed = await completeResponse.json();
 process.stdout.write(JSON.stringify({
-  harnessVersion: "verification-runtime-proof-v1",
+  harnessVersion: "verification-container-runtime-proof-v1",
   sizeGiB,
   objectKey,
   expectedBytes,

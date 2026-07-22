@@ -158,10 +158,30 @@ The Container must:
 Start the Container proof with `standard-1` (0.5 vCPU, 4 GiB memory) and
 single concurrency. Escalate resource class only from measured evidence.
 
+## Workflow-first admission amendment
+
+The Container proof protocol creates or retrieves the deterministic Workflow
+before any admission state can exist. The Workflow's first durable step calls
+the singleton Admission Durable Object. Empty admission is acquired, the same
+proof identity is idempotently re-admitted, and a different identity fails
+before Container execution. The authenticated trigger has no admission binding
+usage and cannot mutate the reservation.
+
+Admission release is compare-by-identity and requires bounded, authoritative
+terminal evidence emitted by `container-standard-1`. Workflow completion,
+Workflow error, a missing Container response, and a nonterminal Container
+response are not executor-terminal evidence and cannot release admission. This
+is the certified fail-closed boundary: ambiguous execution blocks subsequent
+proofs instead of admitting concurrent work.
+
 ## Cleanup
 
-- The proof bucket lifecycle `proof-retention-3-days` is enabled for all objects.
-- Cloudflare's default incomplete-multipart abort rule remains enabled at 7 days.
+- Completed proof objects use the application-owned lifecycle
+  `proof-retention-3-days`, enabled for all objects. Retention is 3 days and the
+  boundary is certified.
+- Incomplete multipart uploads use Cloudflare's provider-managed abort rule.
+  Retention is 7 days; this is a certified platform boundary and is not an
+  application lifecycle defect.
 - Workflow instance retention is explicitly 3 days.
 - Objects and instance evidence remain available for review until lifecycle expiry.
 - Worker, Workflow, and bucket are isolated and may be deleted after evidence review.

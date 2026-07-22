@@ -30,7 +30,7 @@ while (written < totalBytes) {
 output.end();
 await once(output, "close");
 process.stdout.write(JSON.stringify({
-  harnessVersion: "verification-runtime-proof-v1",
+  harnessVersion: "verification-container-runtime-proof-v1",
   sizeGiB,
   expectedBytes: totalBytes,
   expectedSha256: hash.digest("hex"),
