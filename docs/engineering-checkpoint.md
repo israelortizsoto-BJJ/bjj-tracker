@@ -10,6 +10,119 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-21
+
+## Investigation
+
+Shared Match Media verification Container outbound dispatch and 1 GiB runtime certification.
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+The observed ContainerProxy HTTP 520/normalized 503 failure was caused by registering the `proof.r2` outbound handler as an inline static class field rather than by Workflow orchestration, admission, Container capacity, R2 streaming, memory, or SHA-256 execution. The dispatch probe and restored production-handler proof confirmed this hypothesis.
+
+## Latest Runtime Behavior
+
+### Root Cause
+
+The proof Container registered its `proof.r2` outbound handler as an inline static class field. Cloudflare ContainerProxy did not dispatch through that registration form, so the request failed before the registered handler executed. Registration was corrected to a post-class assignment:
+
+```text
+VerificationProofContainer.outboundByHost = {
+  "proof.r2": proofR2BindingOutbound,
+};
+```
+
+The correction changes registration placement only. Workflow orchestration, Candidate A self-admission, global concurrency one, release semantics, R2 behavior, streaming, hashing, and proof isolation remain unchanged.
+
+### Evidence Chain
+
+- Workflow execution and singleton admission completed correctly.
+- The Container instance started and the Node workload executed with recorded CPU, memory, and small network activity.
+- The request then returned normalized nonterminal JSON HTTP failures before meaningful R2 streaming or SHA-256 work.
+- Bounded stage markers narrowed the failure to Container outbound dispatch before handler entry.
+- With the corrected post-class registration retained and the outbound handler temporarily replaced by the certified constant response, `DISPATCH_PROBE_HANDLER_ENTER` was observed and HTTP 200 returned with no HTTP 520.
+- The production `proofR2BindingOutbound()` implementation was immediately restored while retaining only the corrected registration syntax and approved diagnostics.
+- A single 1 GiB production-handler proof then completed successfully.
+
+### Runtime Certification
+
+Container outbound dispatch is certified. The previously observed HTTP 520/normalized 503 boundary is closed as a registration defect, not a Workflow, admission, Container-capacity, R2-streaming, memory, or SHA-256 defect.
+
+Repository correction:
+
+- Commit `8d4244a4ab1152e22141865a3a0b7a556a801117` — `Correct container outbound handler registration`
+- The commit changes only `shared-match-media-verification-proof/src/index.ts`.
+- Local and remote `coach-commentary-media-metadata` both resolve to `8d4244a4ab1152e22141865a3a0b7a556a801117`.
+
+### 1 GiB Certification
+
+- Proof identity: `proof-0be85e9a2f11a3b1877edf3d540714cb71fb3fc9da11190849752edc2a35ac3e`
+- Exact bytes: `1,073,741,824`
+- SHA-256: `74ead4979e013f981cf2c7b6eae53f4edf6fc626bf858f8c51b81327ae1af574`
+- Wall time: `20,516 ms`
+- Peak RSS: `104,534,016 bytes`
+- Attempts: `1`
+- Rereads: `0`
+- Result: terminal completion with identity-checked admission release
+
+This certifies the isolated Container verification path through 1 GiB only. It does not certify 5 GiB, 10 GiB, or 20 GiB capacity.
+
+## Next Experiment
+
+Run exactly one isolated 5 GiB Container capacity certification after its independent deployment gates are re-established. Do not run 1 GiB again and do not proceed to 10 GiB or 20 GiB during that mission.
+
+## Do Not
+
+- Do not redesign Candidate A admission, Workflow ordering, concurrency, or release semantics.
+- Do not modify production bindings, production buckets, Match state, playback, Film Room, or publication.
+- Do not treat the 1 GiB result as certification above 1 GiB.
+
+## Notes
+
+- Runtime correction floor: `8d4244a4ab1152e22141865a3a0b7a556a801117`.
+- The correction commit changes only `shared-match-media-verification-proof/src/index.ts` and was pushed to the matching remote branch.
+- Runtime proof package is clean.
+- Unrelated Timeline and debug-log work remains excluded and untouched.
+- Invalid duplicate 2026-07-19 documentation additions were separated into a recoverable documentation-only stash before this checkpoint was created.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+```
+
+### git log --oneline --decorate -8
+
+```text
+8d4244a (HEAD -> coach-commentary-media-metadata) Correct container outbound handler registration
+eb1dc8f Add bounded container runtime proof diagnostics
+3774010 Record container verification runtime hard stop
+a4e3f3d Implement container verification runtime proof
+be6f388 Add shared match media verification runtime proof
+a6215c3 Implement shared match media upload completion
+1ccc797 Add resumable shared match media upload parts
+bbbb7d5 Implement shared match media upload foundation
+```
+
+### git diff --stat
+
+```text
+ .../google-sheets-live/src/Constants.gs |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs | 735 +++++++++++++++++----
+ 2 files changed, 611 insertions(+), 130 deletions(-)
+```
+
 # Engineering Checkpoint — 2026-07-19
 
 ## Current Initiative
