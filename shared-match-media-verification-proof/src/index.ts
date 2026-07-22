@@ -254,10 +254,6 @@ const proofR2BindingOutbound: OutboundHandler<Env> = async (request, env) => {
 };
 
 export class VerificationProofContainer extends Container<Env> {
-  static outboundByHost = {
-    "proof.r2": proofR2BindingOutbound,
-  };
-
   defaultPort = 8080;
   requiredPorts = [8080];
   sleepAfter = "1m";
@@ -274,6 +270,10 @@ export class VerificationProofContainer extends Container<Env> {
     return this.containerFetch(request);
   }
 }
+
+VerificationProofContainer.outboundByHost = {
+  "proof.r2": proofR2BindingOutbound,
+};
 
 export { ContainerProxy };
 
