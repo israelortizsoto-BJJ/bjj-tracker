@@ -12,6 +12,26 @@ const BENCHMARK_BYTES = new Map([
   ["benchmarks/20gib-v1.mp4", 20 * 1024 * 1024 * 1024],
 ]);
 
+function logCoreStage(marker, proofId, fields = {}) {
+  try {
+    console.log(JSON.stringify({
+      marker,
+      timestamp: new Date().toISOString(),
+      proofId,
+      ...fields,
+    }));
+  } catch {
+    // Diagnostic logging must never alter proof execution.
+  }
+}
+
+function boundedException(error) {
+  return {
+    exceptionName: error instanceof Error ? error.name : "UnknownError",
+    exceptionMessage: (error instanceof Error ? error.message : "unknown_error").slice(0, 256),
+  };
+}
+
 export function validContainerRequest(value) {
   if (!value || typeof value !== "object") return false;
   return /^proof-[a-f0-9]{64}$/.test(value.proofId) &&
@@ -34,18 +54,31 @@ export function detectMime(prefix) {
   return ["isom", "iso2", "mp41", "mp42", "qt  "].includes(brand) ? "video/mp4" : "unknown";
 }
 
-export async function streamAndDigest(body, failAfterBytes) {
+export async function streamAndDigest(body, failAfterBytes, proofId) {
   if (!body) throw new Error("missing response body");
   const hash = createHash("sha256");
   const prefix = Buffer.alloc(MIME_PREFIX_LIMIT);
   let prefixLength = 0;
   let bytes = 0;
+  let firstByteObserved = false;
+  let oneMiBObserved = false;
   const reader = body.getReader();
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        if (proofId) logCoreStage("CORE_STAGE_06_EOF", proofId);
+        break;
+      }
       bytes += value.byteLength;
+      if (!firstByteObserved && value.byteLength > 0) {
+        firstByteObserved = true;
+        if (proofId) logCoreStage("CORE_STAGE_04_FIRST_BYTE", proofId);
+      }
+      if (!oneMiBObserved && bytes >= 1024 * 1024) {
+        oneMiBObserved = true;
+        if (proofId) logCoreStage("CORE_STAGE_05_1MIB_OBSERVED", proofId);
+      }
       hash.update(value);
       if (prefixLength < MIME_PREFIX_LIMIT) {
         const take = Math.min(MIME_PREFIX_LIMIT - prefixLength, value.byteLength);
@@ -60,10 +93,12 @@ export async function streamAndDigest(body, failAfterBytes) {
   } finally {
     reader.releaseLock();
   }
+  const computedSha256 = hash.digest("hex");
+  if (proofId) logCoreStage("CORE_STAGE_07_DIGEST_COMPLETE", proofId);
   return {
     terminal: true,
     streamedBytes: bytes,
-    computedSha256: hash.digest("hex"),
+    computedSha256,
     detectedMime: detectMime(prefix.subarray(0, prefixLength)),
   };
 }
@@ -106,17 +141,39 @@ function resourceDelta(start) {
 }
 
 export async function executeProof(request, fetchImpl = fetch) {
+  logCoreStage("CORE_STAGE_00_EXECUTE_PROOF_ENTER", request.proofId, { attempt: request.attempt });
   const startedAt = performance.now();
   const usage = resourceUsage();
-  const response = await fetchImpl(`http://proof.r2/${encodeURI(request.objectKey)}`, {
-    headers: {
-      "x-proof-object-version": request.objectVersion,
-      "x-proof-expected-bytes": String(request.expectedBytes),
-    },
+  let response;
+  logCoreStage("CORE_STAGE_01_OUTBOUND_FETCH_BEGIN", request.proofId, { attempt: request.attempt });
+  try {
+    response = await fetchImpl(`http://proof.r2/${encodeURI(request.objectKey)}`, {
+      headers: {
+        "x-proof-object-version": request.objectVersion,
+        "x-proof-expected-bytes": String(request.expectedBytes),
+      },
+    });
+  } catch (error) {
+    logCoreStage("CORE_STAGE_FAIL", request.proofId, {
+      attempt: request.attempt,
+      failureCode: "outbound_fetch_exception",
+      ...boundedException(error),
+    });
+    throw error;
+  }
+  logCoreStage("CORE_STAGE_02_OUTBOUND_RESPONSE", request.proofId, {
+    attempt: request.attempt,
+    httpStatus: response.status,
+    contentType: response.headers.get("content-type") ?? "",
   });
 
   if (!response.ok) {
     const code = response.headers.get("x-proof-failure-code") ?? "storage_unavailable";
+    logCoreStage("CORE_STAGE_FAIL_OUTBOUND_RESPONSE", request.proofId, {
+      attempt: request.attempt,
+      httpStatus: response.status,
+      failureCode: code,
+    });
     if (response.status >= 500) {
       return { terminal: false, failureCode: code, retryable: true };
     }
@@ -125,11 +182,33 @@ export async function executeProof(request, fetchImpl = fetch) {
       wallClockMs: Math.round(performance.now() - startedAt),
       ...resourceDelta(usage),
     };
-    return terminalEvidence(request, measurements, { status: "rejected", failureCode: code });
+    const evidence = terminalEvidence(request, measurements, { status: "rejected", failureCode: code });
+    logCoreStage("CORE_STAGE_08_TERMINAL_RESULT", request.proofId, {
+      attempt: request.attempt,
+      failureCode: code,
+    });
+    return evidence;
   }
 
-  const streamed = await streamAndDigest(response.body, request.forceRetryAfterBytes);
-  if (!streamed.terminal) return { ...streamed, retryable: true };
+  logCoreStage("CORE_STAGE_03_STREAM_BEGIN", request.proofId, { attempt: request.attempt });
+  let streamed;
+  try {
+    streamed = await streamAndDigest(response.body, request.forceRetryAfterBytes, request.proofId);
+  } catch (error) {
+    logCoreStage("CORE_STAGE_FAIL", request.proofId, {
+      attempt: request.attempt,
+      failureCode: "stream_exception",
+      ...boundedException(error),
+    });
+    throw error;
+  }
+  if (!streamed.terminal) {
+    logCoreStage("CORE_STAGE_FAIL", request.proofId, {
+      attempt: request.attempt,
+      failureCode: streamed.failureCode,
+    });
+    return { ...streamed, retryable: true };
+  }
   const measurements = {
     ...streamed,
     wallClockMs: Math.round(performance.now() - startedAt),
@@ -138,9 +217,14 @@ export async function executeProof(request, fetchImpl = fetch) {
   const failureCode = streamed.streamedBytes !== request.expectedBytes ? "byte_count_mismatch" :
     streamed.computedSha256 !== request.expectedSha256 ? "digest_mismatch" :
       streamed.detectedMime !== request.expectedMime ? "unsupported_mime" : undefined;
-  return terminalEvidence(
+  const evidence = terminalEvidence(
     request,
     measurements,
     failureCode ? { status: "rejected", failureCode } : { status: "passed" },
   );
+  logCoreStage("CORE_STAGE_08_TERMINAL_RESULT", request.proofId, {
+    attempt: request.attempt,
+    ...(failureCode ? { failureCode } : {}),
+  });
+  return evidence;
 }

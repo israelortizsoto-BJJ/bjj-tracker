@@ -134,26 +134,103 @@ function r2Failure(code: string, status: number): Response {
 }
 
 const proofR2BindingOutbound: OutboundHandler<Env> = async (request, env) => {
-  if (request.method !== "GET") return r2Failure("method_not_allowed", 405);
+  let logContext: Record<string, string | number | undefined> = {};
+  const logStage = (
+    marker: string,
+    fields: Record<string, string | number | undefined> = {},
+  ): void => {
+    try {
+      console.log(JSON.stringify({
+        marker,
+        timestamp: new Date().toISOString(),
+        ...logContext,
+        ...fields,
+      }));
+    } catch {
+      // Diagnostic logging must never alter proof execution.
+    }
+  };
+  const exceptionFields = (error: unknown): { exceptionName: string; exceptionMessage: string } => ({
+    exceptionName: error instanceof Error ? error.name : "UnknownError",
+    exceptionMessage: (error instanceof Error ? error.message : "unknown_error").slice(0, 256),
+  });
+
+  logStage("R2_STAGE_00_HANDLER_ENTER");
+  if (request.method !== "GET") {
+    logStage("R2_STAGE_FAIL_VALIDATION", { failureCode: "method_not_allowed" });
+    return r2Failure("method_not_allowed", 405);
+  }
   const url = new URL(request.url);
   const objectKey = decodeURIComponent(url.pathname.slice(1));
   const expectedVersion = request.headers.get("x-proof-object-version");
   const expectedBytes = Number(request.headers.get("x-proof-expected-bytes"));
+  logContext = {
+    objectKey: validBenchmarkObjectKey(objectKey) ? objectKey : "invalid_benchmark_object",
+    expectedVersion: expectedVersion && expectedVersion.length <= 256 ? expectedVersion : "invalid_version",
+    expectedBytes,
+  };
   if (
     !validBenchmarkObjectKey(objectKey) ||
     !expectedVersion || expectedVersion.length > 256 ||
     expectedBytes !== benchmarkExpectedBytes(objectKey)
-  ) return r2Failure("invalid_request", 400);
+  ) {
+    logStage("R2_STAGE_FAIL_VALIDATION", { failureCode: "invalid_request" });
+    return r2Failure("invalid_request", 400);
+  }
 
+  let operation: "head" | "get" = "head";
   try {
+    logStage("R2_STAGE_01_HEAD_BEGIN");
     const head = await env.PROOF_MEDIA.head(objectKey);
-    if (!head) return r2Failure("missing_object", 404);
-    if (head.version !== expectedVersion) return r2Failure("object_version_mismatch", 409);
-    if (head.size !== expectedBytes) return r2Failure("object_size_mismatch", 422);
+    if (!head) {
+      logStage("R2_STAGE_FAIL_HEAD_MISSING", { failureCode: "missing_object" });
+      return r2Failure("missing_object", 404);
+    }
+    logStage("R2_STAGE_02_HEAD_SUCCESS", {
+      observedVersion: head.version,
+      observedBytes: head.size,
+    });
+    if (head.version !== expectedVersion) {
+      logStage("R2_STAGE_FAIL_VALIDATION", {
+        observedVersion: head.version,
+        observedBytes: head.size,
+        failureCode: "object_version_mismatch",
+      });
+      return r2Failure("object_version_mismatch", 409);
+    }
+    if (head.size !== expectedBytes) {
+      logStage("R2_STAGE_FAIL_VALIDATION", {
+        observedVersion: head.version,
+        observedBytes: head.size,
+        failureCode: "object_size_mismatch",
+      });
+      return r2Failure("object_size_mismatch", 422);
+    }
+    logStage("R2_STAGE_03_VALIDATION_SUCCESS", {
+      observedVersion: head.version,
+      observedBytes: head.size,
+    });
+
+    operation = "get";
+    logStage("R2_STAGE_04_GET_BEGIN");
     const object = await env.PROOF_MEDIA.get(objectKey);
-    if (!object) return r2Failure("missing_object", 404);
-    if (object.version !== expectedVersion) return r2Failure("object_version_mismatch", 409);
-    return new Response(object.body, {
+    if (!object) {
+      logStage("R2_STAGE_FAIL_GET_MISSING", { failureCode: "missing_object" });
+      return r2Failure("missing_object", 404);
+    }
+    logStage("R2_STAGE_05_GET_SUCCESS", {
+      observedVersion: object.version,
+      observedBytes: object.size,
+    });
+    if (object.version !== expectedVersion) {
+      logStage("R2_STAGE_FAIL_VALIDATION", {
+        observedVersion: object.version,
+        observedBytes: object.size,
+        failureCode: "object_version_mismatch",
+      });
+      return r2Failure("object_version_mismatch", 409);
+    }
+    const streamedResponse = new Response(object.body, {
       headers: {
         "cache-control": "no-store",
         "content-length": String(object.size),
@@ -161,7 +238,17 @@ const proofR2BindingOutbound: OutboundHandler<Env> = async (request, env) => {
         "x-proof-object-version": object.version,
       },
     });
-  } catch {
+    logStage("R2_STAGE_06_STREAM_RESPONSE_RETURNED", {
+      observedVersion: object.version,
+      observedBytes: object.size,
+      contentType: "video/mp4",
+    });
+    return streamedResponse;
+  } catch (error) {
+    logStage(operation === "head" ? "R2_STAGE_FAIL_HEAD_EXCEPTION" : "R2_STAGE_FAIL_GET_EXCEPTION", {
+      failureCode: "storage_unavailable",
+      ...exceptionFields(error),
+    });
     return r2Failure("storage_unavailable", 503);
   }
 };
