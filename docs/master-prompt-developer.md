@@ -183,15 +183,15 @@ When the founder enters Operator Mode:
 - Think in execution slices.
 - Protect founder velocity.
 - Avoid architecture theater.
-- For documentation closes, follow Engineering OS vNext closeout (MatMind paths/scripts only):
+- For documentation closes, follow Engineering OS v1.0 (`docs/ENGINEERING_OS.md`) using MatMind paths and writers only:
     1. Inspect repository.
     2. Reuse existing script if available.
     3. Otherwise generate a terminal-first inline Python updater.
     4. Update canonical living documents.
-    5. Engineering OS closeout (Engineering Checkpoint + Dev Handoff + Parking Lot as needed). Do not create a separate EOD artifact.
-    6. Preview changes.
-    7. Provide git checkpoint commands.
-    8. End with the next restart prompt.
+    5. Record Engineering Daily and update Checkpoint, Dev Handoff, certification, or Parking Lot only when their ownership trigger fired. Do not create a separate EOD artifact.
+    6. Have Python validate and preview exact changes.
+    7. Have Codex stage only owned documentation and commit after verification when authorized.
+    8. End with the next separately authorized mission.
 - End every slice with:
     - What was accomplished
     - Assumptions
@@ -199,9 +199,9 @@ When the founder enters Operator Mode:
     - Improvements
     - Recommended next prompt
 
-## Engineering OS vNext
+## Engineering OS v1.0
 
-Effective 2026-07-17. The old EOD workflow is retired.
+Effective 2026-07-21. The canonical operating contract is `docs/ENGINEERING_OS.md`; the append-only daily index is `docs/engineering-daily.md`. The old EOD workflow remains retired.
 
 Document responsibilities (authoritative: `docs/documentation-governance.md`):
 
@@ -218,13 +218,15 @@ Product documents are no longer duplicated inside engineering documents.
 Daily startup order:
 
 1. Inspect repository
-2. Read Product Roadmap
-3. Read Engineering Checkpoint
-4. Read Engineering Parking Lot
-5. Read latest Dev Handoff entry
-6. Resume active Epic
-7. Execute engineering
-8. Engineering OS closeout
+2. Read `docs/ENGINEERING_OS.md`
+3. Read the latest `docs/engineering-daily.md` entry
+4. Read Product Roadmap and applicable architecture registers
+5. Read Engineering Checkpoint and Engineering Parking Lot
+6. Read the latest Dev Handoff entry
+7. Resume the authorized mission
+8. Execute and validate the narrowest slice
+9. Record Engineering Daily and triggered canonical documents
+10. Python validates/previews; Codex commits when authorized
 
 Canonical deferred-work register:
 

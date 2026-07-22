@@ -44,9 +44,9 @@ Why:
 - keeps changes explicit
 - improves operating discipline
 - supports better product-quality work
-## Engineering OS vNext
+## Engineering OS v1.0
 
-Effective 2026-07-17. The old EOD workflow is retired.
+Effective 2026-07-21. Read `docs/ENGINEERING_OS.md` as the canonical operating contract and the latest entry in `docs/engineering-daily.md` as the daily execution index. The old EOD workflow remains retired.
 
 ### Document responsibilities
 
@@ -54,6 +54,8 @@ Authoritative ownership rules: `docs/documentation-governance.md`.
 
 | Document | Owner | Role | Never |
 | --- | --- | --- | --- |
+| `docs/ENGINEERING_OS.md` | Engineering Leadership | Canonical engineering operating contract | Session-specific narrative |
+| `docs/engineering-daily.md` | Engineering | Concise append-only daily index | Long evidence copies; silent history rewrites |
 | `docs/product/product-roadmap.md` | Product | Product SSOT — Epics, sequencing, product intent | Git commits; engineering investigations; debugging |
 | `docs/engineering-checkpoint.md` | Engineering | Session snapshot — updated every engineering session | Product roadmap duplication |
 | `docs/dev-handoff.md` | Engineering | Permanent engineering history — append-only | Rewrites of history |
@@ -74,14 +76,18 @@ Before implementing a strategic subsystem:
 
 Before any coding plan:
 
-1. Inspect repository (`git status -sb`, `git log -8 --oneline`)
-2. Read Product Roadmap (`docs/product/product-roadmap.md`)
-3. Read Engineering Checkpoint (`docs/engineering-checkpoint.md`)
-4. Read Engineering Parking Lot (`docs/engineering-parking-lot.md`)
-5. Read latest Dev Handoff entry (`docs/dev-handoff.md`)
-6. Resume active Epic
-7. Execute engineering
-8. Engineering OS closeout (Checkpoint + Dev Handoff + Parking Lot as needed — not a separate EOD artifact)
+1. Inspect repository (`git status -sb`, `git diff --stat`, `git diff`, `git log --oneline --decorate -10`, `git stash list`)
+2. Read Engineering OS (`docs/ENGINEERING_OS.md`)
+3. Read the latest Engineering Daily entry (`docs/engineering-daily.md`)
+4. Read Product Roadmap (`docs/product/product-roadmap.md`)
+5. Read Certified Architecture, Protected Systems, and Active Investigation registers
+6. Read Engineering Checkpoint (`docs/engineering-checkpoint.md`)
+7. Read Engineering Parking Lot (`docs/engineering-parking-lot.md`)
+8. Read the latest Dev Handoff entry (`docs/dev-handoff.md`)
+9. Resume only the authorized mission
+10. Execute and validate the narrowest slice
+11. Record Engineering Daily and update other canonical documents only when their ownership trigger fired
+12. Have Python validate/preview and Codex commit authorized documentation
 
 After reading the stack above:
 
@@ -116,13 +122,13 @@ Adapt only:
 Workflow order must remain identical:
 
 1. Inspect repository.
-2. Reuse existing script if available.
-3. Otherwise generate a terminal-first inline Python updater.
-4. Update canonical living documents.
-5. Engineering OS closeout (update Engineering Checkpoint; append Dev Handoff; park deferred work if needed). Do not create a separate EOD artifact.
-6. Preview changes.
-7. Provide git checkpoint commands.
-8. End with the next restart prompt.
+2. Reuse an existing writer if it owns the target.
+3. Otherwise use a bounded terminal-first Python recorder.
+4. GPT supplies the structured content; Python records and validates it.
+5. Update Engineering Daily and only the canonical documents whose ownership trigger fired. Do not create a separate EOD artifact.
+6. Python previews exact changes and verifies idempotence.
+7. Codex stages only owned documentation and commits after verification when authorized.
+8. End with the next separately authorized mission.
 
 MatMind script preference:
 
@@ -212,7 +218,7 @@ The current operating model is:
 Do not default back into Cursor-led broad implementation.
 
 ## Current development truth
-Follow **Engineering OS vNext** daily startup order above — it supersedes handoff-first / EOD checklists.
+Follow **Engineering OS v1.0** in `docs/ENGINEERING_OS.md` and the daily startup order above; they supersede handoff-first / EOD checklists.
 
 Founder Execution Doctrine
 
@@ -306,15 +312,17 @@ Before ending the day, be ready to summarize:
 - risks / open loops
 - next product block
 
-Before ending today's sprint (Engineering OS closeout):
+Before ending today's sprint (Engineering OS v1.0 closeout):
 
 If a previously uncertified boundary became proven:
 
 1. Update CertifiedArchitectureRegister-v1.md
 2. Update protected-systems-register.md if protection changes
 3. Remove or narrow the item from active-investigation-register.md
-4. Update docs/engineering-checkpoint.md
-5. Update docs/dev-handoff.md
-6. Park deferred work in docs/engineering-parking-lot.md only when founder-approved with a Resume Trigger
+4. Record the day in docs/engineering-daily.md
+5. Update docs/engineering-checkpoint.md when its session-floor trigger fired
+6. Append docs/dev-handoff.md when its historical-closeout trigger fired
+7. Park deferred work in docs/engineering-parking-lot.md only when founder-approved with a Resume Trigger
+8. Have Python validate and preview; have Codex commit only the authorized documentation
 
 Do not create a separate EOD artifact. Do not duplicate Product Roadmap content into engineering documents.
