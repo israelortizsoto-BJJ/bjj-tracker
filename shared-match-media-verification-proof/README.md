@@ -13,6 +13,21 @@ The default feature flag is disabled. The deployed proof environment requires
 identities before returning evidence, uses deterministic Workflow instance IDs,
 and retains Workflow state for three days.
 
+## Certified benchmark provisioning
+
+The canonical benchmark seeder uses `99,000,000`-byte standard multipart parts
+under provisioning strategy `transport-safe-99m-v1`. Repository evidence showed
+that this exact part size traverses the remote R2 binding, while a part of
+`104,857,600` bytes (100 MiB) is deterministically rejected with HTTP 413 before runtime
+verification begins.
+
+Provisioning controls multipart composition only. The generated manifest records
+`standardPartBytes`, `partCount`, `finalPartBytes`, and
+`provisioningStrategyVersion`, while verification remains authoritative over the
+completed object's immutable version, total bytes, SHA-256, and MIME. Workflow,
+admission, Container execution, and streaming verification do not depend on
+multipart part size or part count.
+
 ## Certified admission state machine
 
 Admission is Workflow-first, proof-scoped, and fail-closed:

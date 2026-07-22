@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test src/*.test.ts container/*.test.mjs",
+    "test": "node --experimental-strip-types --test src/*.test.ts container/*.test.mjs scripts/*.test.mjs",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types",
     "dry-run": "wrangler deploy --dry-run"
