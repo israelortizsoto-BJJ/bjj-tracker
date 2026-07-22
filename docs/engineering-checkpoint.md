@@ -14,7 +14,7 @@ Under Engineering OS vNext, this register is the engineering session snapshot. C
 
 ## Investigation
 
-Shared Match Media verification Container outbound dispatch and 1 GiB runtime certification.
+Shared Match Media verification Container runtime certification through 5 GiB.
 
 ## Status
 
@@ -22,13 +22,20 @@ COMPLETE
 
 ## Hypothesis
 
-The observed ContainerProxy HTTP 520/normalized 503 failure was caused by registering the `proof.r2` outbound handler as an inline static class field rather than by Workflow orchestration, admission, Container capacity, R2 streaming, memory, or SHA-256 execution. The dispatch probe and restored production-handler proof confirmed this hypothesis.
+After correcting the Container outbound registration defect and certifying dispatch plus the restored production handler at 1 GiB, the unchanged isolated standard-1 Container runtime could authoritatively verify a deterministic 5 GiB object in one execution with exact immutable validation, bounded memory, zero reread, and identity-checked admission release. The single authorized 5 GiB execution confirmed this hypothesis.
 
 ## Latest Runtime Behavior
 
-### Root Cause
+### Certified Repository State
 
-The proof Container registered its `proof.r2` outbound handler as an inline static class field. Cloudflare ContainerProxy did not dispatch through that registration form, so the request failed before the registered handler executed. Registration was corrected to a post-class assignment:
+- Certification HEAD before this documentation closeout: `813fd2532349bf37a3a2585e748f19178f3018b9` (`Record 1 GiB container runtime certification`).
+- Certified runtime correction: `8d4244a4ab1152e22141865a3a0b7a556a801117` (`Correct container outbound handler registration`).
+- Branch: `coach-commentary-media-metadata`.
+- The proof package and runtime code are unchanged by this closeout.
+
+### Root Cause and Dispatch Certification
+
+The original HTTP 520/normalized 503 failure was a registration defect: `proof.r2` was registered as an inline static class field, and ContainerProxy did not dispatch through that form. The certified correction retained the same handler, host, bindings, Container, Workflow, and diagnostics while moving registration to the post-class assignment required by the runtime:
 
 ```text
 VerificationProofContainer.outboundByHost = {
@@ -36,58 +43,70 @@ VerificationProofContainer.outboundByHost = {
 };
 ```
 
-The correction changes registration placement only. Workflow orchestration, Candidate A self-admission, global concurrency one, release semantics, R2 behavior, streaming, hashing, and proof isolation remain unchanged.
+A temporary constant-response probe with the corrected registration produced `DISPATCH_PROBE_HANDLER_ENTER` and HTTP 200 with no HTTP 520. The production `proofR2BindingOutbound()` implementation was then restored immediately. No temporary handler behavior remains.
 
-### Evidence Chain
+### 1 GiB Runtime Certification
 
-- Workflow execution and singleton admission completed correctly.
-- The Container instance started and the Node workload executed with recorded CPU, memory, and small network activity.
-- The request then returned normalized nonterminal JSON HTTP failures before meaningful R2 streaming or SHA-256 work.
-- Bounded stage markers narrowed the failure to Container outbound dispatch before handler entry.
-- With the corrected post-class registration retained and the outbound handler temporarily replaced by the certified constant response, `DISPATCH_PROBE_HANDLER_ENTER` was observed and HTTP 200 returned with no HTTP 520.
-- The production `proofR2BindingOutbound()` implementation was immediately restored while retaining only the corrected registration syntax and approved diagnostics.
-- A single 1 GiB production-handler proof then completed successfully.
+The restored production handler completed one isolated 1 GiB proof with exact byte count and SHA-256, one attempt, zero reread, terminal executor evidence, and identity-checked admission release. Certified measurements were `1,073,741,824` bytes, `20,516 ms` wall time, and `104,534,016` bytes peak RSS. This closed the outbound-dispatch defect and certified the complete isolated path at 1 GiB.
 
-### Runtime Certification
+### Docker Operational Certification
 
-Container outbound dispatch is certified. The previously observed HTTP 520/normalized 503 boundary is closed as a registration defect, not a Workflow, admission, Container-capacity, R2-streaming, memory, or SHA-256 defect.
+The local deployment toolchain was separately certified through the repository-approved Colima Docker context and Buildx path. Wrangler `4.112.0` discovered the configured Docker runtime and completed its dry run without repository or runtime changes. The proof image and Container configuration remained unchanged.
 
-Repository correction:
+### Trigger Authentication Certification
 
-- Commit `8d4244a4ab1152e22141865a3a0b7a556a801117` — `Correct container outbound handler registration`
-- The commit changes only `shared-match-media-verification-proof/src/index.ts`.
-- Local and remote `coach-commentary-media-metadata` both resolve to `8d4244a4ab1152e22141865a3a0b7a556a801117`.
+The trigger secret was synchronized from the canonical `.dev.vars` source to the deployed proof Worker secret. A bounded invalid authenticated request returned HTTP 400 `invalid_request` and created no Workflow, proving that authentication succeeded before request validation. The earlier HTTP 401 was classified as an operational secret mismatch, not a repository, Workflow, admission, Container, R2, or hashing defect.
 
-### 1 GiB Certification
+### 5 GiB Capacity Certification
 
-- Proof identity: `proof-0be85e9a2f11a3b1877edf3d540714cb71fb3fc9da11190849752edc2a35ac3e`
-- Exact bytes: `1,073,741,824`
-- SHA-256: `74ead4979e013f981cf2c7b6eae53f4edf6fc626bf858f8c51b81327ae1af574`
-- Wall time: `20,516 ms`
-- Peak RSS: `104,534,016 bytes`
-- Attempts: `1`
-- Rereads: `0`
-- Result: terminal completion with identity-checked admission release
+Exactly one authorized authenticated trigger created exactly one deterministic Workflow and one singleton admission. Exactly one Container execution performed immutable object validation, R2 HEAD, R2 GET, streaming SHA-256, exact byte and MIME validation, terminal evidence persistence, and identity-checked admission release.
 
-This certifies the isolated Container verification path through 1 GiB only. It does not certify 5 GiB, 10 GiB, or 20 GiB capacity.
+- Proof identity: `proof-1b6053e6910670f38e1adc763f133ba1d4d27d66996ae04fddaa85ad3c12e65d`
+- Bucket/key: `matmind-shared-media-verification-proof` / `benchmarks/5gib-v1.mp4`
+- Exact expected and observed bytes: `5,368,709,120`
+- Object version: `7e60793b1927b617ed1a44fb54b11afa`
+- ETag: `1bc74ce3b0eac29fd486fe913b4e58c7-52`
+- Exact expected and computed SHA-256: `1de4231789c9191a7ef8b85f7f73023274a598fbcfca731bb73af71dccae2636`
+- Exact MIME: `video/mp4`
+- Container wall time: `100,075 ms`
+- Observed trigger-to-terminal time: `105,002 ms`
+- Peak RSS: `104,534,016 bytes` (approximately `99.7 MiB`)
+- CPU: `14,620,378 us` user and `17,603,663 us` system
+- Hash attempts: `1`
+- Bytes reread: `0`
+- Terminal evidence: `container-evidence-808c8528cda9eb0aeba6ca226c39ad538307d5b45d02cc42999f67579959d72b`
+- Result: complete, admission released, no Workflow retry, no Container restart, and no failure marker
+
+### Memory and Runtime Behavior
+
+Peak RSS remained exactly `104,534,016` bytes at both 1 GiB and 5 GiB while verified object size increased fivefold. The evidence supports bounded streaming memory behavior rather than object-size-proportional buffering through 5 GiB. The 5 GiB run had one R2 read path, zero reread amplification, one hash attempt, no retry, no restart, exact terminal evidence, and successful release. Candidate A Workflow-first self-admission, deterministic identity, and global concurrency one remained intact.
+
+### Remaining Unknowns
+
+- 10 GiB and 20 GiB Container capacity are not certified.
+- The 5 GiB result certifies only the isolated verification proof runtime; it does not implement or certify the production Verification Service.
+- Publication, Match attachment/revision, Coach projection, playback resolution, Film Room integration, and scanner integration remain outside this proof and unchanged.
+- No conclusion above 5 GiB is authorized from the current evidence.
 
 ## Next Experiment
 
-Run exactly one isolated 5 GiB Container capacity certification after its independent deployment gates are re-established. Do not run 1 GiB again and do not proceed to 10 GiB or 20 GiB during that mission.
+10 GiB Capacity Certification is the next authorized engineering investigation. It must be separately authorized and must repeat the isolated single-trigger certification discipline; do not infer or begin 10 GiB work from this documentation closeout.
 
 ## Do Not
 
+- Do not begin the 10 GiB proof during this closeout.
+- Do not modify runtime code, diagnostics, infrastructure, Docker, secrets, or Cloudflare resources.
 - Do not redesign Candidate A admission, Workflow ordering, concurrency, or release semantics.
-- Do not modify production bindings, production buckets, Match state, playback, Film Room, or publication.
-- Do not treat the 1 GiB result as certification above 1 GiB.
+- Do not modify production bindings, production buckets, Match state, publication, playback, Film Room, or transcript behavior.
+- Do not treat certification through 5 GiB as certification at 10 GiB or 20 GiB.
 
 ## Notes
 
-- Runtime correction floor: `8d4244a4ab1152e22141865a3a0b7a556a801117`.
-- The correction commit changes only `shared-match-media-verification-proof/src/index.ts` and was pushed to the matching remote branch.
-- Runtime proof package is clean.
+- Certification ladder recorded: outbound registration correction, dispatch probe, restored production handler, 1 GiB runtime, Docker operations, trigger authentication, and 5 GiB capacity.
+- The completed 5 GiB object remains subject to the certified three-day application retention policy; incomplete multipart cleanup remains Cloudflare-managed at seven days.
+- Runtime proof package remains clean and unchanged.
 - Unrelated Timeline and debug-log work remains excluded and untouched.
-- Invalid duplicate 2026-07-19 documentation additions were separated into a recoverable documentation-only stash before this checkpoint was created.
+- Protected documentation stash remains excluded and must retain its original identity.
 
 ## Repository State
 
@@ -105,14 +124,14 @@ Run exactly one isolated 5 GiB Container capacity certification after its indepe
 ### git log --oneline --decorate -8
 
 ```text
-8d4244a (HEAD -> coach-commentary-media-metadata) Correct container outbound handler registration
+813fd25 (HEAD -> coach-commentary-media-metadata) Record 1 GiB container runtime certification
+8d4244a Correct container outbound handler registration
 eb1dc8f Add bounded container runtime proof diagnostics
 3774010 Record container verification runtime hard stop
 a4e3f3d Implement container verification runtime proof
 be6f388 Add shared match media verification runtime proof
 a6215c3 Implement shared match media upload completion
 1ccc797 Add resumable shared match media upload parts
-bbbb7d5 Implement shared match media upload foundation
 ```
 
 ### git diff --stat
