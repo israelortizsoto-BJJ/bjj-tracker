@@ -20,6 +20,62 @@ Corrections are appended as labeled amendments. Existing entries are never silen
 
 ---
 
+## 2026-07-22
+
+### Primary Objective
+
+Record the isolated Shared Match Media Container verification runtime through 10 GiB and leave a recoverable, documentation-certified repository floor.
+
+### Repository Floor
+
+- Branch: `coach-commentary-media-metadata`
+- Certified execution HEAD: `ebd6f8e4457ad8707aaec3908d678bc3d8775434`
+- Transport-safe provisioning: `49681de1bd0699e3532a6945c4b899811b16ea98`
+- Engineering OS v1.0: `30abcb21d0f30e1863414b378a0b4fc3faedb1da`
+- Prior 5 GiB floor: `dd1a20ffec9cdad4d384cafae6a3f01ccfd05f0c`
+- Runtime correction: `8d4244a4ab1152e22141865a3a0b7a556a801117`
+- Documentation checkpoint: `Record 10 GiB container runtime certification`
+
+### Completed Outcomes
+
+- Recorded Engineering OS v1.0 successfully.
+- Implemented and committed transport-safe benchmark provisioning.
+- Provisioned and certified the canonical 10 GiB benchmark object.
+- Certified one controlled single-pass 10 GiB verification with exact bytes, MIME, SHA-256, terminal evidence, and admission release.
+- Moved the certified isolated runtime floor from 5 GiB to 10 GiB.
+
+### Evidence and Certification Movement
+
+- 10 GiB expected and observed bytes: `10,737,418,240`
+- SHA-256: `208f0013a161529d27be8c52d7366a21108ff6a0c4c562f15c9ba118c1dcbd89`
+- Object version: `7e6074f743ddaca50b05212565cbca74`
+- Transport strategy: `transport-safe-99m-v1`
+- Container wall time: `206,616 ms`
+- Peak RSS: `116,424,704 bytes`
+- Hash attempts: `1`
+- Bytes reread: `0`
+- Workflow retries: `0`
+- Admission release: successful and identity-checked
+
+The evidence certifies the isolated verification runtime through 10 GiB. It does not certify 20 GiB or the production Verification Service.
+
+### Stops and Remaining Unknowns
+
+- 20 GiB capacity remains FUTURE CERTIFICATION — NOT STARTED.
+- Production Verification Service implementation remains outside the proof.
+- Publication, projection, resolution, playback, Film Room, scanner, privacy, revocation, and mobile behavior remain unchanged and uncertified by this runtime proof.
+- No conclusion above 10 GiB is authorized from the current evidence.
+
+### Protected and Unrelated Scopes
+
+- Runtime code was unchanged by the 10 GiB documentation closeout.
+- Existing Timeline modifications and debug-log directories remained excluded.
+- Protected documentation stash `6aa716e6cba7338c9705f2eb49102a8479f1fc27` remained unchanged.
+
+### Next Authorized Mission
+
+No next capacity certification is authorized from this closeout. Separately authorize any future work; do not begin 20 GiB from this documentation.
+
 ## 2026-07-21
 
 ### Primary Objective

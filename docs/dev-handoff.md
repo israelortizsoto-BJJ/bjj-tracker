@@ -90,6 +90,32 @@ Writers:
 scripts/write_engineering_checkpoint.py
 
 ---
+
+# DEV HANDOFF — 2026-07-22
+
+## Session Summary
+
+Isolated Shared Match Media verification Container runtime is certified through 10 GiB.
+
+Repository checkpoint:
+
+- Certified execution HEAD `ebd6f8e4457ad8707aaec3908d678bc3d8775434`
+- Transport-safe provisioning `49681de1bd0699e3532a6945c4b899811b16ea98`
+- Engineering OS v1.0 `30abcb21d0f30e1863414b378a0b4fc3faedb1da`
+- Prior 5 GiB floor `dd1a20ffec9cdad4d384cafae6a3f01ccfd05f0c`
+- Runtime correction `8d4244a4ab1152e22141865a3a0b7a556a801117`
+
+Canonical records:
+
+- `docs/engineering-checkpoint.md` (2026-07-22)
+- `docs/engineering-daily.md` (2026-07-22)
+- `docs/architecture/certification/CERTIFICATION_HISTORY.md`
+- `docs/architecture/certification/CertifiedArchitectureRegister-v1.md`
+- `docs/architecture/certification/protected-systems-register.md`
+- `docs/architecture/certification/active-investigation-register.md`
+
+This handoff records the new floor only. Full evidence remains in Checkpoint and certification registers. 20 GiB is FUTURE CERTIFICATION — NOT STARTED. Production Verification Service remains unimplemented.
+
 # DEV HANDOFF — 2026-07-19
 
 ## Session Summary

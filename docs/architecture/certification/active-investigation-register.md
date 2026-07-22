@@ -12,15 +12,18 @@ Current Understanding
 
 Shared Match Media architecture, domain boundaries, and service responsibilities are certified in `SharedMatchMedia-ArchitectureDecision-v1.md`, `SharedMatchMedia-CertifiedBoundaries-v1.md`, and `SharedMatchMedia-ServiceContracts-v1.md`.
 
+The isolated verification Container runtime is certified through 10 GiB on the proof package. That evidence does not implement or certify the production Verification Service or the broader production corridor.
+
 Unknown
 
-Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, and mobile background behavior satisfy every Required Proof and privacy gate in production conditions.
+Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, scanner integration, privacy gates, and mobile background behavior satisfy every Required Proof and privacy gate in production conditions.
+
+20 GiB isolated capacity remains FUTURE CERTIFICATION — NOT STARTED and is not an active investigation.
 
 Required Evidence
 
-Complete the certified Required Proof and privacy approval before implementation authorization or production certification.
+Complete the certified Required Proof and privacy approval before implementation authorization or production certification. Separately authorize any 20 GiB capacity certification; do not extrapolate from the 10 GiB floor.
 
----
 
 ## Parent Competition Runtime
 

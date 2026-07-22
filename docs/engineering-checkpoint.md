@@ -10,6 +10,132 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-22
+
+## Investigation
+
+Shared Match Media verification Container runtime through 10 GiB
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+After Engineering OS v1.0, transport-safe provisioning, and canonical 10 GiB object certification, the unchanged isolated standard-1 Container verification runtime could authoritatively verify the deterministic 10 GiB benchmark object in one execution with exact immutable validation, streaming SHA-256, bounded memory, zero reread, and identity-checked admission release. Runtime capability is CERTIFIED through 10 GiB.
+
+## Latest Runtime Behavior
+
+### Certified Repository State
+
+- Certified execution HEAD: `ebd6f8e4457ad8707aaec3908d678bc3d8775434`.
+- Transport-safe provisioning: `49681de1bd0699e3532a6945c4b899811b16ea98`.
+- Engineering OS v1.0: `30abcb21d0f30e1863414b378a0b4fc3faedb1da`.
+- Prior 5 GiB floor documentation: `dd1a20ffec9cdad4d384cafae6a3f01ccfd05f0c`.
+- Certified runtime correction: `8d4244a4ab1152e22141865a3a0b7a556a801117`.
+- Branch: `coach-commentary-media-metadata`.
+- Proof package and runtime code are unchanged by this documentation closeout.
+
+### 10 GiB Object and Provisioning
+
+- Bucket/key: `matmind-shared-media-verification-proof` / `benchmarks/10gib-v1.mp4`
+- Object version: `7e6074f743ddaca50b05212565cbca74`
+- Object identity hash: `c86a5cd5f298f27e7fe7611599e2a9988246cf14b1b878fc88c642872cdad8e1`
+- Exact expected and observed bytes: `10,737,418,240`
+- Exact expected and computed SHA-256: `208f0013a161529d27be8c52d7366a21108ff6a0c4c562f15c9ba118c1dcbd89`
+- Exact MIME: `video/mp4`
+- Transport strategy: `transport-safe-99m-v1`
+- Multipart composition: `109` parts; `99,000,000` standard bytes; `45,418,240` final bytes
+
+### 10 GiB Runtime Certification
+
+Exactly one authorized authenticated trigger created exactly one deterministic Workflow and one singleton admission. Exactly one Container execution performed immutable object validation, R2 HEAD, R2 GET, streaming SHA-256, exact byte and MIME validation, terminal evidence persistence, and identity-checked admission release.
+
+- Proof identity: `proof-379f960bcb86b3a80b8c845d17754e55931a5e62afc167372655a1d42358faeb`
+- Terminal evidence: `container-evidence-7fb491d6827367deb9511d11284917715e3cdc08d4d785439b6339a4e383d832`
+- Container wall time: `206,616 ms`
+- Observed trigger-to-terminal time: `211,626 ms`
+- Peak RSS: `116,424,704 bytes`
+- Hash attempts: `1`
+- Bytes reread: `0`
+- Workflow: complete, no retry
+- Admission: identity-checked release succeeded
+- Runtime capability: **CERTIFIED through 10 GiB**
+
+### Remaining Unknowns
+
+- 20 GiB Container capacity is not certified and is not authorized from this evidence.
+- The 10 GiB result certifies only the isolated verification proof runtime; it does not implement or certify the production Verification Service.
+- Publication, Match attachment/revision, Coach projection, playback resolution, Film Room integration, scanner integration, privacy, revocation, and mobile behavior remain outside this proof and unchanged.
+
+## Next Experiment
+
+No next capacity certification is authorized from this closeout. 20 GiB remains FUTURE CERTIFICATION — NOT STARTED and requires separate authorization. Do not extrapolate the 10 GiB result into 20 GiB certification.
+
+## Do Not
+
+- Do not begin a 20 GiB proof during this closeout.
+- Do not modify runtime code, diagnostics, infrastructure, Docker, secrets, or Cloudflare resources.
+- Do not redesign Candidate A admission, Workflow ordering, concurrency, or release semantics.
+- Do not modify production bindings, production buckets, Match state, publication, playback, Film Room, or transcript behavior.
+- Do not treat certification through 10 GiB as certification at 20 GiB or as production Verification Service certification.
+
+## Notes
+
+- Investigation lifecycle: COMPLETE. Runtime capability: CERTIFIED through 10 GiB.
+- Certification ladder recorded through 1 GiB, 5 GiB, and 10 GiB on the isolated verification proof runtime.
+- Unrelated Timeline and debug-log work remains excluded and untouched.
+- Protected documentation stash remains excluded and must retain its original identity.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M docs/architecture/certification/CERTIFICATION_HISTORY.md
+ M docs/architecture/certification/CertifiedArchitectureRegister-v1.md
+ M docs/architecture/certification/active-investigation-register.md
+ M docs/architecture/certification/protected-systems-register.md
+ M docs/dev-handoff.md
+ M docs/engineering-checkpoint.md
+ M docs/engineering-daily.md
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? scripts/__pycache__/
+```
+
+### git log --oneline --decorate -8
+
+```text
+ebd6f8e (HEAD -> coach-commentary-media-metadata) Remove duplicate provisioning validation
+49681de Implement transport-safe benchmark provisioning
+30abcb2 (origin/coach-commentary-media-metadata) Implement Engineering OS v1.0
+dd1a20f Record 5 GiB container runtime certification
+813fd25 Record 1 GiB container runtime certification
+8d4244a Correct container outbound handler registration
+eb1dc8f Add bounded container runtime proof diagnostics
+3774010 Record container verification runtime hard stop
+```
+
+### git diff --stat
+
+```text
+ .../certification/CERTIFICATION_HISTORY.md         |  31 +
+ .../CertifiedArchitectureRegister-v1.md            |   2 +
+ .../certification/active-investigation-register.md |   9 +-
+ .../certification/protected-systems-register.md    |   1 +
+ docs/dev-handoff.md                                |  26 +
+ docs/engineering-checkpoint.md                     | 124 ++++
+ docs/engineering-daily.md                          |  56 ++
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 9 files changed, 857 insertions(+), 133 deletions(-)
+```
+
 # ENGINEERING CHECKPOINT — 2026-07-21
 
 ## Investigation

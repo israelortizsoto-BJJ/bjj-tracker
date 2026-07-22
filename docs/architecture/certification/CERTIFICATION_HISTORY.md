@@ -1,5 +1,36 @@
 # MatMind Certification History
 
+## 2026-07-22
+
+Certification
+
+Shared Match Media Verification Container Runtime — 10 GiB Certified Floor
+
+Summary
+
+Certified the isolated Shared Match Media verification Container runtime through 10 GiB against the canonical transport-safe benchmark object.
+
+- Object key: `benchmarks/10gib-v1.mp4`
+- Object version: `7e6074f743ddaca50b05212565cbca74`
+- Exact bytes: `10,737,418,240`
+- SHA-256: `208f0013a161529d27be8c52d7366a21108ff6a0c4c562f15c9ba118c1dcbd89`
+- MIME: `video/mp4`
+- Transport strategy: `transport-safe-99m-v1`
+- Single-pass streaming verification with bounded memory, zero reread, terminal evidence, and identity-checked admission release
+- Certified execution HEAD: `ebd6f8e4457ad8707aaec3908d678bc3d8775434`
+
+This does not certify:
+
+- 20 GiB capacity
+- Production Verification Service
+- Publication, projection, resolution, playback, or Film Room integration
+
+Outcome
+
+Status is **CERTIFIED — isolated verification runtime through 10 GiB only**.
+
+---
+
 ## 2026-07-20
 
 Certification
