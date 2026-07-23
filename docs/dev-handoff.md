@@ -95,26 +95,131 @@ scripts/write_engineering_checkpoint.py
 
 ## Session Summary
 
-Isolated Shared Match Media verification Container runtime is certified through 10 GiB.
+Engineering OS closeout for 2026-07-22 after sealing Production Verification Service Contract and State-Machine Design v1.
 
-Repository checkpoint:
+Sealed engineering floor:
 
-- Certified execution HEAD `ebd6f8e4457ad8707aaec3908d678bc3d8775434`
-- Transport-safe provisioning `49681de1bd0699e3532a6945c4b899811b16ea98`
-- Engineering OS v1.0 `30abcb21d0f30e1863414b378a0b4fc3faedb1da`
-- Prior 5 GiB floor `dd1a20ffec9cdad4d384cafae6a3f01ccfd05f0c`
-- Runtime correction `8d4244a4ab1152e22141865a3a0b7a556a801117`
+- Parent Shared Match Media Upload is Product Certified through `upload_complete` only.
+- Isolated verification proof is certified through 10 GiB for mechanics only and is not the Production Verification Service.
+- Production Verification Service Contract and State-Machine Design v1 is certified and sealed at `164f86da797e9a4e5932b1c07d0389bc751ceb4b`.
+- Production Verification remains unimplemented, undeployed, disabled, runtime-uncertified, and Product-uncertified.
+- Required Proof #5 remains open.
+- No verification flag exists in runtime configuration.
+- Publication, Projection, Resolution, Coach visibility, playback, Film Room, transcript, and downstream work remain closed.
 
-Canonical records:
+## Isolated Verification Proof
+
+Preserved the certified 10 GiB isolated verification-proof floor.
+
+Reusable mechanics may include:
+
+- workflow-first admission
+- single-concurrency control
+- container execution
+- streaming reads
+- SHA-256 calculation
+- byte-count calculation
+- MIME validation mechanics
+- terminal evidence patterns
+- retry classification
+- large-object resource evidence
+- certification-harness concepts
+
+The isolated proof does not transfer:
+
+- production service identity
+- production bucket binding
+- production object keys
+- production upload-completion authority
+- production durable verification records
+- production admission identity
+- production verification flag
+- production privacy policy
+- production observability
+- deployment or rollback
+- Required Proof #5 completion
+- Product Certification
+
+Preserved the historical 1 GiB artifact and contextualized it as superseded historical evidence without overwriting its evidence body.
+
+## Production Verification Design Certification
+
+Certified: Production Verification Service — Contract and State-Machine Design Certified v1.
+
+Authoritative lifecycle:
+
+`upload_complete → verifying → verified | rejected | failed`
+
+Definitions recorded in the sealed design contract:
+
+- `upload_complete`: authoritative immutable upload completion; not verification success or publication eligibility
+- `verifying`: durable admission before binary execution
+- `verified`: publication-eligible only for the exact immutable `objectVersion`
+- `rejected`: terminal binary/policy rejection with no automatic retry
+- `failed`: operational outcome requiring explicit retry classification
+
+Also defined:
+
+- separate durable Production Verification record
+- immutable admission identity (`contractVersion`, `storageBucketBinding`, `matchMediaAssetId`, `objectVersion`, `storageObjectKey`)
+- canonical serialization and deterministic SHA-256 identity
+- CAS/idempotency protection and one active attempt per admission identity
+- append-only attempt evidence
+- retryable, non-retryable, terminal-rejection, retry-exhausted, and operator-required outcomes
+- deterministic handling for stuck `verifying` attempts
+- independent verification-flag contract name `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED` (documented only; not added or enabled)
+- provider-independent privacy/scanning hook with privacy and product policy remaining human-owned
+- non-mutation guarantees preventing Verification from changing Match attachment, Match revision, lineage or competition identity, the certified media object, upload-completion history, Publication, Projection, Coach visibility, URI Resolution, playback, Film Room, transcripts, or any downstream system
+- Required Proof #5 acceptance criteria (still open for implementation, production evidence, and human privacy/product decisions)
+
+Canonical artifact:
+
+- `docs/architecture/certification/SharedMatchMedia-ProductionVerificationService-Contract-v1.md`
+
+## Design-Certification Git Checkpoint
+
+- Validated the canonical architecture writer twice before commit
+- Confirmed `git diff --check` was clean
+- Committed exactly nine mission-owned design/certification artifacts
+- Old HEAD: `b782ca18bebbd42e934920a08b08f0816e1bfcf3`
+- New sealed HEAD: `164f86da797e9a4e5932b1c07d0389bc751ceb4b`
+- Commit subject: `Record Production Verification Service design-contract certification artifacts.`
+- Commit result: 9 files changed, 701 insertions(+), 19 deletions(-)
+- No push occurred
+- Timeline changes remained excluded
+- `debug-logs/**` remained excluded
+- All six protected stashes remained untouched
+- No runtime, configuration, flag, deployment, asset, verification-record, Match, or downstream mutation occurred
+
+## Operational Usage Checkpoint
+
+- Captured at approximately 11:42 PM Pacific on 2026-07-22
+- ChatGPT Plus weekly usage remaining: 71%
+- Estimated weekly usage consumed: 29%
+- Weekly reset date: 2026-07-29
+- Credit balance: $0
+- Full reset shown as available and expiring 2026-08-12
+- Source: operator-supplied ChatGPT Usage & Billing screenshot
+- No token counts, dollar-equivalent consumption, or undocumented usage categories inferred
+
+## Canonical Living Records Updated By This Closeout
 
 - `docs/engineering-checkpoint.md` (2026-07-22)
-- `docs/engineering-daily.md` (2026-07-22)
-- `docs/architecture/certification/CERTIFICATION_HISTORY.md`
-- `docs/architecture/certification/CertifiedArchitectureRegister-v1.md`
-- `docs/architecture/certification/protected-systems-register.md`
-- `docs/architecture/certification/active-investigation-register.md`
+- `docs/engineering-daily.md` (2026-07-22 amendment)
+- `docs/master-prompt-daily-restart.md` (sealed floor + next candidate mission)
+- `docs/dev-handoff.md` (2026-07-22)
 
-This handoff records the new floor only. Full evidence remains in Checkpoint and certification registers. 20 GiB is FUTURE CERTIFICATION — NOT STARTED. Production Verification Service remains unimplemented.
+Architecture certification registers were already sealed at `164f86da797e9a4e5932b1c07d0389bc751ceb4b` and were not rewritten by this EOD closeout.
+
+## Next Mission
+
+Candidate only. Not authorized and not begun:
+
+Production Verification Service — Durable Record and Admission Skeleton v1
+
+If later authorized, describe only as disabled, unwired, and limited to durable verification-record authority, exact immutable admission identity, CAS/idempotency, one-active-attempt protection, append-only attempt evidence, stuck-attempt representation, and negative-boundary tests.
+
+Do not describe that candidate as authorization for binary verification, production object access, certified-asset access, configuration or flag changes, deployment, publication, projection, playback, Film Room, transcripts, or downstream work.
 
 # DEV HANDOFF — 2026-07-19
 

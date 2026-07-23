@@ -1,12 +1,14 @@
 # Master Prompt — Daily Coding Restart
 
 ## Edit these each morning
-- Current day: [YYYY-MM-DD]
+- Current day: 2026-07-22
 - Repo: bjj-tracker
-- Active branch: [branch-name]
-- Lane I am working in: [Coding / QA / Release / Architecture / Bug Fix / UX]
-- Main intended coding outcome today: [Short note]
-- Constraints today: [Short note]
+- Active branch: coach-commentary-media-metadata
+- Lane I am working in: Architecture
+- Main intended coding outcome today: Hold the sealed Production Verification design-contract floor at `164f86d`; do not begin implementation unless separately authorized.
+- Constraints today: Production Verification remains unimplemented/undeployed/disabled/runtime-uncertified/Product-uncertified; Required Proof #5 open; no verification flag in runtime config; Publication/Projection/Resolution/Coach visibility/playback/Film Room/transcript/downstream closed; Timeline and debug-logs untouched.
+- Current sealed engineering floor: Upload Product Certified through `upload_complete` only; isolated proof certified through 10 GiB mechanics only (not Production Verification); Production Verification Service Contract and State-Machine Design v1 design-certified at `164f86da797e9a4e5932b1c07d0389bc751ceb4b`.
+- Smallest next candidate mission (not authorized, not begun): Production Verification Service — Durable Record and Admission Skeleton v1 — disabled/unwired durable-record/admission/CAS/idempotency/one-active-attempt/append-only evidence/stuck-attempt/negative-boundary tests only; not binary verification, production/certified-asset access, flag/config, deployment, publication, projection, playback, Film Room, transcripts, or downstream work.
 # Before implementation, verify whether today's objective already has a certified Product Architecture. If yes, implementation must conform to that architecture rather than redefining it.
 
 # Architecture Certification

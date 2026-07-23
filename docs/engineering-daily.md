@@ -76,6 +76,46 @@ The evidence certifies the isolated verification runtime through 10 GiB. It does
 
 No next capacity certification is authorized from this closeout. Separately authorize any future work; do not begin 20 GiB from this documentation.
 
+
+### Amendment — Production Verification Design Certification and EOD closeout
+
+Primary objective for this amendment: record the sealed Production Verification Service design-contract certification floor and Engineering OS closeout after commit `164f86da797e9a4e5932b1c07d0389bc751ceb4b`.
+
+#### Amended Repository Floor
+
+- Design-certification sealed HEAD: `164f86da797e9a4e5932b1c07d0389bc751ceb4b`
+- Prior HEAD: `b782ca18bebbd42e934920a08b08f0816e1bfcf3`
+- Documentation commit subject: `Record Production Verification Service design-contract certification artifacts.`
+- Commit result: 9 files changed, 701 insertions(+), 19 deletions(-); no push
+- Isolated 10 GiB mechanics floor preserved; not transferred into production Verification identity
+- Design status: **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**
+- Required Proof #5 remains open
+- No verification flag exists in runtime configuration
+
+#### Amended Completed Outcomes
+
+- Preserved the certified 10 GiB isolated verification-proof floor and the reusable-mechanics / non-transfer boundary enumerated in the design closeout.
+- Certified Production Verification Service — Contract and State-Machine Design Certified v1, including lifecycle, durable record, admission identity, CAS/idempotency, attempt evidence, retry taxonomy, stuck-attempt handling, flag-name-only contract, privacy-hook reservation, non-mutation guarantees, and Required Proof #5 acceptance criteria (still open).
+- Sealed the design-certification git checkpoint at `164f86da797e9a4e5932b1c07d0389bc751ceb4b` with Timeline/`debug-logs/**`/stashes excluded and no runtime mutation.
+- Recorded operator-supplied ChatGPT usage checkpoint in living engineering memory (~11:42 PM Pacific): weekly remaining 71%; consumed ~29%; reset 2026-07-29; credit balance $0; full reset available expiring 2026-08-12.
+
+#### Amended Evidence and Certification Movement
+
+Canonical design authority remains in `docs/architecture/certification/SharedMatchMedia-ProductionVerificationService-Contract-v1.md` and companion registers already sealed at `164f86da797e9a4e5932b1c07d0389bc751ceb4b`. This amendment indexes the living floor only; it does not rewrite certified architectural conclusions or certified evidence bodies.
+
+#### Amended Stops and Remaining Unknowns
+
+- Production Verification remains unimplemented, undeployed, disabled, runtime-uncertified, and Product-uncertified.
+- Publication, Projection, Resolution, Coach visibility, playback, Film Room, transcript, and downstream work remain closed.
+- Smallest next candidate mission is not authorized and not begun: Production Verification Service — Durable Record and Admission Skeleton v1 (disabled/unwired durable-record skeleton only if later authorized).
+
+#### Amended Protected and Unrelated Scopes
+
+- Timeline `Constants.gs` / `TimelineV2.gs` remain untouched.
+- `debug-logs/codex/**`, `debug-logs/corridor-qa/**`, and `debug-logs/playback-forensics/**` remain untouched.
+- All six protected stashes remain untouched.
+
+
 ## 2026-07-21
 
 ### Primary Objective

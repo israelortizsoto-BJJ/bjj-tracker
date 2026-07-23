@@ -14,7 +14,7 @@ Under Engineering OS vNext, this register is the engineering session snapshot. C
 
 ## Investigation
 
-Shared Match Media verification Container runtime through 10 GiB
+Production Verification Service Contract and State-Machine Design certification closeout, with preserved isolated 10 GiB verification-proof floor
 
 ## Status
 
@@ -22,70 +22,71 @@ COMPLETE
 
 ## Hypothesis
 
-After Engineering OS v1.0, transport-safe provisioning, and canonical 10 GiB object certification, the unchanged isolated standard-1 Container verification runtime could authoritatively verify the deterministic 10 GiB benchmark object in one execution with exact immutable validation, streaming SHA-256, bounded memory, zero reread, and identity-checked admission release. Runtime capability is CERTIFIED through 10 GiB.
+After Parent Shared Match Media Upload Product Certification through upload_complete and isolated verification-proof certification through 10 GiB for mechanics only, the Production Verification Service Contract and State-Machine Design v1 can be design-certified and sealed at commit 164f86da797e9a4e5932b1c07d0389bc751ceb4b without implementing, deploying, enabling, runtime-certifying, or Product-certifying Production Verification, and without transferring isolated-proof identity into production service authority. Required Proof #5 remains open.
 
 ## Latest Runtime Behavior
 
-### Certified Repository State
+### Sealed Engineering Floor
 
-- Certified execution HEAD: `ebd6f8e4457ad8707aaec3908d678bc3d8775434`.
-- Transport-safe provisioning: `49681de1bd0699e3532a6945c4b899811b16ea98`.
-- Engineering OS v1.0: `30abcb21d0f30e1863414b378a0b4fc3faedb1da`.
-- Prior 5 GiB floor documentation: `dd1a20ffec9cdad4d384cafae6a3f01ccfd05f0c`.
-- Certified runtime correction: `8d4244a4ab1152e22141865a3a0b7a556a801117`.
-- Branch: `coach-commentary-media-metadata`.
-- Proof package and runtime code are unchanged by this documentation closeout.
+- Branch: `coach-commentary-media-metadata`
+- Design-certification sealed HEAD: `164f86da797e9a4e5932b1c07d0389bc751ceb4b`
+- Prior HEAD before design-cert commit: `b782ca18bebbd42e934920a08b08f0816e1bfcf3`
+- Design-cert commit subject: `Record Production Verification Service design-contract certification artifacts.`
+- Design-cert commit result: 9 files changed, 701 insertions(+), 19 deletions(-); no push
+- Parent Shared Match Media Upload: Product Certified through `upload_complete` only
+- Isolated verification proof: certified through 10 GiB for mechanics only; not the Production Verification Service
+- Production Verification Service Contract and State-Machine Design v1: **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**
+- Production Verification: unimplemented, undeployed, disabled, runtime-uncertified, Product-uncertified
+- Required Proof #5: open
+- No verification flag exists in runtime configuration (`SHARED_MATCH_MEDIA_VERIFICATION_ENABLED` documented only)
+- Publication, Projection, Resolution, Coach visibility, playback, Film Room, transcript, and downstream work remain closed
 
-### 10 GiB Object and Provisioning
+### Isolated Verification Proof (preserved)
 
-- Bucket/key: `matmind-shared-media-verification-proof` / `benchmarks/10gib-v1.mp4`
-- Object version: `7e6074f743ddaca50b05212565cbca74`
-- Object identity hash: `c86a5cd5f298f27e7fe7611599e2a9988246cf14b1b878fc88c642872cdad8e1`
-- Exact expected and observed bytes: `10,737,418,240`
-- Exact expected and computed SHA-256: `208f0013a161529d27be8c52d7366a21108ff6a0c4c562f15c9ba118c1dcbd89`
-- Exact MIME: `video/mp4`
-- Transport strategy: `transport-safe-99m-v1`
-- Multipart composition: `109` parts; `99,000,000` standard bytes; `45,418,240` final bytes
+Reusable mechanics may include workflow-first admission, single-concurrency control, container execution, streaming reads, SHA-256 and byte-count calculation, MIME validation mechanics, terminal evidence patterns, retry classification, large-object resource evidence, and certification-harness concepts.
 
-### 10 GiB Runtime Certification
+The isolated proof does not transfer production service identity, production bucket binding, production object keys, production upload-completion authority, production durable verification records, production admission identity, production verification flag, production privacy policy, production observability, deployment or rollback, Required Proof #5 completion, or Product Certification.
 
-Exactly one authorized authenticated trigger created exactly one deterministic Workflow and one singleton admission. Exactly one Container execution performed immutable object validation, R2 HEAD, R2 GET, streaming SHA-256, exact byte and MIME validation, terminal evidence persistence, and identity-checked admission release.
+Historical 1 GiB artifact remains preserved as superseded historical evidence; its evidence body was not overwritten.
 
-- Proof identity: `proof-379f960bcb86b3a80b8c845d17754e55931a5e62afc167372655a1d42358faeb`
-- Terminal evidence: `container-evidence-7fb491d6827367deb9511d11284917715e3cdc08d4d785439b6339a4e383d832`
-- Container wall time: `206,616 ms`
-- Observed trigger-to-terminal time: `211,626 ms`
-- Peak RSS: `116,424,704 bytes`
-- Hash attempts: `1`
-- Bytes reread: `0`
-- Workflow: complete, no retry
-- Admission: identity-checked release succeeded
-- Runtime capability: **CERTIFIED through 10 GiB**
+### Production Verification Design Certification
 
-### Remaining Unknowns
+Authoritative lifecycle: `upload_complete → verifying → verified | rejected | failed`.
 
-- 20 GiB Container capacity is not certified and is not authorized from this evidence.
-- The 10 GiB result certifies only the isolated verification proof runtime; it does not implement or certify the production Verification Service.
-- Publication, Match attachment/revision, Coach projection, playback resolution, Film Room integration, scanner integration, privacy, revocation, and mobile behavior remain outside this proof and unchanged.
+- `upload_complete`: authoritative immutable upload completion; not verification success or publication eligibility
+- `verifying`: durable admission before binary execution
+- `verified`: publication-eligible only for the exact immutable `objectVersion`
+- `rejected`: terminal binary/policy rejection with no automatic retry
+- `failed`: operational outcome requiring explicit retry classification
+
+Defined separately: durable Production Verification record; immutable admission identity (`contractVersion`, `storageBucketBinding`, `matchMediaAssetId`, `objectVersion`, `storageObjectKey`); canonical serialization and deterministic SHA-256 identity; CAS/idempotency and one active attempt per admission identity; append-only attempt evidence; retryable / non-retryable / terminal-rejection / retry-exhausted / operator-required outcomes; deterministic stuck-`verifying` handling; independent flag contract name only; provider-independent privacy/scanning hook with privacy/product policy remaining human-owned; non-mutation guarantees across Match attachment/revision/lineage, certified media object, upload-completion history, Publication, Projection, Coach visibility, URI Resolution, playback, Film Room, transcripts, and downstream systems; Required Proof #5 acceptance criteria (still open).
+
+### Design-Certification Git Boundary
+
+Validated canonical architecture writer twice before the design-cert commit; `git diff --check` was clean; Timeline and `debug-logs/**` remained excluded; all six protected stashes untouched; no runtime, configuration, flag, deployment, asset, verification-record, Match, or downstream mutation occurred.
 
 ## Next Experiment
 
-No next capacity certification is authorized from this closeout. 20 GiB remains FUTURE CERTIFICATION — NOT STARTED and requires separate authorization. Do not extrapolate the 10 GiB result into 20 GiB certification.
+Smallest next candidate mission only (not authorized, not begun): Production Verification Service — Durable Record and Admission Skeleton v1. If later authorized, it may be described only as disabled, unwired, and limited to durable verification-record authority, exact immutable admission identity, CAS/idempotency, one-active-attempt protection, append-only attempt evidence, stuck-attempt representation, and negative-boundary tests. It must not authorize binary verification, production/certified-asset object access, configuration or flag changes, deployment, publication, projection, playback, Film Room, transcripts, or downstream work.
 
 ## Do Not
 
-- Do not begin a 20 GiB proof during this closeout.
-- Do not modify runtime code, diagnostics, infrastructure, Docker, secrets, or Cloudflare resources.
-- Do not redesign Candidate A admission, Workflow ordering, concurrency, or release semantics.
-- Do not modify production bindings, production buckets, Match state, publication, playback, Film Room, or transcript behavior.
-- Do not treat certification through 10 GiB as certification at 20 GiB or as production Verification Service certification.
+- Do not begin Durable Record and Admission Skeleton without separate authorization.
+- Do not implement, deploy, enable, or Product-certify Production Verification.
+- Do not add or enable SHARED_MATCH_MEDIA_VERIFICATION_ENABLED in runtime configuration.
+- Do not treat the isolated 10 GiB proof as the Production Verification Service or as Proof #5 completion.
+- Do not mutate Match attachment/revision/lineage, certified media objects, upload-completion history, Publication, Projection, Coach visibility, URI Resolution, playback, Film Room, transcripts, or downstream systems.
+- Do not alter Timeline sources, debug-logs/**, or protected stashes.
+- Do not push unless separately authorized.
 
 ## Notes
 
-- Investigation lifecycle: COMPLETE. Runtime capability: CERTIFIED through 10 GiB.
-- Certification ladder recorded through 1 GiB, 5 GiB, and 10 GiB on the isolated verification proof runtime.
+- Investigation lifecycle for this design-certification / EOD documentation closeout: COMPLETE.
+- Architecture certification artifacts for the design contract are already sealed at 164f86d; this closeout updates living engineering memory only.
 - Unrelated Timeline and debug-log work remains excluded and untouched.
-- Protected documentation stash remains excluded and must retain its original identity.
+- All six protected stashes remain untouched.
+- Operational usage checkpoint (~11:42 PM Pacific, 2026-07-22; operator-supplied ChatGPT Usage & Billing screenshot): ChatGPT Plus weekly usage remaining 71%; estimated weekly usage consumed 29%; weekly reset date 2026-07-29; credit balance $0; full reset shown as available and expiring 2026-08-12.
+- No token counts, dollar-equivalent consumption, or undocumented usage categories inferred.
 
 ## Repository State
 
@@ -93,13 +94,6 @@ No next capacity certification is authorized from this closeout. 20 GiB remains 
 
 ```text
 ## coach-commentary-media-metadata
- M docs/architecture/certification/CERTIFICATION_HISTORY.md
- M docs/architecture/certification/CertifiedArchitectureRegister-v1.md
- M docs/architecture/certification/active-investigation-register.md
- M docs/architecture/certification/protected-systems-register.md
- M docs/dev-handoff.md
- M docs/engineering-checkpoint.md
- M docs/engineering-daily.md
  M timeline-builder/google-sheets-live/src/Constants.gs
  M timeline-builder/google-sheets-live/src/TimelineV2.gs
 ?? debug-logs/codex/
@@ -111,29 +105,22 @@ No next capacity certification is authorized from this closeout. 20 GiB remains 
 ### git log --oneline --decorate -8
 
 ```text
-ebd6f8e (HEAD -> coach-commentary-media-metadata) Remove duplicate provisioning validation
+164f86d (HEAD -> coach-commentary-media-metadata) Record Production Verification Service design-contract certification artifacts.
+b782ca1 Fix match media hashing for React Native
+238ec41 Add parent shared match media upload client
+7927b88 (origin/coach-commentary-media-metadata) Record 10 GiB container runtime certification
+ebd6f8e Remove duplicate provisioning validation
 49681de Implement transport-safe benchmark provisioning
-30abcb2 (origin/coach-commentary-media-metadata) Implement Engineering OS v1.0
+30abcb2 Implement Engineering OS v1.0
 dd1a20f Record 5 GiB container runtime certification
-813fd25 Record 1 GiB container runtime certification
-8d4244a Correct container outbound handler registration
-eb1dc8f Add bounded container runtime proof diagnostics
-3774010 Record container verification runtime hard stop
 ```
 
 ### git diff --stat
 
 ```text
- .../certification/CERTIFICATION_HISTORY.md         |  31 +
- .../CertifiedArchitectureRegister-v1.md            |   2 +
- .../certification/active-investigation-register.md |   9 +-
- .../certification/protected-systems-register.md    |   1 +
- docs/dev-handoff.md                                |  26 +
- docs/engineering-checkpoint.md                     | 124 ++++
- docs/engineering-daily.md                          |  56 ++
  .../google-sheets-live/src/Constants.gs            |   6 +-
  .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
- 9 files changed, 857 insertions(+), 133 deletions(-)
+ 2 files changed, 611 insertions(+), 130 deletions(-)
 ```
 
 # ENGINEERING CHECKPOINT — 2026-07-21
@@ -1527,7 +1514,6 @@ Run the existing runtime validation package.
 Compare runtime behavior against the certified starvation sequence.
 If validation succeeds, begin Production Certification.
 
-
 # ENGINEERING CHECKPOINT — 2026-07-14
 
 Status: COMPLETE
@@ -2050,6 +2036,7 @@ Begin with the certified repository workflow.
 8. End every response with the next highest-ROI Cursor prompt and the next architectural question to certify.
 
 I think today was one of the most valuable investigation days you've had. You didn't just narrow a bug—you substantially reduced the unknown architecture surface. The investigation has transitioned from "where is the bug?" to "what is the correct architectural contract?", which is a much stronger position to be in before making any production changes.
+
 # ENGINEERING CHECKPOINT — 2026-07-13
 
 ## Investigation
