@@ -539,7 +539,8 @@ describe("Shared Match Media upload completion", () => {
     assert.deepEqual(state.completions[0]?.map((part) => part.partNumber), [1, 2]);
     assert.match(body, /"status":"upload_complete"/);
     assert.match(body, /"completedByteCount":12345678/);
-    assert.doesNotMatch(body, /provider|etag|storageObjectKey|match-media\/assets/);
+    assert.match(body, /"objectVersion":"object-version-1"/);
+    assert.doesNotMatch(body, /providerVersion|providerEtag|storageObjectKey|match-media\/assets|r2-upload/);
   });
 
   it("rejects missing parts and incorrect acknowledged byte totals", async () => {
@@ -601,9 +602,14 @@ describe("Shared Match Media upload completion", () => {
     const duplicate = await handleCompleteSharedMatchMediaUpload(
       authorizedRequest("POST"), TOKEN, ids.uploadSessionId, ids.assetId, state.dependencies,
     );
+    const duplicateBody = await payload(duplicate);
     assert.equal(first.status, 201);
     assert.equal(duplicate.status, 200);
-    assert.equal((await payload(duplicate)).idempotentReplay, true);
+    assert.equal(duplicateBody.idempotentReplay, true);
+    assert.equal(
+      (duplicateBody.uploadSession as { objectVersion?: string }).objectVersion,
+      "object-version-1",
+    );
     assert.equal(state.completions.length, 1);
   });
 

@@ -867,6 +867,11 @@ function completionResponse(
         status: "upload_complete",
         completedByteCount: state.completedObject?.byteCount,
         completedAt: state.completedObject?.completedAt,
+        // Domain-facing immutable object identity from storage completion.
+        // Does not expose provider/storage internals (keys, etags, providerUploadId).
+        ...(state.completedObject?.providerVersion
+          ? { objectVersion: state.completedObject.providerVersion }
+          : {}),
       },
       idempotentReplay,
     },

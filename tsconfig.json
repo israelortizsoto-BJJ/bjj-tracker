@@ -23,6 +23,8 @@
     "src/domain/competition/tests/competitionResultDomainParity.test.ts",
     "src/domain/competition/tests/parentResultsRecorded.test.ts",
     "src/domain/competition/tests/parentResultsRecordedGateWiring.test.ts",
+    "src/domain/competition/tests/parentSharedMatchMediaUploadCorridor.test.ts",
+    "src/services/tests/sharedMatchMediaUploadApi.test.ts",
     "src/features/coach/tests/coachDashboardPullToRefreshWiring.test.ts",
     "src/features/coach/tests/ux002CoachVoiceReuseWiring.test.ts",
     "src/features/coach/tests/coachCommentaryMediaCorridor.test.ts",

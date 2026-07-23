@@ -38,12 +38,14 @@ import {
   newCompetitionResultDraft,
   toggleCompetitionResultDraft,
 } from "@/src/domain/competition/competitionResultDraft";
+import { scheduleUploadParentSelectedSharedMatchMedia } from "@/src/domain/competition/uploadParentSharedMatchMedia";
 import {
   competitionVideoRefsFromMatches,
   getCompetitionDetailForEntry,
 } from "../../../../../../src/storage/competitionStore";
 import {
   getKidCompetitionEntryById,
+  getWorkerCompetitionIdForEntry,
   parentAthleteIdFromUnlinkedCompetitionKidId,
 } from "../../../../../../src/storage/kidCompetitionStore";
 import { getKidsById, todayYMD } from "../../../../../../src/storage/coachKidStore";
@@ -200,6 +202,8 @@ export default function KidCompetitionEditScreen() {
   const [notesDraft, setNotesDraft] = useState("");
   const [medalImageDraft, setMedalImageDraft] = useState<string | undefined>();
   const [matches, setMatches] = useState<LocalMatch[]>([]);
+  const [sharedCompetitionId, setSharedCompetitionId] = useState<string | null>(null);
+  const [sharedAthleteId, setSharedAthleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -247,6 +251,8 @@ export default function KidCompetitionEditScreen() {
       setFormatDraft(found.format);
       setNotesDraft(found.coachNotes ?? "");
       setMedalImageDraft(found.medalImageUri);
+      setSharedCompetitionId(getWorkerCompetitionIdForEntry(found) || null);
+      setSharedAthleteId(found.sharedAthleteId?.trim() || null);
       const { detail } = await getCompetitionDetailForEntry(found);
       setMatches(deriveInitialMatches(found, detail, reactId));
     } finally {
@@ -362,9 +368,31 @@ export default function KidCompetitionEditScreen() {
 
   const updateMatchMedia = useCallback(
     (matchIndex: number, patch: Partial<Pick<LocalMatch, "imageUri" | "videoUri" | "imageAssetId" | "videoAssetId">>) => {
-      setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, ...patch } : m)));
+      setMatches((prev) => {
+        const next = prev.map((m, i) => (i === matchIndex ? { ...m, ...patch } : m));
+        const match = next[matchIndex];
+        const videoUri = patch.videoUri;
+        if (typeof videoUri === "string" && videoUri.trim() && match) {
+          // Parent-selected local video enters Shared Match Media upload client.
+          // device-local URI remains for local preview; never treated as cross-device media.
+          scheduleUploadParentSelectedSharedMatchMedia(
+            {
+              localUri: videoUri,
+              sharedAthleteId: sharedAthleteId || unlinkedParentAthleteId || null,
+              sharedCompetitionId,
+              matchLineageKey: match.id,
+            },
+            {
+              onFailure: (message) => {
+                Alert.alert("Match video upload failed", message);
+              },
+            },
+          );
+        }
+        return next;
+      });
     },
-    [],
+    [sharedAthleteId, sharedCompetitionId, unlinkedParentAthleteId],
   );
 
   const addMatch = useCallback(() => {
@@ -609,6 +637,39 @@ export default function KidCompetitionEditScreen() {
         operationKind: "optimistic",
         surface: "parentKidCompetitionEdit",
       });
+
+      // After associations are durable, retry Parent-selected local videos through the upload client.
+      const savedEntry = savedCompetitionId
+        ? await getKidCompetitionEntryById(savedCompetitionId)
+        : null;
+      const postSaveSharedCompetitionId = savedEntry
+        ? getWorkerCompetitionIdForEntry(savedEntry) || sharedCompetitionId
+        : sharedCompetitionId;
+      const postSaveSharedAthleteId =
+        resolvedSharedAthleteId ||
+        savedEntry?.sharedAthleteId?.trim() ||
+        sharedAthleteId ||
+        null;
+      if (postSaveSharedAthleteId && postSaveSharedCompetitionId) {
+        for (const match of matches) {
+          const localUri = typeof match.videoUri === "string" ? match.videoUri.trim() : "";
+          if (!localUri || /^https?:\/\//i.test(localUri)) continue;
+          scheduleUploadParentSelectedSharedMatchMedia(
+            {
+              localUri,
+              sharedAthleteId: postSaveSharedAthleteId,
+              sharedCompetitionId: postSaveSharedCompetitionId,
+              matchLineageKey: match.id,
+            },
+            {
+              onFailure: (message) => {
+                Alert.alert("Match video upload failed", message);
+              },
+            },
+          );
+        }
+      }
+
       exitEditor({
         navigation,
         actorRole: "parent",

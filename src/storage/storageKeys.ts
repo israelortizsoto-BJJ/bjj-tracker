@@ -63,4 +63,10 @@ export const StorageKeys = {
   parentAthletes: "mm:v1:parentAthletes",
   /** Parent Summary: last selected athlete id from `parentAthletes`. */
   parentActiveAthleteId: "mm:v1:parentActiveAthleteId",
+
+  /**
+   * Parent-local Shared Match Media upload_complete records keyed by athlete +
+   * competition + match lineage. Never a delivery URI or verification/publication state.
+   */
+  sharedMatchMediaUploadsByLineage: "mm:v1:sharedMatchMediaUploadsByLineage",
 } as const;
