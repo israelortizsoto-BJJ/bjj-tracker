@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { createHash } from "node:crypto";
+import { afterEach, describe, it, mock } from "node:test";
 
 import {
   buildSharedMatchMediaPartPlan,
+  defaultSha256Hex,
   uploadParentSharedMatchMediaVideo,
   type SharedMatchMediaUploadHttpResponse,
 } from "../sharedMatchMediaUploadApi.ts";
@@ -10,8 +12,19 @@ import {
 const TOKEN = "a".repeat(48);
 const SECRET = "parent-secret";
 
+/** NIST / FIPS 180-4 known vector: SHA-256("abc"). */
+const SHA256_ABC_HEX = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+
+/** Authoritative SHA-256 of exact bytes [1, 2, 3, 4, 5]. */
+const SHA256_BYTES_1_TO_5_HEX =
+  "74f81fe167d99b4cb41d6d0ccda82278caee9f3e2f25d5e5a3936ff3dcec60d0";
+
 function hex64(seed: string): string {
   return seed.repeat(64).slice(0, 64);
+}
+
+function nodeSha256Hex(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
 }
 
 describe("Shared Match Media transport part plan", () => {
@@ -281,5 +294,176 @@ describe("Parent Shared Match Media upload client", () => {
         }),
       /device-local/i,
     );
+  });
+
+  it("hashes the exact uploaded part bytes into X-MatMind-Part-SHA256", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const partHeaders: string[] = [];
+    await uploadParentSharedMatchMediaVideo({
+      linkToken: TOKEN,
+      parentWriterSecret: SECRET,
+      localUri: "file:///tmp/match.mp4",
+      associations: {
+        sharedAthleteId: "shared_ath_1",
+        sharedCompetitionId: "shared_comp_1",
+        matchLineageKey: "match_1",
+      },
+      apiBaseUrlOverride: "https://worker.test",
+      dependencies: {
+        transportPartBytes: 5,
+        openLocalFile: async () => ({
+          byteCount: bytes.byteLength,
+          mimeType: "video/mp4",
+          readPart: async (offset, length) => bytes.slice(offset, offset + length),
+        }),
+        // Exercise default hashing (not an injected stub) for the uploaded bytes.
+        http: async ({ method, url, headers, body }) => {
+          if (method === "POST" && url.endsWith("/match-media/uploads")) {
+            return {
+              status: 201,
+              json: {
+                asset: { matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555" },
+                uploadSession: {
+                  uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  status: "upload_pending",
+                },
+              },
+            };
+          }
+          if (method === "PUT" && url.includes("/parts/")) {
+            assert.ok(body instanceof Uint8Array);
+            assert.deepEqual(Array.from(body as Uint8Array), [1, 2, 3, 4, 5]);
+            partHeaders.push(String(headers["X-MatMind-Part-SHA256"]));
+            return {
+              status: 201,
+              json: { part: { partNumber: 1, byteCount: 5 } },
+            };
+          }
+          return {
+            status: 201,
+            json: {
+              asset: { matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555" },
+              uploadSession: {
+                uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                status: "upload_complete",
+                completedByteCount: 5,
+                completedAt: "2026-07-22T12:00:00.000Z",
+                objectVersion: "object-version-1",
+              },
+            },
+          };
+        },
+      },
+    });
+    assert.deepEqual(partHeaders, [SHA256_BYTES_1_TO_5_HEX]);
+    assert.equal(partHeaders[0], nodeSha256Hex(bytes));
+  });
+
+  it("does not claim upload_complete when part hashing fails", async () => {
+    let completeCalls = 0;
+    await assert.rejects(
+      () =>
+        uploadParentSharedMatchMediaVideo({
+          linkToken: TOKEN,
+          parentWriterSecret: SECRET,
+          localUri: "file:///tmp/match.mp4",
+          associations: {
+            sharedAthleteId: "shared_ath_1",
+            sharedCompetitionId: "shared_comp_1",
+            matchLineageKey: "match_1",
+          },
+          apiBaseUrlOverride: "https://worker.test",
+          dependencies: {
+            openLocalFile: async () => ({
+              byteCount: 4,
+              mimeType: "video/mp4",
+              readPart: async () => new Uint8Array([1, 2, 3, 4]),
+            }),
+            sha256Hex: async () => {
+              throw new Error("hash failed");
+            },
+            http: async ({ method, url }) => {
+              if (method === "POST" && url.endsWith("/match-media/uploads")) {
+                return {
+                  status: 201,
+                  json: {
+                    asset: { matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555" },
+                    uploadSession: {
+                      uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                      status: "upload_pending",
+                    },
+                  },
+                };
+              }
+              if (method === "POST" && url.includes("/complete")) {
+                completeCalls += 1;
+              }
+              throw new Error(`unexpected ${method} ${url}`);
+            },
+          },
+        }),
+      /hash failed/,
+    );
+    assert.equal(completeCalls, 0);
+  });
+});
+
+describe("defaultSha256Hex Hermes-safe hashing", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("produces lowercase hex for the NIST SHA-256('abc') vector", async () => {
+    const bytes = new TextEncoder().encode("abc");
+    const hex = await defaultSha256Hex(bytes);
+    assert.equal(hex, SHA256_ABC_HEX);
+    assert.equal(hex, hex.toLowerCase());
+    assert.match(hex, /^[0-9a-f]{64}$/);
+  });
+
+  it("produces the authoritative digest for exact upload bytes [1,2,3,4,5]", async () => {
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    const hex = await defaultSha256Hex(bytes);
+    assert.equal(hex, SHA256_BYTES_1_TO_5_HEX);
+    assert.equal(hex, nodeSha256Hex(bytes));
+  });
+
+  it("succeeds when globalThis.crypto is absent via expo-crypto digest of exact bytes", async () => {
+    const originalCrypto = globalThis.crypto;
+    const bytes = new Uint8Array([1, 2, 3, 4, 5]);
+    let digested: Uint8Array | null = null;
+
+    mock.module("expo-crypto", {
+      namedExports: {
+        CryptoDigestAlgorithm: { SHA256: "SHA-256" },
+        digest: async (_algorithm: string, data: BufferSource) => {
+          const view =
+            data instanceof ArrayBuffer
+              ? new Uint8Array(data)
+              : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+          digested = new Uint8Array(view);
+          const hash = createHash("sha256").update(view).digest();
+          return hash.buffer.slice(hash.byteOffset, hash.byteOffset + hash.byteLength);
+        },
+      },
+    });
+
+    try {
+      // Simulate Hermes/RN where Web Crypto is missing — never touch bare `crypto`.
+      Object.defineProperty(globalThis, "crypto", {
+        configurable: true,
+        writable: true,
+        value: undefined,
+      });
+      const hex = await defaultSha256Hex(bytes);
+      assert.deepEqual(digested ? Array.from(digested) : null, [1, 2, 3, 4, 5]);
+      assert.equal(hex, SHA256_BYTES_1_TO_5_HEX);
+    } finally {
+      Object.defineProperty(globalThis, "crypto", {
+        configurable: true,
+        writable: true,
+        value: originalCrypto,
+      });
+    }
   });
 });

@@ -79,10 +79,21 @@ function bytesToHex(bytes: ArrayBuffer): string {
   return Array.from(new Uint8Array(bytes), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * SHA-256 of the exact uploaded part bytes as lowercase hex.
+ * Hermes-safe: never evaluates a bare `crypto` identifier (throws on RN).
+ * Uses guarded Web Crypto when present; otherwise expo-crypto.digest on TypedArray bytes.
+ */
 export async function defaultSha256Hex(bytes: Uint8Array): Promise<string> {
   const copy = new Uint8Array(bytes);
-  const digest = await crypto.subtle.digest("SHA-256", copy);
-  return bytesToHex(digest);
+  const subtle = globalThis.crypto?.subtle;
+  if (subtle && typeof subtle.digest === "function") {
+    const digest = await subtle.digest("SHA-256", copy);
+    return bytesToHex(digest);
+  }
+  const { digest, CryptoDigestAlgorithm } = await import("expo-crypto");
+  const digestBuffer = await digest(CryptoDigestAlgorithm.SHA256, copy);
+  return bytesToHex(digestBuffer);
 }
 
 export async function defaultOpenLocalFile(localUri: string): Promise<SharedMatchMediaLocalFile> {
