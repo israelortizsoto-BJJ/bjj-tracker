@@ -6,6 +6,8 @@
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "node --experimental-strip-types --test src/sharedMatchMediaUpload.test.ts src/productionVerification/*.test.ts",
+    "test:canary": "node --experimental-strip-types --test src/productionVerification/canaryControl.test.ts",
+    "test:digest-smoke": "node --experimental-strip-types --test src/productionVerification/digestStream.smoke.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.productionVerification.json"
   },
   "devDependencies": {

@@ -20,6 +20,9 @@ import {
   handleUploadSharedMatchMediaPart,
   type SharedMatchMediaUploadDependencies,
 } from "./sharedMatchMediaUpload";
+import { createConditionalObjectVerificationRecordStore } from "../../shared-match-media-production-verification/src/index";
+import { handleOperatorInspectionHttpRequest } from "./productionVerification/operatorInspection";
+import { createR2ConditionalObjectStore } from "./productionVerification/r2ConditionalObjectStore";
 import {
   isVerificationFeatureEnabled,
   runProductionVerification,
@@ -33,6 +36,15 @@ export interface Env {
   SHARED_MATCH_MEDIA_UPLOAD_ENABLED?: string;
   /** Independent server kill switch. Production Verification is inert unless exactly "1". */
   SHARED_MATCH_MEDIA_VERIFICATION_ENABLED?: string;
+  /** Server-controlled canary asset id. Empty default bypasses verification. */
+  SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID?: string;
+  /** Server-controlled canary object version. Empty default bypasses verification. */
+  SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION?: string;
+  /**
+   * Cloudflare secret binding for read-only operator inspection.
+   * Must never be committed or placed in wrangler [vars].
+   */
+  SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET?: string;
 }
 
 type WeeklyParentFeedback = {
@@ -1907,14 +1919,20 @@ function createSharedMatchMediaUploadDependencies(
           runProductionVerificationAfterUploadComplete: async (input) => {
             const result = await runProductionVerification(input, {
               enabled: true,
+              canaryAssetId: env.SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID ?? "",
+              canaryObjectVersion:
+                env.SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION ?? "",
               mediaBucket: env.MEDIA,
               now: () => new Date(),
               randomId: () => crypto.randomUUID(),
             });
-            if (result.outcome === "disabled") {
+            if (result.outcome === "disabled" || result.outcome === "bypassed") {
               return {
-                outcome: "disabled",
+                outcome: result.outcome,
                 verificationAttempted: false,
+                ...(result.outcome === "bypassed"
+                  ? { code: result.bypassReason }
+                  : {}),
               };
             }
             if (result.outcome === "trigger_error") {
@@ -3738,6 +3756,24 @@ export default {
               assetId,
               dependencies,
             );
+      }
+
+      // Operator inspection: authenticated POST only. Five-field identity is
+      // accepted exclusively in the JSON body — never in the URL or query string.
+      if (path === "/internal/v1/shared-match-media/production-verification") {
+        const store = createConditionalObjectVerificationRecordStore(
+          createR2ConditionalObjectStore(env.MEDIA),
+        );
+        const result = await handleOperatorInspectionHttpRequest({
+          method: request.method,
+          authorizationHeader: request.headers.get("Authorization"),
+          operatorSecret: env.SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET,
+          contentLengthHeader: request.headers.get("Content-Length"),
+          readBodyText: () => request.text(),
+          store,
+          now: () => new Date(),
+        });
+        return json(result.body, result.status);
       }
 
       const mediaUpload = path.match(/^\/v1\/sessions\/([^/]+)\/media$/);

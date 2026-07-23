@@ -1,8 +1,9 @@
 /**
  * Flag-gated Production Verification orchestration for coach-sync-worker.
  *
- * admit → complete-object inspect → append evidence → terminal CAS.
- * Enabled only when SHARED_MATCH_MEDIA_VERIFICATION_ENABLED === "1".
+ * canary gate → admit → (executor only) inspect → append evidence → terminal CAS.
+ * Enabled only when SHARED_MATCH_MEDIA_VERIFICATION_ENABLED === "1" and the
+ * server-controlled canary identity exactly matches the completed asset version.
  */
 
 import {
@@ -24,6 +25,8 @@ import {
   assertProductionMediaStorageBucketBinding,
   rejectProofMediaStorageBucketBinding,
 } from "../../../shared-match-media-production-verification/src/storageBucketBinding.ts";
+import { evaluateProductionVerificationCanaryGate } from "./canaryGate.ts";
+import { emitProductionVerificationMarker } from "./observability.ts";
 import { createR2ConditionalObjectStore } from "./r2ConditionalObjectStore.ts";
 import {
   inspectCompleteR2Object,
@@ -64,6 +67,11 @@ export type ProductionVerificationOperationalOutcome =
       readonly verificationAttempted: false;
     }
   | {
+      readonly outcome: "bypassed";
+      readonly verificationAttempted: false;
+      readonly bypassReason: string;
+    }
+  | {
       readonly outcome: "verified" | "rejected" | "failed" | "idempotent_terminal" | "verifying";
       readonly verificationAttempted: true;
       readonly record: ProductionVerificationRecord;
@@ -78,6 +86,16 @@ export type ProductionVerificationOperationalOutcome =
 
 export type RunProductionVerificationDependencies = {
   readonly enabled: boolean;
+  /**
+   * Server-controlled canary asset id. Defaults to empty (bypass).
+   * Never accepted from the completion request.
+   */
+  readonly canaryAssetId?: string;
+  /**
+   * Server-controlled canary object version. Defaults to empty (bypass).
+   * Never accepted from the completion request.
+   */
+  readonly canaryObjectVersion?: string;
   readonly mediaBucket: InspectableR2Bucket & {
     get(key: string): Promise<{ text(): Promise<string>; etag: string } | null>;
     put(
@@ -122,16 +140,47 @@ function inspectionFailureToTerminal(
   };
 }
 
+function acquiresExecutionOwnership(
+  admissionOutcome: "created" | "idempotent" | "re_admitted",
+): boolean {
+  return admissionOutcome === "created" || admissionOutcome === "re_admitted";
+}
+
 /**
  * Execute Production Verification after authoritative upload_complete.
- * When disabled, performs no verification writes and no object reads.
+ * When disabled or canary-bypassed, performs no verification writes and no object reads.
  */
 export async function runProductionVerification(
   input: ProductionVerificationCompletionInput,
   dependencies: RunProductionVerificationDependencies,
 ): Promise<ProductionVerificationOperationalOutcome> {
-  if (!dependencies.enabled) {
-    return { outcome: "disabled", verificationAttempted: false };
+  const canaryDecision = evaluateProductionVerificationCanaryGate({
+    enabled: dependencies.enabled,
+    canaryAssetId: dependencies.canaryAssetId ?? "",
+    canaryObjectVersion: dependencies.canaryObjectVersion ?? "",
+    matchMediaAssetId: input.matchMediaAssetId,
+    providerVersion: input.objectVersion,
+  });
+
+  emitProductionVerificationMarker(
+    "production_verification_canary_gate",
+    {
+      outcome: canaryDecision.outcome,
+      reason: canaryDecision.allow ? "allow" : canaryDecision.reason,
+      enabled: dependencies.enabled,
+    },
+    dependencies.now,
+  );
+
+  if (!canaryDecision.allow) {
+    if (canaryDecision.reason === "flag_disabled") {
+      return { outcome: "disabled", verificationAttempted: false };
+    }
+    return {
+      outcome: "bypassed",
+      verificationAttempted: false,
+      bypassReason: canaryDecision.reason,
+    };
   }
 
   const storageBucketBinding =
@@ -184,7 +233,25 @@ export async function runProductionVerification(
     };
   }
 
+  emitProductionVerificationMarker(
+    "production_verification_admission",
+    {
+      outcome: admission.outcome,
+      state: admission.record.state,
+    },
+    dependencies.now,
+  );
+
   if (isTerminalVerificationState(admission.record.state)) {
+    emitProductionVerificationMarker(
+      "production_verification_execution_acquisition",
+      {
+        acquired: false,
+        admissionOutcome: admission.outcome,
+        reason: "terminal_replay",
+      },
+      dependencies.now,
+    );
     return {
       outcome: "idempotent_terminal",
       verificationAttempted: true,
@@ -201,6 +268,41 @@ export async function runProductionVerification(
       message: `Unexpected verification state ${admission.record.state}`,
     };
   }
+
+  if (!acquiresExecutionOwnership(admission.outcome)) {
+    emitProductionVerificationMarker(
+      "production_verification_execution_acquisition",
+      {
+        acquired: false,
+        admissionOutcome: admission.outcome,
+        reason: "idempotent_active",
+      },
+      dependencies.now,
+    );
+    return {
+      outcome: "verifying",
+      verificationAttempted: true,
+      record: admission.record,
+      admissionOutcome: admission.outcome,
+    };
+  }
+
+  emitProductionVerificationMarker(
+    "production_verification_execution_acquisition",
+    {
+      acquired: true,
+      admissionOutcome: admission.outcome,
+    },
+    dependencies.now,
+  );
+
+  emitProductionVerificationMarker(
+    "production_verification_inspection_start",
+    {
+      admissionOutcome: admission.outcome,
+    },
+    dependencies.now,
+  );
 
   const inspection = await inspectCompleteR2Object(
     dependencies.mediaBucket,
@@ -238,6 +340,14 @@ export async function runProductionVerification(
         },
         deps,
       );
+      emitProductionVerificationMarker(
+        "production_verification_terminal",
+        {
+          outcome: "failed",
+          reason: failed.terminalReasonCode,
+        },
+        dependencies.now,
+      );
       return {
         outcome: "failed",
         verificationAttempted: true,
@@ -251,6 +361,14 @@ export async function runProductionVerification(
           deps.store,
         );
         if (current && isTerminalVerificationState(current.state)) {
+          emitProductionVerificationMarker(
+            "production_verification_terminal",
+            {
+              outcome: "idempotent_terminal",
+              reason: current.terminalReasonCode,
+            },
+            dependencies.now,
+          );
           return {
             outcome: "idempotent_terminal",
             verificationAttempted: true,
@@ -320,6 +438,14 @@ export async function runProductionVerification(
         },
         deps,
       );
+      emitProductionVerificationMarker(
+        "production_verification_terminal",
+        {
+          outcome: "rejected",
+          reason: rejected.terminalReasonCode,
+        },
+        dependencies.now,
+      );
       return {
         outcome: "rejected",
         verificationAttempted: true,
@@ -344,6 +470,14 @@ export async function runProductionVerification(
       },
       deps,
     );
+    emitProductionVerificationMarker(
+      "production_verification_terminal",
+      {
+        outcome: "verified",
+        reason: null,
+      },
+      dependencies.now,
+    );
     return {
       outcome: "verified",
       verificationAttempted: true,
@@ -357,6 +491,14 @@ export async function runProductionVerification(
         deps.store,
       );
       if (current && isTerminalVerificationState(current.state)) {
+        emitProductionVerificationMarker(
+          "production_verification_terminal",
+          {
+            outcome: "idempotent_terminal",
+            reason: current.terminalReasonCode,
+          },
+          dependencies.now,
+        );
         return {
           outcome: "idempotent_terminal",
           verificationAttempted: true,

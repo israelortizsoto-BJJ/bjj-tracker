@@ -9,13 +9,17 @@ import {
   recordStoreKey,
 } from "../../../shared-match-media-production-verification/src/index.ts";
 import { createSyntheticConditionalObjectStore } from "../../../shared-match-media-production-verification/src/syntheticConditionalObjectStore.ts";
+import { installDigestStreamPolyfillForTests } from "./digestStreamPolyfill.ts";
 import { createR2ConditionalObjectStore } from "./r2ConditionalObjectStore.ts";
 import { inspectCompleteR2Object } from "./r2ObjectInspector.ts";
 import {
   isVerificationFeatureEnabled,
   runProductionVerification,
+  type ProductionVerificationCompletionInput,
   type RunProductionVerificationDependencies,
 } from "./runProductionVerification.ts";
+
+installDigestStreamPolyfillForTests();
 
 function ftypBytes(brand = "isom", size = 64): Uint8Array {
   const bytes = new Uint8Array(size);
@@ -40,19 +44,29 @@ function createFakeMediaBucket(options?: {
   headError?: Error;
   getError?: Error;
   streamError?: Error;
+  chunkSize?: number;
 }) {
   const objects = new Map<string, FakeObject>();
   let etagCounter = 0;
   let getCount = 0;
   let headCount = 0;
   let putCount = 0;
+  let mediaObjectGetCount = 0;
+  let mediaObjectHeadCount = 0;
 
   function isMediaObjectKey(key: string): boolean {
     return key.startsWith("match-media/");
   }
 
   return {
-    stats: () => ({ getCount, headCount, putCount, keys: [...objects.keys()] }),
+    stats: () => ({
+      getCount,
+      headCount,
+      putCount,
+      mediaObjectGetCount,
+      mediaObjectHeadCount,
+      keys: [...objects.keys()],
+    }),
     putBytes(key: string, body: Uint8Array, options?: { version?: string; contentType?: string }) {
       etagCounter += 1;
       objects.set(key, {
@@ -76,9 +90,11 @@ function createFakeMediaBucket(options?: {
     mediaBucket: {
       get: async (key: string) => {
         getCount += 1;
+        if (isMediaObjectKey(key)) mediaObjectGetCount += 1;
         if (options?.getError && isMediaObjectKey(key)) throw options.getError;
         const entry = objects.get(key);
         if (!entry) return null;
+        const chunkSize = options?.chunkSize;
         return {
           text: async () => new TextDecoder().decode(entry.body),
           etag: entry.etag,
@@ -88,7 +104,13 @@ function createFakeMediaBucket(options?: {
                 controller.error(options.streamError);
                 return;
               }
-              controller.enqueue(entry.body);
+              if (chunkSize && chunkSize > 0) {
+                for (let offset = 0; offset < entry.body.byteLength; offset += chunkSize) {
+                  controller.enqueue(entry.body.subarray(offset, offset + chunkSize));
+                }
+              } else {
+                controller.enqueue(entry.body);
+              }
               controller.close();
             },
           }),
@@ -127,6 +149,7 @@ function createFakeMediaBucket(options?: {
       },
       head: async (key: string) => {
         headCount += 1;
+        if (isMediaObjectKey(key)) mediaObjectHeadCount += 1;
         if (options?.headError && isMediaObjectKey(key)) throw options.headError;
         const entry = objects.get(key);
         if (!entry) return null;
@@ -155,6 +178,17 @@ function baseInput(objectKey: string, bytes: Uint8Array, version: string) {
     competitionId: "competition_1",
     matchLineageKey: "lineage_1",
     matchId: "match_1",
+  };
+}
+
+function withMatchingCanary(
+  input: ProductionVerificationCompletionInput,
+  deps: Omit<RunProductionVerificationDependencies, "canaryAssetId" | "canaryObjectVersion">,
+): RunProductionVerificationDependencies {
+  return {
+    ...deps,
+    canaryAssetId: input.matchMediaAssetId,
+    canaryObjectVersion: input.objectVersion,
   };
 }
 
@@ -191,13 +225,17 @@ describe("production verification worker adapters", () => {
     const bytes = ftypBytes();
     const key = "match-media/assets/mma_x/original";
     fake.putBytes(key, bytes, { version: "v1" });
-    const result = await runProductionVerification(baseInput(key, bytes, "v1"), {
-      enabled: true,
-      mediaBucket: fake.mediaBucket,
-      now: () => new Date(),
-      randomId: () => "proof-reject",
-      storageBucketBinding: PROOF_MEDIA_STORAGE_BUCKET_BINDING,
-    });
+    const input = baseInput(key, bytes, "v1");
+    const result = await runProductionVerification(
+      input,
+      withMatchingCanary(input, {
+        enabled: true,
+        mediaBucket: fake.mediaBucket,
+        now: () => new Date(),
+        randomId: () => "proof-reject",
+        storageBucketBinding: PROOF_MEDIA_STORAGE_BUCKET_BINDING,
+      }),
+    );
     assert.equal(result.outcome, "trigger_error");
     if (result.outcome === "trigger_error") {
       assert.equal(result.code, "INVALID_STORAGE_BUCKET_BINDING");
@@ -213,13 +251,14 @@ describe("production verification worker adapters", () => {
     const bytes = ftypBytes("mp41", 96);
     const key = "match-media/assets/mma_11111111-2222-4333-8444-555555555555/original";
     fake.putBytes(key, bytes, { version: "object-v1", contentType: "text/plain" });
-    const deps: RunProductionVerificationDependencies = {
+    const input = baseInput(key, bytes, "object-v1");
+    const deps = withMatchingCanary(input, {
       enabled: true,
       mediaBucket: fake.mediaBucket,
       now: () => new Date("2026-07-23T12:00:00.000Z"),
       randomId: () => "run-1",
-    };
-    const result = await runProductionVerification(baseInput(key, bytes, "object-v1"), deps);
+    });
+    const result = await runProductionVerification(input, deps);
     assert.equal(result.outcome, "verified");
     if (result.outcome === "verified") {
       assert.equal(result.record.state, "verified");
@@ -248,12 +287,15 @@ describe("production verification worker adapters", () => {
     fake.putBytes(key, bytes, { version: "v-no-sha" });
     const input = baseInput(key, bytes, "v-no-sha");
     const { expectedWholeObjectSha256: _omit, ...withoutSha } = input;
-    const result = await runProductionVerification(withoutSha, {
-      enabled: true,
-      mediaBucket: fake.mediaBucket,
-      now: () => new Date(),
-      randomId: () => "no-sha",
-    });
+    const result = await runProductionVerification(
+      withoutSha,
+      withMatchingCanary(withoutSha, {
+        enabled: true,
+        mediaBucket: fake.mediaBucket,
+        now: () => new Date(),
+        randomId: () => "no-sha",
+      }),
+    );
     assert.equal(result.outcome, "verified");
     if (result.outcome === "verified") {
       assert.equal(result.record.calculatedSha256, sha256Hex(bytes));
@@ -267,14 +309,18 @@ describe("production verification worker adapters", () => {
     const key = "match-media/assets/mma_mismatch/original";
     fake.putBytes(key, bytes, { version: "v-mismatch" });
 
+    const byteInput = {
+      ...baseInput(key, bytes, "v-mismatch"),
+      declaredByteCount: bytes.byteLength + 1,
+    };
     const byteReject = await runProductionVerification(
-      { ...baseInput(key, bytes, "v-mismatch"), declaredByteCount: bytes.byteLength + 1 },
-      {
+      byteInput,
+      withMatchingCanary(byteInput, {
         enabled: true,
         mediaBucket: fake.mediaBucket,
         now: () => new Date(),
         randomId: () => "byte-mismatch",
-      },
+      }),
     );
     assert.equal(byteReject.outcome, "rejected");
     if (byteReject.outcome === "rejected") {
@@ -283,17 +329,18 @@ describe("production verification worker adapters", () => {
 
     const fake2 = createFakeMediaBucket();
     fake2.putBytes(key, bytes, { version: "v-sha" });
+    const shaInput = {
+      ...baseInput(key, bytes, "v-sha"),
+      expectedWholeObjectSha256: "a".repeat(64),
+    };
     const shaReject = await runProductionVerification(
-      {
-        ...baseInput(key, bytes, "v-sha"),
-        expectedWholeObjectSha256: "a".repeat(64),
-      },
-      {
+      shaInput,
+      withMatchingCanary(shaInput, {
         enabled: true,
         mediaBucket: fake2.mediaBucket,
         now: () => new Date(),
         randomId: () => "sha-mismatch",
-      },
+      }),
     );
     assert.equal(shaReject.outcome, "rejected");
     if (shaReject.outcome === "rejected") {
@@ -306,14 +353,15 @@ describe("production verification worker adapters", () => {
     const bytes = ftypBytes("mp42", 72);
     const key = "match-media/assets/mma_idem/original";
     fake.putBytes(key, bytes, { version: "v-idem" });
-    const deps: RunProductionVerificationDependencies = {
+    const input = baseInput(key, bytes, "v-idem");
+    const deps = withMatchingCanary(input, {
       enabled: true,
       mediaBucket: fake.mediaBucket,
       now: () => new Date("2026-07-23T12:00:00.000Z"),
       randomId: () => "idem",
-    };
-    const first = await runProductionVerification(baseInput(key, bytes, "v-idem"), deps);
-    const second = await runProductionVerification(baseInput(key, bytes, "v-idem"), deps);
+    });
+    const first = await runProductionVerification(input, deps);
+    const second = await runProductionVerification(input, deps);
     assert.equal(first.outcome, "verified");
     assert.equal(second.outcome, "idempotent_terminal");
     if (first.outcome === "verified" && second.outcome === "idempotent_terminal") {
@@ -332,19 +380,30 @@ describe("production verification worker adapters", () => {
     const key = "match-media/assets/mma_race/original";
     fake.putBytes(key, bytes, { version: "v-race" });
     let id = 0;
-    const deps: RunProductionVerificationDependencies = {
+    const input = baseInput(key, bytes, "v-race");
+    const deps = withMatchingCanary(input, {
       enabled: true,
       mediaBucket: fake.mediaBucket,
       now: () => new Date("2026-07-23T12:00:00.000Z"),
       randomId: () => `race-${id++}`,
-    };
+    });
     const [a, b] = await Promise.all([
-      runProductionVerification(baseInput(key, bytes, "v-race"), deps),
-      runProductionVerification(baseInput(key, bytes, "v-race"), deps),
+      runProductionVerification(input, deps),
+      runProductionVerification(input, deps),
     ]);
     for (const result of [a, b]) {
       assert.notEqual(result.outcome, "trigger_error");
-      if (result.outcome === "disabled" || result.outcome === "trigger_error") continue;
+      if (
+        result.outcome === "disabled" ||
+        result.outcome === "bypassed" ||
+        result.outcome === "trigger_error"
+      ) {
+        continue;
+      }
+      if (result.outcome === "verifying") {
+        assert.equal(result.admissionOutcome, "idempotent");
+        continue;
+      }
       assert.equal(
         result.record.attemptEvidence.filter((attempt) => attempt.state === "verifying").length,
         0,
@@ -355,6 +414,15 @@ describe("production verification worker adapters", () => {
           result.record.state === "failed",
       );
     }
+    const executors = [a, b].filter(
+      (result) =>
+        result.verificationAttempted &&
+        "admissionOutcome" in result &&
+        (result.admissionOutcome === "created" || result.admissionOutcome === "re_admitted"),
+    );
+    assert.equal(executors.length, 1);
+    assert.equal(fake.stats().mediaObjectGetCount, 1);
+    assert.equal(fake.stats().mediaObjectHeadCount, 1);
   });
 
   it("R2 content-type alone cannot pass verification", async () => {
@@ -362,17 +430,18 @@ describe("production verification worker adapters", () => {
     const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     const key = "match-media/assets/mma_r2only/original";
     fake.putBytes(key, bytes, { version: "v-r2", contentType: "video/mp4" });
+    const input = {
+      ...baseInput(key, bytes, "v-r2"),
+      expectedWholeObjectSha256: sha256Hex(bytes),
+    };
     const result = await runProductionVerification(
-      {
-        ...baseInput(key, bytes, "v-r2"),
-        expectedWholeObjectSha256: sha256Hex(bytes),
-      },
-      {
+      input,
+      withMatchingCanary(input, {
         enabled: true,
         mediaBucket: fake.mediaBucket,
         now: () => new Date(),
         randomId: () => "r2-only",
-      },
+      }),
     );
     assert.equal(result.outcome, "rejected");
     if (result.outcome === "rejected") {
@@ -430,12 +499,15 @@ describe("declared MIME provenance into verification", () => {
       const input = testCase.omit
         ? (({ declaredMimeType: _omit, ...rest }) => rest)(base)
         : { ...base, declaredMimeType: testCase.declaredMimeType };
-      const result = await runProductionVerification(input, {
-        enabled: true,
-        mediaBucket: fake.mediaBucket,
-        now: () => new Date(),
-        randomId: () => `mime-${testCase.label}`,
-      });
+      const result = await runProductionVerification(
+        input,
+        withMatchingCanary(input, {
+          enabled: true,
+          mediaBucket: fake.mediaBucket,
+          now: () => new Date(),
+          randomId: () => `mime-${testCase.label}`,
+        }),
+      );
       assert.equal(result.outcome, "rejected");
       if (result.outcome === "rejected") {
         assert.equal(result.record.terminalReasonCode, "MIME_NOT_ALLOWED");
@@ -450,12 +522,15 @@ describe("declared MIME provenance into verification", () => {
     const key = "match-media/assets/mma_no_decl/original";
     fake.putBytes(key, bytes, { version: "v-nodecl", contentType: "video/mp4" });
     const { declaredMimeType: _omit, ...withoutMime } = baseInput(key, bytes, "v-nodecl");
-    const result = await runProductionVerification(withoutMime, {
-      enabled: true,
-      mediaBucket: fake.mediaBucket,
-      now: () => new Date(),
-      randomId: () => "no-decl",
-    });
+    const result = await runProductionVerification(
+      withoutMime,
+      withMatchingCanary(withoutMime, {
+        enabled: true,
+        mediaBucket: fake.mediaBucket,
+        now: () => new Date(),
+        randomId: () => "no-decl",
+      }),
+    );
     assert.equal(result.outcome, "rejected");
     if (result.outcome === "rejected") {
       assert.equal(result.record.terminalReasonCode, "MIME_NOT_ALLOWED");
@@ -480,14 +555,15 @@ describe("declared MIME provenance into verification", () => {
       const bytes = ftypBytes(mime === "video/mp4" ? "isom" : "qt  ", 80);
       const key = `match-media/assets/mma_${mime.replace("/", "_")}/original`;
       fake.putBytes(key, bytes, { version: `v-${mime}` });
+      const input = { ...baseInput(key, bytes, `v-${mime}`), declaredMimeType: mime };
       const result = await runProductionVerification(
-        { ...baseInput(key, bytes, `v-${mime}`), declaredMimeType: mime },
-        {
+        input,
+        withMatchingCanary(input, {
           enabled: true,
           mediaBucket: fake.mediaBucket,
           now: () => new Date(),
           randomId: () => mime,
-        },
+        }),
       );
       assert.equal(result.outcome, "verified");
       if (result.outcome === "verified") {
@@ -511,14 +587,15 @@ describe("worker composition operational failure gaps", () => {
       ReturnType<typeof createFakeMediaBucket>["snapshotObject"]
     >;
   }) {
+    const input = baseInput(args.mediaKey, args.bytes, args.objectVersion);
     const result = await runProductionVerification(
-      baseInput(args.mediaKey, args.bytes, args.objectVersion),
-      {
+      input,
+      withMatchingCanary(input, {
         enabled: true,
         mediaBucket: args.fake.mediaBucket,
         now: () => new Date("2026-07-23T12:00:00.000Z"),
         randomId: () => `fail-${args.expectedCode}-${args.mediaKey}`,
-      },
+      }),
     );
 
     assert.equal(result.outcome, "failed");

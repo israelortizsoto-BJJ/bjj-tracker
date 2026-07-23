@@ -7,6 +7,11 @@ compatibility_date = "2024-12-01"
 SHARED_MATCH_MEDIA_UPLOAD_ENABLED = "0"
 # Production Verification remains completely inert until explicitly enabled per environment.
 SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"
+# Canary identity defaults empty (fail-closed bypass). Never commit real canary identities.
+SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID = ""
+SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION = ""
+# SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET is a Cloudflare secret binding only —
+# never place it in [vars] or commit it.
 
 # Create a KV namespace: `npx wrangler kv namespace create SESSIONS`
 # then paste its id below.
