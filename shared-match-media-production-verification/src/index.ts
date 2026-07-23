@@ -1,8 +1,9 @@
 /**
- * Dormant domain barrel for the Production Verification skeleton.
+ * Production Verification domain barrel.
  *
- * Importing this module from application runtime composition roots is forbidden
- * until a separately authorized wiring mission exists. Tests may import freely.
+ * Package modules remain free of R2/env bindings. Runtime composition lives in
+ * coach-sync-worker behind its verification feature flag (default off).
+ * Proof isolation (PROOF_MEDIA) must never enter the production admission path.
  */
 
 export {
@@ -76,3 +77,41 @@ export {
   type AdmitVerificationResult,
   type VerificationAdmissionDependencies,
 } from "./admitVerification.ts";
+
+export {
+  PRODUCTION_MEDIA_STORAGE_BUCKET_BINDING,
+  PROOF_MEDIA_STORAGE_BUCKET_BINDING,
+  assertProductionMediaStorageBucketBinding,
+  isProductionMediaStorageBucketBinding,
+  rejectProofMediaStorageBucketBinding,
+  type ProductionMediaStorageBucketBinding,
+} from "./storageBucketBinding.ts";
+
+export {
+  FIRST_SLICE_DECLARED_MIME_ALLOWLIST,
+  ISO_BMFF_ACCEPTED_BRANDS,
+  MIME_PREFIX_LIMIT,
+  detectContainerSignature,
+  evaluateMimePolicy,
+  mimeRejectReasonCode,
+  normalizeDeclaredMimeType,
+  type DetectedContainer,
+  type FirstSliceDeclaredMime,
+  type MimePolicyResult,
+  type NormalizedDeclaredMime,
+} from "./mimePolicy.ts";
+
+export {
+  evaluateObjectIntegrity,
+  type ObjectIntegrityInput,
+  type ObjectIntegrityResult,
+} from "./objectIntegrityPolicy.ts";
+
+export {
+  deriveVerifiedMediaPublicationEligibility,
+  type ExpectedAdmissionIdentity,
+  type PublicationEligibilityAbsent,
+  type PublicationEligibilityIdentityMismatch,
+  type PublicationEligibilityPresent,
+  type VerifiedMediaPublicationEligibility,
+} from "./publicationEligibility.ts";

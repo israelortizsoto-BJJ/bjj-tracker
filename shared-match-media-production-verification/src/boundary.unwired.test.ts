@@ -84,63 +84,57 @@ describe("disabled and unwired boundary", () => {
     );
   });
 
-  it("upload completion and coach-sync-worker do not import the skeleton", () => {
-    const hits = rg(
-      "shared-match-media-production-verification|admitVerification|deriveAdmissionIdentity|matmind-shared-media-production-verification",
-      repoRoot,
-      [
-        "coach-sync-worker/**",
-        "src/domain/competition/**",
-        "src/services/**",
-        "src/config/**",
-        "src/storage/**",
-      ],
+  it("production package never imports PROOF_MEDIA and proof worker never owns production admission", () => {
+    const packageSrc = collectFiles(path.join(packageRoot, "src"))
+      .filter((file) => file.endsWith(".ts") && !file.endsWith(".test.ts"))
+      .map((file) => readFileSync(file, "utf8"))
+      .join("\n");
+    // Constant name may appear as isolation guard; runtime binding usage must not.
+    assert.equal(/env\.PROOF_MEDIA|binding\s*=\s*"PROOF_MEDIA"/.test(packageSrc), false);
+
+    const proofHits = rg(
+      "admitVerification|ProductionVerificationRecord|SHARED_MATCH_MEDIA_VERIFICATION_ENABLED",
+      path.join(repoRoot, "shared-match-media-verification-proof"),
+      ["**/*"],
     );
-    assert.equal(hits.trim(), "");
+    assert.equal(proofHits.trim(), "");
   });
 
-  it("no new verification feature flag appears in runtime configuration", () => {
-    const flagHits = rg(
-      "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED",
-      repoRoot,
-      [
-        "coach-sync-worker/**",
-        "src/**",
-        "app.config.*",
-        "wrangler.*",
-        "*.toml",
-        "*.jsonc",
-        "*.env*",
-      ],
+  it("coach-sync-worker may import the package only under the verification feature flag defaulting to disabled", () => {
+    const wrangler = readFileSync(
+      path.join(repoRoot, "coach-sync-worker/wrangler.toml"),
+      "utf8",
     );
-    // Flag name may appear in certification docs as name-only contract.
-    // It must not appear in runtime configuration surfaces.
-    assert.equal(flagHits.trim(), "");
+    assert.match(wrangler, /SHARED_MATCH_MEDIA_VERIFICATION_ENABLED\s*=\s*"0"/);
+    assert.equal(/PROOF_MEDIA/.test(wrangler), false);
+    assert.match(wrangler, /binding\s*=\s*"MEDIA"/);
+
+    const workerHits = rg(
+      "shared-match-media-production-verification|admitVerification|runProductionVerification",
+      path.join(repoRoot, "coach-sync-worker"),
+      ["**/*"],
+    );
+    assert.ok(workerHits.trim().length > 0);
 
     const skeletonSrcHits = rg(
       "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED",
       path.join(packageRoot, "src"),
       ["!*.test.ts"],
     );
-    // Skeleton implementation modules must not add or evaluate the flag.
+    // Domain package still must not evaluate the runtime flag.
     assert.equal(skeletonSrcHits.trim(), "");
   });
 
-  it("no route, worker, queue, scheduler, or event subscriber wires admission", () => {
-    const workerIndex = readFileSync(
-      path.join(repoRoot, "coach-sync-worker/src/index.ts"),
-      "utf8",
-    );
-    assert.equal(workerIndex.includes("production-verification"), false);
-    assert.equal(workerIndex.includes("admitVerification"), false);
-    assert.equal(workerIndex.includes("ProductionVerification"), false);
-
+  it("no queue, scheduler, or event subscriber outside the controlled upload_complete hand-off", () => {
     const scheduleHits = rg(
-      "admitVerification|ProductionVerificationRecord|createConditionalObjectVerificationRecordStore",
-      repoRoot,
-      ["coach-sync-worker/**", "src/**", "app/**", "scripts/**"],
+      "scheduled\\(|queues\\.|CronTrigger",
+      path.join(repoRoot, "coach-sync-worker"),
+      ["src/**", "wrangler.toml", "!**/node_modules/**"],
     );
-    assert.equal(scheduleHits.trim(), "");
+    const verificationSchedule = scheduleHits
+      .split("\n")
+      .filter((line) => /productionVerification|admitVerification/.test(line));
+    assert.equal(verificationSchedule.join("\n").trim(), "");
   });
 
   it("privacy scan hook refuses implicit approval", async () => {

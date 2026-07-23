@@ -4,6 +4,7 @@ import {
   deriveAdmissionIdentity,
   type ImmutableAdmissionFields,
 } from "./admissionIdentity.ts";
+import type { ScanHookStatus } from "./privacyScanHook.ts";
 import {
   defaultRetryClassificationForReason,
   isRetryClassification,
@@ -50,6 +51,8 @@ export type TerminalTransitionInput = {
   readonly observedByteCount?: number;
   readonly observedMimeType?: string;
   readonly calculatedSha256?: string;
+  readonly scanHookStatus?: ScanHookStatus;
+  readonly verifierRuntimeVersion?: string;
   readonly eventDetail?: Readonly<Record<string, string | number | boolean | null>>;
 };
 
@@ -554,6 +557,9 @@ export async function transitionVerificationTerminal(
       observedByteCount: input.observedByteCount ?? record.observedByteCount,
       observedMimeType: input.observedMimeType ?? record.observedMimeType,
       calculatedSha256: input.calculatedSha256 ?? record.calculatedSha256,
+      scanHookStatus: input.scanHookStatus ?? record.scanHookStatus,
+      verifierRuntimeVersion:
+        input.verifierRuntimeVersion ?? record.verifierRuntimeVersion,
       attemptEvidence,
       updatedAt: nowIso,
     };

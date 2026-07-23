@@ -76,6 +76,12 @@ type StoredUploadSessionState = Readonly<{
   sharedCompetitionId: string;
   matchLineageKey: string;
   declaredByteCount: number;
+  /**
+   * Authoritative MIME from upload intent when present.
+   * Legacy sessions may omit this; never fabricate a default.
+   */
+  declaredMimeType?: string;
+  declaredSha256?: string;
   storageObjectKey: string;
   providerUploadId: string;
   status: SharedMatchMediaUploadStatus;
@@ -150,6 +156,15 @@ export type UploadIntentBucket = {
   >;
 };
 
+export type ProductionVerificationHandOffResult = Readonly<{
+  outcome: string;
+  verificationAttempted: boolean;
+  code?: string;
+  message?: string;
+  verificationState?: string;
+  admissionOutcome?: string;
+}>;
+
 export type SharedMatchMediaUploadDependencies = {
   enabled: boolean;
   metadataStore: UploadIntentMetadataStore;
@@ -157,6 +172,24 @@ export type SharedMatchMediaUploadDependencies = {
   readParentSession(token: string): Promise<MatchMediaParentSession | null>;
   now(): Date;
   randomUuid(): string;
+  /**
+   * Optional post-upload_complete Production Verification hand-off.
+   * Composed only when SHARED_MATCH_MEDIA_VERIFICATION_ENABLED === "1".
+   */
+  runProductionVerificationAfterUploadComplete?: (
+    input: Readonly<{
+      matchMediaAssetId: string;
+      objectVersion: string;
+      storageObjectKey: string;
+      declaredByteCount: number;
+      declaredMimeType?: string;
+      expectedWholeObjectSha256?: string;
+      uploadSessionId: string;
+      athleteId: string;
+      competitionId: string;
+      matchLineageKey: string;
+    }>,
+  ) => Promise<ProductionVerificationHandOffResult>;
 };
 
 type CreateUploadIntentBody = {
@@ -379,6 +412,10 @@ function stateFromIntent(record: StoredUploadIntent): StoredUploadSessionState {
     sharedCompetitionId: record.asset.sharedCompetitionId,
     matchLineageKey: record.asset.matchLineageKey,
     declaredByteCount: record.asset.declaredByteCount,
+    declaredMimeType: record.asset.declaredMimeType,
+    ...(record.asset.declaredSha256
+      ? { declaredSha256: record.asset.declaredSha256 }
+      : {}),
     storageObjectKey: record.asset.storageObjectKey,
     providerUploadId: record.uploadSession.providerUploadId,
     status: "upload_pending",
@@ -389,7 +426,12 @@ function stateFromIntent(record: StoredUploadIntent): StoredUploadSessionState {
   };
 }
 
-function parseStoredSessionState(raw: string | null): StoredUploadSessionState | null {
+/**
+ * Parse durable upload-session JSON.
+ * Explicit stored MIME remains authoritative; missing/empty legacy MIME stays absent.
+ * Does not reconstruct MIME from R2, bytes, filename, or a compatibility default.
+ */
+export function parseStoredSessionState(raw: string | null): StoredUploadSessionState | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as StoredUploadSessionState;
@@ -407,7 +449,25 @@ function parseStoredSessionState(raw: string | null): StoredUploadSessionState |
     ) {
       return null;
     }
-    return parsed;
+    const declaredMimeType =
+      typeof parsed.declaredMimeType === "string" && parsed.declaredMimeType.trim()
+        ? parsed.declaredMimeType.trim().toLowerCase()
+        : undefined;
+    const declaredSha256 =
+      typeof parsed.declaredSha256 === "string" &&
+      /^[a-f0-9]{64}$/.test(parsed.declaredSha256.trim().toLowerCase())
+        ? parsed.declaredSha256.trim().toLowerCase()
+        : undefined;
+    const {
+      declaredMimeType: _dropMime,
+      declaredSha256: _dropSha,
+      ...base
+    } = parsed;
+    return {
+      ...base,
+      ...(declaredMimeType !== undefined ? { declaredMimeType } : {}),
+      ...(declaredSha256 !== undefined ? { declaredSha256 } : {}),
+    };
   } catch {
     return null;
   }
@@ -858,6 +918,7 @@ function reconciledParts(
 function completionResponse(
   state: StoredUploadSessionState,
   idempotentReplay: boolean,
+  productionVerification?: ProductionVerificationHandOffResult,
 ): Response {
   return response(
     {
@@ -874,9 +935,54 @@ function completionResponse(
           : {}),
       },
       idempotentReplay,
+      ...(productionVerification
+        ? { productionVerification }
+        : {}),
     },
     idempotentReplay ? 200 : 201,
   );
+}
+
+async function maybeRunProductionVerification(
+  state: StoredUploadSessionState,
+  dependencies: SharedMatchMediaUploadDependencies,
+): Promise<ProductionVerificationHandOffResult | undefined> {
+  if (!dependencies.runProductionVerificationAfterUploadComplete) {
+    return undefined;
+  }
+  if (!state.completedObject) {
+    return {
+      outcome: "trigger_error",
+      verificationAttempted: true,
+      code: "INVALID_COMPLETION_PROVENANCE",
+      message: "upload_complete missing completedObject",
+    };
+  }
+  try {
+    return await dependencies.runProductionVerificationAfterUploadComplete({
+      matchMediaAssetId: state.matchMediaAssetId,
+      objectVersion: state.completedObject.providerVersion,
+      storageObjectKey: state.storageObjectKey,
+      declaredByteCount: state.declaredByteCount,
+      ...(state.declaredMimeType !== undefined
+        ? { declaredMimeType: state.declaredMimeType }
+        : {}),
+      ...(state.declaredSha256
+        ? { expectedWholeObjectSha256: state.declaredSha256 }
+        : {}),
+      uploadSessionId: state.uploadSessionId,
+      athleteId: state.sharedAthleteId,
+      competitionId: state.sharedCompetitionId,
+      matchLineageKey: state.matchLineageKey,
+    });
+  } catch (error) {
+    return {
+      outcome: "trigger_error",
+      verificationAttempted: true,
+      code: "VERIFICATION_TRIGGER_THREW",
+      message: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export async function handleCompleteSharedMatchMediaUpload(
@@ -896,7 +1002,8 @@ export async function handleCompleteSharedMatchMediaUpload(
   if (found instanceof Response) return found;
   let state = found.state;
   if (state.status === "upload_complete" && state.completedObject) {
-    return completionResponse(state, true);
+    const productionVerification = await maybeRunProductionVerification(state, dependencies);
+    return completionResponse(state, true, productionVerification);
   }
   if (dependencies.now().getTime() >= Date.parse(state.expiresAt)) {
     return uploadError("Upload session expired", 410);
@@ -925,7 +1032,8 @@ export async function handleCompleteSharedMatchMediaUpload(
     state = parseStoredSessionState(current?.value ?? null) ?? state;
     if (!current) return uploadError("Upload completion unavailable", 503);
     if (state.status === "upload_complete" && state.completedObject) {
-      return completionResponse(state, true);
+      const productionVerification = await maybeRunProductionVerification(state, dependencies);
+      return completionResponse(state, true, productionVerification);
     }
     if (state.status === "upload_aborted") return uploadError("Upload aborted", 409);
     const completedAt = object.uploaded.toISOString();
@@ -947,7 +1055,11 @@ export async function handleCompleteSharedMatchMediaUpload(
         JSON.stringify(completed),
       )
     ) {
-      return completionResponse(completed, false);
+      const productionVerification = await maybeRunProductionVerification(
+        completed,
+        dependencies,
+      );
+      return completionResponse(completed, false, productionVerification);
     }
   }
   return uploadError("Upload completion unavailable", 503);

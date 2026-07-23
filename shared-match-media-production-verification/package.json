@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Disabled and unwired Production Verification durable-record and admission skeleton. Not a runtime, worker, or deployment unit.",
+  "description": "Production Verification domain: durable records, admission, MIME/integrity policy, and derived publication eligibility. Runtime composition is owned by coach-sync-worker behind a default-disabled feature flag.",
   "scripts": {
     "test": "node --experimental-strip-types --test src/*.test.ts",
     "typecheck": "tsc --noEmit"

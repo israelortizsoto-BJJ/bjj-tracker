@@ -5,6 +5,8 @@ compatibility_date = "2024-12-01"
 [vars]
 # Upload Foundation remains completely inert until explicitly enabled per environment.
 SHARED_MATCH_MEDIA_UPLOAD_ENABLED = "0"
+# Production Verification remains completely inert until explicitly enabled per environment.
+SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"
 
 # Create a KV namespace: `npx wrangler kv namespace create SESSIONS`
 # then paste its id below.

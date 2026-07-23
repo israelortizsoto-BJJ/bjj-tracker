@@ -7,6 +7,7 @@ import {
   handleCreateSharedMatchMediaUploadIntent,
   handleInspectSharedMatchMediaUpload,
   handleUploadSharedMatchMediaPart,
+  parseStoredSessionState,
   type MatchMediaParentSession,
   type SharedMatchMediaUploadDependencies,
 } from "./sharedMatchMediaUpload.ts";
@@ -638,5 +639,155 @@ describe("Shared Match Media upload completion", () => {
     assert.equal((await handleCompleteSharedMatchMediaUpload(
       authorizedRequest("POST"), TOKEN, failedIds.uploadSessionId, failedIds.assetId, failed.dependencies,
     )).status, 503);
+  });
+});
+
+describe("upload session MIME and SHA provenance", () => {
+  function sessionStateKey(records: Map<string, string>): string {
+    const key = [...records.keys()].find((candidate) => candidate.includes("upload-sessions"));
+    assert.ok(key);
+    return key!;
+  }
+
+  it("preserves authoritative declared MIME on newly created sessions", async () => {
+    for (const mime of ["video/mp4", "video/quicktime"] as const) {
+      const state = harness({
+        randomUuid: () =>
+          mime === "video/mp4"
+            ? "11111111-2222-4333-8444-555555555555"
+            : "22222222-2222-4333-8444-555555555555",
+      });
+      const created = await handleCreateSharedMatchMediaUploadIntent(
+        request({
+          idempotencyKey: `mime-${mime}`,
+          body: {
+            sharedAthleteId: "shared_ath_1",
+            sharedCompetitionId: "shared_comp_1",
+            matchLineageKey: "match_1",
+            declaredMimeType: mime,
+            declaredByteCount: 12_345_678,
+            declaredSha256: "b".repeat(64),
+          },
+        }),
+        TOKEN,
+        state.dependencies,
+      );
+      assert.equal(created.status, 201);
+      const stored = parseStoredSessionState(state.records.get(sessionStateKey(state.records))!);
+      assert.ok(stored);
+      assert.equal(stored!.declaredMimeType, mime);
+      assert.equal(stored!.declaredSha256, "b".repeat(64));
+    }
+  });
+
+  it("does not fabricate video/mp4 for missing or empty legacy MIME", () => {
+    const base = {
+      schemaVersion: 1,
+      uploadSessionId: "mmus_" + "a".repeat(32),
+      matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555",
+      sharedAthleteId: "shared_ath_1",
+      sharedCompetitionId: "shared_comp_1",
+      matchLineageKey: "match_1",
+      declaredByteCount: 64,
+      storageObjectKey: "match-media/assets/mma_x/original",
+      providerUploadId: "r2-upload-1",
+      status: "upload_complete",
+      createdAt: "2026-07-20T12:00:00.000Z",
+      expiresAt: "2026-07-26T12:00:00.000Z",
+      acknowledgedParts: {},
+      partReservations: {},
+      completedObject: {
+        providerVersion: "object-version-1",
+        providerEtag: "etag-1",
+        byteCount: 64,
+        completedAt: "2026-07-20T12:05:00.000Z",
+      },
+    };
+
+    const missing = parseStoredSessionState(JSON.stringify(base));
+    assert.ok(missing);
+    assert.equal(missing!.declaredMimeType, undefined);
+    assert.equal("declaredMimeType" in missing!, false);
+
+    const empty = parseStoredSessionState(
+      JSON.stringify({ ...base, declaredMimeType: "   " }),
+    );
+    assert.ok(empty);
+    assert.equal(empty!.declaredMimeType, undefined);
+    assert.equal("declaredMimeType" in empty!, false);
+  });
+
+  it("keeps absent declaredSha256 absent and preserves a valid declared SHA", () => {
+    const base = {
+      schemaVersion: 1,
+      uploadSessionId: "mmus_" + "b".repeat(32),
+      matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555",
+      sharedAthleteId: "shared_ath_1",
+      sharedCompetitionId: "shared_comp_1",
+      matchLineageKey: "match_1",
+      declaredByteCount: 64,
+      declaredMimeType: "video/mp4",
+      storageObjectKey: "match-media/assets/mma_x/original",
+      providerUploadId: "r2-upload-1",
+      status: "uploading",
+      createdAt: "2026-07-20T12:00:00.000Z",
+      expiresAt: "2026-07-26T12:00:00.000Z",
+      acknowledgedParts: {},
+      partReservations: {},
+    };
+
+    const withoutSha = parseStoredSessionState(JSON.stringify(base));
+    assert.ok(withoutSha);
+    assert.equal(withoutSha!.declaredSha256, undefined);
+    assert.equal("declaredSha256" in withoutSha!, false);
+
+    const withSha = parseStoredSessionState(
+      JSON.stringify({ ...base, declaredSha256: "C".repeat(64) }),
+    );
+    assert.ok(withSha);
+    assert.equal(withSha!.declaredSha256, "c".repeat(64));
+  });
+
+  it("hands missing legacy MIME to verification without fabricating a default", async () => {
+    const state = harness();
+    const ids = await createUpload(state);
+    const sessionKey = sessionStateKey(state.records);
+    const stored = JSON.parse(state.records.get(sessionKey)!) as Record<string, unknown>;
+    delete stored.declaredMimeType;
+    delete stored.declaredSha256;
+    stored.status = "upload_complete";
+    stored.completedObject = {
+      providerVersion: "object-version-1",
+      providerEtag: "etag-1",
+      byteCount: 12_345_678,
+      completedAt: "2026-07-20T12:05:00.000Z",
+    };
+    state.records.set(sessionKey, JSON.stringify(stored));
+
+    let captured: { declaredMimeType?: string; expectedWholeObjectSha256?: string } | undefined;
+    state.dependencies.runProductionVerificationAfterUploadComplete = async (input) => {
+      captured = input;
+      return {
+        outcome: "rejected",
+        verificationAttempted: true,
+        code: "MIME_NOT_ALLOWED",
+        verificationState: "rejected",
+      };
+    };
+
+    const result = await handleCompleteSharedMatchMediaUpload(
+      authorizedRequest("POST"),
+      TOKEN,
+      ids.uploadSessionId,
+      ids.assetId,
+      state.dependencies,
+    );
+    assert.equal(result.status, 200);
+    assert.ok(captured);
+    assert.equal("declaredMimeType" in captured!, false);
+    assert.equal("expectedWholeObjectSha256" in captured!, false);
+    const after = parseStoredSessionState(state.records.get(sessionKey)!);
+    assert.equal(after?.status, "upload_complete");
+    assert.equal(after?.declaredMimeType, undefined);
   });
 });
