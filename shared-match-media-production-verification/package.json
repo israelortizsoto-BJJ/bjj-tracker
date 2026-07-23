@@ -1,0 +1,14 @@
+{
+  "name": "matmind-shared-media-production-verification",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Disabled and unwired Production Verification durable-record and admission skeleton. Not a runtime, worker, or deployment unit.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
