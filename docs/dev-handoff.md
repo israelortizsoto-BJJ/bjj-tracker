@@ -91,6 +91,138 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-23
+
+## Session Summary
+
+Engineering OS closeout for the completed, committed, flag-disabled Production Verification vertical-slice checkpoint.
+
+Integrated engineering floor:
+
+- Branch: `coach-commentary-media-metadata`
+- Integrated HEAD: `1443c48329bad9c92eb5978578e7c907b9eb0ed2` (`1443c48`)
+- Subject: `Integrate production media verification vertical slice`
+- Foundation checkpoint: `dda707a` — Establish production verification domain foundation
+- Preceding documentation checkpoint: `34359ac` — Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
+- Committed slice: 24 files, +3091 / −146
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- Feature composition occurs only when the exact flag value is `"1"`
+- No production resource created/altered/touched; no deploy; no push; no R2/KV binding created
+- Committed Wrangler change contains only the disabled feature variable
+
+## Implemented Production-Shaped Sequence
+
+authoritative `upload_complete`
+→ exact feature gate
+→ verification admission
+→ MEDIA object inspection
+→ complete-object streaming
+→ observed byte count
+→ calculated SHA-256
+→ bounded ISO-BMFF MIME inspection
+→ authoritative evidence append
+→ terminal verification CAS
+→ derived fail-closed Coach-publication eligibility
+
+## Certified Properties
+
+- Five-field verification admission identity remains preserved.
+- Admission is idempotent.
+- Conditional persistence and CAS convergence remain preserved.
+- Authoritative-prior-record validation remains preserved.
+- Attempts and evidence remain append-only.
+- Only one active attempt is permitted.
+- Terminal records remain immutable.
+- Stuck work remains durably `verifying`.
+- Stuck classification is observational: `STUCK_ATTEMPT_REQUIRES_RECONCILIATION` / `operator_required`.
+- `ProductionVerificationRecord` remains the sole durable verification authority.
+- Coach-publication eligibility is derived and fail-closed.
+- No second durable eligibility authority was created.
+- Production inspection is bound to environment-local `MEDIA`.
+- `PROOF_MEDIA` remains isolated and cannot enter the production path.
+- R2 content type is evidence-only.
+- ETags and multipart hashes are not treated as whole-object SHA-256.
+- The complete object is streamed once to independently count bytes, calculate SHA-256, and capture the bounded MIME prefix.
+- Expected SHA is compared only when provided.
+- Missing expected SHA alone does not reject the first controlled slice.
+- Missing legacy MIME remains missing and terminates as `state: rejected` / `reason: MIME_NOT_ALLOWED`.
+- No compatibility fallback fabricates `video/mp4`.
+
+## Terminal Mappings
+
+- valid object and all gates pass → `verified`
+- missing, empty, or invalid declared MIME → `rejected` / `MIME_NOT_ALLOWED`
+- unsupported declared MIME → `rejected` / `UNSUPPORTED_MEDIA_FORMAT`
+- inconclusive supported-format detection → `rejected` / `UNSUPPORTED_MEDIA_FORMAT`
+- recognized conflicting container family → `rejected` / `MIME_SIGNATURE_MISMATCH`
+- byte-count mismatch → `rejected` / `BYTE_COUNT_MISMATCH`
+- expected SHA mismatch → `rejected` / `SHA256_MISMATCH`
+- object missing after upload completion → `failed` / `OBJECT_NOT_FOUND_AFTER_COMPLETION`
+- authoritative object-version mismatch → `failed` / `OBJECT_VERSION_MISMATCH`
+- transient head/get/stream failure → `failed` / `STORAGE_READ_TRANSIENT`
+- stuck attempt → remains `verifying`; operator-required classification only
+
+## Verification Evidence
+
+- Production Verification package: 91/91 passing
+- Package typecheck: passing
+- Affected worker tests: 42/42 passing before checkpoint
+- Scoped worker Production Verification typecheck: passing
+- Scoped includes: `productionVerification/**`, `sharedMatchMediaUpload.ts`
+- Scoped excludes: `src/index.ts` (do not describe as full-worker typecheck)
+- `src/index.ts` import and type consistency inspected separately
+- Controlled integration harness: passing
+- `git diff --cached --check`: clean before commit
+
+## Current Boundary
+
+### IMPLEMENTED AND CHECKPOINTED
+
+- verification domain
+- worker adapters
+- real-object inspection
+- terminal verification lifecycle
+- derived fail-closed publication eligibility
+- controlled integration harness
+
+### DISABLED
+
+- production composition and execution
+
+### NOT YET IMPLEMENTED OR AUTHORIZED
+
+- controlled production enablement
+- production resource/binding changes
+- durable Coach attachment publication
+- Coach media resolution
+- signed playback URLs
+- Film Room UI
+- Coach recording
+- Coach breakdown publication
+- Parent return hydration
+- final playback
+- queues or schedulers
+- leases or heartbeats
+- operator reconciliation
+- full topology/publication-convergence correction
+
+## Canonical Living Records Updated By This Closeout
+
+- `docs/engineering-checkpoint.md` (2026-07-23)
+- `docs/engineering-daily.md` (2026-07-23)
+- `docs/master-prompt-daily-restart.md` (integrated floor + next candidate mission)
+- `docs/dev-handoff.md` (2026-07-23)
+
+Architecture certification artifacts were not rewritten by this closeout.
+
+## Next Mission
+
+Candidate only. Not authorized and not begun:
+
+controlled Production Verification enablement planning/authorization gate
+
+Do not enable the flag, create production resources or bindings, deploy, push, or begin durable Coach attachment publication, Coach media resolution, signed playback URLs, Film Room UI, Coach recording, Coach breakdown publication, Parent return hydration, final playback, queues/schedulers, leases/heartbeats, operator reconciliation, or full topology/publication-convergence correction without separate authorization.
+
 # DEV HANDOFF — 2026-07-22
 
 ## Session Summary

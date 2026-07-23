@@ -1,14 +1,14 @@
 # Master Prompt — Daily Coding Restart
 
 ## Edit these each morning
-- Current day: 2026-07-22
+- Current day: 2026-07-23
 - Repo: bjj-tracker
 - Active branch: coach-commentary-media-metadata
 - Lane I am working in: Architecture
-- Main intended coding outcome today: Hold the sealed Production Verification design-contract floor at `164f86d`; do not begin implementation unless separately authorized.
-- Constraints today: Production Verification remains unimplemented/undeployed/disabled/runtime-uncertified/Product-uncertified; Required Proof #5 open; no verification flag in runtime config; Publication/Projection/Resolution/Coach visibility/playback/Film Room/transcript/downstream closed; Timeline and debug-logs untouched.
-- Current sealed engineering floor: Upload Product Certified through `upload_complete` only; isolated proof certified through 10 GiB mechanics only (not Production Verification); Production Verification Service Contract and State-Machine Design v1 design-certified at `164f86da797e9a4e5932b1c07d0389bc751ceb4b`.
-- Smallest next candidate mission (not authorized, not begun): Production Verification Service — Durable Record and Admission Skeleton v1 — disabled/unwired durable-record/admission/CAS/idempotency/one-active-attempt/append-only evidence/stuck-attempt/negative-boundary tests only; not binary verification, production/certified-asset access, flag/config, deployment, publication, projection, playback, Film Room, transcripts, or downstream work.
+- Main intended coding outcome today: Hold the integrated flag-disabled Production Verification vertical-slice floor at `1443c48`; do not enable composition unless separately authorized.
+- Constraints today: Feature remains `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`; no production resources/bindings; no deploy/push; PROOF_MEDIA isolated; Timeline and debug-logs untouched; no downstream Coach/publication/playback work.
+- Current sealed engineering floor: Vertical slice integrated at `1443c48329bad9c92eb5978578e7c907b9eb0ed2` (`1443c48` — Integrate production media verification vertical slice); foundation `dda707a`; prior docs `34359ac`; IMPLEMENTED AND CHECKPOINTED domain/adapters/inspection/terminal lifecycle/derived eligibility/harness; DISABLED production composition; NOT YET AUTHORIZED controlled enablement and downstream surfaces.
+- Smallest next candidate mission (not authorized, not begun): controlled Production Verification enablement planning/authorization gate only — not flag enablement, resource/binding creation, deploy/push, Coach publication/resolution/playback, Film Room, queues/schedulers, leases/heartbeats, operator reconciliation, or topology/publication-convergence correction.
 # Before implementation, verify whether today's objective already has a certified Product Architecture. If yes, implementation must conform to that architecture rather than redefining it.
 
 # Architecture Certification

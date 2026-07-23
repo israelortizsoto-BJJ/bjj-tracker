@@ -10,6 +10,168 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-23
+
+## Investigation
+
+Production Verification vertical-slice documentation closeout for the committed, flag-disabled production media verification integration
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+After the design seal at 34359ac and the domain foundation at dda707a, the Production Verification vertical slice can be committed at 1443c48329bad9c92eb5978578e7c907b9eb0ed2 as an implemented-and-checkpointed, flag-disabled production-shaped path that preserves admission identity, conditional persistence/CAS, append-only attempts/evidence, terminal immutability, MEDIA-bound inspection, derived fail-closed Coach-publication eligibility, and PROOF_MEDIA isolation, without enabling production composition, creating resources, deploying, pushing, or authorizing downstream Coach/publication/playback work.
+
+## Latest Runtime Behavior
+
+### Integrated Engineering Floor
+
+- Branch: `coach-commentary-media-metadata`
+- Integrated vertical-slice HEAD: `1443c48329bad9c92eb5978578e7c907b9eb0ed2` (`1443c48`)
+- Integrated commit subject: `Integrate production media verification vertical slice`
+- Foundation checkpoint: `dda707a` — Establish production verification domain foundation
+- Preceding documentation checkpoint: `34359ac` — Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
+- Committed slice: 24 files, +3091 / −146
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- Feature composition occurs only when the exact flag value is `"1"`
+- No production resource was created, altered, or touched
+- No deploy occurred; no push occurred
+- No R2 or KV binding was created
+- Committed Wrangler change contains only the disabled feature variable
+
+### Implemented Production-Shaped Sequence
+
+authoritative `upload_complete`
+→ exact feature gate
+→ verification admission
+→ MEDIA object inspection
+→ complete-object streaming
+→ observed byte count
+→ calculated SHA-256
+→ bounded ISO-BMFF MIME inspection
+→ authoritative evidence append
+→ terminal verification CAS
+→ derived fail-closed Coach-publication eligibility
+
+### Certified Properties (repository evidence)
+
+- Five-field verification admission identity remains preserved.
+- Admission is idempotent.
+- Conditional persistence and CAS convergence remain preserved.
+- Authoritative-prior-record validation remains preserved.
+- Attempts and evidence remain append-only.
+- Only one active attempt is permitted.
+- Terminal records remain immutable.
+- Stuck work remains durably `verifying`.
+- Stuck classification is observational: `STUCK_ATTEMPT_REQUIRES_RECONCILIATION` / `operator_required`.
+- `ProductionVerificationRecord` remains the sole durable verification authority.
+- Coach-publication eligibility is derived and fail-closed.
+- No second durable eligibility authority was created.
+- Production inspection is bound to environment-local `MEDIA`.
+- `PROOF_MEDIA` remains isolated and cannot enter the production path.
+- R2 content type is evidence-only.
+- ETags and multipart hashes are not treated as whole-object SHA-256.
+- The complete object is streamed once to independently count bytes, calculate SHA-256, and capture the bounded MIME prefix.
+- Expected SHA is compared only when provided.
+- Missing expected SHA alone does not reject the first controlled slice.
+- Missing legacy MIME remains missing and terminates as `state: rejected` / `reason: MIME_NOT_ALLOWED`.
+- No compatibility fallback fabricates `video/mp4`.
+
+### Terminal Mappings
+
+- valid object and all gates pass → `verified`
+- missing, empty, or invalid declared MIME → `rejected` / `MIME_NOT_ALLOWED`
+- unsupported declared MIME → `rejected` / `UNSUPPORTED_MEDIA_FORMAT`
+- inconclusive supported-format detection → `rejected` / `UNSUPPORTED_MEDIA_FORMAT`
+- recognized conflicting container family → `rejected` / `MIME_SIGNATURE_MISMATCH`
+- byte-count mismatch → `rejected` / `BYTE_COUNT_MISMATCH`
+- expected SHA mismatch → `rejected` / `SHA256_MISMATCH`
+- object missing after upload completion → `failed` / `OBJECT_NOT_FOUND_AFTER_COMPLETION`
+- authoritative object-version mismatch → `failed` / `OBJECT_VERSION_MISMATCH`
+- transient head/get/stream failure → `failed` / `STORAGE_READ_TRANSIENT`
+- stuck attempt → remains `verifying`; operator-required classification only
+
+### Verification Evidence
+
+- Production Verification package: 91/91 passing
+- Package typecheck: passing
+- Affected worker tests: 42/42 passing before checkpoint
+- Scoped worker Production Verification typecheck: passing
+- Scoped worker typecheck includes `productionVerification/**` and `sharedMatchMediaUpload.ts`; excludes `src/index.ts` (not a full-worker typecheck)
+- `src/index.ts` import and type consistency inspected separately
+- Controlled integration harness: passing
+- `git diff --cached --check`: clean before commit
+
+### Current Boundary
+
+**IMPLEMENTED AND CHECKPOINTED:** verification domain; worker adapters; real-object inspection; terminal verification lifecycle; derived fail-closed publication eligibility; controlled integration harness.
+
+**DISABLED:** production composition and execution.
+
+**NOT YET IMPLEMENTED OR AUTHORIZED:** controlled production enablement; production resource/binding changes; durable Coach attachment publication; Coach media resolution; signed playback URLs; Film Room UI; Coach recording; Coach breakdown publication; Parent return hydration; final playback; queues or schedulers; leases or heartbeats; operator reconciliation; full topology/publication-convergence correction.
+
+## Next Experiment
+
+Smallest next candidate mission only (not authorized, not begun): controlled Production Verification enablement planning/authorization gate only. Do not enable the flag, create production resources or bindings, deploy, push, or begin durable Coach attachment publication, Coach media resolution, signed playback URLs, Film Room UI, Coach recording, Coach breakdown publication, Parent return hydration, final playback, queues/schedulers, leases/heartbeats, operator reconciliation, or full topology/publication-convergence correction without separate authorization.
+
+## Do Not
+
+- Do not set SHARED_MATCH_MEDIA_VERIFICATION_ENABLED to "1" without separate authorization.
+- Do not create, alter, or touch production resources or R2/KV bindings.
+- Do not deploy or push.
+- Do not begin durable Coach attachment publication, Coach media resolution, signed playback URLs, Film Room UI, Coach recording, Coach breakdown publication, Parent return hydration, or final playback.
+- Do not add queues, schedulers, leases, heartbeats, or operator reconciliation.
+- Do not treat PROOF_MEDIA as production MEDIA or allow it into the production path.
+- Do not fabricate video/mp4 compatibility fallbacks for missing legacy MIME.
+- Do not alter Timeline sources, debug-logs/**, or protected stashes.
+- Do not rewrite architecture-certification artifacts from this living-memory closeout.
+
+## Notes
+
+- Investigation lifecycle for this vertical-slice documentation closeout: COMPLETE.
+- Code floor remains at 1443c48; this closeout updates living engineering memory only.
+- Feature remains disabled (SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0").
+- Unrelated Timeline and debug-log work remains excluded and untouched.
+- All six protected stashes remain untouched.
+- Architecture certification artifacts were not rewritten by this closeout.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? scripts/__pycache__/
+```
+
+### git log --oneline --decorate -8
+
+```text
+1443c48 (HEAD -> coach-commentary-media-metadata) Integrate production media verification vertical slice
+dda707a Establish production verification domain foundation
+34359ac Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
+164f86d Record Production Verification Service design-contract certification artifacts.
+b782ca1 Fix match media hashing for React Native
+238ec41 Add parent shared match media upload client
+7927b88 (origin/coach-commentary-media-metadata) Record 10 GiB container runtime certification
+ebd6f8e Remove duplicate provisioning validation
+```
+
+### git diff --stat
+
+```text
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 2 files changed, 611 insertions(+), 130 deletions(-)
+```
+
 # ENGINEERING CHECKPOINT — 2026-07-22
 
 ## Investigation
