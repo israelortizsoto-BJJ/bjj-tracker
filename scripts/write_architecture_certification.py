@@ -23,6 +23,7 @@ OWNED_FILES = (
     "SharedMatchMedia-ArchitectureDecision-v1.md",
     "SharedMatchMedia-CertifiedBoundaries-v1.md",
     "SharedMatchMedia-ServiceContracts-v1.md",
+    "SharedMatchMedia-ProductionVerificationService-Contract-v1.md",
 )
 
 REQUIRED_TEXT = {
@@ -32,10 +33,14 @@ REQUIRED_TEXT = {
         "PlaybackCoordinator",
         "FilmRoomSessionCoordinator",
         "SharedMatchMedia-ServiceContracts-v1.md",
+        "SharedMatchMedia-ProductionVerificationService-Contract-v1.md",
+        "DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED",
     ),
     "CERTIFICATION_HISTORY.md": (
         "Shared Match Media Architecture v1 — Architecture and Contracts",
         "upload/resolve proof of concept remains future work",
+        "Production Verification Service — Contract and State-Machine Design v1",
+        "DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED",
     ),
     "protected-systems-register.md": (
         "Parent Competition Match Media Attachment Authority",
@@ -44,11 +49,15 @@ REQUIRED_TEXT = {
         "PlaybackCoordinator Authority",
         "FilmRoomSessionCoordinator Authority",
         "Shared Match Media Service Ownership",
+        "Shared Match Media Production Verification Design",
+        "DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED",
     ),
     "active-investigation-register.md": (
         "Shared Match Media Production Corridor",
         "FUTURE PROOF — NOT IMPLEMENTED",
         "SharedMatchMedia-ServiceContracts-v1.md",
+        "SharedMatchMedia-ProductionVerificationService-Contract-v1.md",
+        "DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED",
     ),
     "SharedMatchMedia-ArchitectureDecision-v1.md": (
         "CERTIFIED — Shared Match Media Architecture v1",
@@ -56,6 +65,8 @@ REQUIRED_TEXT = {
         "Parent Competition authority controls the canonical Match attachment.",
         "Neither `file://` URIs nor short-lived resolved URLs enter synchronized domain artifacts.",
         "PlaybackCoordinator and Session ownership do not change.",
+        "SharedMatchMedia-ProductionVerificationService-Contract-v1.md",
+        "upload_complete",
     ),
     "SharedMatchMedia-CertifiedBoundaries-v1.md": (
         "Film Room is not a media ownership system.",
@@ -73,6 +84,18 @@ REQUIRED_TEXT = {
         "PlaybackCoordinator",
         "FilmRoomSessionCoordinator",
         "Implementation readiness | CONDITIONAL PASS",
+        "SharedMatchMedia-ProductionVerificationService-Contract-v1.md",
+        "upload_complete → verifying → verified | rejected | failed",
+    ),
+    "SharedMatchMedia-ProductionVerificationService-Contract-v1.md": (
+        "DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED",
+        "upload_complete → verifying → verified | rejected | failed",
+        "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED",
+        "publicationEligible",
+        "Required Proof #5",
+        "isolated",
+        "NOT IMPLEMENTED",
+        "Never owns",
     ),
 }
 

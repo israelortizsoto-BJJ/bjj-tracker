@@ -69,8 +69,19 @@ Upload completion means all expected bytes were received. It does not mean the a
 
 ## 4. Verification Service
 
+Normative design expansion: `SharedMatchMedia-ProductionVerificationService-Contract-v1.md`
+(status: **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**). That document owns the
+Production Verification durable-record schema, admission/idempotency key, state
+machine, reason/retry taxonomy, independent flag contract, privacy-hook boundary,
+non-mutation guarantees, publication-eligibility denial, isolated-proof non-identity,
+and Required Proof #5 acceptance split. This section retains the service-ownership
+summary; it does not implement or Product Certify Verification.
+
 ### Owns
 
+- eligibility evaluation only after authoritative `upload_complete`;
+- admission of an exact completed asset/`objectVersion` into verification;
+- durable verification state and evidence;
 - checksum calculation and comparison;
 - detected MIME validation against supported policy;
 - authoritative byte-count validation;
@@ -81,6 +92,7 @@ Upload completion means all expected bytes were received. It does not mean the a
 
 ### Never owns
 
+- upload completion or collapsing `upload_complete` into `verified`;
 - attachment publication or topology advancement;
 - Match revisions, replacement, or tombstone;
 - Parent or Coach playback;
@@ -89,7 +101,19 @@ Upload completion means all expected bytes were received. It does not mean the a
 
 ### Contract
 
-Only `verified` assets are publication-eligible. `verified` never means attached. A rejected asset cannot be published. A transient verification failure may be retried by Verification; a policy rejection requires a new or corrected Parent upload.
+Production Verification begins only after durable `upload_complete`. The durable
+path is `upload_complete → verifying → verified | rejected | failed`. Direct
+`upload_complete → verified` is forbidden.
+
+Only `verified` assets are publication-eligible. `verified` never means attached,
+published, Coach-visible, projected, playable, resolved, or transcribed. A rejected
+asset cannot be published. A transient verification failure may be retried by
+Verification; a policy rejection requires a new or corrected Parent upload.
+
+The Production Verification runtime remains unimplemented, undeployed, disabled,
+runtime-uncertified, and Product-uncertified. The isolated 10 GiB proof certifies
+mechanics only and is not this service. Required Proof #5 remains open for
+implementation and live production evidence.
 
 ## 5. Publication Service
 
@@ -205,11 +229,13 @@ sequenceDiagram
     Parent->>Upload: Create scoped resumable session
     Parent->>Upload: Send retryable parts
     Upload->>Storage: Persist received bytes
-    Parent->>Upload: Complete byte intake
-    Upload->>Verification: Request verification
+    Parent->>Upload: Complete byte intake to upload_complete
+    Note over Upload,Verification: Hand-off is future-authorized only; boundaries remain separate
+    Upload->>Verification: Request verification after upload_complete
+    Verification->>Verification: Durable verifying admission
     Verification->>Storage: Read bytes and integrity metadata
-    Verification-->>Parent: Verified asset identity
-    Parent->>Publication: Publish with expected revision
+    Verification-->>Parent: verified | rejected | failed (eligibility only)
+    Parent->>Publication: Publish only if verified, with expected revision
     Publication->>Publication: CAS and advance revision
     Publication->>Projection: Emit canonical attachment change
     Projection-->>Coach: Hydrate read-only projection

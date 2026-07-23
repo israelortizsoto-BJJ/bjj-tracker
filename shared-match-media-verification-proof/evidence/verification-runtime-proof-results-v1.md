@@ -2,6 +2,17 @@
 
 Date: 2026-07-21
 
+> Historical evidence disposition (documentation only; body preserved):
+> This artifact records the 2026-07-21 Container hard-stop / rejected ladder
+> attempt. It is **not** the current isolated verification ceiling. Later
+> repository certifications established the isolated proof runtime through
+> 1 GiB, 5 GiB, and **10 GiB**. Authoritative current floor:
+> `docs/engineering-checkpoint.md`,
+> `docs/architecture/certification/CERTIFICATION_HISTORY.md`, and
+> `docs/architecture/certification/protected-systems-register.md`.
+> This file remains historical evidence and must not be treated as production
+> Verification Service certification.
+
 ## Conclusion
 
 **REJECTED: Container verification failed at the 1 GiB rung and did not

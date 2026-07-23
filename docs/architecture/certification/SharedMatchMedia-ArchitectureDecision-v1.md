@@ -120,14 +120,14 @@ Authorization is evaluated from authenticated relationship and Match context on 
 
 ## Upload State Machine
 
-Asset states:
+Asset / verification states (durable boundaries):
 
 ```text
-initiated → uploading ↔ paused
-                  ↓
-               uploaded → verifying → verified
-                    ↘          ↘
-                     failed     rejected
+upload_pending → upload/session intermediate states → upload_complete
+                                                      ↓
+                                                 verifying → verified
+                                                      ↘          ↘
+                                                       failed     rejected
 
 verified or orphaned → deletion_eligible → deleted
 ```
@@ -136,8 +136,10 @@ Rules:
 
 - Create is idempotent by Parent + Match + client idempotency key.
 - Chunks/parts are retryable and integrity-addressed; concurrent upload sessions cannot publish over one another without the Match revision precondition.
-- Complete is idempotent and validates byte count, checksum, detected MIME, and policy.
-- `verified` means eligible, not attached.
+- Upload complete is Upload-owned, idempotent, and terminates at durable `upload_complete`. Upload may enforce intake integrity (for example declared-versus-completed size) without issuing a Verification eligibility verdict.
+- Production Verification is a separate durable state machine: `upload_complete → verifying → verified | rejected | failed`. See `SharedMatchMedia-ProductionVerificationService-Contract-v1.md`.
+- Historical “complete and verify” API shorthand is deprecated as collapsed-boundary authority; orchestration may later sequence the calls without merging ownership.
+- `verified` means publication-eligible only, not attached.
 - A failed/rejected asset cannot publish.
 - Abandoned and verified-orphan assets are collected only after the configured grace period.
 
@@ -164,9 +166,13 @@ Request: `sharedAthleteId`, declared MIME/bytes/checksum, optional filename, ide
 
 `GET /.../media-uploads/{matchMediaAssetId}` returns acknowledged parts/range, expiry, and state. Chunk transport may be provider-specific but must support safe repeat and must not grant publication authority.
 
-### Complete and verify
+### Complete upload (Upload boundary)
 
-`POST /.../media-uploads/{matchMediaAssetId}/complete` with idempotency key and final integrity data. Response is `verifying`, `verified`, or `rejected`; never attachment publication.
+`POST /.../media-uploads/{matchMediaAssetId}/complete` with idempotency key and final integrity data. Response is durable `upload_complete` (including idempotent replay); never attachment publication and never an implicit Verification verdict.
+
+### Request verification (Verification boundary; design-certified, unimplemented)
+
+A separately authorized Production Verification admission occurs only after authoritative `upload_complete`. Durable states are `verifying → verified | rejected | failed`. Historical title “Complete and verify” and any response shape that collapsed these boundaries are deprecated as ownership authority; see `SharedMatchMedia-ProductionVerificationService-Contract-v1.md`.
 
 ### Publish or replace
 
@@ -220,7 +226,7 @@ No bulk backfill is required. Existing videos remain Parent-local until an autho
 
 ## Rollback Plan
 
-Use separate flags for upload creation, completion/verification, publication, projection emission, Coach hydration, and resolve. Roll back Coach first by disabling hydration/resolve and showing video unavailable; existing Parent local playback remains. Disable new publication next while allowing in-flight uploads to settle or expire. Do not rewrite revisions, resurrect tombstones, repoint Matches, or immediately delete blobs. Preserve attachment metadata and verified binaries through the recovery window so a corrected reader can resume. Trigger rollback on authorization leakage, revision corruption, local Parent regression, material hydration fan-out, or playback/runtime boundary regression.
+Use separate flags for upload creation, upload completion, Production Verification, publication, projection emission, Coach hydration, and resolve. Upload flags must not enable Verification; Verification must not enable Publication. Roll back Coach first by disabling hydration/resolve and showing video unavailable; existing Parent local playback remains. Disable new publication next while allowing in-flight uploads to settle or expire. Do not rewrite revisions, resurrect tombstones, repoint Matches, or immediately delete blobs. Preserve attachment metadata and verified binaries through the recovery window so a corrected reader can resume. Trigger rollback on authorization leakage, revision corruption, local Parent regression, material hydration fan-out, or playback/runtime boundary regression.
 
 ## Certification Impact Matrix
 
@@ -260,7 +266,7 @@ Certification cannot advance to implementation approval until evidence covers:
 2. Old/new Parent and Coach payload decoding across absent, attached, replaced, and tombstoned states.
 3. Parent-only write; Coach-only read; denial across user, athlete, competition, Match, revoked link, guessed ID, and superseded asset.
 4. Resumable interruption/restart, duplicate parts, duplicate complete, upload expiry, and same-idempotency replay.
-5. Verification for bytes, checksum, MIME, size, and rejected content; publication before verification denied.
+5. Verification for bytes, checksum, MIME, size, and rejected content; publication before verification denied. Production acceptance criteria, design-versus-implementation split, and open privacy gates are enumerated in `SharedMatchMedia-ProductionVerificationService-Contract-v1.md`. Required Proof #5 remains open until implementation and live production evidence exist; this design document does not satisfy Proof #5 by itself.
 6. CAS publication conflict, concurrent replacement, idempotent publication, atomic projection, and monotonic revision.
 7. Tombstone beats stale attachment during out-of-order delivery; delayed GC never makes rollback destructive.
 8. Resolve TTL, range/seek compatibility, expiry retry, revoked-access denial, and signed-URL log redaction.

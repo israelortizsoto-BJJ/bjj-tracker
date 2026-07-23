@@ -12,17 +12,19 @@ Current Understanding
 
 Shared Match Media architecture, domain boundaries, and service responsibilities are certified in `SharedMatchMedia-ArchitectureDecision-v1.md`, `SharedMatchMedia-CertifiedBoundaries-v1.md`, and `SharedMatchMedia-ServiceContracts-v1.md`.
 
+The Production Verification Service design contract and state machine are design-certified in `SharedMatchMedia-ProductionVerificationService-Contract-v1.md` as **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**. Parent Shared Match Media Upload remains Product Certified at the `upload_complete` boundary only. Production Verification remains unimplemented, undeployed, disabled, runtime-uncertified, and Product-uncertified.
+
 The isolated verification Container runtime is certified through 10 GiB on the proof package. That evidence does not implement or certify the production Verification Service or the broader production corridor.
 
 Unknown
 
-Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, scanner integration, privacy gates, and mobile background behavior satisfy every Required Proof and privacy gate in production conditions.
+Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, scanner integration, privacy gates, and mobile background behavior satisfy every Required Proof and privacy gate in production conditions. Required Proof #5 remains open for implementation and live production evidence despite design acceptance criteria being enumerated.
 
 20 GiB isolated capacity remains FUTURE CERTIFICATION — NOT STARTED and is not an active investigation.
 
 Required Evidence
 
-Complete the certified Required Proof and privacy approval before implementation authorization or production certification. Separately authorize any 20 GiB capacity certification; do not extrapolate from the 10 GiB floor.
+Complete the certified Required Proof and privacy approval before implementation authorization or production certification. Separately authorize any Production Verification implementation mission and any 20 GiB capacity certification; do not extrapolate from the 10 GiB floor or from design certification alone.
 
 
 ## Parent Competition Runtime

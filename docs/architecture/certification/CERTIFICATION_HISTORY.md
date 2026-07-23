@@ -4,6 +4,36 @@
 
 Certification
 
+Production Verification Service — Contract and State-Machine Design v1
+
+Summary
+
+Certified the Production Verification Service design contract and state machine only.
+
+- Durable verification begins only after authoritative `upload_complete`.
+- Lifecycle: `upload_complete → verifying → verified | rejected | failed`.
+- `verified` means publication-eligible only; never attached, published, Coach-visible, projected, playable, resolved, or transcribed.
+- Durable verification record is production-owned and separate from upload-session JSON.
+- Admission/idempotency key includes contract version, bucket/binding, asset ID, objectVersion, and storage object key.
+- Independent flag `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED` is designed default-disabled and fail-closed; not added to runtime configuration.
+- Privacy/scan hook is reserved; privacy approval is not claimed.
+- Isolated 10 GiB proof remains mechanics-only and non-identical to Production Verification.
+- Required Proof #5 acceptance criteria are enumerated; Proof #5 remains open for implementation and live evidence.
+
+Artifact
+
+- SharedMatchMedia-ProductionVerificationService-Contract-v1.md
+
+Outcome
+
+Status is **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**. Production Verification remains unimplemented, undeployed, disabled, runtime-uncertified, and Product-uncertified. No flag enablement and no downstream Publication scope are authorized.
+
+---
+
+## 2026-07-22
+
+Certification
+
 Shared Match Media Verification Container Runtime — 10 GiB Certified Floor
 
 Summary

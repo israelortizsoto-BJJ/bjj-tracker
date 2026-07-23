@@ -265,6 +265,7 @@ Repository References
 - docs/architecture/certification/SharedMatchMedia-ArchitectureDecision-v1.md
 - docs/architecture/certification/SharedMatchMedia-CertifiedBoundaries-v1.md
 - docs/architecture/certification/SharedMatchMedia-ServiceContracts-v1.md
+- docs/architecture/certification/SharedMatchMedia-ProductionVerificationService-Contract-v1.md
 
 Certification Summary
 
@@ -277,6 +278,8 @@ PlaybackCoordinator and FilmRoomSessionCoordinator ownership remain unchanged an
 Service ownership is certified across Upload, Verification, Publication, Resolution, Storage, and Projection. Each durable transition and failure-recovery path has one owner. Service orchestration, retry, delivery, and measurement do not transfer playback or synchronization authority.
 
 Isolated Verification runtime is certified through 10 GiB. The evidence confirms immutable R2 validation, streaming SHA-256, exact bytes/MIME, bounded memory, single admission, terminal evidence, and release. Primary architecture status remains CERTIFIED — architecture and contracts only. Production functionality remains uncertified.
+
+Production Verification Service design contract and state machine are recorded in `SharedMatchMedia-ProductionVerificationService-Contract-v1.md` as **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**. That design does not implement, enable, Product Certify, or satisfy Required Proof #5 for Production Verification. The isolated proof remains non-identical to the production service.
 
 ---
 
