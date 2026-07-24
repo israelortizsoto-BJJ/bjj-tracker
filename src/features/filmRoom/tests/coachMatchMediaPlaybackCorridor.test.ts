@@ -142,7 +142,10 @@ describe("Coach Match Media Film Room playback corridor (source)", () => {
     assert.match(filmRoom, /FilmRoomCoachCommentaryControls/);
     assert.doesNotMatch(hook, /persistCoachVoiceAudio|CoachVoiceNoteField|playhead/);
     assert.doesNotMatch(resolveCore, /persistCoachVoiceAudio|CoachVoiceNoteField/);
-    assert.doesNotMatch(route, /alignment|transcript.*sync|capture-origin/i);
+    assert.match(route, /alignment=\{alignment\}/);
+    assert.match(filmRoom, /alignment: _alignment/);
+    // Alignment is receive-only transport: it must not become a playback instruction.
+    assert.doesNotMatch(filmRoom, /seekAsync\([^)]*_alignment|playAsync\([^)]*_alignment|pauseAsync\([^)]*_alignment/);
   });
 
   it("never routes, persists, caches, or logs signed URL / signature / object key", () => {

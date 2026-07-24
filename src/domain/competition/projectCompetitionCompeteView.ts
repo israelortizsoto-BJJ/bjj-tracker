@@ -16,6 +16,7 @@ export type CompetitionMatchOverlayAnnotation = {
   mediaId?: string;
   durationMs?: number;
   mimeType?: string;
+  alignment?: import("../../types/coachWeeklySync").CoachMatchBreakdownAlignment;
 };
 
 export type CompetitionCompeteView = KidCompetitionEntry & {
@@ -41,6 +42,7 @@ export function competitionOverlayAnnotationsFromEmbeddedMatches(
     ...(match.mediaId?.trim() ? { mediaId: match.mediaId.trim() } : {}),
     ...(match.durationMs !== undefined ? { durationMs: match.durationMs } : {}),
     ...(match.mimeType?.trim() ? { mimeType: match.mimeType.trim() } : {}),
+    ...(match.alignment ? { alignment: match.alignment } : {}),
   }));
 }
 
@@ -166,6 +168,7 @@ function snapshotFromTopologyMatch(
     ...(mediaId ? { mediaId } : {}),
     ...(overlay?.durationMs !== undefined ? { durationMs: overlay.durationMs } : {}),
     ...(overlay?.mimeType?.trim() ? { mimeType: overlay.mimeType.trim() } : {}),
+    ...(overlay?.alignment ? { alignment: overlay.alignment } : {}),
     imageUri: image.uri,
     videoUri: video.uri,
     imageAssetId: image.assetId,

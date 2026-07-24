@@ -112,6 +112,7 @@ export function overlayAnnotationsFromCoachMatchBreakdownArtifactSet(input: {
       ...(mediaId ? { mediaId } : {}),
       ...(artifact.durationMs !== undefined ? { durationMs: artifact.durationMs } : {}),
       ...(artifact.mimeType?.trim() ? { mimeType: artifact.mimeType.trim() } : {}),
+      ...(artifact.alignment ? { alignment: artifact.alignment } : {}),
     });
   }
 
@@ -208,6 +209,7 @@ export function mergeCoachBreakdownIntoMatches(input: {
       ...(mergedMediaId ? { mediaId: mergedMediaId } : {}),
       ...(overlay.durationMs !== undefined ? { durationMs: overlay.durationMs } : {}),
       ...(overlay.mimeType?.trim() ? { mimeType: overlay.mimeType.trim() } : {}),
+      ...(overlay.alignment ? { alignment: overlay.alignment } : {}),
     };
   });
 

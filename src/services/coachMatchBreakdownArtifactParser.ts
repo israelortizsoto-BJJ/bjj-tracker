@@ -3,6 +3,7 @@ import type {
   SyncedCoachMatchBreakdownArtifact,
   SyncedCoachMatchBreakdownArtifactSet,
 } from "../types/coachWeeklySync";
+import { normalizeCoachMatchBreakdownAlignment } from "../types/coachWeeklySync";
 
 function isSyncedCoachMatchBreakdownArtifact(
   value: unknown,
@@ -23,6 +24,7 @@ function isSyncedCoachMatchBreakdownArtifact(
     typeof artifact.localUri === "string" ||
     typeof artifact.url === "string" ||
     typeof artifact.audioUrl === "string" ||
+    typeof artifact.playableUri === "string" ||
     "voiceNoteRefs" in artifact
   ) {
     return false;
@@ -48,7 +50,7 @@ function isSyncedCoachMatchBreakdownArtifactSet(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const artifactSet = value as Record<string, unknown>;
   if (
-    artifactSet.schemaVersion !== 1 ||
+    (artifactSet.schemaVersion !== 1 && artifactSet.schemaVersion !== 2) ||
     typeof artifactSet.sharedAthleteId !== "string" ||
     typeof artifactSet.updatedAt !== "string" ||
     !Array.isArray(artifactSet.artifacts)
@@ -73,6 +75,16 @@ function isSyncedCoachMatchBreakdownArtifactSet(
     identityKeys.add(key);
   }
   return true;
+}
+
+function normalizeArtifact(
+  artifact: SyncedCoachMatchBreakdownArtifact,
+  schemaVersion: 1 | 2,
+): SyncedCoachMatchBreakdownArtifact {
+  const alignment =
+    schemaVersion === 2 ? normalizeCoachMatchBreakdownAlignment(artifact.alignment) : undefined;
+  const { alignment: _discardedAlignment, ...base } = artifact;
+  return alignment ? { ...base, alignment } : base;
 }
 
 export function parseCoachMatchBreakdownArtifactsField(
@@ -122,7 +134,10 @@ export function parseCoachMatchBreakdownArtifactsField(
       athleteEntryClassificationById[athleteId] = "malformed";
       continue;
     }
-    artifactsByAthleteId[athleteId] = value;
+    artifactsByAthleteId[athleteId] = {
+      ...value,
+      artifacts: value.artifacts.map((artifact) => normalizeArtifact(artifact, value.schemaVersion)),
+    };
     athleteEntryClassificationById[athleteId] =
       value.artifacts.length > 0 ? "populated" : "empty";
   }

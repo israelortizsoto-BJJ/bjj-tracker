@@ -228,11 +228,12 @@ type CoachMatchBreakdownArtifact = {
   mediaId?: string;
   durationMs?: number;
   mimeType?: string;
+  alignment?: { commentaryStartVideoMs: number; matchMediaAssetId: string; attachmentRevision: number };
   updatedAt: string;
 };
 
 type CoachMatchBreakdownArtifactSet = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   sharedAthleteId: string;
   updatedAt: string;
   artifacts: CoachMatchBreakdownArtifact[];
@@ -1338,7 +1339,12 @@ function parseCoachMatchBreakdownArtifact(raw: unknown): CoachMatchBreakdownArti
   if (!sharedAthleteId || !sharedCompetitionId || !matchLineageKey || !updatedAt) return null;
   if (coachNoteRaw.length > MAX_COACH_BREAKDOWN_TEXT_CHARS) return null;
   // Domain metadata only — reject any attempt to sync URLs or local paths.
-  if (typeof o.localUri === "string" || typeof o.url === "string" || typeof o.audioUrl === "string") {
+  if (
+    typeof o.localUri === "string" ||
+    typeof o.url === "string" ||
+    typeof o.audioUrl === "string" ||
+    typeof o.playableUri === "string"
+  ) {
     return null;
   }
   if ("voiceNoteRefs" in o) return null;
@@ -1355,6 +1361,21 @@ function parseCoachMatchBreakdownArtifact(raw: unknown): CoachMatchBreakdownArti
     typeof o.durationMs === "number" && Number.isFinite(o.durationMs) && o.durationMs >= 0
       ? Math.min(Math.floor(o.durationMs), 24 * 60 * 60 * 1000)
       : undefined;
+  const alignmentRaw = o.alignment;
+  const alignmentRow = alignmentRaw && typeof alignmentRaw === "object" && !Array.isArray(alignmentRaw)
+    ? alignmentRaw as Record<string, unknown>
+    : null;
+  const commentaryStartVideoMs = alignmentRow?.commentaryStartVideoMs;
+  const matchMediaAssetId = typeof alignmentRow?.matchMediaAssetId === "string"
+    ? alignmentRow.matchMediaAssetId.trim()
+    : "";
+  const attachmentRevision = alignmentRow?.attachmentRevision;
+  const alignment =
+    typeof commentaryStartVideoMs === "number" && Number.isSafeInteger(commentaryStartVideoMs) && commentaryStartVideoMs >= 0 &&
+    Boolean(matchMediaAssetId) &&
+    typeof attachmentRevision === "number" && Number.isSafeInteger(attachmentRevision) && attachmentRevision > 0
+      ? { commentaryStartVideoMs, matchMediaAssetId, attachmentRevision }
+      : undefined;
   return {
     sharedAthleteId,
     sharedCompetitionId,
@@ -1363,6 +1384,7 @@ function parseCoachMatchBreakdownArtifact(raw: unknown): CoachMatchBreakdownArti
     ...(mediaId ? { mediaId } : {}),
     ...(durationMs !== undefined ? { durationMs } : {}),
     ...(mimeType ? { mimeType } : {}),
+    ...(alignment ? { alignment } : {}),
     updatedAt,
   };
 }
@@ -1519,7 +1541,7 @@ function parseCoachMatchBreakdownArtifactSet(
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   if (JSON.stringify(raw).length > MAX_COACH_BREAKDOWN_PAYLOAD_CHARS) return null;
   const o = raw as Record<string, unknown>;
-  if (o.schemaVersion !== 1 || !Array.isArray(o.artifacts)) return null;
+  if ((o.schemaVersion !== 1 && o.schemaVersion !== 2) || !Array.isArray(o.artifacts)) return null;
   const sharedAthleteId = parseTopologyId(o.sharedAthleteId);
   const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
   if (!sharedAthleteId || !updatedAt) return null;
@@ -1537,11 +1559,13 @@ function parseCoachMatchBreakdownArtifactSet(
     ]);
     if (identityKeys.has(identityKey)) return null;
     identityKeys.add(identityKey);
-    artifacts.push(artifact);
+    artifacts.push(
+      o.schemaVersion === 2 ? artifact : { ...artifact, alignment: undefined },
+    );
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: o.schemaVersion,
     sharedAthleteId,
     updatedAt,
     artifacts,

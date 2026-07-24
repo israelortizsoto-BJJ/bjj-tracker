@@ -196,11 +196,43 @@ export type SyncedCoachMatchBreakdownArtifact = {
   mediaId?: string;
   durationMs?: number;
   mimeType?: string;
+  /** Immutable capture-time binding; never a URI, delivery capability, or player state. */
+  alignment?: CoachMatchBreakdownAlignment;
   updatedAt: string;
 };
 
+export type CoachMatchBreakdownAlignment = {
+  commentaryStartVideoMs: number;
+  matchMediaAssetId: string;
+  attachmentRevision: number;
+};
+
+/** Drops a partial or malformed alignment without rejecting its surrounding artifact. */
+export function normalizeCoachMatchBreakdownAlignment(
+  value: unknown,
+): CoachMatchBreakdownAlignment | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const row = value as Record<string, unknown>;
+  const commentaryStartVideoMs = row.commentaryStartVideoMs;
+  const matchMediaAssetId =
+    typeof row.matchMediaAssetId === "string" ? row.matchMediaAssetId.trim() : "";
+  const attachmentRevision = row.attachmentRevision;
+  if (
+    typeof commentaryStartVideoMs !== "number" ||
+    !Number.isSafeInteger(commentaryStartVideoMs) ||
+    commentaryStartVideoMs < 0 ||
+    !matchMediaAssetId ||
+    typeof attachmentRevision !== "number" ||
+    !Number.isSafeInteger(attachmentRevision) ||
+    attachmentRevision <= 0
+  ) {
+    return undefined;
+  }
+  return { commentaryStartVideoMs, matchMediaAssetId, attachmentRevision };
+}
+
 export type SyncedCoachMatchBreakdownArtifactSet = {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   sharedAthleteId: SharedAthleteId;
   updatedAt: string;
   artifacts: SyncedCoachMatchBreakdownArtifact[];

@@ -5,6 +5,7 @@ import type {
   SyncedCoachMatchBreakdownArtifact,
   SyncedCoachMatchBreakdownArtifactSet,
 } from "../types/coachWeeklySync";
+import { normalizeCoachMatchBreakdownAlignment } from "../types/coachWeeklySync";
 import { StorageKeys } from "./storageKeys";
 
 type ArtifactSetByAthleteId = Record<string, SyncedCoachMatchBreakdownArtifactSet>;
@@ -90,7 +91,7 @@ export function isValidSyncedCoachMatchBreakdownArtifactSet(
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const set = value as Record<string, unknown>;
   if (
-    set.schemaVersion !== 1 ||
+    (set.schemaVersion !== 1 && set.schemaVersion !== 2) ||
     !isNonEmptyString(set.sharedAthleteId) ||
     !isNonEmptyString(set.updatedAt) ||
     !Array.isArray(set.artifacts)
@@ -113,6 +114,22 @@ export function isValidSyncedCoachMatchBreakdownArtifactSet(
   return true;
 }
 
+function normalizeArtifactSet(
+  set: SyncedCoachMatchBreakdownArtifactSet,
+): SyncedCoachMatchBreakdownArtifactSet {
+  return {
+    ...set,
+    artifacts: set.artifacts.map((artifact) => {
+      const alignment =
+        set.schemaVersion === 2
+          ? normalizeCoachMatchBreakdownAlignment(artifact.alignment)
+          : undefined;
+      const { alignment: _discardedAlignment, ...base } = artifact;
+      return alignment ? { ...base, alignment } : base;
+    }),
+  };
+}
+
 function normalizeMap(raw: unknown): ArtifactSetByAthleteId {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const out: ArtifactSetByAthleteId = {};
@@ -120,7 +137,7 @@ function normalizeMap(raw: unknown): ArtifactSetByAthleteId {
     const id = athleteId.trim();
     if (!id || !isValidSyncedCoachMatchBreakdownArtifactSet(value)) continue;
     if (value.sharedAthleteId.trim() !== id) continue;
-    out[id] = value;
+    out[id] = normalizeArtifactSet(value);
   }
   return out;
 }

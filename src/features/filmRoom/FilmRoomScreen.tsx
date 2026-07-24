@@ -11,6 +11,7 @@ import {
 } from "../../playback/FilmRoomSessionCoordinator";
 import type { PlaybackCoordinator } from "../../playback/PlaybackCoordinator";
 import type { CoachMatchMediaDeliveryFailureKind } from "./coachMatchMediaPlaybackResolve";
+import type { CoachMatchBreakdownAlignment } from "../../types/coachWeeklySync";
 import { FilmRoomCoachCommentaryControls } from "./FilmRoomCoachCommentaryControls";
 import { FilmRoomVideoPlayer } from "./FilmRoomVideoPlayer";
 
@@ -30,6 +31,8 @@ export type FilmRoomScreenProps = {
   coachNote?: string;
   videoUri?: string | null;
   durationMs?: number;
+  /** Receive-only transport metadata. Film Room remains video-led. */
+  alignment?: CoachMatchBreakdownAlignment;
   /** Forward-only delivery failure; FilmRoomScreen does not resolve or authorize media. */
   onDeliveryError?: (kind?: CoachMatchMediaDeliveryFailureKind) => void;
 };
@@ -96,6 +99,7 @@ export function FilmRoomScreen({
   coachNote: coachNoteProp = "",
   videoUri = null,
   durationMs,
+  alignment: _alignment,
   onDeliveryError,
 }: FilmRoomScreenProps) {
   const [coachNote, setCoachNote] = useState(coachNoteProp.trim());

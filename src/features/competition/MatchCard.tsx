@@ -47,6 +47,7 @@ export function buildFilmRoomHref(input: {
   /** Hydrated Coach Shared Match Media identity only — never a signed URL. */
   matchMediaAssetId?: string;
   expectedRevision?: number;
+  alignment?: CompetitionDetailMatchSnapshot["alignment"];
 }): Href {
   const params = new URLSearchParams();
   params.set("matchLineageKey", input.matchLineageKey);
@@ -62,6 +63,11 @@ export function buildFilmRoomHref(input: {
   if (videoUri && !input.matchMediaAssetId?.trim()) params.set("videoUri", videoUri);
   if (input.durationMs !== undefined && Number.isFinite(input.durationMs)) {
     params.set("durationMs", String(input.durationMs));
+  }
+  if (input.alignment) {
+    params.set("commentaryStartVideoMs", String(input.alignment.commentaryStartVideoMs));
+    params.set("commentaryMatchMediaAssetId", input.alignment.matchMediaAssetId);
+    params.set("commentaryAttachmentRevision", String(input.alignment.attachmentRevision));
   }
   const matchMediaAssetId = input.matchMediaAssetId?.trim() ?? "";
   if (
@@ -188,6 +194,7 @@ export function MatchCard({
         durationMs: snapshot.durationMs,
         matchMediaAssetId: attachedMatchMedia?.matchMediaAssetId,
         expectedRevision: attachedMatchMedia?.revision,
+        alignment: snapshot.alignment,
       }),
     );
   };

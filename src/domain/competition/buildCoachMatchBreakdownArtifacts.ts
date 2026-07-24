@@ -57,6 +57,7 @@ export async function buildCoachMatchBreakdownArtifacts(
               mediaId: media.mediaId,
               ...(media.durationMs !== undefined ? { durationMs: media.durationMs } : {}),
               ...(media.mimeType ? { mimeType: media.mimeType } : {}),
+              ...(media.alignment ? { alignment: media.alignment } : {}),
             }
           : {}),
         updatedAt: overlay.updatedAt,
@@ -114,7 +115,9 @@ export async function buildCoachMatchBreakdownArtifacts(
     ) ?? new Date().toISOString());
 
   const artifactSet: SyncedCoachMatchBreakdownArtifactSet = {
-    schemaVersion: 1,
+    // v1 remains the wire shape for unaligned commentary. v2 is emitted only when
+    // the complete immutable alignment unit is present.
+    schemaVersion: artifacts.some((artifact) => artifact.alignment) ? 2 : 1,
     sharedAthleteId: athleteId,
     updatedAt,
     artifacts,

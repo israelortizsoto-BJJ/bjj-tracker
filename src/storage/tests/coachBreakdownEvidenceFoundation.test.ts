@@ -146,6 +146,35 @@ describe("coach match breakdown artifact write outcomes", () => {
     );
   });
 
+  it("accepts legacy v1 and v2 alignment while dropping only malformed v2 alignment", async () => {
+    const v2: SyncedCoachMatchBreakdownArtifactSet = {
+      ...artifactSet("shared_ath_1"),
+      schemaVersion: 2,
+      artifacts: [{
+        ...artifactSet("shared_ath_1").artifacts[0]!,
+        alignment: {
+          commentaryStartVideoMs: 0,
+          matchMediaAssetId: "asset-1",
+          attachmentRevision: 1,
+        },
+      }],
+    };
+    await writeCoachMatchBreakdownArtifactSet(v2);
+    assert.deepEqual(
+      (await getCoachMatchBreakdownArtifactSet("shared_ath_1"))?.artifacts[0]?.alignment,
+      v2.artifacts[0]?.alignment,
+    );
+
+    const malformed: SyncedCoachMatchBreakdownArtifactSet = {
+      ...v2,
+      artifacts: [{ ...v2.artifacts[0]!, alignment: { commentaryStartVideoMs: -1, matchMediaAssetId: "asset-1", attachmentRevision: 1 } }],
+    };
+    await writeCoachMatchBreakdownArtifactSet(malformed);
+    const retained = await getCoachMatchBreakdownArtifactSet("shared_ath_1");
+    assert.equal(retained?.artifacts[0]?.alignment, undefined);
+    assert.equal(retained?.artifacts[0]?.coachNote, "Stay patient");
+  });
+
   it("returns rejected_invalid before any persistence write", async () => {
     const invalid = artifactSet("");
 

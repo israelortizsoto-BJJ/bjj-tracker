@@ -38,6 +38,9 @@ export default function CompetitionFilmRoomRoute() {
     durationMs?: string;
     matchMediaAssetId?: string;
     expectedRevision?: string;
+    commentaryStartVideoMs?: string;
+    commentaryMatchMediaAssetId?: string;
+    commentaryAttachmentRevision?: string;
   }>();
 
   const matchLineageKey = singleParam(params.matchLineageKey);
@@ -47,6 +50,18 @@ export default function CompetitionFilmRoomRoute() {
   const durationRaw = singleParam(params.durationMs);
   const durationParsed = Number.parseInt(durationRaw || "", 10);
   const legacyVideoUri = singleParam(params.videoUri) || null;
+  const commentaryStartVideoMs = Number.parseInt(singleParam(params.commentaryStartVideoMs), 10);
+  const commentaryAttachmentRevision = Number.parseInt(
+    singleParam(params.commentaryAttachmentRevision),
+    10,
+  );
+  const commentaryMatchMediaAssetId = singleParam(params.commentaryMatchMediaAssetId);
+  const alignment =
+    Number.isSafeInteger(commentaryStartVideoMs) && commentaryStartVideoMs >= 0 &&
+    commentaryMatchMediaAssetId &&
+    Number.isSafeInteger(commentaryAttachmentRevision) && commentaryAttachmentRevision > 0
+      ? { commentaryStartVideoMs, matchMediaAssetId: commentaryMatchMediaAssetId, attachmentRevision: commentaryAttachmentRevision }
+      : undefined;
 
   const coachMediaIdentity = parseCoachMatchMediaPlaybackIdentity({
     sharedAthleteId,
@@ -149,6 +164,7 @@ export default function CompetitionFilmRoomRoute() {
         coachNote={singleParam(params.coachNote)}
         videoUri={videoUri}
         durationMs={Number.isFinite(durationParsed) ? durationParsed : undefined}
+        alignment={alignment}
         onDeliveryError={
           coachMediaIdentity
             ? (kind) => {

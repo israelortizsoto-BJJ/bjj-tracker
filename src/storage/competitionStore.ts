@@ -10,6 +10,7 @@ import type {
   KidCompetitionVideoRef,
 } from "../types/coachKid";
 import type { VoiceNoteRef } from "../types/coachMatchBreakdownOverlay";
+import type { CoachMatchBreakdownAlignment } from "../types/coachWeeklySync";
 import { logCompOverlayMaterialize, logCompSave } from "../dev/competitionMutationDevLog";
 import {
   emitCompetitionChange,
@@ -39,6 +40,8 @@ export type CompetitionDetailMatchSnapshot = {
   mediaId?: string;
   durationMs?: number;
   mimeType?: string;
+  /** Read-only artifact metadata. It is not a playback instruction. */
+  alignment?: CoachMatchBreakdownAlignment;
   imageUri: string | null;
   videoUri: string | null;
   imageAssetId: string | null;
