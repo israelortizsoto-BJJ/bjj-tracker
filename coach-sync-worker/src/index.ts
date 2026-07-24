@@ -25,6 +25,10 @@ import {
   isPublicationFeatureEnabled,
   type MatchMediaPublicationDependencies,
 } from "./matchMediaPublication";
+import {
+  isAttachmentProjectionFeatureEnabled,
+  projectMatchMediaAttachmentsByAthlete,
+} from "./matchMediaAttachmentProjection";
 import { createConditionalObjectVerificationRecordStore } from "../../shared-match-media-production-verification/src/index";
 import { handleOperatorInspectionHttpRequest } from "./productionVerification/operatorInspection";
 import { createR2ConditionalObjectStore } from "./productionVerification/r2ConditionalObjectStore";
@@ -51,6 +55,8 @@ export interface Env {
    * Upload/Verification enablement must never open this flag.
    */
   SHARED_MATCH_MEDIA_PUBLICATION_ENABLED?: string;
+  /** Read-time attachment projection is omitted unless exactly "1". */
+  SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED?: string;
   /**
    * Cloudflare secret binding for read-only operator inspection.
    * Must never be committed or placed in wrangler [vars].
@@ -2151,6 +2157,18 @@ export default {
           competitions: rec.competitions,
           competitionAggregateByAthleteId: rec.competitionAggregateByAthleteId,
           competitionTopologyByAthleteId: rec.competitionTopologyByAthleteId,
+          ...(isAttachmentProjectionFeatureEnabled(
+            env.SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED,
+          )
+            ? {
+                matchMediaAttachmentsByAthleteId:
+                  await projectMatchMediaAttachmentsByAthlete({
+                    enabled: true,
+                    bucket: env.MEDIA,
+                    topologyByAthleteId: rec.competitionTopologyByAthleteId,
+                  }),
+              }
+            : {}),
           trainingProofByAthleteId: rec.trainingProofByAthleteId,
           coachMatchBreakdownArtifacts: apiCoachMatchBreakdownArtifacts,
         };

@@ -107,7 +107,8 @@ function validateAttachProvenance(
   return null;
 }
 
-function parseRecord(raw: string): MatchMediaAttachment | null {
+/** Strict, capability-free decoder for authoritative attachment record reads. */
+export function decodeMatchMediaAttachmentRecord(raw: string): MatchMediaAttachment | null {
   try {
     const parsed = JSON.parse(raw) as MatchMediaAttachment;
     const identity = normalizeIdentity(parsed);
@@ -309,7 +310,7 @@ export async function mutateMatchMediaAttachment(
 
   for (let attempt = 0; attempt < MAX_PUBLICATION_CAS_ATTEMPTS; attempt += 1) {
     const versioned = await dependencies.store.getVersioned(key);
-    const current = versioned ? parseRecord(versioned.value) : null;
+    const current = versioned ? decodeMatchMediaAttachmentRecord(versioned.value) : null;
     if (versioned && !current) {
       return {
         outcome: "denied",
@@ -351,7 +352,7 @@ export async function mutateMatchMediaAttachment(
   }
 
   const latest = await dependencies.store.getVersioned(key);
-  const current = latest ? parseRecord(latest.value) : null;
+  const current = latest ? decodeMatchMediaAttachmentRecord(latest.value) : null;
   return {
     outcome: "conflict",
     reasonCode: "CAS_RETRY_EXHAUSTED",

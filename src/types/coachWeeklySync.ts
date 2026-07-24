@@ -134,6 +134,34 @@ export type SyncedCompetitionTopologyArtifact = {
   competitions: SyncedCompetitionTopology[];
 };
 
+/** Read-only durable attachment metadata; never a delivery capability. */
+export type SyncedMatchMediaAttachmentProjection =
+  | {
+      sharedAthleteId: SharedAthleteId;
+      sharedCompetitionId: SharedCompetitionId;
+      matchLineageKey: string;
+      revision: number;
+      state: "attached";
+      matchMediaAssetId: string;
+      publishedAt: string;
+      updatedAt: string;
+    }
+  | {
+      sharedAthleteId: SharedAthleteId;
+      sharedCompetitionId: SharedCompetitionId;
+      matchLineageKey: string;
+      revision: number;
+      state: "tombstoned";
+      tombstonedAt: string;
+      updatedAt: string;
+    };
+
+export type SyncedMatchMediaAttachmentProjectionSet = {
+  schemaVersion: 1;
+  sharedAthleteId: SharedAthleteId;
+  attachments: SyncedMatchMediaAttachmentProjection[];
+};
+
 export type CoachWeeklySyncPutCompetitionTopologyBody = SyncedCompetitionTopologyArtifact;
 
 export type SyncedTrainingProofRankedItem = {
@@ -211,6 +239,8 @@ export type CoachWeeklySyncSessionResponse = {
   competitionAggregateByAthleteId?: Record<string, SyncedCompetitionAggregateArtifact>;
   /** Per-athlete canonical competition topology; parent writer only. Inert until Phase 2. */
   competitionTopologyByAthleteId?: Record<string, SyncedCompetitionTopologyArtifact>;
+  /** Optional Worker read-time projection; no client hydration consumes it yet. */
+  matchMediaAttachmentsByAthleteId?: Record<string, SyncedMatchMediaAttachmentProjectionSet>;
   /** Per-athlete bounded training proof; parent writer only. */
   trainingProofByAthleteId?: Record<string, SyncedTrainingProofArtifact>;
   /** Per-athlete coach-owned match breakdown overlays. Parents consume read-only. */

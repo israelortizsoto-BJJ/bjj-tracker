@@ -47,6 +47,8 @@ import type {
   CoachWeeklySyncUpdateCompetitionBody,
   SyncedCompetitionAggregateArtifact,
   SyncedCompetitionTopologyArtifact,
+  SyncedMatchMediaAttachmentProjection,
+  SyncedMatchMediaAttachmentProjectionSet,
   SyncedTrainingProofArtifact,
   SyncedSharedAthlete,
   SyncedSharedCompetition,
@@ -241,6 +243,46 @@ function parseCompetitionTopologyByAthleteIdField(
   return out;
 }
 
+function parseMatchMediaAttachmentsByAthleteIdField(
+  raw: unknown,
+): Record<string, SyncedMatchMediaAttachmentProjectionSet> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: Record<string, SyncedMatchMediaAttachmentProjectionSet> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    const set = value as Record<string, unknown>;
+    const sharedAthleteId = typeof set.sharedAthleteId === "string" ? set.sharedAthleteId.trim() : "";
+    if (key.trim() !== sharedAthleteId || set.schemaVersion !== 1 || !Array.isArray(set.attachments)) continue;
+    const attachments: SyncedMatchMediaAttachmentProjection[] = [];
+    for (const candidate of set.attachments) {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+      const attachment = candidate as Record<string, unknown>;
+      const identity =
+        typeof attachment.sharedAthleteId === "string" && attachment.sharedAthleteId.trim() === sharedAthleteId &&
+        typeof attachment.sharedCompetitionId === "string" && Boolean(attachment.sharedCompetitionId.trim()) &&
+        typeof attachment.matchLineageKey === "string" && Boolean(attachment.matchLineageKey.trim()) &&
+        typeof attachment.revision === "number" && Number.isSafeInteger(attachment.revision) && attachment.revision >= 1 &&
+        typeof attachment.updatedAt === "string" && Boolean(attachment.updatedAt.trim());
+      if (!identity) continue;
+      if (
+        attachment.state === "attached" &&
+        typeof attachment.matchMediaAssetId === "string" && Boolean(attachment.matchMediaAssetId.trim()) &&
+        typeof attachment.publishedAt === "string" && Boolean(attachment.publishedAt.trim())
+      ) {
+        attachments.push(attachment as SyncedMatchMediaAttachmentProjection);
+      } else if (
+        attachment.state === "tombstoned" &&
+        typeof attachment.tombstonedAt === "string" && Boolean(attachment.tombstonedAt.trim()) &&
+        !("matchMediaAssetId" in attachment)
+      ) {
+        attachments.push(attachment as SyncedMatchMediaAttachmentProjection);
+      }
+    }
+    out[sharedAthleteId] = { schemaVersion: 1, sharedAthleteId, attachments };
+  }
+  return out;
+}
+
 function isSyncedTrainingProofRankedItem(v: unknown): boolean {
   if (!v || typeof v !== "object" || Array.isArray(v)) return false;
   const o = v as Record<string, unknown>;
@@ -397,6 +439,9 @@ export async function coachSyncFetchSession(
   });
   const competitionTopologyByAthleteId = parseCompetitionTopologyByAthleteIdField(
     p.competitionTopologyByAthleteId,
+  );
+  const matchMediaAttachmentsByAthleteId = parseMatchMediaAttachmentsByAthleteIdField(
+    p.matchMediaAttachmentsByAthleteId,
   );
   for (const artifact of Object.values(competitionTopologyByAthleteId)) {
     for (const competition of artifact.competitions) {
@@ -660,6 +705,7 @@ export async function coachSyncFetchSession(
     competitions,
     competitionAggregateByAthleteId,
     competitionTopologyByAthleteId,
+    matchMediaAttachmentsByAthleteId,
     trainingProofByAthleteId,
     coachMatchBreakdownArtifacts,
     coachMatchBreakdownArtifactEvidence,

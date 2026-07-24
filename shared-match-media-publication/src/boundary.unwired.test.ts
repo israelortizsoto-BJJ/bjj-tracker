@@ -50,7 +50,7 @@ describe("Publication domain remains capability-free and enablement-closed", () 
     }
   });
 
-  it("is imported only by the flag-gated Worker publication module", () => {
+  it("is imported only by flag-gated Worker publication and read-time projection modules", () => {
     const packageName = "shared-match-media-publication";
     const workerFiles = sourceFiles(path.join(repoRoot, "coach-sync-worker", "src"));
     const importers = workerFiles.filter((file) =>
@@ -58,7 +58,10 @@ describe("Publication domain remains capability-free and enablement-closed", () 
     );
     assert.deepEqual(
       importers.map((file) => path.relative(repoRoot, file)).sort(),
-      ["coach-sync-worker/src/matchMediaPublication.ts"],
+      [
+        "coach-sync-worker/src/matchMediaAttachmentProjection.ts",
+        "coach-sync-worker/src/matchMediaPublication.ts",
+      ],
     );
 
     const client = combinedSource(path.join(repoRoot, "src"));
@@ -91,6 +94,7 @@ describe("Publication domain remains capability-free and enablement-closed", () 
       "utf8",
     );
     assert.match(wrangler, /SHARED_MATCH_MEDIA_PUBLICATION_ENABLED\s*=\s*"0"/);
+    assert.match(wrangler, /SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED\s*=\s*"0"/);
     assert.match(wrangler, /SHARED_MATCH_MEDIA_UPLOAD_ENABLED\s*=\s*"0"/);
     assert.match(wrangler, /SHARED_MATCH_MEDIA_VERIFICATION_ENABLED\s*=\s*"0"/);
   });

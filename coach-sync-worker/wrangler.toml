@@ -13,6 +13,8 @@ SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION = ""
 # Publication remains completely inert until explicitly enabled per environment.
 # Independent of Upload and Verification flags — neither may open Publication.
 SHARED_MATCH_MEDIA_PUBLICATION_ENABLED = "0"
+# Read-only session GET projection remains absent unless explicitly enabled.
+SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED = "0"
 # SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET is a Cloudflare secret binding only —
 # never place it in [vars] or commit it.
 

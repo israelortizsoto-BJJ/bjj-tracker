@@ -28,6 +28,7 @@ export {
 export {
   MAX_PUBLICATION_CAS_ATTEMPTS,
   evaluateMatchMediaAttachmentMutation,
+  decodeMatchMediaAttachmentRecord,
   mutateMatchMediaAttachment,
   type PublicationDependencies,
 } from "./publication.ts";
