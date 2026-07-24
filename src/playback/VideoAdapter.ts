@@ -31,7 +31,26 @@ export type VideoAdapter = {
   unload: () => Promise<void>;
   getPositionMs: () => Promise<number | null>;
   getDurationMs: () => Promise<number | null>;
+  /**
+   * Strict pause path for capture-boundary callers. Unlike `pause()`, this does
+   * not swallow native failure and returns the status produced by this exact
+   * `pauseAsync()` request together with the bound engine identity.
+   */
+  requestPauseConfirmation: () => Promise<VideoPauseConfirmationRequest>;
+  /** True only while the engine that served a request remains the live engine. */
+  isPauseConfirmationCurrent: (request: VideoPauseConfirmationRequest) => boolean;
 };
+
+export type VideoPauseConfirmationRequest = {
+  engine: VideoEngine;
+  status: VideoEngineStatus | null;
+};
+
+function asVideoEngineStatus(value: unknown): VideoEngineStatus | null {
+  if (!value || typeof value !== "object" || !("isLoaded" in value)) return null;
+  const status = value as VideoEngineStatus;
+  return typeof status.isLoaded === "boolean" ? status : null;
+}
 
 /**
  * @param getEngine Returns the live Video ref/engine, or null when unbound.
@@ -105,6 +124,19 @@ export function createVideoAdapter(getEngine: () => VideoEngine | null): VideoAd
       } catch {
         return null;
       }
+    },
+
+    async requestPauseConfirmation() {
+      const engine = getEngine();
+      if (!engine) {
+        throw new Error("Video pause confirmation requires a bound video engine.");
+      }
+      const status = await engine.pauseAsync();
+      return { engine, status: asVideoEngineStatus(status) };
+    },
+
+    isPauseConfirmationCurrent(request) {
+      return getEngine() === request.engine;
     },
   };
 }

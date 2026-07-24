@@ -26,6 +26,36 @@
 import type { AudioAdapter, AudioEngineStatus } from "./AudioAdapter";
 import type { VideoAdapter, VideoEngineStatus } from "./VideoAdapter";
 
+/** Narrow failure surface for a request-correlated native video pause. */
+export class PlaybackVideoPauseConfirmationError extends Error {
+  readonly code:
+    | "VIDEO_PAUSE_CONFIRMATION_SUPERSEDED"
+    | "VIDEO_PAUSE_CONFIRMATION_TIMEOUT"
+    | "VIDEO_PAUSE_CONFIRMATION_CANCELLED"
+    | "VIDEO_PAUSE_CONFIRMATION_REPLACED"
+    | "VIDEO_PAUSE_CONFIRMATION_INVALID_STATUS";
+
+  constructor(
+    code: PlaybackVideoPauseConfirmationError["code"],
+    message: string,
+  ) {
+    super(message);
+    this.name = "PlaybackVideoPauseConfirmationError";
+    this.code = code;
+  }
+}
+
+export type ConfirmedVideoPause = {
+  positionMillis: number;
+};
+
+export type ConfirmedVideoPauseOptions = {
+  /** Bounded native-operation wait; callers may only shorten it for focused UI needs. */
+  timeoutMs?: number;
+};
+
+const DEFAULT_VIDEO_PAUSE_CONFIRMATION_TIMEOUT_MS = 750;
+
 /** Thrown when both video and audio adapters report a live engine. */
 export class PlaybackCoordinatorDualBindError extends Error {
   readonly code = "PLAYBACK_COORDINATOR_DUAL_BIND" as const;
@@ -52,6 +82,13 @@ export type PlayIntentHandler = () => void | Promise<void>;
 export type PlaybackCoordinator = {
   play: () => Promise<void>;
   pause: () => Promise<void>;
+  /**
+   * Strict capture-boundary pause. Resolves only from the native status returned
+   * by this exact `pauseAsync()` request; ordinary `pause()` remains unchanged.
+   */
+  requestConfirmedVideoPause: (options?: ConfirmedVideoPauseOptions) => Promise<ConfirmedVideoPause>;
+  /** Reject a pending strict pause when its bound player is being replaced or unmounted. */
+  cancelConfirmedVideoPause: (reason?: string) => void;
   seek: (positionMs: number) => Promise<void>;
   replay: () => Promise<void>;
   unload: () => Promise<void>;
@@ -82,6 +119,14 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
     durationMs: null,
   };
   let playIntentHandler: PlayIntentHandler | null = null;
+  let nextVideoPauseRequestId = 0;
+  let pendingVideoPause:
+    | {
+        id: number;
+        timer: ReturnType<typeof setTimeout>;
+        reject: (reason: Error) => void;
+      }
+    | null = null;
 
   const listeners = new Set<(snapshot: PlaybackSnapshot) => void>();
 
@@ -110,6 +155,35 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
 
   function setPlaybackState(playbackState: PlaybackState) {
     publish({ ...snapshot, playbackState });
+  }
+
+  function clearPendingVideoPause(
+    pending: NonNullable<typeof pendingVideoPause>,
+  ): boolean {
+    if (pendingVideoPause !== pending) return false;
+    clearTimeout(pending.timer);
+    pendingVideoPause = null;
+    return true;
+  }
+
+  function rejectPendingVideoPause(
+    pending: NonNullable<typeof pendingVideoPause>,
+    error: Error,
+  ) {
+    if (!clearPendingVideoPause(pending)) return;
+    pending.reject(error);
+  }
+
+  function cancelConfirmedVideoPause(reason = "Video player was replaced or unmounted.") {
+    const pending = pendingVideoPause;
+    if (!pending) return;
+    rejectPendingVideoPause(
+      pending,
+      new PlaybackVideoPauseConfirmationError(
+        "VIDEO_PAUSE_CONFIRMATION_CANCELLED",
+        reason,
+      ),
+    );
   }
 
   function applyVideoStatus(status: VideoEngineStatus) {
@@ -188,6 +262,90 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
       await refreshClockFromAdapters();
     },
 
+    requestConfirmedVideoPause(options = {}) {
+      assertSingleEngineBound();
+      const timeoutMs = options.timeoutMs ?? DEFAULT_VIDEO_PAUSE_CONFIRMATION_TIMEOUT_MS;
+      if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || timeoutMs > DEFAULT_VIDEO_PAUSE_CONFIRMATION_TIMEOUT_MS) {
+        return Promise.reject(
+          new RangeError(
+            `Video pause confirmation timeout must be a positive integer no greater than ${DEFAULT_VIDEO_PAUSE_CONFIRMATION_TIMEOUT_MS}.`,
+          ),
+        );
+      }
+
+      const previous = pendingVideoPause;
+      if (previous) {
+        rejectPendingVideoPause(
+          previous,
+          new PlaybackVideoPauseConfirmationError(
+            "VIDEO_PAUSE_CONFIRMATION_SUPERSEDED",
+            "Video pause confirmation was superseded by a newer request.",
+          ),
+        );
+      }
+
+      return new Promise<ConfirmedVideoPause>((resolve, reject) => {
+        const id = ++nextVideoPauseRequestId;
+        let pending: NonNullable<typeof pendingVideoPause>;
+        const timer = setTimeout(() => {
+          rejectPendingVideoPause(
+            pending,
+            new PlaybackVideoPauseConfirmationError(
+              "VIDEO_PAUSE_CONFIRMATION_TIMEOUT",
+              "Timed out waiting for request-correlated native video pause confirmation.",
+            ),
+          );
+        }, timeoutMs);
+        pending = {
+          id,
+          timer,
+          reject,
+        };
+        pendingVideoPause = pending;
+
+        void (async () => {
+          try {
+            const request = await video.requestPauseConfirmation();
+            if (pendingVideoPause !== pending) return;
+            if (!video.isPauseConfirmationCurrent(request)) {
+              rejectPendingVideoPause(
+                pending,
+                new PlaybackVideoPauseConfirmationError(
+                  "VIDEO_PAUSE_CONFIRMATION_REPLACED",
+                  "Video player changed before native pause confirmation arrived.",
+                ),
+              );
+              return;
+            }
+            const status = request.status;
+            if (
+              !status?.isLoaded ||
+              status.isPlaying !== false ||
+              typeof status.positionMillis !== "number" ||
+              !Number.isFinite(status.positionMillis) ||
+              status.positionMillis < 0
+            ) {
+              rejectPendingVideoPause(
+                pending,
+                new PlaybackVideoPauseConfirmationError(
+                  "VIDEO_PAUSE_CONFIRMATION_INVALID_STATUS",
+                  "Native pause request did not return a loaded, paused status with a valid position.",
+                ),
+              );
+              return;
+            }
+            if (!clearPendingVideoPause(pending)) return;
+            resolve({ positionMillis: status.positionMillis });
+          } catch (error) {
+            if (!clearPendingVideoPause(pending)) return;
+            reject(error instanceof Error ? error : new Error(String(error)));
+          }
+        })();
+      });
+    },
+
+    cancelConfirmedVideoPause,
+
     async seek(positionMs: number) {
       // Today only video exercises seek (replay → 0). Audio seek is forward-only.
       assertSingleEngineBound();
@@ -211,6 +369,7 @@ export function createPlaybackCoordinator(deps: PlaybackCoordinatorDeps): Playba
     },
 
     async unload() {
+      cancelConfirmedVideoPause();
       assertSingleEngineBound();
       await video.unload();
       await audio.unload();
