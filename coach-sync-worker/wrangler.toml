@@ -15,6 +15,8 @@ SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION = ""
 SHARED_MATCH_MEDIA_PUBLICATION_ENABLED = "0"
 # Read-only session GET projection remains absent unless explicitly enabled.
 SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED = "0"
+# Coach Match-media resolution remains completely inert until explicitly enabled.
+SHARED_MATCH_MEDIA_RESOLUTION_ENABLED = "0"
 # SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET is a Cloudflare secret binding only —
 # never place it in [vars] or commit it.
 

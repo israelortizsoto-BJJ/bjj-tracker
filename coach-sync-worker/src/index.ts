@@ -29,6 +29,12 @@ import {
   isAttachmentProjectionFeatureEnabled,
   projectMatchMediaAttachmentsByAthlete,
 } from "./matchMediaAttachmentProjection";
+import {
+  handleMatchMediaAssetContent,
+  handleResolveMatchMediaAttachment,
+  isResolutionFeatureEnabled,
+  type MatchMediaResolutionDependencies,
+} from "./matchMediaResolution";
 import { createConditionalObjectVerificationRecordStore } from "../../shared-match-media-production-verification/src/index";
 import { handleOperatorInspectionHttpRequest } from "./productionVerification/operatorInspection";
 import { createR2ConditionalObjectStore } from "./productionVerification/r2ConditionalObjectStore";
@@ -57,6 +63,12 @@ export interface Env {
   SHARED_MATCH_MEDIA_PUBLICATION_ENABLED?: string;
   /** Read-time attachment projection is omitted unless exactly "1". */
   SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED?: string;
+  /**
+   * Independent server kill switch. Coach Match-media resolution is inert
+   * unless exactly "1". Upload/Verification/Publication/Projection must never
+   * open this flag.
+   */
+  SHARED_MATCH_MEDIA_RESOLUTION_ENABLED?: string;
   /**
    * Cloudflare secret binding for read-only operator inspection.
    * Must never be committed or placed in wrangler [vars].
@@ -1891,6 +1903,28 @@ function createMatchMediaPublicationDependencies(
     mediaBucket: env.MEDIA,
     readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
     now: () => new Date(),
+  };
+}
+
+function createMatchMediaResolutionDependencies(
+  env: Env,
+  request: Request,
+): MatchMediaResolutionDependencies {
+  return {
+    enabled: isResolutionFeatureEnabled(env.SHARED_MATCH_MEDIA_RESOLUTION_ENABLED),
+    mediaBucket: env.MEDIA,
+    readCoachSession: async (sessionToken) => {
+      const session = await readSession(env.SESSIONS, sessionToken);
+      if (!session) return null;
+      return {
+        writerSecret: session.writerSecret,
+        athletes: session.athletes,
+        competitions: session.competitions,
+        competitionTopologyByAthleteId: session.competitionTopologyByAthleteId,
+      };
+    },
+    now: () => new Date(),
+    requestOrigin: new URL(request.url).origin,
   };
 }
 
@@ -3734,6 +3768,40 @@ export default {
           path,
           method: request.method,
         });
+      }
+
+      const sharedMatchMediaResolve = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/attachments\/resolve$/,
+      );
+      if (sharedMatchMediaResolve && request.method === "POST") {
+        const token = decodeURIComponent(sharedMatchMediaResolve[1] ?? "")
+          .trim()
+          .toLowerCase();
+        if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
+        return handleResolveMatchMediaAttachment(
+          request,
+          token,
+          createMatchMediaResolutionDependencies(env, request),
+        );
+      }
+
+      const sharedMatchMediaAssetContent = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/assets\/([^/]+)\/content$/,
+      );
+      if (sharedMatchMediaAssetContent && request.method === "GET") {
+        const token = decodeURIComponent(sharedMatchMediaAssetContent[1] ?? "")
+          .trim()
+          .toLowerCase();
+        const matchMediaAssetId = decodeURIComponent(
+          sharedMatchMediaAssetContent[2] ?? "",
+        ).trim();
+        if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
+        return handleMatchMediaAssetContent(
+          request,
+          token,
+          matchMediaAssetId,
+          createMatchMediaResolutionDependencies(env, request),
+        );
       }
 
       const sharedMatchMediaPublication = path.match(
