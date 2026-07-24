@@ -27,6 +27,7 @@ import {
   isVerificationFeatureEnabled,
   runProductionVerification,
 } from "./productionVerification/runProductionVerification";
+import { uploadMultipartPartWithSha256 } from "./uploadMultipartPartWithSha256";
 
 export interface Env {
   SESSIONS: KVNamespace;
@@ -903,14 +904,18 @@ function parseWeeklyByAthleteId(raw: unknown): Record<string, WeeklyDoc> {
   }
   const outProbes = Object.fromEntries(Object.entries(out).map(([id, doc]) => [id, probeWeeklyDoc(doc)]));
   const stageDiffs: Record<string, { fieldsLost: string[]; rawKeys: string[] }> = {};
+  const rawMap = raw as Record<string, unknown>;
   for (const [id, before] of Object.entries(rawProbes)) {
     const after = outProbes[id];
     const fieldsLost = diffWeeklyFieldLoss(before, after);
     if (fieldsLost.length > 0 || !after) {
+      const rawEntry = rawMap[id];
       stageDiffs[id] = {
         fieldsLost: after ? fieldsLost : [...fieldsLost, "__entire_entry_dropped__"],
         rawKeys:
-          v && typeof v === "object" && !Array.isArray(v) ? Object.keys(v as Record<string, unknown>) : [],
+          rawEntry && typeof rawEntry === "object" && !Array.isArray(rawEntry)
+            ? Object.keys(rawEntry as Record<string, unknown>)
+            : [],
       };
     }
   }
@@ -1901,11 +1906,14 @@ function createSharedMatchMediaUploadDependencies(
         env.MEDIA.createMultipartUpload(key, options),
       resumeMultipartUpload: (key, uploadId) => {
         const multipart = env.MEDIA.resumeMultipartUpload(key, uploadId);
+        // { sha256 } support is established by existing runtime certification or
+        // observed behavior; it is not currently represented in the published
+        // R2MultipartOptions/Workers type contract.
         return {
           uploadId: multipart.uploadId,
           abort: () => multipart.abort(),
           uploadPart: (partNumber, value, options) =>
-            multipart.uploadPart(partNumber, value, options),
+            uploadMultipartPartWithSha256(multipart, partNumber, value, options),
           complete: (parts) => multipart.complete([...parts]),
         };
       },
@@ -2903,6 +2911,10 @@ export default {
         const mergedWeekly: WeeklyDoc = {
           ...existingWeeklySansParentFeedback(existingWeeklyForMerge),
           ...omitUndefinedShallow(weeklyFromPut as Record<string, unknown>),
+          // Required WeeklyDoc fields must remain definite after Partial spreads.
+          weekStartYMD: weeklyFromPut.weekStartYMD,
+          headline: weeklyFromPut.headline,
+          body: weeklyFromPut.body,
           updatedAt: now,
         };
         if (hasFamilyCoachRecapKey) {

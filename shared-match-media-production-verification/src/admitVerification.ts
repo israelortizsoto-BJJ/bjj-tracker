@@ -1,9 +1,8 @@
-import { isDeepStrictEqual } from "node:util";
-
 import {
   deriveAdmissionIdentity,
   type ImmutableAdmissionFields,
 } from "./admissionIdentity.ts";
+import { jsonDeepEqual } from "./jsonDeepEqual.ts";
 import type { ScanHookStatus } from "./privacyScanHook.ts";
 import {
   defaultRetryClassificationForReason,
@@ -129,7 +128,7 @@ function assertDeepEqualExactPrefix<T>(
     throw new VerificationDomainError("APPEND_ONLY_VIOLATION", message);
   }
   for (let index = 0; index < prior.length; index += 1) {
-    if (!isDeepStrictEqual(prior[index], proposed[index])) {
+    if (!jsonDeepEqual(prior[index], proposed[index])) {
       throw new VerificationDomainError("APPEND_ONLY_VIOLATION", message);
     }
   }
@@ -173,7 +172,7 @@ export function assertAppendOnlyEvidencePrefix(
     );
 
     if (priorAttempt.events.length === proposedAttempt.events.length) {
-      if (!isDeepStrictEqual(priorAttempt, proposedAttempt)) {
+      if (!jsonDeepEqual(priorAttempt, proposedAttempt)) {
         throw new VerificationDomainError(
           "APPEND_ONLY_VIOLATION",
           "attemptEvidence must not remove, replace, reorder, or alter existing attempts.",
