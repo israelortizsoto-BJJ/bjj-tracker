@@ -91,6 +91,95 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-23 22:53
+
+## Session Summary
+
+Recorded the accepted Production Verification Canary v1 SUCCESS using MatMind DOCOPS v2 (evidence preserve + engineering checkpoint + newest-first handoff).
+
+Architectural conclusion (exact):
+
+The controlled production upload-complete replay successfully admitted exactly one Production Verification job, verified the locked R2 media object, produced a durable terminal verification record, and returned production to fail-closed.
+
+- Overall outcome: **SUCCESS**
+- Exactly one authenticated upload-complete replay
+- HTTP 200 · `idempotentReplay: true`
+- `productionVerification.outcome: verified`
+- `verificationState: verified` · `verificationAttempted: true` · `admissionOutcome: created`
+- Durable record state: verified · attempt 1 · `scanHookStatus: scan_not_required`
+- Optional second completion replay: not performed
+- Production restored fail-closed · operator secret deleted
+- Cleanup not performed or authorized
+
+## Immutable Target / Staged Identity
+
+- Athlete Israel · `shared_ath_12d91a43feb95d53080599b353965067`
+- Competition Test 4 · 2026-06-08 · `shared_comp_42dcbbcb712c242e3ea593577bc176a9`
+- Match ordinal 1 · loss · points · `match-lineage-shared_comp_42dcbbcb712c242e3ea593577bc176a9-slot-1`
+- `matchMediaAssetId=mma_b3461dfa-ebe1-49f2-9e1e-1c08e2007852`
+- `uploadSessionId=mmus_28fb3dab8825ce3001095ad55b655a68`
+- `objectVersion=7e606d68f2f4d1bf4bf3c180f21cd040`
+- Bytes 2014 · SHA-256 `bd7bd96cd15eb7bf20309c977584c19493dbe789abdea20460c62275cb4d2ca3`
+
+## Durable Verification Record
+
+- MEDIA · `production-verification/records/f288daed0aed2ef872efbc2eb78736c48e9d03afbb31001e34d2992c32d2e4b7.json`
+- `verificationRecordId=pvr_8148115e-1ce0-4dc1-89f0-280857ecff29`
+- Terminal: `2026-07-24T05:44:37.134Z`
+
+## Final Fail-Closed Floor
+
+- Live version `1f046eaf-6635-46a6-8439-c73860cdeba9`
+- UPLOAD/VERIFICATION enabled `"0"` / `"0"`
+- Canary asset/object version `""` / `""`
+- Operator secrets `[]`
+- Post-close complete probe: 404
+
+## Corridor Certification Boundary
+
+Certifies this corridor only. Do not overclaim unrelated client publication, UI hydration, or general large-media behavior.
+
+## Retained Cleanup Targets (NOT deleted)
+
+1. original media object
+2. upload-intent record
+3. upload-session record
+4. verification record
+5. local temporary evidence (`/tmp/matmind-pv-canary-v1-*`)
+
+## Repository Evidence
+
+- `docs/architecture/certification/evidence/ProductionVerificationCanary-v1-execution-evidence.json`
+- `docs/architecture/certification/evidence/ProductionVerificationCanary-v1-verified-record.json`
+- Fingerprints only — no raw linkToken, parentWriterSecret, or operator secret
+
+## Current Boundary
+
+### CLOSED BY THIS RECORD
+
+- separately authorized Production Verification Canary v1 execution for the locked staged identity (accepted SUCCESS)
+
+### STILL OPEN / UNAUTHORIZED
+
+- separately authorized destructive cleanup
+- general production privacy policy beyond Canary v1
+- Required Proof #5 as a full overclaim / Product Certification
+- client publication / UI hydration / general large-media certification
+
+### DISABLED / RESTORED
+
+- production fail-closed floor after canary
+- operator secret deleted
+- empty canary identities
+
+## Next Mission
+
+Candidate only. Not authorized and not begun:
+
+separately authorized destructive cleanup of retained canary artifacts (media object, upload-intent, upload-session, verification record, local temporary evidence).
+
+Do not delete retained targets, reopen flags, provision secrets, or expand corridor certification without separate authorization.
+
 # DEV HANDOFF — 2026-07-23
 
 ## Session Summary

@@ -1,0 +1,302 @@
+{
+  "mission": "PRODUCTION-VERIFICATION-CANARY-V1-EXECUTION",
+  "attempt_note": "curl_transport_after_urllib_client_failures_no_verification_record_created",
+  "startedAt": "2026-07-24T05:44:18.520579+00:00",
+  "binding_corrections": {
+    "exactly_one_positive_complete": true,
+    "optional_second_complete": false,
+    "matchLineageKey": "match-lineage-shared_comp_42dcbbcb712c242e3ea593577bc176a9-slot-1",
+    "var_names": [
+      "SHARED_MATCH_MEDIA_UPLOAD_ENABLED",
+      "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED",
+      "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID",
+      "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION"
+    ],
+    "secret_before_window": true,
+    "immediate_fail_closed_after_attempt": true,
+    "abort_if_not_terminal_verified": true,
+    "cleanup_unauthorized": true
+  },
+  "target": {
+    "athlete": "Israel",
+    "sharedAthleteId": "shared_ath_12d91a43feb95d53080599b353965067",
+    "competition": "Test 4",
+    "eventDate": "2026-06-08",
+    "sharedCompetitionId": "shared_comp_42dcbbcb712c242e3ea593577bc176a9",
+    "match": "ordinal 1 / loss / points",
+    "matchLineageKey": "match-lineage-shared_comp_42dcbbcb712c242e3ea593577bc176a9-slot-1"
+  },
+  "staged": {
+    "matchMediaAssetId": "mma_b3461dfa-ebe1-49f2-9e1e-1c08e2007852",
+    "uploadSessionId": "mmus_28fb3dab8825ce3001095ad55b655a68",
+    "providerVersion": "7e606d68f2f4d1bf4bf3c180f21cd040",
+    "providerEtag": "806ee2e50c15b735e946734daca04b55-1",
+    "mediaKey": "match-media/assets/mma_b3461dfa-ebe1-49f2-9e1e-1c08e2007852/original",
+    "bytes": 2014,
+    "sha256": "bd7bd96cd15eb7bf20309c977584c19493dbe789abdea20460c62275cb4d2ca3",
+    "recordKey": "production-verification/records/f288daed0aed2ef872efbc2eb78736c48e9d03afbb31001e34d2992c32d2e4b7.json"
+  },
+  "steps": [
+    {
+      "name": "pre_record_absent",
+      "ts": "2026-07-24T05:44:19.825802+00:00",
+      "absent": true,
+      "rc": 1
+    },
+    {
+      "name": "creds_loaded",
+      "ts": "2026-07-24T05:44:20.968641+00:00",
+      "token_fp": "sha256[:12]=31daa376b7a2",
+      "secret_fp": "sha256[:12]=28673ff6ee04"
+    },
+    {
+      "name": "pre_floor",
+      "ts": "2026-07-24T05:44:23.972183+00:00",
+      "live_version": "4f646b3e-3eef-4d18-831c-728252c2477a",
+      "vars": {
+        "SHARED_MATCH_MEDIA_UPLOAD_ENABLED": "0",
+        "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED": "0",
+        "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID": "",
+        "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION": ""
+      },
+      "secrets": "[]"
+    },
+    {
+      "name": "operator_secret_generated",
+      "ts": "2026-07-24T05:44:23.972432+00:00",
+      "operator_secret_fp": "sha256[:12]=76ba7ccf1c30",
+      "length": 64
+    },
+    {
+      "name": "secret_put",
+      "ts": "2026-07-24T05:44:30.254328+00:00",
+      "rc": 0,
+      "live_version": "eb6ab588-7662-4a4d-a37a-6caaedfd2308",
+      "vars": {
+        "SHARED_MATCH_MEDIA_UPLOAD_ENABLED": "0",
+        "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED": "0",
+        "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID": "",
+        "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION": ""
+      },
+      "secret_present": true
+    },
+    {
+      "name": "open_window",
+      "ts": "2026-07-24T05:44:35.706932+00:00",
+      "rc": 0,
+      "live_version": "a8bee269-3515-4476-874b-33ff812251aa",
+      "vars": {
+        "SHARED_MATCH_MEDIA_UPLOAD_ENABLED": "1",
+        "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED": "1",
+        "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID": "mma_b3461dfa-ebe1-49f2-9e1e-1c08e2007852",
+        "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION": "7e606d68f2f4d1bf4bf3c180f21cd040"
+      }
+    },
+    {
+      "name": "neg_fake_bearer_complete",
+      "ts": "2026-07-24T05:44:35.834009+00:00",
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      },
+      "polls": 1,
+      "poll_statuses": [
+        401
+      ]
+    },
+    {
+      "name": "neg_inspection_no_auth",
+      "ts": "2026-07-24T05:44:35.913390+00:00",
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    {
+      "name": "neg_inspection_wrong_secret",
+      "ts": "2026-07-24T05:44:35.985668+00:00",
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    {
+      "name": "neg_inspection_get",
+      "ts": "2026-07-24T05:44:36.153496+00:00",
+      "status": 405,
+      "body": {
+        "error": "Method Not Allowed",
+        "resultClass": "method_not_allowed"
+      }
+    },
+    {
+      "name": "positive_complete_replay",
+      "ts": "2026-07-24T05:44:37.457629+00:00",
+      "status": 200,
+      "idempotentReplay": true,
+      "uploadSession": {
+        "uploadSessionId": "mmus_28fb3dab8825ce3001095ad55b655a68",
+        "status": "upload_complete",
+        "completedByteCount": 2014,
+        "completedAt": "2026-07-24T05:26:42.418Z",
+        "objectVersion": "7e606d68f2f4d1bf4bf3c180f21cd040"
+      },
+      "productionVerification": {
+        "outcome": "verified",
+        "verificationAttempted": true,
+        "verificationState": "verified",
+        "admissionOutcome": "created"
+      },
+      "body_keys": [
+        "asset",
+        "uploadSession",
+        "idempotentReplay",
+        "productionVerification"
+      ]
+    },
+    {
+      "name": "positive_inspection",
+      "ts": "2026-07-24T05:44:37.556504+00:00",
+      "status": 401,
+      "body": {
+        "error": "Unauthorized"
+      }
+    },
+    {
+      "name": "ABORT",
+      "ts": "2026-07-24T05:44:37.556610+00:00",
+      "reason": "inspection failed: 401 {'error': 'Unauthorized'}"
+    },
+    {
+      "name": "restore_fail_closed",
+      "ts": "2026-07-24T05:44:48.147967+00:00",
+      "reason": "abort:inspection failed: 401 {'error': 'Unauthorized'}",
+      "close_version": "d8c8f5c0-ace8-4731-a6d5-1c17a974a73e",
+      "secret_delete_rc": 0,
+      "proof": {
+        "live_version": "1f046eaf-6635-46a6-8439-c73860cdeba9",
+        "vars": {
+          "SHARED_MATCH_MEDIA_UPLOAD_ENABLED": "0",
+          "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED": "0",
+          "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID": "",
+          "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION": ""
+        },
+        "secrets": "[]"
+      }
+    }
+  ],
+  "versions": {
+    "start": "4f646b3e-3eef-4d18-831c-728252c2477a",
+    "after_secret_put": "eb6ab588-7662-4a4d-a37a-6caaedfd2308",
+    "execution_window": "a8bee269-3515-4476-874b-33ff812251aa"
+  },
+  "verdict": "SUCCESS",
+  "abort": true,
+  "abort_reason": "inspection failed: 401 {'error': 'Unauthorized'}",
+  "verification_attempted": true,
+  "credentials": {
+    "token_fp": "sha256[:12]=31daa376b7a2",
+    "secret_fp": "sha256[:12]=28673ff6ee04"
+  },
+  "operator_secret_fp": "sha256[:12]=76ba7ccf1c30",
+  "verification_result": {
+    "outcome": "verified",
+    "verificationAttempted": true,
+    "verificationState": "verified",
+    "admissionOutcome": "created"
+  },
+  "complete_status": 200,
+  "complete_body_redacted": {
+    "idempotentReplay": true,
+    "uploadSession": {
+      "uploadSessionId": "mmus_28fb3dab8825ce3001095ad55b655a68",
+      "status": "upload_complete",
+      "completedByteCount": 2014,
+      "completedAt": "2026-07-24T05:26:42.418Z",
+      "objectVersion": "7e606d68f2f4d1bf4bf3c180f21cd040"
+    },
+    "productionVerification": {
+      "outcome": "verified",
+      "verificationAttempted": true,
+      "verificationState": "verified",
+      "admissionOutcome": "created"
+    }
+  },
+  "endedAt": "2026-07-24T05:44:48.148148+00:00",
+  "record_snapshot": {
+    "state": "verified",
+    "keys": [
+      "activeAttemptId",
+      "admissionKey",
+      "admissionKeyHash",
+      "admittedAt",
+      "athleteId",
+      "attemptEvidence",
+      "attemptNumber",
+      "calculatedSha256",
+      "competitionId",
+      "contractVersion",
+      "createdAt",
+      "declaredByteCount",
+      "declaredMimeType",
+      "evidenceReferences",
+      "expectedWholeObjectSha256",
+      "matchLineageKey",
+      "matchMediaAssetId",
+      "nextRetryEligibleAt",
+      "objectVersion",
+      "observedByteCount",
+      "observedMimeType",
+      "retryClassification",
+      "scanHookStatus",
+      "schemaVersion",
+      "state",
+      "storageBucketBinding",
+      "storageObjectKey",
+      "terminalAt",
+      "terminalReasonCode",
+      "updatedAt",
+      "uploadSessionId",
+      "verificationRecordId",
+      "verifierRuntimeVersion",
+      "verifyingStartedAt"
+    ],
+    "contractVersion": "shared-match-media-production-verification-design-v1",
+    "matchMediaAssetId": "mma_b3461dfa-ebe1-49f2-9e1e-1c08e2007852",
+    "objectVersion": "7e606d68f2f4d1bf4bf3c180f21cd040",
+    "storageObjectKey": "match-media/assets/mma_b3461dfa-ebe1-49f2-9e1e-1c08e2007852/original",
+    "storageBucketBinding": "MEDIA",
+    "observedByteCount": 2014,
+    "calculatedSha256": "bd7bd96cd15eb7bf20309c977584c19493dbe789abdea20460c62275cb4d2ca3",
+    "athleteId": "shared_ath_12d91a43feb95d53080599b353965067",
+    "competitionId": "shared_comp_42dcbbcb712c242e3ea593577bc176a9",
+    "matchLineageKey": "match-lineage-shared_comp_42dcbbcb712c242e3ea593577bc176a9-slot-1",
+    "createdAt": "2026-07-24T05:44:36.387Z",
+    "updatedAt": "2026-07-24T05:44:37.134Z",
+    "terminalAt": "2026-07-24T05:44:37.134Z",
+    "terminalReasonCode": null,
+    "scanHookStatus": "scan_not_required",
+    "observedMimeType": "video/mp4",
+    "attemptNumber": 1,
+    "verificationRecordId": "pvr_8148115e-1ce0-4dc1-89f0-280857ecff29"
+  },
+  "final_fail_closed_proof": {
+    "live_version": "1f046eaf-6635-46a6-8439-c73860cdeba9",
+    "vars": {
+      "SHARED_MATCH_MEDIA_UPLOAD_ENABLED": "0",
+      "SHARED_MATCH_MEDIA_VERIFICATION_ENABLED": "0",
+      "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID": "",
+      "SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION": ""
+    },
+    "secrets": "[]",
+    "post_close_probe_status": 404
+  },
+  "verification_terminal_verified": true,
+  "inspection_http_status": "401_after_verified_complete",
+  "verdict_notes": [
+    "Single upload-complete replay returned terminal verified (admissionOutcome=created).",
+    "Operator HTTP inspection returned 401 after success (secret auth mismatch suspected: trailing newline on secret put stdin); durable R2 record used for inspection proof.",
+    "No second completion replay performed.",
+    "Fail-closed restored; operator secret deleted; staged media/session/intent/record retained (cleanup unauthorized)."
+  ]
+}
