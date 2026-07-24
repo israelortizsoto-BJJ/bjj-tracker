@@ -17,6 +17,9 @@ SHARED_MATCH_MEDIA_PUBLICATION_ENABLED = "0"
 SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED = "0"
 # Coach Match-media resolution remains completely inert until explicitly enabled.
 SHARED_MATCH_MEDIA_RESOLUTION_ENABLED = "0"
+# Coach Match Breakdown schema-v2 publication remains blocked until explicitly enabled.
+# Independent of SHARED_MATCH_MEDIA_* flags — none may open schema-v2 publication.
+COACH_MATCH_BREAKDOWN_SCHEMA_V2_PUBLICATION_ENABLED = "0"
 # SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET is a Cloudflare secret binding only —
 # never place it in [vars] or commit it.
 

@@ -43,6 +43,17 @@ import {
   runProductionVerification,
 } from "./productionVerification/runProductionVerification";
 import { uploadMultipartPartWithSha256 } from "./uploadMultipartPartWithSha256";
+import {
+  parseCoachMatchBreakdownArtifactSet,
+  parseCoachMatchBreakdownArtifacts,
+  type CoachMatchBreakdownArtifact,
+  type CoachMatchBreakdownArtifactSet,
+} from "./coachMatchBreakdownArtifacts";
+import {
+  buildCoachMatchBreakdownSchemaV2PublicationDisabledResponse,
+  decideCoachMatchBreakdownPut,
+  logCoachMatchBreakdownSchemaV2PublicationBlocked,
+} from "./coachMatchBreakdownSchemaV2Publication";
 
 export interface Env {
   SESSIONS: KVNamespace;
@@ -69,6 +80,11 @@ export interface Env {
    * open this flag.
    */
   SHARED_MATCH_MEDIA_RESOLUTION_ENABLED?: string;
+  /**
+   * Independent server kill switch. Coach Match Breakdown schema-v2 publication
+   * is rejected unless exactly "1". Must not derive from SHARED_MATCH_MEDIA_*.
+   */
+  COACH_MATCH_BREAKDOWN_SCHEMA_V2_PUBLICATION_ENABLED?: string;
   /**
    * Cloudflare secret binding for read-only operator inspection.
    * Must never be committed or placed in wrangler [vars].
@@ -217,26 +233,6 @@ type TrainingProofArtifact = {
   topSystems: TrainingProofRankedItem[];
   topTechniques: TrainingProofRankedItem[];
   weeklyGoalMet: boolean;
-};
-
-type CoachMatchBreakdownArtifact = {
-  sharedAthleteId: string;
-  sharedCompetitionId: string;
-  matchLineageKey: string;
-  coachNote?: string;
-  /** Remote companion audio id (R2). Never a URL or localUri. */
-  mediaId?: string;
-  durationMs?: number;
-  mimeType?: string;
-  alignment?: { commentaryStartVideoMs: number; matchMediaAssetId: string; attachmentRevision: number };
-  updatedAt: string;
-};
-
-type CoachMatchBreakdownArtifactSet = {
-  schemaVersion: 1 | 2;
-  sharedAthleteId: string;
-  updatedAt: string;
-  artifacts: CoachMatchBreakdownArtifact[];
 };
 
 /** Stored shape; legacy rows omit schemaVersion / athletes / parentWriterSecret / weeklyByAthleteId until migrated. */
@@ -457,7 +453,6 @@ const MAX_TOPOLOGY_MEDIA_REFS_PER_MATCH = 2;
 const MAX_TOPOLOGY_PAYLOAD_CHARS = 256_000;
 const MAX_TOPOLOGY_ID_CHARS = 200;
 const MAX_TOPOLOGY_URI_CHARS = 2_000;
-const MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE = 2048;
 const MAX_COACH_MEDIA_BYTES = 15 * 1024 * 1024;
 const MEDIA_ID_RE = /^[a-f0-9]{32}$/i;
 const MEDIA_CONTENT_TTL_SECONDS = 15 * 60;
@@ -507,8 +502,6 @@ function coachMatchBreakdownArtifactCountForAthlete(
 ): number {
   return artifactsByAthleteId[sharedAthleteId]?.artifacts.length ?? 0;
 }
-const MAX_COACH_BREAKDOWN_TEXT_CHARS = 8_000;
-const MAX_COACH_BREAKDOWN_PAYLOAD_CHARS = 256_000;
 const RESULT_SET = new Set<CompetitionResult>(["gold", "silver", "bronze", "participated", "dnf", "other"]);
 const EVENT_STATUS_SET = new Set<CompetitionEventStatus>(["upcoming", "completed", "cancelled", "unknown"]);
 const FORMAT_SET = new Set<CompetitionFormat>(["gi", "nogi", "both"]);
@@ -1328,66 +1321,6 @@ function parseTrainingProofByAthleteId(
   return out;
 }
 
-function parseCoachMatchBreakdownArtifact(raw: unknown): CoachMatchBreakdownArtifact | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const o = raw as Record<string, unknown>;
-  const sharedAthleteId = parseTopologyId(o.sharedAthleteId);
-  const sharedCompetitionId = parseTopologyId(o.sharedCompetitionId);
-  const matchLineageKey = parseTopologyId(o.matchLineageKey);
-  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
-  const coachNoteRaw = typeof o.coachNote === "string" ? o.coachNote.trim() : "";
-  if (!sharedAthleteId || !sharedCompetitionId || !matchLineageKey || !updatedAt) return null;
-  if (coachNoteRaw.length > MAX_COACH_BREAKDOWN_TEXT_CHARS) return null;
-  // Domain metadata only — reject any attempt to sync URLs or local paths.
-  if (
-    typeof o.localUri === "string" ||
-    typeof o.url === "string" ||
-    typeof o.audioUrl === "string" ||
-    typeof o.playableUri === "string"
-  ) {
-    return null;
-  }
-  if ("voiceNoteRefs" in o) return null;
-  const mediaIdRaw = typeof o.mediaId === "string" ? o.mediaId.trim() : "";
-  const mediaId = mediaIdRaw && MEDIA_ID_RE.test(mediaIdRaw) ? mediaIdRaw.toLowerCase() : "";
-  if (mediaIdRaw && !mediaId) return null;
-  const mimeTypeRaw = typeof o.mimeType === "string" ? o.mimeType.trim().toLowerCase() : "";
-  const mimeType =
-    mimeTypeRaw && mimeTypeRaw.length <= 80 && ALLOWED_COACH_MEDIA_MIME.has(mimeTypeRaw)
-      ? mimeTypeRaw
-      : "";
-  if (mimeTypeRaw && !mimeType) return null;
-  const durationMs =
-    typeof o.durationMs === "number" && Number.isFinite(o.durationMs) && o.durationMs >= 0
-      ? Math.min(Math.floor(o.durationMs), 24 * 60 * 60 * 1000)
-      : undefined;
-  const alignmentRaw = o.alignment;
-  const alignmentRow = alignmentRaw && typeof alignmentRaw === "object" && !Array.isArray(alignmentRaw)
-    ? alignmentRaw as Record<string, unknown>
-    : null;
-  const commentaryStartVideoMs = alignmentRow?.commentaryStartVideoMs;
-  const matchMediaAssetId = typeof alignmentRow?.matchMediaAssetId === "string"
-    ? alignmentRow.matchMediaAssetId.trim()
-    : "";
-  const attachmentRevision = alignmentRow?.attachmentRevision;
-  const alignment =
-    typeof commentaryStartVideoMs === "number" && Number.isSafeInteger(commentaryStartVideoMs) && commentaryStartVideoMs >= 0 &&
-    Boolean(matchMediaAssetId) &&
-    typeof attachmentRevision === "number" && Number.isSafeInteger(attachmentRevision) && attachmentRevision > 0
-      ? { commentaryStartVideoMs, matchMediaAssetId, attachmentRevision }
-      : undefined;
-  return {
-    sharedAthleteId,
-    sharedCompetitionId,
-    matchLineageKey,
-    ...(coachNoteRaw ? { coachNote: coachNoteRaw } : {}),
-    ...(mediaId ? { mediaId } : {}),
-    ...(durationMs !== undefined ? { durationMs } : {}),
-    ...(mimeType ? { mimeType } : {}),
-    ...(alignment ? { alignment } : {}),
-    updatedAt,
-  };
-}
 
 function mediaObjectKey(token: string, mediaId: string): string {
   return `sessions/${token}/media/${mediaId}`;
@@ -1533,58 +1466,6 @@ function parseDurationMsHeader(request: Request): number | undefined {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return undefined;
   return Math.min(Math.floor(n), 24 * 60 * 60 * 1000);
-}
-
-function parseCoachMatchBreakdownArtifactSet(
-  raw: unknown,
-): CoachMatchBreakdownArtifactSet | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  if (JSON.stringify(raw).length > MAX_COACH_BREAKDOWN_PAYLOAD_CHARS) return null;
-  const o = raw as Record<string, unknown>;
-  if ((o.schemaVersion !== 1 && o.schemaVersion !== 2) || !Array.isArray(o.artifacts)) return null;
-  const sharedAthleteId = parseTopologyId(o.sharedAthleteId);
-  const updatedAt = typeof o.updatedAt === "string" ? o.updatedAt.trim() : "";
-  if (!sharedAthleteId || !updatedAt) return null;
-  if (o.artifacts.length > MAX_COACH_BREAKDOWN_ARTIFACTS_PER_ATHLETE) return null;
-
-  const identityKeys = new Set<string>();
-  const artifacts: CoachMatchBreakdownArtifact[] = [];
-  for (const rawArtifact of o.artifacts) {
-    const artifact = parseCoachMatchBreakdownArtifact(rawArtifact);
-    if (!artifact || artifact.sharedAthleteId !== sharedAthleteId) return null;
-    const identityKey = JSON.stringify([
-      artifact.sharedAthleteId,
-      artifact.sharedCompetitionId,
-      artifact.matchLineageKey,
-    ]);
-    if (identityKeys.has(identityKey)) return null;
-    identityKeys.add(identityKey);
-    artifacts.push(
-      o.schemaVersion === 2 ? artifact : { ...artifact, alignment: undefined },
-    );
-  }
-
-  return {
-    schemaVersion: o.schemaVersion,
-    sharedAthleteId,
-    updatedAt,
-    artifacts,
-  };
-}
-
-function parseCoachMatchBreakdownArtifacts(
-  raw: unknown,
-): Record<string, CoachMatchBreakdownArtifactSet> {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const out: Record<string, CoachMatchBreakdownArtifactSet> = {};
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const id = key.trim();
-    if (!id || id.length > MAX_TOPOLOGY_ID_CHARS) continue;
-    const artifactSet = parseCoachMatchBreakdownArtifactSet(value);
-    if (!artifactSet || artifactSet.sharedAthleteId !== id) continue;
-    out[id] = artifactSet;
-  }
-  return out;
 }
 
 /** Entries keyed only by athletes still on the session; bounded for KV size. */
@@ -3380,16 +3261,36 @@ export default {
         });
 
         const rec = await readSession(env.SESSIONS, token);
-        if (!rec || rec.writerSecret !== secret) {
+        if (!rec) {
           return error("Unauthorized", 401);
         }
-        if (!rec.athletes.some((a) => a.id.trim() === artifactSet.sharedAthleteId)) {
+
+        const decision = decideCoachMatchBreakdownPut({
+          capability: env.COACH_MATCH_BREAKDOWN_SCHEMA_V2_PUBLICATION_ENABLED,
+          providedSecret: secret,
+          artifactSet,
+          session: rec,
+        });
+        if (decision.kind === "unauthorized") {
+          return error("Unauthorized", 401);
+        }
+        if (decision.kind === "athlete_scope_denied") {
           console.log("[COACH_OVERLAY_SYNC_TRACE]", {
             stage: "worker_coach_overlay_reject_athlete_scope",
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifactSet.sharedAthleteId,
           });
           return error("sharedAthleteId is not linked to this session", 400);
+        }
+        if (decision.kind === "schema_v2_publication_disabled") {
+          logCoachMatchBreakdownSchemaV2PublicationBlocked({
+            traceId: overlayForensicTraceId,
+            tokenSuffix: token.slice(-8),
+            sharedAthleteId: artifactSet.sharedAthleteId,
+            artifactCount: artifactSet.artifacts.length,
+            updatedAt: artifactSet.updatedAt,
+          });
+          return buildCoachMatchBreakdownSchemaV2PublicationDisabledResponse();
         }
 
         const existing = rec.coachMatchBreakdownArtifacts[artifactSet.sharedAthleteId];
@@ -3406,22 +3307,18 @@ export default {
           existingKvArtifactCount,
           newKvArtifactCount: artifactSet.artifacts.length,
         });
-        if (existing && artifactSet.updatedAt.localeCompare(existing.updatedAt) < 0) {
+        if (decision.kind === "stale") {
           console.log("[COACH_OVERLAY_SYNC_TRACE]", {
             stage: "worker_coach_overlay_reject_stale",
             tokenSuffix: token.slice(-8),
             sharedAthleteId: artifactSet.sharedAthleteId,
             incomingUpdatedAt: artifactSet.updatedAt,
-            existingUpdatedAt: existing.updatedAt,
+            existingUpdatedAt: existing?.updatedAt ?? null,
             artifactCount: artifactSet.artifacts.length,
           });
           return error("Coach match breakdown artifact set is stale", 409);
         }
-        if (
-          existing &&
-          artifactSet.updatedAt === existing.updatedAt &&
-          JSON.stringify(artifactSet) !== JSON.stringify(existing)
-        ) {
+        if (decision.kind === "equal_timestamp_conflict") {
           console.log("[COACH_OVERLAY_SYNC_TRACE]", {
             stage: "worker_coach_overlay_reject_equal_timestamp_conflict",
             tokenSuffix: token.slice(-8),
@@ -3433,10 +3330,7 @@ export default {
 
         const next: SessionRecord = {
           ...rec,
-          coachMatchBreakdownArtifacts: {
-            ...(rec.coachMatchBreakdownArtifacts || {}),
-            [artifactSet.sharedAthleteId]: artifactSet,
-          },
+          coachMatchBreakdownArtifacts: decision.nextCoachMatchBreakdownArtifacts,
         };
         console.log("[COACH_OVERLAY_SYNC_TRACE]", {
           stage: "worker_coach_overlay_store_ok",

@@ -23,6 +23,7 @@ describe("Coach Commentary media metadata corridor", () => {
   const builder = source("src/domain/competition/buildCoachMatchBreakdownArtifacts.ts");
   const publish = source("src/domain/competition/publishCoachMatchBreakdownArtifacts.ts");
   const worker = source("coach-sync-worker/src/index.ts");
+  const workerArtifacts = source("coach-sync-worker/src/coachMatchBreakdownArtifacts.ts");
   const wrangler = source("coach-sync-worker/wrangler.toml");
   const matchCard = source("src/features/competition/MatchCard.tsx");
   const filmRoomCommentary = source(
@@ -63,7 +64,7 @@ describe("Coach Commentary media metadata corridor", () => {
     assert.match(worker, /const mediaContent = path\.match/);
     assert.match(worker, /\/content\$/);
     assert.match(worker, /signMediaContentAccess/);
-    assert.match(worker, /if \("voiceNoteRefs" in o\) return null;/);
+    assert.match(workerArtifacts, /if \("voiceNoteRefs" in o\) return null;/);
   });
 
   it("client resolves mediaId to ephemeral URL and never stores URL in artifact helpers", () => {
@@ -206,12 +207,12 @@ describe("Coach Commentary media metadata corridor", () => {
   });
 
   it("Worker reconstructs v2 alignment while excluding local and playable media fields", () => {
-    assert.match(worker, /o\.schemaVersion !== 1 && o\.schemaVersion !== 2/);
-    assert.match(worker, /commentaryStartVideoMs/);
-    assert.match(worker, /matchMediaAssetId/);
-    assert.match(worker, /attachmentRevision/);
-    assert.match(worker, /typeof o\.playableUri === "string"/);
-    assert.match(worker, /"voiceNoteRefs" in o/);
+    assert.match(workerArtifacts, /o\.schemaVersion !== 1 && o\.schemaVersion !== 2/);
+    assert.match(workerArtifacts, /commentaryStartVideoMs/);
+    assert.match(workerArtifacts, /matchMediaAssetId/);
+    assert.match(workerArtifacts, /attachmentRevision/);
+    assert.match(workerArtifacts, /typeof o\.playableUri === "string"/);
+    assert.match(workerArtifacts, /"voiceNoteRefs" in o/);
   });
 
   it("hydrates the complete alignment through the parent match snapshot and Film Room props only", () => {

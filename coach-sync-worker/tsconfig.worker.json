@@ -18,6 +18,8 @@
     "src/sharedMatchMediaUpload.ts",
     "src/matchMediaPublication.ts",
     "src/matchMediaAttachmentProjection.ts",
+    "src/coachMatchBreakdownArtifacts.ts",
+    "src/coachMatchBreakdownSchemaV2Publication.ts",
     "src/uploadMultipartPartWithSha256.ts",
     "src/productionVerification/**/*.ts"
   ],
