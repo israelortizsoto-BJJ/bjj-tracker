@@ -16,6 +16,7 @@
     "src/index.ts",
     "src/competitionStateAuditor.ts",
     "src/sharedMatchMediaUpload.ts",
+    "src/matchMediaPublication.ts",
     "src/uploadMultipartPartWithSha256.ts",
     "src/productionVerification/**/*.ts"
   ],

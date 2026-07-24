@@ -20,6 +20,11 @@ import {
   handleUploadSharedMatchMediaPart,
   type SharedMatchMediaUploadDependencies,
 } from "./sharedMatchMediaUpload";
+import {
+  handlePublishMatchMediaAttachment,
+  isPublicationFeatureEnabled,
+  type MatchMediaPublicationDependencies,
+} from "./matchMediaPublication";
 import { createConditionalObjectVerificationRecordStore } from "../../shared-match-media-production-verification/src/index";
 import { handleOperatorInspectionHttpRequest } from "./productionVerification/operatorInspection";
 import { createR2ConditionalObjectStore } from "./productionVerification/r2ConditionalObjectStore";
@@ -41,6 +46,11 @@ export interface Env {
   SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID?: string;
   /** Server-controlled canary object version. Empty default bypasses verification. */
   SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION?: string;
+  /**
+   * Independent server kill switch. Publication is inert unless exactly "1".
+   * Upload/Verification enablement must never open this flag.
+   */
+  SHARED_MATCH_MEDIA_PUBLICATION_ENABLED?: string;
   /**
    * Cloudflare secret binding for read-only operator inspection.
    * Must never be committed or placed in wrangler [vars].
@@ -1865,6 +1875,17 @@ async function writeSession(kv: KVNamespace, token: string, rec: SessionRecord):
       parseCompetitionTopologyByAthleteId(readBackRoot?.competitionTopologyByAthleteId),
     ).length,
   });
+}
+
+function createMatchMediaPublicationDependencies(
+  env: Env,
+): MatchMediaPublicationDependencies {
+  return {
+    enabled: isPublicationFeatureEnabled(env.SHARED_MATCH_MEDIA_PUBLICATION_ENABLED),
+    mediaBucket: env.MEDIA,
+    readParentSession: (sessionToken) => readSession(env.SESSIONS, sessionToken),
+    now: () => new Date(),
+  };
 }
 
 function createSharedMatchMediaUploadDependencies(
@@ -3695,6 +3716,21 @@ export default {
           path,
           method: request.method,
         });
+      }
+
+      const sharedMatchMediaPublication = path.match(
+        /^\/v1\/sessions\/([^/]+)\/match-media\/attachments$/,
+      );
+      if (sharedMatchMediaPublication && request.method === "PUT") {
+        const token = decodeURIComponent(sharedMatchMediaPublication[1] ?? "")
+          .trim()
+          .toLowerCase();
+        if (!TOKEN_RE.test(token)) return error("Invalid token", 400);
+        return handlePublishMatchMediaAttachment(
+          request,
+          token,
+          createMatchMediaPublicationDependencies(env),
+        );
       }
 
       const sharedMatchMediaUploadIntent = path.match(

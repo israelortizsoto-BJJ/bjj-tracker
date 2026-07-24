@@ -29,7 +29,7 @@ function combinedSource(root: string): string {
     .join("\n");
 }
 
-describe("Publication domain remains disabled and unwired", () => {
+describe("Publication domain remains capability-free and enablement-closed", () => {
   it("has no Worker, network, binary, client-local, projection, resolution, or playback capability", () => {
     const source = combinedSource(path.join(packageRoot, "src"));
     for (const forbidden of [
@@ -50,14 +50,21 @@ describe("Publication domain remains disabled and unwired", () => {
     }
   });
 
-  it("is not imported by Worker, client, or Production Verification runtime", () => {
+  it("is imported only by the flag-gated Worker publication module", () => {
     const packageName = "shared-match-media-publication";
-    const worker = combinedSource(path.join(repoRoot, "coach-sync-worker", "src"));
+    const workerFiles = sourceFiles(path.join(repoRoot, "coach-sync-worker", "src"));
+    const importers = workerFiles.filter((file) =>
+      readFileSync(file, "utf8").includes(packageName),
+    );
+    assert.deepEqual(
+      importers.map((file) => path.relative(repoRoot, file)).sort(),
+      ["coach-sync-worker/src/matchMediaPublication.ts"],
+    );
+
     const client = combinedSource(path.join(repoRoot, "src"));
     const verification = combinedSource(
       path.join(repoRoot, "shared-match-media-production-verification", "src"),
     );
-    assert.doesNotMatch(worker, new RegExp(packageName));
     assert.doesNotMatch(client, new RegExp(packageName));
     assert.doesNotMatch(verification, new RegExp(packageName));
   });
@@ -76,5 +83,15 @@ describe("Publication domain remains disabled and unwired", () => {
       "typecheck",
     ]);
     assert.deepEqual(manifest.devDependencies, { typescript: "5.9.3" });
+  });
+
+  it("keeps Publication enablement independent and default-off in Worker config", () => {
+    const wrangler = readFileSync(
+      path.join(repoRoot, "coach-sync-worker", "wrangler.toml"),
+      "utf8",
+    );
+    assert.match(wrangler, /SHARED_MATCH_MEDIA_PUBLICATION_ENABLED\s*=\s*"0"/);
+    assert.match(wrangler, /SHARED_MATCH_MEDIA_UPLOAD_ENABLED\s*=\s*"0"/);
+    assert.match(wrangler, /SHARED_MATCH_MEDIA_VERIFICATION_ENABLED\s*=\s*"0"/);
   });
 });

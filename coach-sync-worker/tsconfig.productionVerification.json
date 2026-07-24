@@ -12,7 +12,8 @@
   },
   "include": [
     "src/productionVerification/**/*.ts",
-    "src/sharedMatchMediaUpload.ts"
+    "src/sharedMatchMediaUpload.ts",
+    "src/matchMediaPublication.ts"
   ],
   "exclude": ["**/*.test.ts"]
 }

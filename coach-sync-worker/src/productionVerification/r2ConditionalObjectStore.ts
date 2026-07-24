@@ -1,6 +1,6 @@
 /**
  * Thin ConditionalObjectStore adapter over the coach-sync-worker MEDIA R2 binding.
- * Used only for Production Verification record durability (JSON + ETag CAS).
+ * Maps JSON + ETag conditional puts for durable records (Verification, Publication).
  */
 
 import type {
@@ -21,20 +21,26 @@ export type R2ConditionalBucket = {
   ): Promise<{ etag: string } | null>;
 };
 
+export type R2ConditionalObjectStoreOptions = {
+  readonly recordType?: string;
+};
+
 export function createR2ConditionalObjectStore(
   bucket: R2ConditionalBucket,
+  options?: R2ConditionalObjectStoreOptions,
 ): ConditionalObjectStore {
+  const recordType = options?.recordType ?? "production-verification-record-v1";
   return {
     get: async (key) => {
       const object = await bucket.get(key);
       if (!object) return null;
       return { body: await object.text(), etag: object.etag };
     },
-    put: async (key, value, options) => {
+    put: async (key, value, putOptions) => {
       const object = await bucket.put(key, value, {
-        onlyIf: options.onlyIf,
+        onlyIf: putOptions.onlyIf,
         httpMetadata: { contentType: "application/json" },
-        customMetadata: { recordType: "production-verification-record-v1" },
+        customMetadata: { recordType },
       });
       return object ? { etag: object.etag } : null;
     },

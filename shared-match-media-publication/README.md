@@ -1,6 +1,6 @@
 # Shared Match Media Publication
 
-Pure, unwired domain foundation for the Parent-owned canonical
+Pure domain foundation for the Parent-owned canonical
 `MatchMediaAttachment`.
 
 This package owns only:
@@ -15,4 +15,6 @@ It does not own or import upload sessions, Production Verification records, R2
 binary operations, Worker routes, Coach projection, resolution, playback, Film
 Room, local `videoUri`, `videoAssetId`, or `parentMediaRefs`.
 
-The package is deliberately not imported by any production or client runtime.
+Runtime composition lives only in `coach-sync-worker` behind
+`SHARED_MATCH_MEDIA_PUBLICATION_ENABLED` (default off). The client and
+Production Verification packages must not import this module.
