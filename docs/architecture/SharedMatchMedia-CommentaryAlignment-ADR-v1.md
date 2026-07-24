@@ -50,6 +50,65 @@ request-correlated, awaitable pause-confirmation contract exists yet. This ADR
 therefore authorizes no capture instrumentation until the separately scoped primitive
 below exists.
 
+## Accepted amendment — editor shared-media player identity
+
+This amendment resolves the editor-side identity prerequisite for aligned commentary.
+It does not authorize runtime implementation, flag enablement, or deployment.
+
+An editor player is **alignment-capable** only when a valid, attached Coach Match
+Media projection and an authorized shared-media resolution jointly establish one
+in-memory binding for the player generation that loaded the resolved URI:
+
+```text
+playableUri
+matchMediaAssetId
+attachmentRevision
+matchLineageKey
+sharedAthleteId
+sharedCompetitionId
+playerBindingToken
+```
+
+`playerBindingToken` is ephemeral and unique to that loaded player generation. The
+resolved URI is a memory-only delivery capability; neither it nor the token is
+durable commentary metadata, synchronized state, or log material.
+
+`LocalMatch.videoUri` and `LocalMatch.videoAssetId` do not prove correspondence to
+`matchMediaAssetId` and `attachmentRevision`. They may remain available for legacy
+unbound editor viewing, but cannot produce `VoiceNoteRef.alignment` by themselves.
+The editor must never infer identity by joining a local URI with the current shared
+attachment row.
+
+The editor may reuse the pure resolution core in
+`src/features/filmRoom/coachMatchMediaPlaybackResolve.ts`. It must not import or
+create `FilmRoomScreen`, `FilmRoomSessionCoordinator`,
+`useCoachMatchMediaPlaybackUri`, a second player, a second `PlaybackCoordinator`, or
+another session authority. The existing editor field coordinator remains the sole
+playback owner for its bound player.
+
+Both authoritative attachment projection and shared-media resolution capability are
+required. While either capability is default-off or unavailable, editor local-URI
+playback remains legacy-unbound: it may be viewed, but recording from it must not
+create alignment and the UI/runtime must not represent it as alignment-capable. This
+amendment does not enable `SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED` or
+`SHARED_MATCH_MEDIA_RESOLUTION_ENABLED`.
+
+When both a local URI and a valid attached row exist, the resolved shared attachment
+is the authoritative source for alignment-capable playback. The local URI is only an
+explicitly unbound fallback. If shared resolution fails, the local URI may remain
+usable for legacy viewing, but alignment capture remains unavailable; failure must
+not attach shared identity to the local player or discard otherwise usable local
+video.
+
+The binding is active only after its resolved URI has loaded into its specific player
+generation. Invalidate it on asset replacement, revision change, tombstone, Match,
+athlete, competition, or lineage change, URI/player-generation replacement, unload,
+unmount, stale resolution completion, resolution failure, or delivery expiry. A
+refreshed delivery URI for the same durable asset and revision preserves durable
+identity but creates a new `playerBindingToken` and player generation; it invalidates
+any pending confirmed-pause request associated with the prior generation until the
+new URI is successfully resolved and loaded.
+
 ## Required alignment metadata
 
 Each aligned commentary reference carries these optional fields together:
@@ -195,9 +254,20 @@ It must not start audio capture or introduce a second player, clock, coordinator
 playback owner. It must not touch Worker, Parent transport, hydration, resolution,
 Timeline Builder, flags, or deployment configuration.
 
+### Slice 1.5 — editor shared-media player binding
+
+Before aligned recording capture, independently implement and checkpoint the
+editor-side binding defined in the accepted amendment above. It may reuse the pure
+shared-media resolution core, but must preserve the existing editor
+`PlaybackCoordinator` as the sole player owner. It must prove source precedence,
+capability gating, load-generation activation, invalidation, delivery-refresh
+supersession, and that legacy local playback cannot create alignment. Feature-flag
+enablement and deployment remain separate missions.
+
 ### Slice 2 — aligned recording capture
 
-Use Slice 1's confirmed-pause primitive to add the startup lock and `starting` state,
+Use Slice 1's confirmed-pause primitive and the independently certified Slice 1.5
+player binding to add the startup lock and `starting` state,
 capture the confirmed position and attached-media identity, bind one snapshot to one
 recording attempt, validate it again at persistence, and write optional
 `VoiceNoteRef.alignment` only when the complete contract remains valid. Likely
