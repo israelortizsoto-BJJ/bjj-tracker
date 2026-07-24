@@ -95,6 +95,64 @@ scripts/write_engineering_checkpoint.py
 
 ## Session Summary
 
+Recorded the Human Product/Privacy Policy Certification for Production Verification Canary v1 in the MatMind DOCOPS certification corpus.
+
+- Verdict: **APPROVED WITH CONDITIONS**
+- Approval date: 2026-07-23
+- Expiry date: 2026-07-30
+- Product/Privacy owner and audit owner: Israel Ortiz Soto
+- Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
+- Certified policy values: `scanHookStatus: "scan_not_required"`; `scanPolicyIdentity: "first-slice-scan-not-required-v1"`
+- Artifact: `docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`
+
+This recording preserves permitted media, prohibited media, exact canary scope, expiry/automatic invalidation, mandatory abort conditions, retention/deletion requirements, required evidence, and the authorization boundary.
+
+## Current Boundary
+
+### CLOSED BY THIS RECORD
+
+- explicit human privacy-policy decision for Production Verification Canary v1 only
+
+### STILL OPEN / UNAUTHORIZED
+
+- separately authorized deployment/provisioning mission
+- separately authorized single-canary execution mission
+- general production privacy policy beyond Canary v1
+- Required Proof #5 live production evidence
+- Product Certification
+- flag enablement, secret provisioning, canary-identity insertion, media upload, Cloudflare mutation, push/tag/deploy, canary execution
+
+### DISABLED / UNCHANGED
+
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- empty canary identities
+- no committed operator secret
+- code floor remains `38b8943`
+
+## Canonical Living Records Updated By This Recording
+
+- `docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` (new)
+- `docs/architecture/certification/CERTIFICATION_HISTORY.md`
+- `docs/architecture/certification/CertifiedArchitectureRegister-v1.md`
+- `docs/architecture/certification/protected-systems-register.md`
+- `docs/architecture/certification/active-investigation-register.md`
+- `docs/engineering-checkpoint.md`
+- `docs/engineering-daily.md`
+- `docs/master-prompt-daily-restart.md`
+- `docs/dev-handoff.md`
+
+## Next Mission
+
+Candidate only. Not authorized and not begun:
+
+separately authorized deployment/provisioning planning for Production Verification Canary v1 under the recorded APPROVED WITH CONDITIONS constraints
+
+Do not deploy, provision secrets, insert canary identities, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without separate authorization. Do not expand Canary v1 into general scanner-free production media policy.
+
+# DEV HANDOFF — 2026-07-23
+
+## Session Summary
+
 Engineering OS closeout for the completed, committed, flag-disabled Production Verification vertical-slice checkpoint.
 
 Integrated engineering floor:

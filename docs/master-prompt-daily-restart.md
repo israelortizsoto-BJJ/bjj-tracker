@@ -5,10 +5,10 @@
 - Repo: bjj-tracker
 - Active branch: coach-commentary-media-metadata
 - Lane I am working in: Architecture
-- Main intended coding outcome today: Hold the integrated flag-disabled Production Verification vertical-slice floor at `1443c48`; do not enable composition unless separately authorized.
-- Constraints today: Feature remains `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`; no production resources/bindings; no deploy/push; PROOF_MEDIA isolated; Timeline and debug-logs untouched; no downstream Coach/publication/playback work.
-- Current sealed engineering floor: Vertical slice integrated at `1443c48329bad9c92eb5978578e7c907b9eb0ed2` (`1443c48` — Integrate production media verification vertical slice); foundation `dda707a`; prior docs `34359ac`; IMPLEMENTED AND CHECKPOINTED domain/adapters/inspection/terminal lifecycle/derived eligibility/harness; DISABLED production composition; NOT YET AUTHORIZED controlled enablement and downstream surfaces.
-- Smallest next candidate mission (not authorized, not begun): controlled Production Verification enablement planning/authorization gate only — not flag enablement, resource/binding creation, deploy/push, Coach publication/resolution/playback, Film Room, queues/schedulers, leases/heartbeats, operator reconciliation, or topology/publication-convergence correction.
+- Main intended coding outcome today: Hold the recorded Human Product/Privacy Policy Certification for Production Verification Canary v1 (APPROVED WITH CONDITIONS through 2026-07-30) atop floor `38b8943`; do not deploy, enable, upload, or execute a canary unless separately authorized.
+- Constraints today: Feature remains `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`; empty canary identities; no committed operator secret; no deploy/push/tag/provision/Cloudflare mutation/media upload/production canary; Timeline and debug-logs untouched; Canary v1 privacy conditions remain binding and must not be expanded.
+- Current sealed engineering floor: Worker runtime/validation-toolchain correction at `38b894338db1868948c7b83fe4caa70c16b8f434` (`38b8943`); Human Product/Privacy Canary v1 policy **APPROVED WITH CONDITIONS** (2026-07-23 → 2026-07-30) recorded in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`; PV remains disabled; canary execution NOT authorized by the policy recording alone.
+- Smallest next candidate mission (not authorized as implementation by this recording): separately authorized deployment/provisioning planning under recorded Canary v1 conditions — not flag enablement, not media upload, not single-canary execution, not general privacy-policy expansion.
 # Before implementation, verify whether today's objective already has a certified Product Architecture. If yes, implementation must conform to that architecture rather than redefining it.
 
 # Architecture Certification

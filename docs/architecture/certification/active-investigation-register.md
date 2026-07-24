@@ -16,15 +16,17 @@ The Production Verification Service design contract and state machine are design
 
 The isolated verification Container runtime is certified through 10 GiB on the proof package. That evidence does not implement or certify the production Verification Service or the broader production corridor.
 
+Human Product/Privacy Policy Certification for Production Verification Canary v1 is recorded in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` as **APPROVED WITH CONDITIONS** (2026-07-23; expires 2026-07-30). That closes only the narrow canary privacy-policy gate for `scan_not_required` / `first-slice-scan-not-required-v1` against floor `38b894338db1868948c7b83fe4caa70c16b8f434`. It does not authorize deployment, flag enablement, media upload, canary execution, or general production privacy policy.
+
 Unknown
 
-Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, scanner integration, privacy gates, and mobile background behavior satisfy every Required Proof and privacy gate in production conditions. Required Proof #5 remains open for implementation and live production evidence despite design acceptance criteria being enumerated.
+Whether the proposed upload, verification, compare-and-swap publication, projection hydration, authorization, range delivery, revocation, deletion, scanner integration, general production privacy gates, and mobile background behavior satisfy every Required Proof and remaining privacy gate in production conditions. Required Proof #5 remains open for implementation and live production evidence despite design acceptance criteria being enumerated. Separately authorized deployment/provisioning and single-canary execution remain open.
 
 20 GiB isolated capacity remains FUTURE CERTIFICATION — NOT STARTED and is not an active investigation.
 
 Required Evidence
 
-Complete the certified Required Proof and privacy approval before implementation authorization or production certification. Separately authorize any Production Verification implementation mission and any 20 GiB capacity certification; do not extrapolate from the 10 GiB floor or from design certification alone.
+Complete the certified Required Proof and remaining general production privacy approvals before production certification. Preserve Canary v1 policy conditions if a separately authorized canary mission proceeds. Separately authorize any deployment/provisioning or single-canary execution mission and any 20 GiB capacity certification; do not extrapolate from the 10 GiB floor, design certification, or the narrow canary privacy approval alone.
 
 
 ## Parent Competition Runtime

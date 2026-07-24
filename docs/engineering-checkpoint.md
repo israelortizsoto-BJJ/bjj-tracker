@@ -14,7 +14,7 @@ Under Engineering OS vNext, this register is the engineering session snapshot. C
 
 ## Investigation
 
-Production Verification vertical-slice documentation closeout for the committed, flag-disabled production media verification integration
+Human Product/Privacy Policy Certification recording for Production Verification Canary v1
 
 ## Status
 
@@ -22,120 +22,224 @@ COMPLETE
 
 ## Hypothesis
 
-After the design seal at 34359ac and the domain foundation at dda707a, the Production Verification vertical slice can be committed at 1443c48329bad9c92eb5978578e7c907b9eb0ed2 as an implemented-and-checkpointed, flag-disabled production-shaped path that preserves admission identity, conditional persistence/CAS, append-only attempts/evidence, terminal immutability, MEDIA-bound inspection, derived fail-closed Coach-publication eligibility, and PROOF_MEDIA isolation, without enabling production composition, creating resources, deploying, pushing, or authorizing downstream Coach/publication/playback work.
+The Human Product/Privacy Owner decision APPROVED WITH CONDITIONS for Production Verification Canary v1 can be recorded into the established MatMind DOCOPS certification corpus and living engineering memory without deploying, provisioning, enabling verification, uploading media, or executing a canary.
 
 ## Latest Runtime Behavior
 
-### Integrated Engineering Floor
+### Recorded Certification
 
-- Branch: `coach-commentary-media-metadata`
-- Integrated vertical-slice HEAD: `1443c48329bad9c92eb5978578e7c907b9eb0ed2` (`1443c48`)
-- Integrated commit subject: `Integrate production media verification vertical slice`
-- Foundation checkpoint: `dda707a` — Establish production verification domain foundation
-- Preceding documentation checkpoint: `34359ac` — Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
-- Committed slice: 24 files, +3091 / −146
-- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
-- Feature composition occurs only when the exact flag value is `"1"`
-- No production resource was created, altered, or touched
-- No deploy occurred; no push occurred
-- No R2 or KV binding was created
-- Committed Wrangler change contains only the disabled feature variable
+- Artifact: `docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`
+- Verdict: **APPROVED WITH CONDITIONS**
+- Approval date: 2026-07-23
+- Expiry date: 2026-07-30
+- Product/Privacy owner and audit owner: Israel Ortiz Soto
+- Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
+- Certified policy values: `scanHookStatus: "scan_not_required"`; `scanPolicyIdentity: "first-slice-scan-not-required-v1"`
+- Preserved: permitted media; prohibited media; exact canary scope; expiry/automatic invalidation; mandatory abort conditions; retention/deletion requirements; required evidence; authorization boundary
 
-### Implemented Production-Shaped Sequence
+### Certification Corpus Movement
 
-authoritative `upload_complete`
-→ exact feature gate
-→ verification admission
-→ MEDIA object inspection
-→ complete-object streaming
-→ observed byte count
-→ calculated SHA-256
-→ bounded ISO-BMFF MIME inspection
-→ authoritative evidence append
-→ terminal verification CAS
-→ derived fail-closed Coach-publication eligibility
-
-### Certified Properties (repository evidence)
-
-- Five-field verification admission identity remains preserved.
-- Admission is idempotent.
-- Conditional persistence and CAS convergence remain preserved.
-- Authoritative-prior-record validation remains preserved.
-- Attempts and evidence remain append-only.
-- Only one active attempt is permitted.
-- Terminal records remain immutable.
-- Stuck work remains durably `verifying`.
-- Stuck classification is observational: `STUCK_ATTEMPT_REQUIRES_RECONCILIATION` / `operator_required`.
-- `ProductionVerificationRecord` remains the sole durable verification authority.
-- Coach-publication eligibility is derived and fail-closed.
-- No second durable eligibility authority was created.
-- Production inspection is bound to environment-local `MEDIA`.
-- `PROOF_MEDIA` remains isolated and cannot enter the production path.
-- R2 content type is evidence-only.
-- ETags and multipart hashes are not treated as whole-object SHA-256.
-- The complete object is streamed once to independently count bytes, calculate SHA-256, and capture the bounded MIME prefix.
-- Expected SHA is compared only when provided.
-- Missing expected SHA alone does not reject the first controlled slice.
-- Missing legacy MIME remains missing and terminates as `state: rejected` / `reason: MIME_NOT_ALLOWED`.
-- No compatibility fallback fabricates `video/mp4`.
-
-### Terminal Mappings
-
-- valid object and all gates pass → `verified`
-- missing, empty, or invalid declared MIME → `rejected` / `MIME_NOT_ALLOWED`
-- unsupported declared MIME → `rejected` / `UNSUPPORTED_MEDIA_FORMAT`
-- inconclusive supported-format detection → `rejected` / `UNSUPPORTED_MEDIA_FORMAT`
-- recognized conflicting container family → `rejected` / `MIME_SIGNATURE_MISMATCH`
-- byte-count mismatch → `rejected` / `BYTE_COUNT_MISMATCH`
-- expected SHA mismatch → `rejected` / `SHA256_MISMATCH`
-- object missing after upload completion → `failed` / `OBJECT_NOT_FOUND_AFTER_COMPLETION`
-- authoritative object-version mismatch → `failed` / `OBJECT_VERSION_MISMATCH`
-- transient head/get/stream failure → `failed` / `STORAGE_READ_TRANSIENT`
-- stuck attempt → remains `verifying`; operator-required classification only
-
-### Verification Evidence
-
-- Production Verification package: 91/91 passing
-- Package typecheck: passing
-- Affected worker tests: 42/42 passing before checkpoint
-- Scoped worker Production Verification typecheck: passing
-- Scoped worker typecheck includes `productionVerification/**` and `sharedMatchMediaUpload.ts`; excludes `src/index.ts` (not a full-worker typecheck)
-- `src/index.ts` import and type consistency inspected separately
-- Controlled integration harness: passing
-- `git diff --cached --check`: clean before commit
+- Prepended `CERTIFICATION_HISTORY.md`
+- Updated `CertifiedArchitectureRegister-v1.md` section 9 + master table
+- Updated `protected-systems-register.md`
+- Updated `active-investigation-register.md` to close only the narrow canary privacy-policy gate
+- Verified owned architecture certification documents via `scripts/write_architecture_certification.py --verify`
 
 ### Current Boundary
 
-**IMPLEMENTED AND CHECKPOINTED:** verification domain; worker adapters; real-object inspection; terminal verification lifecycle; derived fail-closed publication eligibility; controlled integration harness.
+**COMPLETE:** Human Product/Privacy Policy Certification recording for Production Verification Canary v1.
 
-**DISABLED:** production composition and execution.
+**CLOSED BY THIS RECORD:** explicit human privacy-policy decision for the narrowly defined canary only.
 
-**NOT YET IMPLEMENTED OR AUTHORIZED:** controlled production enablement; production resource/binding changes; durable Coach attachment publication; Coach media resolution; signed playback URLs; Film Room UI; Coach recording; Coach breakdown publication; Parent return hydration; final playback; queues or schedulers; leases or heartbeats; operator reconciliation; full topology/publication-convergence correction.
+**STILL OPEN:**
+- separately authorized deployment/provisioning mission
+- separately authorized single-canary execution mission
+- general production privacy policy beyond Canary v1
+- Required Proof #5 live production evidence
+- Product Certification
+
+**DISABLED / UNCHANGED:**
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- empty canary identities
+- no committed operator secret
+- no deploy, push, tag, Cloudflare mutation, media upload, or canary execution occurred
 
 ## Next Experiment
 
-Smallest next candidate mission only (not authorized, not begun): controlled Production Verification enablement planning/authorization gate only. Do not enable the flag, create production resources or bindings, deploy, push, or begin durable Coach attachment publication, Coach media resolution, signed playback URLs, Film Room UI, Coach recording, Coach breakdown publication, Parent return hydration, final playback, queues/schedulers, leases/heartbeats, operator reconciliation, or full topology/publication-convergence correction without separate authorization.
+Smallest next candidate mission only (not authorized as implementation by this recording): separately authorized deployment/provisioning planning for Production Verification Canary v1 under the recorded APPROVED WITH CONDITIONS constraints, or renewed readiness review if floor changes. Do not deploy, provision secrets, insert canary identities, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without a separately authorized mission.
 
 ## Do Not
 
+- Do not treat this recording as authorization to deploy, provision, enable, upload, or execute a canary.
+- Do not expand Canary v1 privacy approval into general scanner-free production media policy.
 - Do not set SHARED_MATCH_MEDIA_VERIFICATION_ENABLED to "1" without separate authorization.
-- Do not create, alter, or touch production resources or R2/KV bindings.
-- Do not deploy or push.
-- Do not begin durable Coach attachment publication, Coach media resolution, signed playback URLs, Film Room UI, Coach recording, Coach breakdown publication, Parent return hydration, or final playback.
-- Do not add queues, schedulers, leases, heartbeats, or operator reconciliation.
-- Do not treat PROOF_MEDIA as production MEDIA or allow it into the production path.
-- Do not fabricate video/mp4 compatibility fallbacks for missing legacy MIME.
+- Do not provision operator secrets or non-empty canary identities without separate authorization.
+- Do not push, tag, deploy, provision, enable, upload media, mutate Cloudflare, or execute a production canary.
 - Do not alter Timeline sources, debug-logs/**, or protected stashes.
-- Do not rewrite architecture-certification artifacts from this living-memory closeout.
+- Do not modify Worker code, domain code, package metadata, lockfiles, or Cloudflare configuration during this documentation mission.
+- Do not retry an aborted canary under this certification.
+- Do not claim Product Certification or Required Proof #5 complete.
 
 ## Notes
 
-- Investigation lifecycle for this vertical-slice documentation closeout: COMPLETE.
-- Code floor remains at 1443c48; this closeout updates living engineering memory only.
-- Feature remains disabled (SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0").
-- Unrelated Timeline and debug-log work remains excluded and untouched.
-- All six protected stashes remain untouched.
+- Investigation lifecycle for this Human Product/Privacy Policy Certification recording: COMPLETE.
+- Certified engineering floor remains 38b894338db1868948c7b83fe4caa70c16b8f434.
+- Privacy gate for Production Verification Canary v1 is APPROVED WITH CONDITIONS through 2026-07-30.
+- Deployment/provisioning and single-canary execution remain separate unauthorized missions.
+- Production Verification remains disabled with empty canary identities and no committed operator secret.
+- No push, tag, deployment, secret provisioning, Cloudflare mutation, media upload, or production canary occurred.
+- Timeline Builder, debug logs, and all six stashes remained excluded.
+- Checkpoint writer permanent-header constant does not include the Engineering OS vNext sentence present in this register; this entry was recorded with the established bounded terminal-first updater.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M docs/architecture/certification/CERTIFICATION_HISTORY.md
+ M docs/architecture/certification/CertifiedArchitectureRegister-v1.md
+ M docs/architecture/certification/active-investigation-register.md
+ M docs/architecture/certification/protected-systems-register.md
+ M docs/engineering-checkpoint.md
+ M docs/engineering-daily.md
+ M docs/master-prompt-daily-restart.md
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md
+?? scripts/__pycache__/
+```
+
+### git log --oneline --decorate -8
+
+```text
+38b8943 (HEAD -> coach-commentary-media-metadata) Fix Worker runtime and validation toolchain
+28e7b44 Add bounded production verification canary controls
+561b007 Record 2026-07-23 Engineering OS closeout for Production Verification vertical slice.
+1443c48 Integrate production media verification vertical slice
+dda707a Establish production verification domain foundation
+34359ac Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
+164f86d Record Production Verification Service design-contract certification artifacts.
+b782ca1 Fix match media hashing for React Native
+```
+
+### git diff --stat
+
+```text
+(documentation recording in progress; see mission diff report)
+```
+
+# ENGINEERING CHECKPOINT — 2026-07-23
+
+## Investigation
+
+Worker runtime and validation-toolchain correction documentation closeout for the completed local correction checkpoint at 38b8943
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+After Production Verification canary controls at 28e7b44 and Codex identification of three Worker readiness blockers (Node-only node:util comparator; lack of full Worker entrypoint typechecking; outdated/non-deterministic Wrangler toolchain), the nine-path engineering correction can be completed at 38b894338db1868948c7b83fe4caa70c16b8f434 by replacing the comparator with a runtime-neutral JSON structural equality helper, adding full Worker typechecking including src/index.ts and the multipart adapter, pinning Wrangler/Workers types/esbuild, and preserving the R2MultipartUpload receiver through a narrow .call(multipart, …) adapter — without amending 28e7b44, enabling production verification, provisioning secrets, deploying, pushing, uploading media, or executing a production canary.
+
+## Latest Runtime Behavior
+
+### Corrected Engineering Floor
+
+- Branch: `coach-commentary-media-metadata`
+- Correction HEAD: `38b894338db1868948c7b83fe4caa70c16b8f434` (`38b8943`)
+- Correction subject: `Fix Worker runtime and validation toolchain`
+- Parent (unchanged; not amended): `28e7b44f1b73e4a4a08d1f91f1287e440bb03f9c` (`28e7b44`) — Add bounded production verification canary controls
+- Preceding vertical-slice floor: `1443c48` — Integrate production media verification vertical slice
+- Preceding same-day documentation checkpoint: `561b007` — Record 2026-07-23 Engineering OS closeout for Production Verification vertical slice.
+- Production Verification canary controls previously committed at `28e7b44`
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- Canary identities remain empty; no committed operator secret
+- No push, tag, deployment, secret provisioning, Cloudflare mutation, media upload, or production canary occurred
+- Timeline Builder, debug-logs/**, and all six stashes remained excluded
+
+### Codex Readiness Blockers Corrected
+
+1. Node-only `node:util` comparator replaced by runtime-neutral JSON structural equality
+2. Full Worker entrypoint typechecking added (includes `src/index.ts` and multipart adapter)
+3. Wrangler toolchain pinned for reproducible Worker validation
+
+### Multipart Receiver Correction
+
+- Initial correction introduced an unbound `R2MultipartUpload.uploadPart()` call
+- Independent review reproduced `TypeError: Illegal invocation`
+- Final correction preserves the multipart receiver through a narrow adapter using `.call(multipart, …)`
+- Receiver-sensitive regression proves: receiver identity; exact argument forwarding; one upload invocation; unchanged return value; failure of the former unbound implementation
+
+### Runtime-Neutral Comparator
+
+- Preserves JSON structural equality
+- Object-key-order independence
+- Array ordering preserved
+
+### Toolchain Pins
+
+- Wrangler: `4.112.0`
+- `@cloudflare/workers-types`: `5.20260714.1`
+- esbuild resolves to `0.28.1`
+- TypeScript remains `5.9.3`
+- ES2024 and `node:util` runtime warnings resolved
+
+### Final Validation Passed
+
+- Production Verification suite: 97/97
+- Worker suite: 59/59
+- Comparator focused suite: 6/6
+- Multipart adapter suite: 2/2
+- Canary suite: 14/14
+- DigestStream smoke: 1/1
+- Scoped and full Worker typechecks
+- Worker local startup
+- Wrangler dry-run
+- Bundle, credential, configuration, and diff checks
+
+### Current Boundary
+
+**COMPLETE:** Worker runtime and validation-toolchain correction at `38b8943`.
+
+**DISABLED / NOT READY:** Production Verification production-canary readiness remains incomplete.
+
+**OPEN GATES (not closed by this documentation mission):**
+- explicit human privacy-policy decision
+- renewed Codex production-canary readiness review from commit `38b8943`
+- separately authorized deployment/provisioning mission
+- separately authorized single-canary execution mission
+
+## Next Experiment
+
+Smallest next candidate mission only (not authorized as implementation by this closeout): renewed Codex production-canary readiness review from commit 38b894338db1868948c7b83fe4caa70c16b8f434. Do not make the privacy-policy decision during documentation. Do not deploy, provision secrets, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without separately authorized missions.
+
+## Do Not
+
+- Do not mark Production Verification production-canary readiness complete.
+- Do not make the human privacy-policy decision during this documentation mission.
+- Do not set SHARED_MATCH_MEDIA_VERIFICATION_ENABLED to "1" without separate authorization.
+- Do not provision operator secrets or non-empty canary identities without separate authorization.
+- Do not push, tag, deploy, provision, enable, upload media, mutate Cloudflare, or execute a production canary.
+- Do not amend parent commit 28e7b44.
+- Do not alter Timeline sources, debug-logs/**, or protected stashes.
+- Do not rewrite architecture-certification artifacts from this living-memory closeout.
+- Do not modify Worker code, domain code, package metadata, lockfiles, or Cloudflare configuration during documentation.
+
+## Notes
+
+- Investigation lifecycle for this Worker runtime and validation-toolchain documentation closeout: COMPLETE.
+- Commit 38b894338db1868948c7b83fe4caa70c16b8f434 is the completed local correction checkpoint.
+- Parent commit 28e7b44f1b73e4a4a08d1f91f1287e440bb03f9c was not amended.
+- Production Verification remains disabled with empty canary identities and no committed operator secret.
+- No push, tag, deployment, secret provisioning, Cloudflare mutation, media upload, or production canary occurred.
+- Timeline Builder, debug logs, and all six stashes remained excluded.
 - Architecture certification artifacts were not rewritten by this closeout.
+- This closeout updates living engineering memory only; code floor remains at 38b8943.
 
 ## Repository State
 
@@ -154,14 +258,14 @@ Smallest next candidate mission only (not authorized, not begun): controlled Pro
 ### git log --oneline --decorate -8
 
 ```text
-1443c48 (HEAD -> coach-commentary-media-metadata) Integrate production media verification vertical slice
+38b8943 (HEAD -> coach-commentary-media-metadata) Fix Worker runtime and validation toolchain
+28e7b44 Add bounded production verification canary controls
+561b007 Record 2026-07-23 Engineering OS closeout for Production Verification vertical slice.
+1443c48 Integrate production media verification vertical slice
 dda707a Establish production verification domain foundation
 34359ac Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
 164f86d Record Production Verification Service design-contract certification artifacts.
 b782ca1 Fix match media hashing for React Native
-238ec41 Add parent shared match media upload client
-7927b88 (origin/coach-commentary-media-metadata) Record 10 GiB container runtime certification
-ebd6f8e Remove duplicate provisioning validation
 ```
 
 ### git diff --stat

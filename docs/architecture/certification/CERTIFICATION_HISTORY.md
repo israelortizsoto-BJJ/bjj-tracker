@@ -1,5 +1,34 @@
 # MatMind Certification History
 
+## 2026-07-23
+
+Certification
+
+Human Product/Privacy Policy Certification — Production Verification Canary v1
+
+Summary
+
+Recorded the Human Product/Privacy Owner decision for the bounded Production Verification Canary v1 only.
+
+- Verdict: **APPROVED WITH CONDITIONS**
+- Approval date: 2026-07-23
+- Expiry date: 2026-07-30
+- Product/Privacy owner and audit owner: Israel Ortiz Soto
+- Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
+- Certified policy values: `scanHookStatus: "scan_not_required"`; `scanPolicyIdentity: "first-slice-scan-not-required-v1"`
+- Narrow one-time exception only; no scanner-free handling of ordinary user, athlete, customer, or competition media
+- Preserves permitted-media rules, prohibited-media rules, exact canary scope, expiry/automatic invalidation, mandatory abort conditions, retention/deletion requirements, required evidence, and authorization boundary
+
+Artifact
+
+- ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md
+
+Outcome
+
+Status is **APPROVED WITH CONDITIONS** for Production Verification Canary v1 human Product/Privacy policy only. This resolves the human privacy-policy gate for the narrowly defined canary. It does not authorize deployment, Cloudflare mutation, secret provisioning, canary-identity insertion, verification-flag enablement, media upload, canary execution, Product Certification, or general production privacy policy.
+
+---
+
 ## 2026-07-22
 
 Certification

@@ -65,6 +65,97 @@ Living engineering memory (Checkpoint, Dev Handoff, Engineering Daily, Daily Res
 
 No next implementation mission is authorized from this closeout. Candidate only (not authorized, not begun): controlled Production Verification enablement planning/authorization gate — without enabling the flag, creating resources/bindings, deploying, pushing, or beginning downstream Coach/publication/playback work.
 
+### Amendment — Worker runtime and validation-toolchain correction
+
+Primary objective for this amendment: record the completed Worker runtime and validation-toolchain correction checkpoint at `38b8943` after parent canary-controls commit `28e7b44`, without marking production-canary readiness complete.
+
+#### Amended Repository Floor
+
+- Correction HEAD: `38b894338db1868948c7b83fe4caa70c16b8f434` (`38b8943`)
+- Parent (unchanged; not amended): `28e7b44f1b73e4a4a08d1f91f1287e440bb03f9c` (`28e7b44`) — Add bounded production verification canary controls
+- Correction subject: `Fix Worker runtime and validation toolchain`
+- Preceding vertical-slice floor: `1443c48` — Integrate production media verification vertical slice
+- Preceding same-day documentation checkpoint: `561b007` — Record 2026-07-23 Engineering OS closeout for Production Verification vertical slice.
+- Feature flag remains `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- Canary identities remain empty; no committed operator secret
+- Toolchain pins: Wrangler `4.112.0`; `@cloudflare/workers-types` `5.20260714.1`; esbuild `0.28.1`; TypeScript `5.9.3`
+
+#### Amended Completed Outcomes
+
+- Recorded Codex readiness blockers corrected: Node-only `node:util` comparator; lack of full Worker entrypoint typechecking; outdated/non-deterministic Wrangler toolchain.
+- Recorded multipart receiver correction path: unbound `uploadPart()` Illegal invocation → narrow `.call(multipart, …)` adapter with receiver-sensitive regression.
+- Recorded runtime-neutral comparator properties: JSON structural equality; object-key-order independence; array ordering preserved.
+- Recorded final validation: PV 97/97; Worker 59/59; comparator 6/6; multipart adapter 2/2; canary 14/14; DigestStream smoke 1/1; scoped and full Worker typechecks; Worker local startup; Wrangler dry-run; bundle/credential/configuration/diff checks.
+- Marked Worker runtime and validation-toolchain correction COMPLETE at `38b8943` while preserving open production-canary readiness gates.
+
+#### Amended Evidence and Certification Movement
+
+Living engineering memory (Checkpoint, Dev Handoff, Engineering Daily amendment, Daily Restart morning floor) indexes the local correction floor at `38b8943`. Architecture certification artifacts were not rewritten. Production Verification remains disabled. Production-canary readiness is not claimed complete. No Runtime or Product Certification is claimed by this documentation closeout.
+
+#### Amended Stops and Remaining Unknowns
+
+- Explicit human privacy-policy decision remains open (not made by this documentation mission).
+- Renewed Codex production-canary readiness review from commit `38b8943` remains required.
+- Separately authorized deployment/provisioning mission remains required.
+- Separately authorized single-canary execution mission remains required.
+- Do not enable the flag, provision secrets, deploy, push, upload media, mutate Cloudflare, or execute a production canary without separate authorization.
+
+#### Amended Protected and Unrelated Scopes
+
+- Timeline `Constants.gs` / `TimelineV2.gs` remain untouched.
+- `debug-logs/codex/**`, `debug-logs/corridor-qa/**`, and `debug-logs/playback-forensics/**` remain untouched.
+- All six protected stashes remain untouched.
+- Code floor at `38b8943` remains unchanged by this documentation closeout.
+
+#### Amended Next Authorized Mission
+
+No deployment, provisioning, enablement, or canary-execution mission is authorized from this closeout. Candidate only (not authorized as implementation by this closeout): renewed Codex production-canary readiness review from commit `38b8943`.
+
+
+### Amendment — Human Product/Privacy Policy Certification (Production Verification Canary v1)
+
+Primary objective for this amendment: record the Human Product/Privacy Owner certification APPROVED WITH CONDITIONS for Production Verification Canary v1 only.
+
+#### Amended Repository Floor
+
+- Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434` (`38b8943`)
+- Feature flag remains `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- Canary identities remain empty; no committed operator secret
+
+#### Amended Completed Outcomes
+
+- Recorded verdict **APPROVED WITH CONDITIONS** dated 2026-07-23, expiry 2026-07-30.
+- Recorded certified policy values `scan_not_required` / `first-slice-scan-not-required-v1`.
+- Preserved permitted media, prohibited media, exact canary scope, expiry/invalidation, abort conditions, retention/deletion, required evidence, and authorization boundary.
+- Updated certification history, architecture register, protected-systems register, and active-investigation register.
+- Verified owned architecture certification documents with `write_architecture_certification.py --verify`.
+
+#### Amended Evidence and Certification Movement
+
+Architecture certification corpus now includes `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`. Living engineering memory indexes the closed canary privacy-policy gate. No Runtime or Product Certification is claimed. No deployment, provisioning, enablement, upload, or canary execution occurred.
+
+#### Amended Stops and Remaining Unknowns
+
+- Human privacy-policy decision for Production Verification Canary v1 is CLOSED as APPROVED WITH CONDITIONS through 2026-07-30.
+- Separately authorized deployment/provisioning mission remains required.
+- Separately authorized single-canary execution mission remains required.
+- General production privacy policy beyond Canary v1 remains open.
+- Required Proof #5 live production evidence and Product Certification remain open.
+- Do not deploy, provision secrets, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without separate authorization.
+
+#### Amended Protected and Unrelated Scopes
+
+- Timeline `Constants.gs` / `TimelineV2.gs` remain untouched by this recording.
+- `debug-logs/**` remain untouched.
+- All six protected stashes remain untouched.
+- Code floor at `38b8943` remains unchanged by this documentation mission.
+
+#### Amended Next Authorized Mission
+
+No deployment, provisioning, enablement, or canary-execution mission is authorized from this recording. Candidate only: separately authorized deployment/provisioning planning under the recorded Canary v1 conditions, without expanding policy scope.
+
+
+
 ## 2026-07-22
 
 ### Primary Objective

@@ -281,6 +281,43 @@ Isolated Verification runtime is certified through 10 GiB. The evidence confirms
 
 Production Verification Service design contract and state machine are recorded in `SharedMatchMedia-ProductionVerificationService-Contract-v1.md` as **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**. That design does not implement, enable, Product Certify, or satisfy Required Proof #5 for Production Verification. The isolated proof remains non-identical to the production service.
 
+Human Product/Privacy Policy Certification for Production Verification Canary v1 is recorded separately in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` as **APPROVED WITH CONDITIONS** (2026-07-23 through 2026-07-30). That record closes only the narrow canary privacy-policy gate and does not authorize deployment, flag enablement, media upload, canary execution, or general production privacy policy.
+
+---
+
+## 9. Production Verification Canary v1 — Human Product/Privacy Policy
+
+Status
+
+APPROVED WITH CONDITIONS
+
+Version
+
+Canary v1
+
+Certification Date
+
+2026-07-23
+
+Expiry Date
+
+2026-07-30
+
+Confidence
+
+High — human Product/Privacy Owner decision
+
+Repository References
+
+- docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md
+- docs/architecture/certification/SharedMatchMedia-ProductionVerificationService-Contract-v1.md
+
+Certification Summary
+
+Israel Ortiz Soto approved bounded use of `scan_not_required` under `first-slice-scan-not-required-v1` for Production Verification Canary v1 only, against engineering floor `38b894338db1868948c7b83fe4caa70c16b8f434`.
+
+The approval is conditioned on permitted/prohibited media rules, exact single-canary scope, expiry and automatic invalidation, mandatory abort conditions, retention/deletion requirements, and required evidence. It does not authorize deployment, Cloudflare mutation, secret provisioning, canary-identity insertion, verification-flag enablement from `"0"`, media upload, canary execution, or scanner-free ordinary production media handling.
+
 ---
 
 # Master Certification Table
@@ -295,6 +332,7 @@ Production Verification Service design contract and state machine are recorded i
 | Product Architecture | CERTIFIED | High |
 | Media Runtime Foundation | CERTIFIED | High |
 | Shared Match Media Architecture (contracts only) | CERTIFIED | High |
+| Production Verification Canary v1 Human Product/Privacy Policy | APPROVED WITH CONDITIONS | High |
 
 ---
 
