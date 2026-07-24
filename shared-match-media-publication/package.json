@@ -1,0 +1,14 @@
+{
+  "name": "matmind-shared-match-media-publication",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Unwired Parent-owned MatchMediaAttachment revision and CAS domain.",
+  "scripts": {
+    "test": "node --experimental-strip-types --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}
