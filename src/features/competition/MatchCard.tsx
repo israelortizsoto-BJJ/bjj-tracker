@@ -1,11 +1,13 @@
 import { router, type Href } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { formatSubmissionTimeDisplay } from "../../domain/competition/matchDurationFormat";
 import { logBreakdownPropagationForMatch } from "../../domain/competition/competitionProjectionBreakdownTrace";
 import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
+import { getCoachMatchMediaAttachment } from "../../storage/coachMatchMediaAttachmentStore";
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
+import type { SyncedMatchMediaAttachmentProjection } from "../../types/coachWeeklySync";
 import { labelForSubmissionTypeKey } from "./submissionTypes";
 
 const FEED = {
@@ -42,6 +44,9 @@ export function buildFilmRoomHref(input: {
   coachNote?: string;
   videoUri?: string | null;
   durationMs?: number;
+  /** Hydrated Coach Shared Match Media identity only — never a signed URL. */
+  matchMediaAssetId?: string;
+  expectedRevision?: number;
 }): Href {
   const params = new URLSearchParams();
   params.set("matchLineageKey", input.matchLineageKey);
@@ -52,10 +57,21 @@ export function buildFilmRoomHref(input: {
   }
   if (input.mediaId?.trim()) params.set("mediaId", input.mediaId.trim());
   if (input.coachNote?.trim()) params.set("coachNote", input.coachNote.trim());
+  // Local/legacy Parent URI only. Coach Shared Match Media uses identity params below.
   const videoUri = input.videoUri?.trim();
-  if (videoUri) params.set("videoUri", videoUri);
+  if (videoUri && !input.matchMediaAssetId?.trim()) params.set("videoUri", videoUri);
   if (input.durationMs !== undefined && Number.isFinite(input.durationMs)) {
     params.set("durationMs", String(input.durationMs));
+  }
+  const matchMediaAssetId = input.matchMediaAssetId?.trim() ?? "";
+  if (
+    matchMediaAssetId &&
+    input.expectedRevision !== undefined &&
+    Number.isSafeInteger(input.expectedRevision) &&
+    input.expectedRevision >= 1
+  ) {
+    params.set("matchMediaAssetId", matchMediaAssetId);
+    params.set("expectedRevision", String(input.expectedRevision));
   }
   return `/competition/film-room?${params.toString()}` as Href;
 }
@@ -75,9 +91,39 @@ export function MatchCard({
 }) {
   const won = snapshot.matchResult === "win";
   const [coachBreakdownExpanded, setCoachBreakdownExpanded] = useState(false);
+  const [matchMediaAttachment, setMatchMediaAttachment] =
+    useState<SyncedMatchMediaAttachmentProjection | null>(null);
   const coachBreakdown = snapshot.coachNote?.trim() ?? "";
   const mediaId = snapshot.mediaId?.trim() ?? "";
   const durationLabel = formatCommentaryDuration(snapshot.durationMs);
+  const attachedMatchMedia =
+    matchMediaAttachment?.state === "attached" ? matchMediaAttachment : null;
+  const tombstonedMatchMedia =
+    matchMediaAttachment?.state === "tombstoned" ? matchMediaAttachment : null;
+  // Shared-media Film Room corridor: attached hydrated Coach projection only.
+  // mediaId alone (voice) must not open this corridor.
+  const canOpenFilmRoom = Boolean(attachedMatchMedia);
+
+  useEffect(() => {
+    const athleteId = sharedAthleteId.trim();
+    const competitionId = sharedCompetitionId.trim();
+    const lineage = snapshot.id.trim();
+    if (!athleteId || !competitionId || !lineage) {
+      setMatchMediaAttachment(null);
+      return;
+    }
+    let cancelled = false;
+    void getCoachMatchMediaAttachment({
+      sharedAthleteId: athleteId,
+      sharedCompetitionId: competitionId,
+      matchLineageKey: lineage,
+    }).then((row) => {
+      if (!cancelled) setMatchMediaAttachment(row);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [sharedAthleteId, sharedCompetitionId, snapshot.id]);
 
   logBreakdownPropagationForMatch({
     stage: "match_card_render",
@@ -102,7 +148,7 @@ export function MatchCard({
     hasMediaId: Boolean(mediaId),
     coachNotePreview: coachBreakdown ? coachBreakdown.slice(0, 40) : null,
   });
-  if (coachBreakdown || mediaId) {
+  if (coachBreakdown || mediaId || attachedMatchMedia) {
     logCoachMediaCorridorTrace("MATCHCARD_RENDER", {
       // MatchCard has no coach-save corridor traceId; correlate via lineage keys.
       traceId: null,
@@ -129,6 +175,7 @@ export function MatchCard({
   );
 
   const openFilmRoom = () => {
+    if (!canOpenFilmRoom) return;
     router.push(
       buildFilmRoomHref({
         matchLineageKey: snapshot.id,
@@ -137,8 +184,10 @@ export function MatchCard({
         sharedCompetitionId,
         mediaId,
         coachNote: coachBreakdown,
-        videoUri: snapshot.videoUri,
+        videoUri: attachedMatchMedia ? null : snapshot.videoUri,
         durationMs: snapshot.durationMs,
+        matchMediaAssetId: attachedMatchMedia?.matchMediaAssetId,
+        expectedRevision: attachedMatchMedia?.revision,
       }),
     );
   };
@@ -186,13 +235,19 @@ export function MatchCard({
         </View>
         <View style={styles.matchField}>
           <Text style={styles.label}>Video</Text>
-          <Text style={styles.value}>{videoLabel(snapshot)}</Text>
+          <Text style={styles.value}>
+            {tombstonedMatchMedia
+              ? "Video removed"
+              : attachedMatchMedia
+                ? "Attached"
+                : videoLabel(snapshot)}
+          </Text>
         </View>
       </View>
-      {coachBreakdown ? (
+      {coachBreakdown || canOpenFilmRoom ? (
         <View style={styles.coachSection}>
           <Text style={styles.coachLabel}>Coach Match Breakdown</Text>
-          {mediaId ? (
+          {canOpenFilmRoom ? (
             <View style={styles.commentaryControls}>
               <Pressable
                 accessibilityRole="button"
@@ -210,22 +265,26 @@ export function MatchCard({
               ) : null}
             </View>
           ) : null}
-          <Text
-            numberOfLines={coachBreakdownExpanded ? undefined : 3}
-            style={styles.coachText}
-          >
-            {coachBreakdown}
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${coachBreakdownExpanded ? "Collapse" : "Read more"} coach match breakdown for match ${index + 1}`}
-            onPress={() => setCoachBreakdownExpanded((expanded) => !expanded)}
-            style={({ pressed }) => [styles.readMore, pressed ? styles.readMorePressed : null]}
-          >
-            <Text style={styles.readMoreText}>
-              {coachBreakdownExpanded ? "Show Less" : "Read More"}
-            </Text>
-          </Pressable>
+          {coachBreakdown ? (
+            <>
+              <Text
+                numberOfLines={coachBreakdownExpanded ? undefined : 3}
+                style={styles.coachText}
+              >
+                {coachBreakdown}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${coachBreakdownExpanded ? "Collapse" : "Read more"} coach match breakdown for match ${index + 1}`}
+                onPress={() => setCoachBreakdownExpanded((expanded) => !expanded)}
+                style={({ pressed }) => [styles.readMore, pressed ? styles.readMorePressed : null]}
+              >
+                <Text style={styles.readMoreText}>
+                  {coachBreakdownExpanded ? "Show Less" : "Read More"}
+                </Text>
+              </Pressable>
+            </>
+          ) : null}
         </View>
       ) : null}
     </View>

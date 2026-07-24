@@ -10,6 +10,7 @@ import {
   type FilmRoomSessionCoordinator,
 } from "../../playback/FilmRoomSessionCoordinator";
 import type { PlaybackCoordinator } from "../../playback/PlaybackCoordinator";
+import type { CoachMatchMediaDeliveryFailureKind } from "./coachMatchMediaPlaybackResolve";
 import { FilmRoomCoachCommentaryControls } from "./FilmRoomCoachCommentaryControls";
 import { FilmRoomVideoPlayer } from "./FilmRoomVideoPlayer";
 
@@ -29,6 +30,8 @@ export type FilmRoomScreenProps = {
   coachNote?: string;
   videoUri?: string | null;
   durationMs?: number;
+  /** Forward-only delivery failure; FilmRoomScreen does not resolve or authorize media. */
+  onDeliveryError?: (kind?: CoachMatchMediaDeliveryFailureKind) => void;
 };
 
 /**
@@ -93,6 +96,7 @@ export function FilmRoomScreen({
   coachNote: coachNoteProp = "",
   videoUri = null,
   durationMs,
+  onDeliveryError,
 }: FilmRoomScreenProps) {
   const [coachNote, setCoachNote] = useState(coachNoteProp.trim());
   const [coachNoteExpanded, setCoachNoteExpanded] = useState(false);
@@ -238,6 +242,7 @@ export function FilmRoomScreen({
           onPlay={playCoachMatchBreakdown}
           onPause={pauseCoachMatchBreakdown}
           onReplay={replayCoachMatchBreakdown}
+          onDeliveryError={onDeliveryError}
         />
 
         <View style={styles.body}>

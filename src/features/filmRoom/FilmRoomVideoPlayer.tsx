@@ -8,6 +8,10 @@ import {
   type PlaybackCoordinator,
 } from "../../playback/PlaybackCoordinator";
 import { createVideoAdapter } from "../../playback/VideoAdapter";
+import {
+  classifyCoachMatchMediaPlayerDeliveryError,
+  type CoachMatchMediaDeliveryFailureKind,
+} from "./coachMatchMediaPlaybackResolve";
 
 const UI = {
   panel: "#111315",
@@ -30,6 +34,11 @@ type FilmRoomVideoPlayerProps = {
   onPlay: () => void | Promise<void>;
   onPause: () => void | Promise<void>;
   onReplay: () => void | Promise<void>;
+  /**
+   * Narrow content-delivery failure signal for the upstream URL lifecycle owner.
+   * Player detects only — does not resolve, authorize, or retry.
+   */
+  onDeliveryError?: (kind?: CoachMatchMediaDeliveryFailureKind) => void;
 };
 
 /**
@@ -46,6 +55,7 @@ export const FilmRoomVideoPlayer = memo(function FilmRoomVideoPlayer({
   onPlay,
   onPause,
   onReplay,
+  onDeliveryError,
 }: FilmRoomVideoPlayerProps) {
   const videoRef = useRef<Video>(null);
   const playbackRef = useRef(
@@ -55,6 +65,9 @@ export const FilmRoomVideoPlayer = memo(function FilmRoomVideoPlayer({
     }),
   );
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deliveryErrorReportedRef = useRef(false);
+  const onDeliveryErrorRef = useRef(onDeliveryError);
+  onDeliveryErrorRef.current = onDeliveryError;
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [aspectRatio, setAspectRatio] = useState(16 / 9);
   const [playbackState, setPlaybackState] = useState<"idle" | "loading" | "playing" | "paused">(
@@ -84,7 +97,15 @@ export const FilmRoomVideoPlayer = memo(function FilmRoomVideoPlayer({
     void playbackRef.current.unload();
     setAspectRatio(16 / 9);
     setHasStarted(false);
+    deliveryErrorReportedRef.current = false;
   }, [uri]);
+
+  const emitDeliveryError = (errorText: string) => {
+    if (!uri || deliveryErrorReportedRef.current) return;
+    deliveryErrorReportedRef.current = true;
+    const kind = classifyCoachMatchMediaPlayerDeliveryError(errorText);
+    onDeliveryErrorRef.current?.(kind);
+  };
 
   useEffect(() => {
     const coordinator = playbackRef.current;
@@ -172,11 +193,18 @@ export const FilmRoomVideoPlayer = memo(function FilmRoomVideoPlayer({
               setAspectRatio(oriented);
             }
           }}
+          onError={(error) => {
+            emitDeliveryError(typeof error === "string" ? error : "");
+          }}
           onPlaybackStatusUpdate={(status) => {
             if (!status || typeof status !== "object") return;
             if ("isLoaded" in status && status.isLoaded) {
               playbackRef.current.applyVideoStatus(status);
               if (status.positionMillis > 0) setHasStarted(true);
+              return;
+            }
+            if ("error" in status && typeof status.error === "string" && status.error) {
+              emitDeliveryError(status.error);
             }
           }}
         />
