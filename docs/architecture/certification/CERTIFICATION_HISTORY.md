@@ -12,9 +12,10 @@ Recorded the Human Product/Privacy Owner decision for the bounded Production Ver
 
 - Verdict: **APPROVED WITH CONDITIONS**
 - Approval date: 2026-07-23
-- Expiry date: 2026-07-30
+- Expiry datetime: 2026-07-30T00:00:00-07:00
 - Product/Privacy owner and audit owner: Israel Ortiz Soto
 - Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
+- Confirmed authorization expiry: `2026-07-30T00:00:00-07:00` — Israel Ortiz Soto explicitly confirmed: Production Verification Canary v1 policy authorization expires at 2026-07-30T00:00:00-07:00. This clarification eliminates the prior date-only ambiguity (`2026-07-30`).
 - Certified policy values: `scanHookStatus: "scan_not_required"`; `scanPolicyIdentity: "first-slice-scan-not-required-v1"`
 - Narrow one-time exception only; no scanner-free handling of ordinary user, athlete, customer, or competition media
 - Preserves permitted-media rules, prohibited-media rules, exact canary scope, expiry/automatic invalidation, mandatory abort conditions, retention/deletion requirements, required evidence, and authorization boundary

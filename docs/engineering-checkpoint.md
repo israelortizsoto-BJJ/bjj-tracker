@@ -14,7 +14,7 @@ Under Engineering OS vNext, this register is the engineering session snapshot. C
 
 ## Investigation
 
-Human Product/Privacy Policy Certification recording for Production Verification Canary v1
+Production Verification Canary v1 confirmed authorization-expiry clarification
 
 ## Status
 
@@ -22,34 +22,35 @@ COMPLETE
 
 ## Hypothesis
 
-The Human Product/Privacy Owner decision APPROVED WITH CONDITIONS for Production Verification Canary v1 can be recorded into the established MatMind DOCOPS certification corpus and living engineering memory without deploying, provisioning, enabling verification, uploading media, or executing a canary.
+Israel’s confirmed fail-closed instant `2026-07-30T00:00:00-07:00` can be recorded into the established MatMind DOCOPS certification corpus and living engineering memory, eliminating the prior date-only ambiguity (`2026-07-30`), without deploying, provisioning, enabling verification, uploading media, mutating Cloudflare, or executing a canary.
 
 ## Latest Runtime Behavior
 
-### Recorded Certification
+### Confirmed Expiry Clarification
 
-- Artifact: `docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`
-- Verdict: **APPROVED WITH CONDITIONS**
-- Approval date: 2026-07-23
-- Expiry date: 2026-07-30
+- Israel Ortiz Soto explicitly confirmed: Production Verification Canary v1 policy authorization expires at 2026-07-30T00:00:00-07:00.
+- Fail-closed instant: `2026-07-30T00:00:00-07:00` (not end-of-day `2026-07-30`)
+- Prior recording used date-only `2026-07-30`; that ambiguity is now closed
+- Verdict remains **APPROVED WITH CONDITIONS**
+- Approval date remains 2026-07-23
 - Product/Privacy owner and audit owner: Israel Ortiz Soto
-- Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
-- Certified policy values: `scanHookStatus: "scan_not_required"`; `scanPolicyIdentity: "first-slice-scan-not-required-v1"`
-- Preserved: permitted media; prohibited media; exact canary scope; expiry/automatic invalidation; mandatory abort conditions; retention/deletion requirements; required evidence; authorization boundary
+- Certified engineering floor remains `38b894338db1868948c7b83fe4caa70c16b8f434`
+- Documentation HEAD at clarification recording start: `fdb0dca35622a068ec43f9ff9d08d23b64c7ce93`
+- Policy authorization is not expired as of this recording
 
 ### Certification Corpus Movement
 
-- Prepended `CERTIFICATION_HISTORY.md`
-- Updated `CertifiedArchitectureRegister-v1.md` section 9 + master table
-- Updated `protected-systems-register.md`
-- Updated `active-investigation-register.md` to close only the narrow canary privacy-policy gate
+- Updated `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` header and expiry/invalidation list to `2026-07-30T00:00:00-07:00` and recorded Israel’s explicit confirmation
+- Amended `CERTIFICATION_HISTORY.md` 2026-07-23 entry expiry + confirmation note
+- Updated `CertifiedArchitectureRegister-v1.md` section 9 Expiry Datetime + confirmation sentence
+- Updated `protected-systems-register.md` and `active-investigation-register.md` expiry references
 - Verified owned architecture certification documents via `scripts/write_architecture_certification.py --verify`
 
 ### Current Boundary
 
-**COMPLETE:** Human Product/Privacy Policy Certification recording for Production Verification Canary v1.
+**COMPLETE:** Confirmed authorization-expiry clarification for Production Verification Canary v1.
 
-**CLOSED BY THIS RECORD:** explicit human privacy-policy decision for the narrowly defined canary only.
+**CLOSED BY THIS RECORD:** date-only expiry ambiguity for Canary v1 policy authorization.
 
 **STILL OPEN:**
 - separately authorized deployment/provisioning mission
@@ -62,32 +63,32 @@ The Human Product/Privacy Owner decision APPROVED WITH CONDITIONS for Production
 - `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
 - empty canary identities
 - no committed operator secret
-- no deploy, push, tag, Cloudflare mutation, media upload, or canary execution occurred
+- no deploy, push, tag, Cloudflare mutation, media upload, or canary execution authorized by this clarification
 
 ## Next Experiment
 
-Smallest next candidate mission only (not authorized as implementation by this recording): separately authorized deployment/provisioning planning for Production Verification Canary v1 under the recorded APPROVED WITH CONDITIONS constraints, or renewed readiness review if floor changes. Do not deploy, provision secrets, insert canary identities, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without a separately authorized mission.
+Smallest next candidate mission only (not authorized as implementation by this clarification): separately authorized read-only production preflight and/or deployment/provisioning planning for Production Verification Canary v1 under the recorded APPROVED WITH CONDITIONS constraints and confirmed expiry `2026-07-30T00:00:00-07:00`. Do not deploy, provision secrets, insert canary identities, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without a separately authorized mission.
 
 ## Do Not
 
-- Do not treat this recording as authorization to deploy, provision, enable, upload, or execute a canary.
+- Do not treat this clarification as authorization to deploy, provision, enable, upload, or execute a canary.
 - Do not expand Canary v1 privacy approval into general scanner-free production media policy.
 - Do not set SHARED_MATCH_MEDIA_VERIFICATION_ENABLED to "1" without separate authorization.
 - Do not provision operator secrets or non-empty canary identities without separate authorization.
 - Do not push, tag, deploy, provision, enable, upload media, mutate Cloudflare, or execute a production canary.
 - Do not alter Timeline sources, debug-logs/**, or protected stashes.
 - Do not modify Worker code, domain code, package metadata, lockfiles, or Cloudflare configuration during this documentation mission.
-- Do not retry an aborted canary under this certification.
+- Do not reinterpret `2026-07-30T00:00:00-07:00` as end-of-day `2026-07-30`.
 - Do not claim Product Certification or Required Proof #5 complete.
 
 ## Notes
 
-- Investigation lifecycle for this Human Product/Privacy Policy Certification recording: COMPLETE.
+- Investigation lifecycle for this expiry-clarification recording: COMPLETE.
 - Certified engineering floor remains 38b894338db1868948c7b83fe4caa70c16b8f434.
-- Privacy gate for Production Verification Canary v1 is APPROVED WITH CONDITIONS through 2026-07-30.
+- Privacy gate for Production Verification Canary v1 remains APPROVED WITH CONDITIONS through `2026-07-30T00:00:00-07:00`.
 - Deployment/provisioning and single-canary execution remain separate unauthorized missions.
 - Production Verification remains disabled with empty canary identities and no committed operator secret.
-- No push, tag, deployment, secret provisioning, Cloudflare mutation, media upload, or production canary occurred.
+- No push, tag, deployment, secret provisioning, Cloudflare mutation, media upload, or production canary occurred as part of this clarification.
 - Timeline Builder, debug logs, and all six stashes remained excluded.
 - Checkpoint writer permanent-header constant does not include the Engineering OS vNext sentence present in this register; this entry was recorded with the established bounded terminal-first updater.
 
@@ -99,37 +100,41 @@ Smallest next candidate mission only (not authorized as implementation by this r
 ## coach-commentary-media-metadata
  M docs/architecture/certification/CERTIFICATION_HISTORY.md
  M docs/architecture/certification/CertifiedArchitectureRegister-v1.md
+ M docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md
  M docs/architecture/certification/active-investigation-register.md
  M docs/architecture/certification/protected-systems-register.md
- M docs/engineering-checkpoint.md
- M docs/engineering-daily.md
- M docs/master-prompt-daily-restart.md
  M timeline-builder/google-sheets-live/src/Constants.gs
  M timeline-builder/google-sheets-live/src/TimelineV2.gs
 ?? debug-logs/codex/
 ?? debug-logs/corridor-qa/
 ?? debug-logs/playback-forensics/
-?? docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md
 ?? scripts/__pycache__/
 ```
 
 ### git log --oneline --decorate -8
 
 ```text
-38b8943 (HEAD -> coach-commentary-media-metadata) Fix Worker runtime and validation toolchain
+fdb0dca (HEAD -> coach-commentary-media-metadata) Record Human Product/Privacy Policy Certification for Production Verification Canary v1.
+38b8943 Fix Worker runtime and validation toolchain
 28e7b44 Add bounded production verification canary controls
 561b007 Record 2026-07-23 Engineering OS closeout for Production Verification vertical slice.
 1443c48 Integrate production media verification vertical slice
 dda707a Establish production verification domain foundation
 34359ac Record 2026-07-22 Engineering OS closeout for Production Verification design seal.
 164f86d Record Production Verification Service design-contract certification artifacts.
-b782ca1 Fix match media hashing for React Native
 ```
 
 ### git diff --stat
 
 ```text
-(documentation recording in progress; see mission diff report)
+ .../certification/CERTIFICATION_HISTORY.md         |   3 +-
+ .../CertifiedArchitectureRegister-v1.md            |   8 +-
+ ...ry-v1-HumanProductPrivacyPolicyCertification.md |   9 +-
+ .../certification/active-investigation-register.md |   2 +-
+ .../certification/protected-systems-register.md    |   2 +-
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 7 files changed, 627 insertions(+), 138 deletions(-)
 ```
 
 # ENGINEERING CHECKPOINT — 2026-07-23

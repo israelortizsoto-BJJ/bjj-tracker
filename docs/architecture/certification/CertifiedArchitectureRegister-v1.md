@@ -281,7 +281,7 @@ Isolated Verification runtime is certified through 10 GiB. The evidence confirms
 
 Production Verification Service design contract and state machine are recorded in `SharedMatchMedia-ProductionVerificationService-Contract-v1.md` as **DESIGN CERTIFIED — RUNTIME NOT IMPLEMENTED**. That design does not implement, enable, Product Certify, or satisfy Required Proof #5 for Production Verification. The isolated proof remains non-identical to the production service.
 
-Human Product/Privacy Policy Certification for Production Verification Canary v1 is recorded separately in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` as **APPROVED WITH CONDITIONS** (2026-07-23 through 2026-07-30). That record closes only the narrow canary privacy-policy gate and does not authorize deployment, flag enablement, media upload, canary execution, or general production privacy policy.
+Human Product/Privacy Policy Certification for Production Verification Canary v1 is recorded separately in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` as **APPROVED WITH CONDITIONS** (2026-07-23 through `2026-07-30T00:00:00-07:00`). That record closes only the narrow canary privacy-policy gate and does not authorize deployment, flag enablement, media upload, canary execution, or general production privacy policy.
 
 ---
 
@@ -299,9 +299,9 @@ Certification Date
 
 2026-07-23
 
-Expiry Date
+Expiry Datetime
 
-2026-07-30
+2026-07-30T00:00:00-07:00
 
 Confidence
 
@@ -315,6 +315,8 @@ Repository References
 Certification Summary
 
 Israel Ortiz Soto approved bounded use of `scan_not_required` under `first-slice-scan-not-required-v1` for Production Verification Canary v1 only, against engineering floor `38b894338db1868948c7b83fe4caa70c16b8f434`.
+
+Israel Ortiz Soto explicitly confirmed: Production Verification Canary v1 policy authorization expires at 2026-07-30T00:00:00-07:00. This confirmed fail-closed instant replaces the prior date-only recording (`2026-07-30`).
 
 The approval is conditioned on permitted/prohibited media rules, exact single-canary scope, expiry and automatic invalidation, mandatory abort conditions, retention/deletion requirements, and required evidence. It does not authorize deployment, Cloudflare mutation, secret provisioning, canary-identity insertion, verification-flag enablement from `"0"`, media upload, canary execution, or scanner-free ordinary production media handling.
 

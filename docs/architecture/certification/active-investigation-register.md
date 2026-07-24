@@ -16,7 +16,7 @@ The Production Verification Service design contract and state machine are design
 
 The isolated verification Container runtime is certified through 10 GiB on the proof package. That evidence does not implement or certify the production Verification Service or the broader production corridor.
 
-Human Product/Privacy Policy Certification for Production Verification Canary v1 is recorded in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` as **APPROVED WITH CONDITIONS** (2026-07-23; expires 2026-07-30). That closes only the narrow canary privacy-policy gate for `scan_not_required` / `first-slice-scan-not-required-v1` against floor `38b894338db1868948c7b83fe4caa70c16b8f434`. It does not authorize deployment, flag enablement, media upload, canary execution, or general production privacy policy.
+Human Product/Privacy Policy Certification for Production Verification Canary v1 is recorded in `ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md` as **APPROVED WITH CONDITIONS** (2026-07-23; expires `2026-07-30T00:00:00-07:00`). That closes only the narrow canary privacy-policy gate for `scan_not_required` / `first-slice-scan-not-required-v1` against floor `38b894338db1868948c7b83fe4caa70c16b8f434`. It does not authorize deployment, flag enablement, media upload, canary execution, or general production privacy policy.
 
 Unknown
 

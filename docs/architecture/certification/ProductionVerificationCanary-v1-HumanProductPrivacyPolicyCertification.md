@@ -5,11 +5,16 @@ Verdict: **APPROVED WITH CONDITIONS**
 
 Approval date: 2026-07-23
 
-Expiry date: 2026-07-30
+Expiry datetime: 2026-07-30T00:00:00-07:00
 
 Product/Privacy owner and audit owner: Israel Ortiz Soto
 
 Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
+
+Confirmed authorization expiry (eliminates date-only ambiguity):
+
+- Israel Ortiz Soto explicitly confirmed: Production Verification Canary v1 policy authorization expires at 2026-07-30T00:00:00-07:00.
+- Fail-closed instant: `2026-07-30T00:00:00-07:00` (not end-of-day `2026-07-30`).
 
 ---
 
@@ -75,7 +80,7 @@ The certification expires at the earliest of:
 
 - successful completion of the authorized canary;
 - abortion of the authorized canary;
-- 2026-07-30;
+- `2026-07-30T00:00:00-07:00`;
 - any change to engineering floor `38b894338db1868948c7b83fe4caa70c16b8f434`;
 - any change to the asset, asset identity, object version, or hash;
 - any change to `scanHookStatus` or `scanPolicyIdentity`;

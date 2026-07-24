@@ -95,6 +95,65 @@ scripts/write_engineering_checkpoint.py
 
 ## Session Summary
 
+Recorded Israel’s confirmed Production Verification Canary v1 authorization-expiry clarification in the MatMind DOCOPS certification corpus.
+
+- Verdict remains: **APPROVED WITH CONDITIONS**
+- Approval date remains: 2026-07-23
+- Confirmed authorization expiry: `2026-07-30T00:00:00-07:00`
+- Confirmation: Israel Ortiz Soto explicitly confirmed: Production Verification Canary v1 policy authorization expires at 2026-07-30T00:00:00-07:00.
+- Product/Privacy owner and audit owner: Israel Ortiz Soto
+- Certified engineering floor: `38b894338db1868948c7b83fe4caa70c16b8f434`
+- Documentation HEAD at clarification start: `fdb0dca35622a068ec43f9ff9d08d23b64c7ce93`
+- Artifact: `docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`
+
+This clarification eliminates the prior date-only ambiguity (`2026-07-30`) and does not expand scope, authorize deployment, or authorize canary execution.
+
+## Current Boundary
+
+### CLOSED BY THIS RECORD
+
+- date-only expiry ambiguity for Production Verification Canary v1 policy authorization
+
+### STILL OPEN / UNAUTHORIZED
+
+- separately authorized deployment/provisioning mission
+- separately authorized single-canary execution mission
+- general production privacy policy beyond Canary v1
+- Required Proof #5 live production evidence
+- Product Certification
+- flag enablement, secret provisioning, canary-identity insertion, media upload, Cloudflare mutation, push/tag/deploy, canary execution
+
+### DISABLED / UNCHANGED
+
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- empty canary identities
+- no committed operator secret
+- code floor remains `38b8943`
+
+## Canonical Living Records Updated By This Clarification
+
+- `docs/architecture/certification/ProductionVerificationCanary-v1-HumanProductPrivacyPolicyCertification.md`
+- `docs/architecture/certification/CERTIFICATION_HISTORY.md`
+- `docs/architecture/certification/CertifiedArchitectureRegister-v1.md`
+- `docs/architecture/certification/protected-systems-register.md`
+- `docs/architecture/certification/active-investigation-register.md`
+- `docs/engineering-checkpoint.md`
+- `docs/engineering-daily.md`
+- `docs/master-prompt-daily-restart.md`
+- `docs/dev-handoff.md`
+
+## Next Mission
+
+Candidate only. Not authorized and not begun:
+
+separately authorized read-only production preflight and/or deployment/provisioning planning for Production Verification Canary v1 under APPROVED WITH CONDITIONS and confirmed expiry `2026-07-30T00:00:00-07:00`
+
+Do not deploy, provision secrets, insert canary identities, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without separate authorization. Do not expand Canary v1 into general scanner-free production media policy.
+
+# DEV HANDOFF — 2026-07-23
+
+## Session Summary
+
 Recorded the Human Product/Privacy Policy Certification for Production Verification Canary v1 in the MatMind DOCOPS certification corpus.
 
 - Verdict: **APPROVED WITH CONDITIONS**

@@ -154,7 +154,46 @@ Architecture certification corpus now includes `ProductionVerificationCanary-v1-
 
 No deployment, provisioning, enablement, or canary-execution mission is authorized from this recording. Candidate only: separately authorized deployment/provisioning planning under the recorded Canary v1 conditions, without expanding policy scope.
 
+### Amendment — Confirmed Canary v1 authorization expiry
 
+Primary objective for this amendment: record Israel’s explicit confirmation that Production Verification Canary v1 policy authorization expires at `2026-07-30T00:00:00-07:00`, eliminating the prior date-only ambiguity.
+
+#### Amended Repository Floor
+
+- Documentation HEAD at clarification start: `fdb0dca35622a068ec43f9ff9d08d23b64c7ce93`
+- Certified engineering floor unchanged: `38b894338db1868948c7b83fe4caa70c16b8f434` (`38b8943`)
+- Feature flag remains `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"`
+- Canary identities remain empty; no committed operator secret
+- Confirmed authorization expiry: `2026-07-30T00:00:00-07:00`
+
+#### Amended Completed Outcomes
+
+- Recorded: Israel Ortiz Soto explicitly confirmed: Production Verification Canary v1 policy authorization expires at 2026-07-30T00:00:00-07:00.
+- Replaced date-only `2026-07-30` with fail-closed instant `2026-07-30T00:00:00-07:00` in the Canary v1 certification artifact and certification corpus references.
+- Verified owned architecture certification documents with `write_architecture_certification.py --verify`.
+
+#### Amended Evidence and Certification Movement
+
+Certification corpus and living engineering memory now carry the confirmed fail-closed instant. Verdict remains **APPROVED WITH CONDITIONS**. No Runtime or Product Certification is claimed. No deployment, provisioning, enablement, upload, Cloudflare mutation, or canary execution occurred.
+
+#### Amended Stops and Remaining Unknowns
+
+- Date-only expiry ambiguity for Canary v1 is CLOSED.
+- Human privacy-policy decision remains APPROVED WITH CONDITIONS through `2026-07-30T00:00:00-07:00`.
+- Separately authorized deployment/provisioning mission remains required.
+- Separately authorized single-canary execution mission remains required.
+- Do not deploy, provision secrets, enable verification, upload media, mutate Cloudflare, push, tag, or execute a production canary without separate authorization.
+
+#### Amended Protected and Unrelated Scopes
+
+- Timeline `Constants.gs` / `TimelineV2.gs` remain untouched by this clarification.
+- `debug-logs/**` remain untouched.
+- All six protected stashes remain untouched.
+- Code floor at `38b8943` remains unchanged by this documentation clarification.
+
+#### Amended Next Authorized Mission
+
+No deployment, provisioning, enablement, or canary-execution mission is authorized from this clarification. Candidate only: separately authorized read-only production preflight and/or deployment/provisioning planning under the recorded Canary v1 conditions and confirmed expiry `2026-07-30T00:00:00-07:00`.
 
 ## 2026-07-22
 
