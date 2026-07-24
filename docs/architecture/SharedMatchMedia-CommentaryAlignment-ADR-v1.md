@@ -2,7 +2,7 @@
 
 Status: **ACCEPTED — contract only; implementation not authorized by this ADR**
 
-Engineering floor: `8165722915a1db1d28cc08730a5288dc6839304d`
+Engineering floor: `86ae7356a688572c43e95541e26bacecc35082cd`
 
 ## Decision
 
@@ -10,7 +10,7 @@ New Coach commentary may carry a fixed capture-time offset to the Parent-owned M
 video. The selected first contract is **Model A**:
 
 ```text
-commentaryStartVideoMs = video session playhead when Coach presses Record
+commentaryStartVideoMs = confirmed native-paused video positionMillis
 audioTimeMs = videoPlayheadMs - commentaryStartVideoMs
 ```
 
@@ -19,13 +19,36 @@ is only a follower. This does not create a new coordinator, clock, resolver, or
 media authority.
 
 The origin belongs in the existing Coach MatchBlock / `CoachVoiceNoteField` authoring
-corridor, not Film Room. Repository evidence: MatchBlock creates the per-Match
-`FilmRoomSessionCoordinator`, reads its playhead, and passes
-`shouldPausePlayback={recordingState === "recording"}` to `MatchMediaAttachments`
-(`src/features/competition/competitionMatchEditor.tsx`). `CoachVoiceNoteField`
-starts the recorder before reporting `recording`, so capture instrumentation must
-take the session playhead immediately at the successful Record transition, before
-or with that transition—not later at transcription or publication.
+corridor, not Film Room. Pressing Record begins one atomic aligned-record attempt;
+it does **not** capture the offset. Repository evidence shows why: the current
+`CoachVoiceNoteField` starts `recording.startAsync()` before it reports `recording`,
+and MatchBlock presently passes `shouldPausePlayback={recordingState === "recording"}`
+to `MatchMediaAttachments` (`src/features/coach/CoachVoiceNoteField.tsx`,
+`src/features/competition/competitionMatchEditor.tsx`). Current behavior therefore
+starts audio before its effect requests a video pause and does not supply a stable
+paused origin.
+
+The implementation must acquire an immediate ref-based one-attempt lock before any
+asynchronous permission, pause, preparation, or recorder work. A visible or internal
+`starting` state is also required so MatchBlock locks media controls during startup;
+the ref lock remains the synchronous duplicate-attempt authority.
+
+Before audio recording starts, the existing Match video coordinator must be asked to
+pause through its existing ownership corridor. The attempt may continue only after
+request-correlated native status proves that the intended player is loaded and
+`isPlaying === false`. `commentaryStartVideoMs` is the `positionMillis` in that
+confirmed status. At the same confirmed boundary, capture the attached
+`matchMediaAssetId`, `attachmentRevision`, and the ephemeral Match/athlete/competition
+context used for later validation. Only then may `recording.startAsync()` begin audio
+capture. A pre-pause Record-press snapshot must never be silently substituted.
+
+Today `PlaybackCoordinator.pause()` and `getSnapshot().playbackState` are not native
+pause proof: `VideoAdapter.pause()` swallows `pauseAsync()` failures and the
+coordinator then writes its logical snapshot to paused. Native status arrives later
+through `Video.onPlaybackStatusUpdate` and `applyVideoStatus`, but no
+request-correlated, awaitable pause-confirmation contract exists yet. This ADR
+therefore authorizes no capture instrumentation until the separately scoped primitive
+below exists.
 
 ## Required alignment metadata
 
@@ -33,9 +56,9 @@ Each aligned commentary reference carries these optional fields together:
 
 | Field | Semantics |
 |---|---|
-| `commentaryStartVideoMs` | Finite, non-negative integer millisecond offset from the capture-time video start. |
-| `matchMediaAssetId` | Attached asset ID observed at Record. |
-| `attachmentRevision` | Positive integer attachment revision observed at Record. |
+| `commentaryStartVideoMs` | Finite, non-negative integer `positionMillis` from the confirmed native-paused video status immediately before audio start. |
+| `matchMediaAssetId` | Attached asset ID observed at that same confirmed boundary. |
+| `attachmentRevision` | Positive attachment revision observed at that same confirmed boundary. |
 
 `matchLineageKey` remains the Match association but is insufficient for alignment.
 `matchMediaAssetId` plus `attachmentRevision` bind the offset to the exact attachment
@@ -104,11 +127,39 @@ unsynchronized Match note. This preserves the existing Coach Match Breakdown
 artifact and hydration direction instead of making the media attachment a
 commentary-write authority.
 
+## Capture attempt and persistence validation
+
+The attempt token, Match lineage, athlete/competition identity, and
+`wasPlayingBeforePause` are ephemeral. They never enter `VoiceNoteRef.alignment`.
+Only these certified fields may be durable alignment metadata:
+
+- `commentaryStartVideoMs`
+- `matchMediaAssetId`
+- `attachmentRevision`
+
+If native pause fails, is unconfirmed, or times out, abort the aligned-record attempt:
+do not create audio, do not create an aligned record, and do not silently fall back to
+a Model C note from that action. Clear the lock and pending alignment while preserving
+existing playback ownership.
+
+If permission, recorder preparation, or `startAsync()` fails after this attempt
+paused a previously playing video, discard the pending attempt, unload any prepared
+recorder, and request restoration through that same existing `PlaybackCoordinator`.
+Current APIs cannot prove native restoration success; no second playback owner may be
+introduced to compensate.
+
+At local-audio persistence time, retain alignment only when the live attempt token
+matches and current reads prove that Match lineage, athlete identity, and competition
+identity remain unchanged; the attachment is still `attached`; and its asset ID and
+revision equal the captured values. These reads validate the frozen capture context;
+they must never combine a newly read identity with an old playhead. Any mismatch
+persists no alignment metadata.
+
 ## Ownership and transport boundary
 
 | Boundary | Future responsibility |
 |---|---|
-| Capture | MatchBlock reads current session video playhead and current attached projection at Record. |
+| Capture | One locked attempt awaits native pause confirmation, then MatchBlock captures confirmed position and current attached projection before audio start. |
 | Local model | Optional metadata lives with the existing `VoiceNoteRef` / Coach Match Breakdown overlay. |
 | Publication | Coach Match Breakdown artifact v2 transports safe alignment metadata. |
 | Validation | Worker validates timing and asset/revision shapes; no delivery capability is admitted. |
@@ -127,25 +178,42 @@ playback coordinator/clock. Reconsider a Timeline Builder or editorial timeline
 only when the product requires true multi-segment commentary editing, multiple
 recording intervals with distinct video anchors, or durable editorial markers.
 
-## First implementation slice (separately authorized)
+## Implementation slices (separately authorized)
 
-Capture instrumentation only:
+### Slice 1 — native pause-confirmation primitive
 
-1. In `src/features/competition/competitionMatchEditor.tsx`, read the existing
-   MatchBlock session playhead and current Coach attachment projection at the Record
-   transition.
-2. In `src/features/coach/CoachVoiceNoteField.tsx`, add the narrow callback/data
-   handoff needed to bind that capture context to the successfully persisted voice note.
-3. Extend `src/types/coachMatchBreakdownOverlay.ts` and
-   `src/storage/coachMatchBreakdownOverlayStore.ts` only as needed to hold the optional
-   local metadata.
-4. Add focused coverage beside the existing MatchBlock/session and overlay-store
-   tests, including missing/tombstoned attachment and a stable playhead capture.
+Introduce the narrowest request-correlated native pause-confirmation contract through
+the existing playback ownership path. Likely production boundary:
 
-That slice must not modify Worker transport, Parent hydration, Parent Film Room
-orchestration, Timeline Builder, or resolution/playback contracts. A later separately
-authorized transport slice would update the artifact types, builder, parser, Worker
-validation, and Parent hydration for v2.
+1. `src/playback/PlaybackCoordinator.ts`
+2. `src/playback/VideoAdapter.ts`
+3. `src/components/MatchMediaAttachments.tsx`
+
+Its exact API shape must be selected from repository evidence during implementation.
+It must expose native failure and reject or time out when confirmation does not arrive.
+It must not start audio capture or introduce a second player, clock, coordinator, or
+playback owner. It must not touch Worker, Parent transport, hydration, resolution,
+Timeline Builder, flags, or deployment configuration.
+
+### Slice 2 — aligned recording capture
+
+Use Slice 1's confirmed-pause primitive to add the startup lock and `starting` state,
+capture the confirmed position and attached-media identity, bind one snapshot to one
+recording attempt, validate it again at persistence, and write optional
+`VoiceNoteRef.alignment` only when the complete contract remains valid. Likely
+production boundary:
+
+1. `src/features/competition/competitionMatchEditor.tsx`
+2. `src/features/coach/CoachVoiceNoteField.tsx`
+3. `app/(tabs)/coach/kid/[kidId]/competition/edit.tsx`
+4. `src/types/coachMatchBreakdownOverlay.ts`
+
+Do not include `src/storage/coachMatchBreakdownOverlayStore.ts` unless later
+repository evidence proves the existing normalization path cannot retain the optional
+alignment. Slice 2 must not modify Worker transport, artifact schema v2, Parent
+hydration, Parent Film Room orchestration, Timeline Builder, or delivery/resolution
+contracts. A later separately authorized transport slice may update the artifact
+types, builder, parser, Worker validation, and Parent hydration for v2.
 
 ## Explicit non-goals
 
