@@ -1,10 +1,18 @@
-import { sharedMatchMediaUploadClientEnabled } from "../../config/sharedMatchMediaUploadFlags";
+import {
+  sharedMatchMediaPublicationClientEnabled,
+  sharedMatchMediaUploadClientEnabled,
+} from "../../config/sharedMatchMediaUploadFlags";
 import { resolveLinkedTargetForParentWriter } from "../../family/parentKidCompetitionDelete";
 import {
   uploadParentSharedMatchMediaVideo,
   type SharedMatchMediaUploadCompleteResult,
   type SharedMatchMediaUploadDependencies,
 } from "../../services/sharedMatchMediaUploadApi";
+import {
+  publishParentMatchMediaAttachment,
+  type ParentMatchMediaPublicationDependencies,
+  type ParentMatchMediaPublicationResult,
+} from "../../services/sharedMatchMediaPublicationApi";
 import {
   getSharedMatchMediaUploadRecord,
   putSharedMatchMediaUploadComplete,
@@ -17,6 +25,7 @@ export type ParentSharedMatchMediaUploadOutcome =
       skipped?: undefined;
       result: SharedMatchMediaUploadCompleteResult;
       record: SharedMatchMediaUploadRecord;
+      publication?: ParentMatchMediaPublicationResult | { outcome: "failed"; message: string };
     }
   | {
       ok: false;
@@ -47,6 +56,7 @@ export type ParentSharedMatchMediaUploadRequest = {
   matchLineageKey: string | null | undefined;
   force?: boolean;
   dependencies?: Partial<SharedMatchMediaUploadDependencies>;
+  publicationDependencies?: Partial<ParentMatchMediaPublicationDependencies>;
 };
 
 /**
@@ -168,6 +178,32 @@ export async function uploadParentSelectedSharedMatchMedia(
       localSourceUri: result.localSourceUri,
     });
 
+    let publication:
+      | ParentMatchMediaPublicationResult
+      | { outcome: "failed"; message: string }
+      | undefined;
+    if (result.serverReportedVerified && sharedMatchMediaPublicationClientEnabled) {
+      try {
+        publication = await publishParentMatchMediaAttachment({
+          linkToken: target.linkToken,
+          parentWriterSecret: target.parentWriterSecret,
+          sharedAthleteId: record.sharedAthleteId,
+          sharedCompetitionId: record.sharedCompetitionId,
+          matchLineageKey: record.matchLineageKey,
+          matchMediaAssetId: record.matchMediaAssetId,
+          objectVersion: record.objectVersion,
+          expectedRevision: 0,
+          apiBaseUrlOverride: target.apiBaseUrl,
+          dependencies: input.publicationDependencies,
+        });
+      } catch (error) {
+        publication = {
+          outcome: "failed",
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
+
     logUpload("UPLOAD_COMPLETE", {
       sharedAthleteId,
       sharedCompetitionId,
@@ -176,10 +212,10 @@ export async function uploadParentSelectedSharedMatchMedia(
       objectVersion: record.objectVersion,
       status: record.status,
       verification: false,
-      publication: false,
+      publication: publication?.outcome ?? false,
     });
 
-    return { ok: true, result, record };
+    return { ok: true, result, record, ...(publication ? { publication } : {}) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     logUpload("UPLOAD_FAILED", {

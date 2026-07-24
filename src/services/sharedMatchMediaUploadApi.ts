@@ -22,12 +22,25 @@ export type SharedMatchMediaUploadCompleteResult = {
   declaredByteCount: number;
   /** Device-local source only — never a cross-device media reference. */
   localSourceUri: string;
+  /** Transient server report only; never persisted as verification authority. */
+  serverReportedVerified: boolean;
 };
 
 export type SharedMatchMediaUploadHttpResponse = {
   status: number;
   json: unknown;
 };
+
+/** Only this exact Worker completion signal may open the separate client gate. */
+export function isServerReportedVerifiedUploadCompletion(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const report = value as Record<string, unknown>;
+  return (
+    report.outcome === "verified" &&
+    report.verificationState === "verified" &&
+    report.verificationAttempted === true
+  );
+}
 
 export type SharedMatchMediaUploadHttp = (
   input: {
@@ -374,6 +387,9 @@ export async function uploadParentSharedMatchMediaVideo(input: {
     typeof completedAsset?.matchMediaAssetId === "string"
       ? completedAsset.matchMediaAssetId.trim()
       : "";
+  const serverReportedVerified = isServerReportedVerifiedUploadCompletion(
+    completeBody.productionVerification,
+  );
 
   if (
     status !== "upload_complete" ||
@@ -404,5 +420,6 @@ export async function uploadParentSharedMatchMediaVideo(input: {
     declaredMimeType: file.mimeType,
     declaredByteCount: file.byteCount,
     localSourceUri: localUri,
+    serverReportedVerified,
   };
 }

@@ -5,6 +5,7 @@ import { afterEach, describe, it, mock } from "node:test";
 import {
   buildSharedMatchMediaPartPlan,
   defaultSha256Hex,
+  isServerReportedVerifiedUploadCompletion,
   uploadParentSharedMatchMediaVideo,
   type SharedMatchMediaUploadHttpResponse,
 } from "../sharedMatchMediaUploadApi.ts";
@@ -45,6 +46,26 @@ describe("Shared Match Media transport part plan", () => {
 });
 
 describe("Parent Shared Match Media upload client", () => {
+  it("treats only an exact Worker verified completion report as publication-eligible", () => {
+    assert.equal(isServerReportedVerifiedUploadCompletion(undefined), false);
+    assert.equal(
+      isServerReportedVerifiedUploadCompletion({
+        outcome: "verified",
+        verificationState: "verifying",
+        verificationAttempted: true,
+      }),
+      false,
+    );
+    assert.equal(
+      isServerReportedVerifiedUploadCompletion({
+        outcome: "verified",
+        verificationState: "verified",
+        verificationAttempted: true,
+      }),
+      true,
+    );
+  });
+
   it("completes multipart upload and captures immutable asset identity plus object version", async () => {
     const calls: Array<{ method: string; url: string }> = [];
     const bytes = new Uint8Array([1, 2, 3, 4, 5]);
