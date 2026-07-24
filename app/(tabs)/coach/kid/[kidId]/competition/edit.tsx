@@ -605,7 +605,11 @@ export default function KidCompetitionEditScreen() {
     setMatches((prev) => prev.map((m, i) => (i === matchIndex ? { ...m, coachNote: text } : m)));
   }, []);
 
-  const setMatchVoiceNotePersisted = useCallback((matchIndex: number, localUri: string) => {
+  const setMatchVoiceNotePersisted = useCallback((
+    matchIndex: number,
+    localUri: string,
+    alignment?: VoiceNoteRef["alignment"],
+  ) => {
     const uri = localUri.trim();
     if (!uri) return;
     setMatches((prev) =>
@@ -620,6 +624,7 @@ export default function KidCompetitionEditScreen() {
           localUri: uri,
           createdAt: new Date().toISOString(),
           mimeType: "audio/mp4",
+          ...(alignment ? { alignment } : {}),
         };
         return { ...m, voiceNoteRefs: [nextRef] };
       }),
@@ -1629,7 +1634,7 @@ export default function KidCompetitionEditScreen() {
                     onSubmissionTypeChange={(key) => setMatchSubmissionType(i, key)}
                     onCoachNoteChange={(text) => setMatchCoachNote(i, text)}
                     onCoachNoteFocus={onNotesFocusScroll}
-                    onVoiceNotePersisted={(localUri) => setMatchVoiceNotePersisted(i, localUri)}
+                    onVoiceNotePersisted={(localUri, alignment) => setMatchVoiceNotePersisted(i, localUri, alignment)}
                     onImageChange={(uri, assetId) => updateMatchMedia(i, { imageUri: uri, imageAssetId: assetId })}
                     onVideoChange={(uri, assetId) => updateMatchMedia(i, { videoUri: uri, videoAssetId: assetId })}
                   />

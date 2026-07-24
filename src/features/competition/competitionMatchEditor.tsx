@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type LayoutChangeEvent,
   Pressable,
@@ -18,6 +18,7 @@ import {
   CoachVoiceNoteField,
   type CoachVoiceRecordingControls,
   type CoachVoiceRecordingState,
+  type VoiceNoteAlignmentSnapshot,
 } from "../coach/CoachVoiceNoteField";
 import { TimedTranscriptFollowing } from "../coach/TimedTranscriptFollowing";
 import { createFilmRoomSessionCoordinator } from "../../playback/FilmRoomSessionCoordinator";
@@ -29,6 +30,7 @@ import {
 import type { KidCompetitionEntry } from "../../types/coachKid";
 import type { VoiceNoteRef } from "../../types/coachMatchBreakdownOverlay";
 import { normalizeVoiceNoteRefs } from "../../types/coachMatchBreakdownOverlay";
+import { getCoachMatchMediaAttachment } from "../../storage/coachMatchMediaAttachmentStore";
 import { normalizeStoredSubmissionType, SUBMISSION_TYPE_CHIPS } from "./submissionTypes";
 
 /** UI tokens mirror the coach competition editor. */
@@ -254,7 +256,7 @@ export function MatchBlock({
   onCoachNoteChange: (text: string) => void;
   onCoachNoteFocus?: () => void;
   onCoachNoteLayout?: (y: number) => void;
-  onVoiceNotePersisted?: (localUri: string) => void;
+  onVoiceNotePersisted?: (localUri: string, alignment?: VoiceNoteAlignmentSnapshot) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
   sharedPlaybackScope?: Omit<MatchMediaSharedPlaybackScope, "matchLineageKey"> | null;
@@ -275,6 +277,63 @@ export function MatchBlock({
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const recordingControlsRef = useRef<CoachVoiceRecordingControls | null>(null);
   const sharedPlaybackControllerRef = useRef<MatchMediaSharedPlaybackController | null>(null);
+  const alignmentAttemptRef = useRef<{
+    alignment: VoiceNoteAlignmentSnapshot;
+    sharedAthleteId: string;
+    sharedCompetitionId: string;
+    matchLineageKey: string;
+  } | null>(null);
+  const prepareVoiceNoteAlignment = useCallback(async (): Promise<VoiceNoteAlignmentSnapshot | null> => {
+    alignmentAttemptRef.current = null;
+    const controller = sharedPlaybackControllerRef.current;
+    if (!controller?.getActiveBinding()) return null;
+    const confirmed = await controller.requestConfirmedBoundVideoPause();
+    const alignment = {
+      commentaryStartVideoMs: confirmed.positionMillis,
+      matchMediaAssetId: confirmed.binding.matchMediaAssetId,
+      attachmentRevision: confirmed.binding.attachmentRevision,
+    };
+    alignmentAttemptRef.current = {
+      alignment,
+      sharedAthleteId: confirmed.binding.sharedAthleteId,
+      sharedCompetitionId: confirmed.binding.sharedCompetitionId,
+      matchLineageKey: confirmed.binding.matchLineageKey,
+    };
+    return alignment;
+  }, []);
+  const persistVoiceNote = useCallback(async (
+    localUri: string,
+    alignment: VoiceNoteAlignmentSnapshot | null,
+  ) => {
+    let validAlignment: VoiceNoteAlignmentSnapshot | undefined;
+    const attempt = alignment && alignmentAttemptRef.current?.alignment === alignment
+      ? alignmentAttemptRef.current
+      : null;
+    if (
+      attempt &&
+      sharedPlaybackScope &&
+      attempt.sharedAthleteId === sharedPlaybackScope.sharedAthleteId &&
+      attempt.sharedCompetitionId === sharedPlaybackScope.sharedCompetitionId &&
+      attempt.matchLineageKey === match.id
+    ) {
+      try {
+        const current = await getCoachMatchMediaAttachment({
+          sharedAthleteId: attempt.sharedAthleteId,
+          sharedCompetitionId: attempt.sharedCompetitionId,
+          matchLineageKey: attempt.matchLineageKey,
+        });
+        if (
+          current?.state === "attached" &&
+          current.matchMediaAssetId === attempt.alignment.matchMediaAssetId &&
+          current.revision === attempt.alignment.attachmentRevision
+        ) validAlignment = attempt.alignment;
+      } catch {
+        // Preserve the durable audio as unaligned when the read boundary is unavailable.
+      }
+    }
+    alignmentAttemptRef.current = null;
+    onVoiceNotePersisted?.(localUri, validAlignment);
+  }, [match.id, onVoiceNotePersisted, sharedPlaybackScope]);
   // One Film Room session per MatchBlock — membership + exclusivity arbitration.
   const sessionRef = useRef(
     createFilmRoomSessionCoordinator({
@@ -458,7 +517,8 @@ export function MatchBlock({
           externalStopControl
           recordingControlsRef={recordingControlsRef}
           playbackUri={match.voiceNoteRefs?.[0]?.localUri ?? null}
-          onAudioPersisted={onVoiceNotePersisted}
+          beforeStartRecording={prepareVoiceNoteAlignment}
+          onAudioPersisted={persistVoiceNote}
           onRecordingStateChange={setRecordingState}
           onPlaybackCoordinator={setCoachAudioCoordinator}
         />

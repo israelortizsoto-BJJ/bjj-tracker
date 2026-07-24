@@ -14,6 +14,7 @@ import {
   TIMED_TRANSCRIPT_SOURCE_WHISPER,
   TIMED_TRANSCRIPT_VERSION,
 } from "../../types/timedTranscript";
+import { beginVoiceNoteAttempt, createVoiceNoteAttemptGate } from "../../types/coachMatchBreakdownOverlay";
 import {
   logTranscribeRuntime,
   transcribeCoachAudio,
@@ -30,7 +31,13 @@ const UI = {
   accent: "#1d4ed8",
 } as const;
 
-export type CoachVoiceRecordingState = "idle" | "recording" | "processing" | "done";
+export type CoachVoiceRecordingState = "idle" | "starting" | "recording" | "processing" | "done";
+
+export type VoiceNoteAlignmentSnapshot = {
+  commentaryStartVideoMs: number;
+  matchMediaAssetId: string;
+  attachmentRevision: number;
+};
 
 export type CoachVoiceRecordingControls = {
   recordingState: CoachVoiceRecordingState;
@@ -69,7 +76,12 @@ type CoachVoiceNoteFieldProps = {
    * Fired after a recording is copied into durable local storage (before or with transcript).
    * Match Breakdown attaches this as voiceNoteRefs; other surfaces may omit.
    */
-  onAudioPersisted?: (localUri: string) => void;
+  onAudioPersisted?: (
+    localUri: string,
+    alignment: VoiceNoteAlignmentSnapshot | null,
+  ) => void | Promise<void>;
+  /** Resolves one optional shared-video alignment before native audio starts. */
+  beforeStartRecording?: () => Promise<VoiceNoteAlignmentSnapshot | null>;
   /** Optional: expose field-local audio coordinator for session membership wiring. */
   onPlaybackCoordinator?: (coordinator: PlaybackCoordinator) => void;
 };
@@ -99,11 +111,15 @@ export function CoachVoiceNoteField({
   onRecordingStateChange,
   playbackUri = null,
   onAudioPersisted,
+  beforeStartRecording,
   onPlaybackCoordinator,
 }: CoachVoiceNoteFieldProps) {
   const [recordingState, setRecordingState] = useState<CoachVoiceRecordingState>("idle");
   const [playbackState, setPlaybackState] = useState<"idle" | "playing" | "paused">("idle");
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const attemptRef = useRef<{ id: number; alignment: VoiceNoteAlignmentSnapshot | null } | null>(null);
+  const attemptGateRef = useRef(createVoiceNoteAttemptGate());
+  const mountedRef = useRef(true);
   const soundRef = useRef<Audio.Sound | null>(null);
   // Audio-only binding for coach authoring. Video stays unbound so play/pause/unload
   // do not fan out to MatchMediaAttachments. MatchCard owns a separate field-local coordinator.
@@ -148,6 +164,9 @@ export function CoachVoiceNoteField({
 
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
+      attemptRef.current = null;
+      attemptGateRef.current.cancel();
       const activeRecording = recordingRef.current;
       recordingRef.current = null;
       if (activeRecording) {
@@ -165,6 +184,15 @@ export function CoachVoiceNoteField({
     if (disabled) return;
     if (recordingState === "recording" || recordingState === "processing") return;
     try {
+      const acquired = await beginVoiceNoteAttempt({
+        gate: attemptGateRef.current,
+        prepare: async () => await beforeStartRecording?.() ?? null,
+      });
+      if (!acquired) return;
+      const attempt = { id: acquired.id, alignment: acquired.value };
+      attemptRef.current = attempt;
+      updateRecordingState("starting");
+      if (!mountedRef.current || attemptRef.current !== attempt || !attemptGateRef.current.isActive(attempt.id)) return;
       await unloadPlayback();
       logTranscribeRuntime("permission_request", { stage: "startRecording" });
       const { status } = await Audio.requestPermissionsAsync();
@@ -185,7 +213,12 @@ export function CoachVoiceNoteField({
 
       const recording = new Audio.Recording();
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      if (!mountedRef.current || attemptRef.current !== attempt || !attemptGateRef.current.isActive(attempt.id)) return;
       await recording.startAsync();
+      if (!mountedRef.current || attemptRef.current !== attempt || !attemptGateRef.current.isActive(attempt.id)) {
+        await recording.stopAndUnloadAsync().catch(() => {});
+        return;
+      }
       recordingRef.current = recording;
 
       logTranscribeRuntime("recording_started", { stage: "startRecording" });
@@ -200,8 +233,17 @@ export function CoachVoiceNoteField({
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
       });
+    } finally {
+      const attempt = attemptRef.current;
+      if (attempt && recordingRef.current !== null) {
+        // The attempt remains owned until persistence completes in stopRecording.
+      } else if (attempt) {
+        attemptRef.current = null;
+        attemptGateRef.current.release(attempt.id);
+        if (mountedRef.current) updateRecordingState("idle");
+      }
     }
-  }, [disabled, recordingState, unloadPlayback, updateRecordingState]);
+  }, [beforeStartRecording, disabled, recordingState, unloadPlayback, updateRecordingState]);
 
   const stopRecording = useCallback(async () => {
     if (recordingState !== "recording") return;
@@ -210,6 +252,7 @@ export function CoachVoiceNoteField({
 
     const recording = recordingRef.current;
     recordingRef.current = null;
+    const attempt = attemptRef.current;
 
     try {
       if (!recording) {
@@ -247,7 +290,9 @@ export function CoachVoiceNoteField({
           durableUriScheme: uriScheme(durableUri),
           durableUri,
         });
-        onAudioPersisted?.(durableUri);
+        if (attempt && attemptRef.current === attempt && attemptGateRef.current.isActive(attempt.id) && mountedRef.current) {
+          await onAudioPersisted?.(durableUri, attempt.alignment);
+        }
       } catch (persistError) {
         logTranscribeRuntime("audio_persist_failed", {
           stage: "stopRecording",
@@ -294,6 +339,10 @@ export function CoachVoiceNoteField({
       );
       updateRecordingState("done");
     } finally {
+      if (attemptRef.current === attempt) {
+        attemptRef.current = null;
+        if (attempt) attemptGateRef.current.release(attempt.id);
+      }
       await Audio.setAudioModeAsync({
         allowsRecordingIOS: false,
       });
@@ -363,7 +412,7 @@ export function CoachVoiceNoteField({
     };
   }, [recordingControlsRef, recordingState, startRecording, stopRecording]);
 
-  const controlsDisabled = disabled || recordingState === "processing";
+  const controlsDisabled = disabled || recordingState === "starting" || recordingState === "processing";
   const showInlineStop = recordingState === "recording" && !externalStopControl;
   const recordDisabled =
     controlsDisabled || (externalStopControl && recordingState === "recording");
@@ -372,7 +421,9 @@ export function CoachVoiceNoteField({
     disabled || recordingState === "processing" || recordingState === "recording";
 
   const statusText =
-    recordingState === "processing"
+    recordingState === "starting"
+      ? "Starting recording"
+      : recordingState === "processing"
       ? "Transcription in progress"
       : recordingState === "recording"
         ? "Recording in progress"
