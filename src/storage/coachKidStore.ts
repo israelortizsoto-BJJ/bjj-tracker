@@ -62,7 +62,12 @@ import {
   pruneCoachMatchBreakdownArtifactSets,
   removeCoachMatchBreakdownArtifactSet,
 } from "./coachMatchBreakdownArtifactStore";
+import {
+  pruneCoachMatchMediaAttachments,
+  removeCoachMatchMediaAttachments,
+} from "./coachMatchMediaAttachmentStore";
 import { reconcileCoachMatchBreakdownArtifacts } from "../domain/competition/reconcileCoachMatchBreakdownArtifacts";
+import { reconcileCoachMatchMediaAttachments } from "../domain/competition/reconcileCoachMatchMediaAttachments";
 import { bumpCoachSyncHydrationVersion } from "./coachSyncHydrationStore";
 import { setCachedWeeklyForLinkToken } from "./coachWeeklySyncCacheStore";
 import { deleteKidCurrentStateAssessmentForKid } from "./kidCurrentStateAssessmentStore";
@@ -297,6 +302,7 @@ export async function clearKidSharedAthleteLink(kidId: KidId): Promise<Kid | nul
     await removeCoachCompetitionTopology(sid);
     await removeCoachTrainingProof(sid);
     await removeCoachMatchBreakdownArtifactSet(sid);
+    await removeCoachMatchMediaAttachments(sid);
 
   const nowIso = new Date().toISOString();
   const { sharedAthleteId: _omit, sharedFromInviteTokenNorm: _tok, ...rest } = existing;
@@ -1142,6 +1148,11 @@ export async function reconcileCoachKidRosterFromWriterSessions(opts: {
     remoteUnionIds,
     allFetched,
   });
+  await pruneCoachMatchMediaAttachmentsAfterRosterReconcile({
+    totalActiveWriterCount,
+    remoteUnionIds,
+    allFetched,
+  });
 
   return getKidsById();
 }
@@ -1174,6 +1185,16 @@ async function pruneCoachCompetitionTopologyAfterRosterReconcile(opts: {
   const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
   if (!allFetched || totalActiveWriterCount <= 0) return;
   await pruneCoachCompetitionTopology(remoteUnionIds);
+}
+
+async function pruneCoachMatchMediaAttachmentsAfterRosterReconcile(opts: {
+  totalActiveWriterCount: number;
+  remoteUnionIds: Set<string>;
+  allFetched: boolean;
+}): Promise<void> {
+  const { totalActiveWriterCount, remoteUnionIds, allFetched } = opts;
+  if (!allFetched || totalActiveWriterCount <= 0) return;
+  await pruneCoachMatchMediaAttachments(remoteUnionIds);
 }
 
 async function pruneCoachMatchBreakdownArtifactsAfterRosterReconcile(opts: {
@@ -1866,6 +1887,10 @@ export async function refreshCoachWriterSessionsAndReconcileStores(): Promise<Co
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
     });
+    await reconcileCoachMatchMediaAttachments({
+      successfulSnapshots,
+      totalActiveWriterCount: writerLinks.length,
+    });
     await reconcileCoachTrainingProofFromWriterSessions({
       successfulSnapshots,
       totalActiveWriterCount: writerLinks.length,
@@ -2166,6 +2191,7 @@ export async function deleteKidPilot(kidId: KidId): Promise<boolean> {
     await removeCoachCompetitionAggregate(sharedAthleteId);
     await removeCoachCompetitionTopology(sharedAthleteId);
     await removeCoachTrainingProof(sharedAthleteId);
+    await removeCoachMatchMediaAttachments(sharedAthleteId);
   }
 
   const familyCompPick = await getFamilyCompetitionSelectedKidId();

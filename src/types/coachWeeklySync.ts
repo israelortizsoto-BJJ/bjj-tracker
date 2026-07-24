@@ -239,7 +239,7 @@ export type CoachWeeklySyncSessionResponse = {
   competitionAggregateByAthleteId?: Record<string, SyncedCompetitionAggregateArtifact>;
   /** Per-athlete canonical competition topology; parent writer only. Inert until Phase 2. */
   competitionTopologyByAthleteId?: Record<string, SyncedCompetitionTopologyArtifact>;
-  /** Optional Worker read-time projection; no client hydration consumes it yet. */
+  /** Optional Worker read-time projection; Coach hydrates via coachMatchMediaAttachmentStore. */
   matchMediaAttachmentsByAthleteId?: Record<string, SyncedMatchMediaAttachmentProjectionSet>;
   /** Per-athlete bounded training proof; parent writer only. */
   trainingProofByAthleteId?: Record<string, SyncedTrainingProofArtifact>;
