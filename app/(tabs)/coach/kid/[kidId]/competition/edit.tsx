@@ -78,6 +78,7 @@ import { createOverlayForensicTraceId } from "@/src/dev/overlayForensicTrace";
 import { upsertMatchBreakdownOverlay } from "@/src/domain/competition/upsertMatchBreakdownOverlay";
 import { parentResultsRecorded } from "@/src/domain/competition/parentResultsRecorded";
 import { getCoachCompetitionTopology } from "@/src/storage/coachCompetitionTopologyStore";
+import { useCoachSyncHydrationVersion } from "@/src/storage/coachSyncHydrationStore";
 import type {
   CoachMatchBreakdownOverlay,
   VoiceNoteRef,
@@ -206,6 +207,7 @@ export default function KidCompetitionEditScreen() {
     sharedCompetitionId: string;
   } | null>(null);
   const [linkedCompetition, setLinkedCompetition] = useState(false);
+  const coachSyncHydrationVersion = useCoachSyncHydrationVersion();
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(saving);
   const loadingRef = useRef(loading);
@@ -1616,6 +1618,11 @@ export default function KidCompetitionEditScreen() {
                     match={m}
                     canonicalReadOnly={canonicalReadOnly}
                     matchBreakdownDisabled={matchBreakdownAuthoringBlocked}
+                    sharedPlaybackScope={
+                      overlayScope
+                        ? { ...overlayScope, hydrationVersion: coachSyncHydrationVersion }
+                        : null
+                    }
                     onToggleMatchResult={(v) => setMatchResult(i, v)}
                     onToggleOutcome={(label) => setMatchOutcome(i, label)}
                     onSubmissionTimeChange={(text) => setMatchSubmissionTime(i, text)}

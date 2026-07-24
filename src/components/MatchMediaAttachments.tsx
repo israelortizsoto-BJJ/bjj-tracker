@@ -1,6 +1,6 @@
 import { ResizeMode, Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import {
   persistMediaFromCameraRoll,
@@ -12,6 +12,15 @@ import {
   type PlaybackCoordinator,
 } from "../playback/PlaybackCoordinator";
 import { createVideoAdapter } from "../playback/VideoAdapter";
+import { sharedMatchMediaEditorBindingClientEnabled } from "../config/sharedMatchMediaUploadFlags";
+import { coachSyncResolveMatchMediaAttachment } from "../services/coachMatchMediaResolutionApi";
+import { resolveCoachMatchMediaSessionTarget } from "../services/resolveCoachMatchMediaSessionTarget";
+import { getCoachMatchMediaAttachment } from "../storage/coachMatchMediaAttachmentStore";
+import { resolveCoachMatchMediaPlaybackOnce } from "../features/filmRoom/coachMatchMediaPlaybackResolve";
+import {
+  createMatchMediaBindingLifecycle,
+  type MatchMediaBindingCandidate,
+} from "./matchMediaBindingLifecycle";
 
 const UI = {
   bgCard: "#ffffff",
@@ -22,6 +31,28 @@ const UI = {
   danger: "#dc2626",
 } as const;
 
+export type BoundMatchMediaPlaybackSource = {
+  playableUri: string;
+  matchMediaAssetId: string;
+  attachmentRevision: number;
+  matchLineageKey: string;
+  sharedAthleteId: string;
+  sharedCompetitionId: string;
+  playerGenerationToken: string;
+};
+
+export type MatchMediaSharedPlaybackScope = {
+  sharedAthleteId: string;
+  sharedCompetitionId: string;
+  matchLineageKey: string;
+  hydrationVersion: number;
+};
+
+export type MatchMediaSharedPlaybackController = {
+  requestConfirmedBoundVideoPause(): Promise<{ positionMillis: number; binding: BoundMatchMediaPlaybackSource }>;
+  getActiveBinding(): BoundMatchMediaPlaybackSource | null;
+};
+
 export type MatchMediaCallbacks = {
   imageUri: string | null;
   videoUri: string | null;
@@ -31,6 +62,8 @@ export type MatchMediaCallbacks = {
   onReplay?: () => void;
   /** First consumer migration: expose coordinator authority for subscribe/getSnapshot. */
   onPlaybackCoordinator?: (coordinator: PlaybackCoordinator) => void;
+  sharedPlaybackScope?: MatchMediaSharedPlaybackScope | null;
+  onSharedPlaybackController?: (controller: MatchMediaSharedPlaybackController | null) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
 };
@@ -52,6 +85,8 @@ export function MatchMediaAttachments({
   onPause,
   onReplay,
   onPlaybackCoordinator,
+  sharedPlaybackScope = null,
+  onSharedPlaybackController,
   onImageChange,
   onVideoChange,
 }: MatchMediaCallbacks) {
@@ -65,6 +100,68 @@ export function MatchMediaAttachments({
     }),
   );
   const [videoLinkDraft, setVideoLinkDraft] = useState("");
+  const [sharedCandidate, setSharedCandidate] = useState<MatchMediaBindingCandidate | null>(null);
+  const [activeBinding, setActiveBinding] = useState<BoundMatchMediaPlaybackSource | null>(null);
+  const resolveGenerationRef = useRef(0);
+  const playerGenerationRef = useRef(0);
+  const lifecycleRef = useRef<ReturnType<typeof createMatchMediaBindingLifecycle> | null>(null);
+  if (!lifecycleRef.current) {
+    lifecycleRef.current = createMatchMediaBindingLifecycle({
+      now: () => Date.now(),
+      setTimer: (callback, delay) => setTimeout(callback, delay),
+      clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+      cancelConfirmedVideoPause: (reason) => playbackRef.current.cancelConfirmedVideoPause(reason),
+      requestConfirmedVideoPause: () => playbackRef.current.requestConfirmedVideoPause(),
+      unload: () => playbackRef.current.unload(),
+      onChange: (state) => {
+        setSharedCandidate(state.candidate);
+        setActiveBinding(state.active);
+      },
+    });
+  }
+  const invalidateSharedBinding = useCallback((reason = "Shared editor media binding invalidated.") => {
+    resolveGenerationRef.current += 1;
+    lifecycleRef.current?.invalidate(reason, true);
+  }, []);
+
+  const scopeKey = sharedPlaybackScope
+    ? [sharedPlaybackScope.sharedAthleteId, sharedPlaybackScope.sharedCompetitionId, sharedPlaybackScope.matchLineageKey, String(sharedPlaybackScope.hydrationVersion)].join("\\0")
+    : null;
+
+  useEffect(() => {
+    if (!sharedMatchMediaEditorBindingClientEnabled) return;
+    invalidateSharedBinding("Shared editor media scope changed.");
+    if (!sharedPlaybackScope || !scopeKey) return;
+    const generation = ++resolveGenerationRef.current;
+    const scope = { ...sharedPlaybackScope };
+    void resolveCoachMatchMediaPlaybackOnce(
+      {
+        sharedAthleteId: scope.sharedAthleteId,
+        sharedCompetitionId: scope.sharedCompetitionId,
+        matchLineageKey: scope.matchLineageKey,
+      },
+      { getAttachment: getCoachMatchMediaAttachment, resolveSessionTarget: resolveCoachMatchMediaSessionTarget, resolveAttachment: coachSyncResolveMatchMediaAttachment, now: () => Date.now() },
+    ).then((result) => {
+      if (generation !== resolveGenerationRef.current || result.status !== "ready") return;
+      const candidate: MatchMediaBindingCandidate = {
+        playableUri: result.url, matchMediaAssetId: result.matchMediaAssetId, attachmentRevision: result.revision,
+        matchLineageKey: scope.matchLineageKey, sharedAthleteId: scope.sharedAthleteId,
+        sharedCompetitionId: scope.sharedCompetitionId, playerGenerationToken: `editor-shared-${++playerGenerationRef.current}`,
+        expiresAt: result.expiresAt,
+      };
+      lifecycleRef.current?.accept(candidate);
+    });
+    return invalidateSharedBinding;
+  }, [invalidateSharedBinding, scopeKey]);
+
+  useEffect(() => {
+    if (!onSharedPlaybackController) return;
+    onSharedPlaybackController({
+      getActiveBinding: () => lifecycleRef.current?.getActive() ?? null,
+      requestConfirmedBoundVideoPause: () => lifecycleRef.current!.requestConfirmedBoundPause(),
+    });
+    return () => onSharedPlaybackController(null);
+  }, [onSharedPlaybackController]);
 
   useEffect(() => {
     onPlaybackCoordinator?.(playbackRef.current);
@@ -78,14 +175,25 @@ export function MatchMediaAttachments({
     }
   }, [videoUri]);
 
-  // Coordinator-owned lifecycle: reset snapshot when media goes away or source changes.
+  const effectiveVideoUri = sharedCandidate?.playableUri ?? videoUri;
+  const videoGenerationKey = sharedCandidate?.playerGenerationToken ?? `legacy:${videoUri ?? "none"}`;
+  const renderedSharedGenerationToken = sharedCandidate?.playerGenerationToken ?? null;
+
+  // Legacy source changes must not retire an active shared source.
   useEffect(() => {
+    if (lifecycleRef.current?.hasCandidate()) return;
     void playbackRef.current.unload();
   }, [videoUri]);
 
   useEffect(() => {
     return () => {
       void playbackRef.current.unload();
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      lifecycleRef.current?.dispose();
     };
   }, []);
 
@@ -151,7 +259,7 @@ export function MatchMediaAttachments({
   }
 
   async function clearVideoMedia() {
-    await playbackRef.current.unload();
+    if (!lifecycleRef.current?.hasCandidate()) await playbackRef.current.unload();
     onVideoChange(null, null);
   }
 
@@ -183,7 +291,7 @@ export function MatchMediaAttachments({
     if (!result.canceled && result.assets?.[0]?.uri) {
       const asset = result.assets[0];
       const persisted = await persistMediaFromCameraRoll(asset.uri, "video");
-      await playbackRef.current.unload();
+      if (!lifecycleRef.current?.hasCandidate()) await playbackRef.current.unload();
       onVideoChange(persisted, asset.assetId ?? null);
     }
   }
@@ -261,12 +369,13 @@ export function MatchMediaAttachments({
         </View>
       ) : null}
 
-      {videoUri ? (
+      {effectiveVideoUri ? (
         <View style={styles.attachmentPreview}>
           <Text style={styles.sectionTitle}>Video Preview</Text>
           <Video
+            key={videoGenerationKey}
             ref={videoRef}
-            source={{ uri: videoUri }}
+            source={{ uri: effectiveVideoUri }}
             style={styles.previewImg}
             useNativeControls={false}
             resizeMode={ResizeMode.CONTAIN}
@@ -276,10 +385,16 @@ export function MatchMediaAttachments({
               // Coordinator owns video status truth; preserve existing finish → onPause UI.
               if ("isLoaded" in status && status.isLoaded) {
                 playbackRef.current.applyVideoStatus(status);
+                lifecycleRef.current?.markLoaded(videoGenerationKey);
               }
               // @ts-ignore didJustFinish on playback status
               if (status.didJustFinish) {
                 onPause?.();
+              }
+            }}
+            onError={() => {
+              if (renderedSharedGenerationToken) {
+                lifecycleRef.current?.handleNativeError(renderedSharedGenerationToken);
               }
             }}
           />

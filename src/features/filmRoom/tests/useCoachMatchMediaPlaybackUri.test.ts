@@ -183,14 +183,13 @@ describe("useCoachMatchMediaPlaybackUri helpers", () => {
     assert.deepEqual(missing, { status: "missing" });
   });
 
-  it("resolves against the current hydrated row with full identity + expectedRevision", async () => {
+  it("resolves against the current hydrated row using scope-only caller input", async () => {
     let seenBody: Record<string, unknown> | null = null;
     const result = await resolveCoachMatchMediaPlaybackOnce(
       {
-        ...identity,
-        // Stale route revision/asset — hydrated row must win.
-        matchMediaAssetId: "mma_stale",
-        expectedRevision: 1,
+        sharedAthleteId: identity.sharedAthleteId,
+        sharedCompetitionId: identity.sharedCompetitionId,
+        matchLineageKey: identity.matchLineageKey,
       },
       {
         now: () => Date.parse("2026-07-24T12:00:00.000Z"),
@@ -229,6 +228,8 @@ describe("useCoachMatchMediaPlaybackUri helpers", () => {
     assert.equal(result.status, "ready");
     if (result.status === "ready") {
       assert.equal(result.url, "https://worker.test/content?sig=abc");
+      assert.equal(result.matchMediaAssetId, "mma_current");
+      assert.equal(result.revision, 4);
       assert.equal(result.revision, 4);
     }
     assert.deepEqual(seenBody, {

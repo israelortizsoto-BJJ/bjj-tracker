@@ -9,7 +9,11 @@ import {
   View,
 } from "react-native";
 
-import { MatchMediaAttachments } from "../../components/MatchMediaAttachments";
+import {
+  MatchMediaAttachments,
+  type MatchMediaSharedPlaybackController,
+  type MatchMediaSharedPlaybackScope,
+} from "../../components/MatchMediaAttachments";
 import {
   CoachVoiceNoteField,
   type CoachVoiceRecordingControls,
@@ -237,6 +241,7 @@ export function MatchBlock({
   onVoiceNotePersisted,
   onImageChange,
   onVideoChange,
+  sharedPlaybackScope,
   canonicalReadOnly = false,
   matchBreakdownDisabled = false,
 }: {
@@ -252,6 +257,7 @@ export function MatchBlock({
   onVoiceNotePersisted?: (localUri: string) => void;
   onImageChange: (uri: string | null, assetId: string | null) => void;
   onVideoChange: (uri: string | null, assetId: string | null) => void;
+  sharedPlaybackScope?: Omit<MatchMediaSharedPlaybackScope, "matchLineageKey"> | null;
   canonicalReadOnly?: boolean;
   /** INV-CIL-4: block Coach Match Breakdown authoring until ParentResultsRecorded. */
   matchBreakdownDisabled?: boolean;
@@ -268,6 +274,7 @@ export function MatchBlock({
   const [transcriptFollowTimeMs, setTranscriptFollowTimeMs] = useState<number | null>(null);
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const recordingControlsRef = useRef<CoachVoiceRecordingControls | null>(null);
+  const sharedPlaybackControllerRef = useRef<MatchMediaSharedPlaybackController | null>(null);
   // One Film Room session per MatchBlock — membership + exclusivity arbitration.
   const sessionRef = useRef(
     createFilmRoomSessionCoordinator({
@@ -367,6 +374,14 @@ export function MatchBlock({
             imageUri={match.imageUri}
             videoUri={match.videoUri}
             onPlaybackCoordinator={setPlaybackCoordinator}
+            sharedPlaybackScope={
+              sharedPlaybackScope
+                ? { ...sharedPlaybackScope, matchLineageKey: match.id }
+                : null
+            }
+            onSharedPlaybackController={(controller) => {
+              sharedPlaybackControllerRef.current = controller;
+            }}
             onImageChange={onImageChange}
             onVideoChange={onVideoChange}
             shouldPausePlayback={recordingState === "recording"}

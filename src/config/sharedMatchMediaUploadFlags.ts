@@ -19,5 +19,12 @@ export const sharedMatchMediaPublicationClientEnabled =
     process.env.EXPO_PUBLIC_SHARED_MATCH_MEDIA_PUBLICATION_CLIENT,
   );
 
+/**
+ * Coach editor shared-media binding remains inert until separately certified and
+ * explicitly enabled. Server projection/resolution capability is still required.
+ */
+export const sharedMatchMediaEditorBindingClientEnabled =
+  process.env.EXPO_PUBLIC_SHARED_MATCH_MEDIA_EDITOR_BINDING_CLIENT === "1";
+
 /** Certified transport-safe multipart part size (bytes). */
 export const SHARED_MATCH_MEDIA_TRANSPORT_PART_BYTES = 99_000_000;

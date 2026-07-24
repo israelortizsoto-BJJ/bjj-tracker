@@ -2,11 +2,15 @@ import type { CoachMatchMediaResolveResult } from "../../services/coachMatchMedi
 import type { CoachMatchMediaSessionTarget } from "../../services/resolveCoachMatchMediaSessionTarget";
 import type { SyncedMatchMediaAttachmentProjection } from "../../types/coachWeeklySync";
 
-/** Route/bridge identity only — never a signed URL, signature, secret, or object key. */
-export type CoachMatchMediaPlaybackIdentity = {
+/** Scope needed to locate the current hydrated attachment row. */
+export type CoachMatchMediaPlaybackScope = {
   sharedAthleteId: string;
   sharedCompetitionId: string;
   matchLineageKey: string;
+};
+
+/** Route/bridge identity only — never a signed URL, signature, secret, or object key. */
+export type CoachMatchMediaPlaybackIdentity = CoachMatchMediaPlaybackScope & {
   matchMediaAssetId: string;
   expectedRevision: number;
 };
@@ -16,6 +20,7 @@ export type CoachMatchMediaResolveAttemptResult =
       status: "ready";
       url: string;
       expiresAt: string;
+      matchMediaAssetId: string;
       revision: number;
     }
   | { status: "removed" }
@@ -170,7 +175,7 @@ export function classifyCoachMatchMediaResolveError(error: unknown): {
  * Callers supply session/attachment/resolution dependencies (hook wires production defaults).
  */
 export async function resolveCoachMatchMediaPlaybackOnce(
-  identity: CoachMatchMediaPlaybackIdentity,
+  identity: CoachMatchMediaPlaybackScope,
   dependencies: CoachMatchMediaPlaybackDependencies,
 ): Promise<CoachMatchMediaResolveAttemptResult> {
   const attachment = await dependencies.getAttachment({
@@ -232,6 +237,18 @@ export async function resolveCoachMatchMediaPlaybackOnce(
         httpStatus: null,
       };
     }
+    if (
+      resolved.matchMediaAssetId.trim() !== matchMediaAssetId ||
+      !Number.isSafeInteger(resolved.revision) ||
+      resolved.revision < 1
+    ) {
+      return {
+        status: "unavailable",
+        reason: "identity",
+        retryable: false,
+        httpStatus: null,
+      };
+    }
     if (isCoachMatchMediaUrlExpired(expiresAt, dependencies.now())) {
       return {
         status: "unavailable",
@@ -244,6 +261,7 @@ export async function resolveCoachMatchMediaPlaybackOnce(
       status: "ready",
       url,
       expiresAt,
+      matchMediaAssetId,
       revision: resolved.revision,
     };
   } catch (error) {

@@ -182,9 +182,9 @@ describe("request-correlated native video pause confirmation", () => {
     await unloading;
   });
 
-  it("keeps MatchMediaAttachments replacement and unmount cleanup routed through coordinator unload", () => {
+  it("keeps legacy cleanup routed through coordinator unload without retiring a shared binding", () => {
     const source = readFileSync(new URL("../../components/MatchMediaAttachments.tsx", import.meta.url), "utf8");
-    assert.match(source, /useEffect\(\(\) => \{\s*void playbackRef\.current\.unload\(\);\s*\}, \[videoUri\]\)/s);
+    assert.match(source, /if \(lifecycleRef\.current\?\.hasCandidate\(\)\) return;\s*void playbackRef\.current\.unload\(\);/s);
     assert.match(source, /return \(\) => \{\s*void playbackRef\.current\.unload\(\);\s*\};/s);
   });
 });
