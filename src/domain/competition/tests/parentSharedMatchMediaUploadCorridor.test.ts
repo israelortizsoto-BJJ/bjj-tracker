@@ -76,4 +76,13 @@ describe("Parent Shared Match Media upload corridor wiring", () => {
     assert.match(domain, /PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED/);
     assert.match(domain, /PARENT_MATCH_MEDIA_PUBLICATION_RESULT/);
   });
+
+  it("permits completion replay only behind an explicit default-off gate and preserves verified-only publication", () => {
+    assert.match(flags, /EXPO_PUBLIC_SHARED_MATCH_MEDIA_VERIFIED_COMPLETION_REPLAY_CLIENT/);
+    assert.match(domain, /input\.replayVerifiedCompletion && sharedMatchMediaVerifiedCompletionReplayClientEnabled/);
+    assert.match(domain, /replayParentSharedMatchMediaUploadCompletion/);
+    assert.match(api, /did not confirm the persisted immutable upload identity/i);
+    assert.match(domain, /result\.serverReportedVerified && sharedMatchMediaPublicationClientEnabled/);
+    assert.match(domain, /trigger: "verified_completion_replay"/);
+  });
 });

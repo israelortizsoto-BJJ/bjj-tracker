@@ -1,10 +1,12 @@
 import {
   sharedMatchMediaPublicationClientEnabled,
   sharedMatchMediaUploadClientEnabled,
+  sharedMatchMediaVerifiedCompletionReplayClientEnabled,
 } from "../../config/sharedMatchMediaUploadFlags";
 import { resolveLinkedTargetForParentWriter } from "../../family/parentKidCompetitionDelete";
 import {
   uploadParentSharedMatchMediaVideo,
+  replayParentSharedMatchMediaUploadCompletion,
   type SharedMatchMediaUploadCompleteResult,
   type SharedMatchMediaUploadDependencies,
 } from "../../services/sharedMatchMediaUploadApi";
@@ -57,7 +59,9 @@ export type ParentSharedMatchMediaUploadRequest = {
   matchLineageKey: string | null | undefined;
   /** Trace-only correlation; never sent to the Worker or persisted. */
   traceId?: string | null;
-  traceTrigger?: "selection" | "post_save";
+  traceTrigger?: "selection" | "post_save" | "verified_completion_replay";
+  /** Explicitly requests an idempotent verification-bearing completion replay. */
+  replayVerifiedCompletion?: boolean;
   force?: boolean;
   dependencies?: Partial<SharedMatchMediaUploadDependencies>;
   publicationDependencies?: Partial<ParentMatchMediaPublicationDependencies>;
@@ -153,6 +157,83 @@ export async function uploadParentSelectedSharedMatchMedia(
     existing.matchMediaAssetId &&
     existing.objectVersion
   ) {
+    if (input.replayVerifiedCompletion && sharedMatchMediaVerifiedCompletionReplayClientEnabled) {
+      const target = await resolveLinkedTargetForParentWriter(sharedAthleteId);
+      if (!target) {
+        return {
+          ok: false,
+          skipped: true,
+          reason: "no_parent_writer_target",
+          message: "No Parent writer session is available for Shared Match Media completion replay.",
+        };
+      }
+      try {
+        const replay = await replayParentSharedMatchMediaUploadCompletion({
+          linkToken: target.linkToken,
+          parentWriterSecret: target.parentWriterSecret,
+          uploadSessionId: existing.uploadSessionId,
+          matchMediaAssetId: existing.matchMediaAssetId,
+          objectVersion: existing.objectVersion,
+          associations: {
+            sharedAthleteId: existing.sharedAthleteId,
+            sharedCompetitionId: existing.sharedCompetitionId,
+            matchLineageKey: existing.matchLineageKey,
+          },
+          apiBaseUrlOverride: target.apiBaseUrl,
+          dependencies: input.dependencies,
+        });
+        const result: SharedMatchMediaUploadCompleteResult = {
+          ...replay,
+          declaredMimeType: existing.declaredMimeType,
+          declaredByteCount: existing.declaredByteCount,
+          localSourceUri: existing.localSourceUri,
+        };
+        let publication:
+          | ParentMatchMediaPublicationResult
+          | { outcome: "failed"; message: string }
+          | undefined;
+        if (result.serverReportedVerified && sharedMatchMediaPublicationClientEnabled) {
+          try {
+            publication = await publishParentMatchMediaAttachment({
+              linkToken: target.linkToken,
+              parentWriterSecret: target.parentWriterSecret,
+              sharedAthleteId: existing.sharedAthleteId,
+              sharedCompetitionId: existing.sharedCompetitionId,
+              matchLineageKey: existing.matchLineageKey,
+              matchMediaAssetId: existing.matchMediaAssetId,
+              objectVersion: existing.objectVersion,
+              expectedRevision: 0,
+              apiBaseUrlOverride: target.apiBaseUrl,
+              dependencies: input.publicationDependencies,
+            });
+          } catch (error) {
+            publication = {
+              outcome: "failed",
+              message: error instanceof Error ? error.message : String(error),
+            };
+          }
+        }
+        logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_RESULT", {
+          ...traceIdentity,
+          trigger: "verified_completion_replay",
+          uploadComplete: true,
+          idempotentReplay: replay.idempotentReplay,
+          serverReportedVerified: replay.serverReportedVerified,
+          publicationOutcome: publication?.outcome ?? null,
+          matchMediaAssetId: existing.matchMediaAssetId,
+        });
+        return { ok: true, result, record: existing, ...(publication ? { publication } : {}) };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_RESULT", {
+          ...traceIdentity,
+          trigger: "verified_completion_replay",
+          uploadComplete: false,
+          error: message,
+        });
+        return { ok: false, reason: "upload_failed", message };
+      }
+    }
     logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
       ...traceIdentity,
       reason: "already_upload_complete",

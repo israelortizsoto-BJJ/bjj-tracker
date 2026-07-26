@@ -6,6 +6,7 @@ import {
   buildSharedMatchMediaPartPlan,
   defaultSha256Hex,
   isServerReportedVerifiedUploadCompletion,
+  replayParentSharedMatchMediaUploadCompletion,
   uploadParentSharedMatchMediaVideo,
   type SharedMatchMediaUploadHttpResponse,
 } from "../sharedMatchMediaUploadApi.ts";
@@ -292,6 +293,86 @@ describe("Parent Shared Match Media upload client", () => {
     assert.equal(result.idempotentReplay, true);
     assert.equal(result.objectVersion, "object-version-replay");
     assert.equal(result.status, "upload_complete");
+  });
+
+  it("replays only a persisted completion identity and accepts a verified Worker report", async () => {
+    const result = await replayParentSharedMatchMediaUploadCompletion({
+      linkToken: TOKEN,
+      parentWriterSecret: SECRET,
+      uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555",
+      objectVersion: "object-version-1",
+      associations: {
+        sharedAthleteId: "shared_ath_1",
+        sharedCompetitionId: "shared_comp_1",
+        matchLineageKey: "match_1",
+      },
+      apiBaseUrlOverride: "https://worker.test",
+      dependencies: {
+        http: async ({ method, url, headers }) => {
+          assert.equal(method, "POST");
+          assert.equal(headers.Authorization, `Bearer ${SECRET}`);
+          assert.match(url, /uploads\/mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\/complete\?assetId=mma_11111111/);
+          return {
+            status: 200,
+            json: {
+              asset: { matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555" },
+              uploadSession: {
+                uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                status: "upload_complete",
+                completedByteCount: 5,
+                completedAt: "2026-07-25T12:00:00.000Z",
+                objectVersion: "object-version-1",
+              },
+              idempotentReplay: true,
+              productionVerification: {
+                outcome: "verified",
+                verificationState: "verified",
+                verificationAttempted: true,
+              },
+            },
+          };
+        },
+      },
+    });
+    assert.equal(result.idempotentReplay, true);
+    assert.equal(result.serverReportedVerified, true);
+    assert.equal(result.objectVersion, "object-version-1");
+  });
+
+  it("rejects a completion replay whose immutable version differs from persisted state", async () => {
+    await assert.rejects(
+      () =>
+        replayParentSharedMatchMediaUploadCompletion({
+          linkToken: TOKEN,
+          parentWriterSecret: SECRET,
+          uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555",
+          objectVersion: "object-version-1",
+          associations: {
+            sharedAthleteId: "shared_ath_1",
+            sharedCompetitionId: "shared_comp_1",
+            matchLineageKey: "match_1",
+          },
+          apiBaseUrlOverride: "https://worker.test",
+          dependencies: {
+            http: async () => ({
+              status: 200,
+              json: {
+                asset: { matchMediaAssetId: "mma_11111111-2222-4333-8444-555555555555" },
+                uploadSession: {
+                  uploadSessionId: "mmus_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  status: "upload_complete",
+                  completedByteCount: 5,
+                  completedAt: "2026-07-25T12:00:00.000Z",
+                  objectVersion: "different-version",
+                },
+              },
+            }),
+          },
+        }),
+      /did not confirm/i,
+    );
   });
 
   it("rejects remote http(s) URIs as non-uploadable media references", async () => {

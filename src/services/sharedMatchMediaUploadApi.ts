@@ -26,6 +26,12 @@ export type SharedMatchMediaUploadCompleteResult = {
   serverReportedVerified: boolean;
 };
 
+/** Result of replaying an existing authoritative upload completion. */
+export type SharedMatchMediaUploadCompletionReplayResult = Omit<
+  SharedMatchMediaUploadCompleteResult,
+  "declaredMimeType" | "declaredByteCount" | "localSourceUri"
+>;
+
 export type SharedMatchMediaUploadHttpResponse = {
   status: number;
   json: unknown;
@@ -421,5 +427,107 @@ export async function uploadParentSharedMatchMediaVideo(input: {
     declaredByteCount: file.byteCount,
     localSourceUri: localUri,
     serverReportedVerified,
+  };
+}
+
+/**
+ * Replays only the existing completion endpoint for a persisted upload_complete
+ * identity. It never creates an intent, uploads bytes, or supplies verification
+ * authority; the Worker re-reads the authoritative session and object state.
+ */
+export async function replayParentSharedMatchMediaUploadCompletion(input: {
+  linkToken: string;
+  parentWriterSecret: string;
+  uploadSessionId: string;
+  matchMediaAssetId: string;
+  objectVersion: string;
+  associations: SharedMatchMediaUploadAssociations;
+  apiBaseUrlOverride?: string | null;
+  dependencies?: Partial<Pick<SharedMatchMediaUploadDependencies, "http" | "resolveApiBaseUrl">>;
+}): Promise<SharedMatchMediaUploadCompletionReplayResult> {
+  const http = input.dependencies?.http ?? defaultSharedMatchMediaUploadHttp;
+  const resolveApiBaseUrl =
+    input.dependencies?.resolveApiBaseUrl ?? defaultResolveSharedMatchMediaApiBaseUrl;
+  const sharedAthleteId = input.associations.sharedAthleteId.trim();
+  const sharedCompetitionId = input.associations.sharedCompetitionId.trim();
+  const matchLineageKey = input.associations.matchLineageKey.trim();
+  const uploadSessionId = input.uploadSessionId.trim();
+  const matchMediaAssetId = input.matchMediaAssetId.trim();
+  const objectVersion = input.objectVersion.trim();
+  if (
+    !sharedAthleteId ||
+    !sharedCompetitionId ||
+    !matchLineageKey ||
+    !uploadSessionId ||
+    !matchMediaAssetId ||
+    !objectVersion
+  ) {
+    throw new SharedMatchMediaUploadClientError(
+      "Completion replay requires persisted upload, immutable asset, and canonical match identity.",
+    );
+  }
+
+  const base = resolveApiBaseUrl(input.apiBaseUrlOverride);
+  const completeUrl = joinUrl(
+    base,
+    `/v1/sessions/${encodeURIComponent(input.linkToken)}/match-media/uploads/` +
+      `${encodeURIComponent(uploadSessionId)}/complete?assetId=${encodeURIComponent(matchMediaAssetId)}`,
+  );
+  const completeResponse = await http({
+    method: "POST",
+    url: completeUrl,
+    headers: authHeaders(input.parentWriterSecret),
+  });
+  const completeBody = requireOk(completeResponse, [200]);
+  const completedSession = completeBody.uploadSession as Record<string, unknown> | undefined;
+  const completedAsset = completeBody.asset as Record<string, unknown> | undefined;
+  const returnedSessionId =
+    typeof completedSession?.uploadSessionId === "string"
+      ? completedSession.uploadSessionId.trim()
+      : "";
+  const returnedAssetId =
+    typeof completedAsset?.matchMediaAssetId === "string"
+      ? completedAsset.matchMediaAssetId.trim()
+      : "";
+  const returnedObjectVersion =
+    typeof completedSession?.objectVersion === "string"
+      ? completedSession.objectVersion.trim()
+      : "";
+  const completedByteCount =
+    typeof completedSession?.completedByteCount === "number"
+      ? completedSession.completedByteCount
+      : NaN;
+  const completedAt =
+    typeof completedSession?.completedAt === "string"
+      ? completedSession.completedAt.trim()
+      : "";
+  if (
+    completedSession?.status !== "upload_complete" ||
+    returnedSessionId !== uploadSessionId ||
+    returnedAssetId !== matchMediaAssetId ||
+    returnedObjectVersion !== objectVersion ||
+    !Number.isSafeInteger(completedByteCount) ||
+    completedByteCount <= 0 ||
+    !completedAt
+  ) {
+    throw new SharedMatchMediaUploadClientError(
+      "Completion replay did not confirm the persisted immutable upload identity.",
+      completeResponse.status,
+    );
+  }
+  return {
+    matchMediaAssetId,
+    objectVersion,
+    uploadSessionId,
+    status: "upload_complete",
+    completedByteCount,
+    completedAt,
+    idempotentReplay: completeBody.idempotentReplay === true,
+    sharedAthleteId,
+    sharedCompetitionId,
+    matchLineageKey,
+    serverReportedVerified: isServerReportedVerifiedUploadCompletion(
+      completeBody.productionVerification,
+    ),
   };
 }

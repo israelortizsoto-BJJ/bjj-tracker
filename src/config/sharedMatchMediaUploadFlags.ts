@@ -20,6 +20,14 @@ export const sharedMatchMediaPublicationClientEnabled =
   );
 
 /**
+ * Allows an explicit Parent replay of an already-completed upload so the
+ * Worker can report its verification result. Default-off; never implied by
+ * upload or publication enablement.
+ */
+export const sharedMatchMediaVerifiedCompletionReplayClientEnabled =
+  process.env.EXPO_PUBLIC_SHARED_MATCH_MEDIA_VERIFIED_COMPLETION_REPLAY_CLIENT === "1";
+
+/**
  * Coach editor shared-media binding remains inert until separately certified and
  * explicitly enabled. Server projection/resolution capability is still required.
  */
