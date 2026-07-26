@@ -443,6 +443,18 @@ export async function coachSyncFetchSession(
   const matchMediaAttachmentsByAthleteId = parseMatchMediaAttachmentsByAthleteIdField(
     p.matchMediaAttachmentsByAthleteId,
   );
+  logCoachMediaCorridorTrace("MATCH_MEDIA_SESSION_PROJECTION", {
+    projectionField: Object.prototype.hasOwnProperty.call(p, "matchMediaAttachmentsByAthleteId")
+      ? "present"
+      : "omitted",
+    projectedAthleteIds: Object.keys(matchMediaAttachmentsByAthleteId),
+    projectedAttachmentCounts: Object.fromEntries(
+      Object.entries(matchMediaAttachmentsByAthleteId).map(([athleteId, set]) => [
+        athleteId,
+        set.attachments.length,
+      ]),
+    ),
+  });
   for (const artifact of Object.values(competitionTopologyByAthleteId)) {
     for (const competition of artifact.competitions) {
       console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {

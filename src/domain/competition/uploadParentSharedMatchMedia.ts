@@ -18,6 +18,7 @@ import {
   putSharedMatchMediaUploadComplete,
   type SharedMatchMediaUploadRecord,
 } from "../../storage/sharedMatchMediaUploadStore";
+import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
 
 export type ParentSharedMatchMediaUploadOutcome =
   | {
@@ -54,6 +55,9 @@ export type ParentSharedMatchMediaUploadRequest = {
   sharedAthleteId: string | null | undefined;
   sharedCompetitionId: string | null | undefined;
   matchLineageKey: string | null | undefined;
+  /** Trace-only correlation; never sent to the Worker or persisted. */
+  traceId?: string | null;
+  traceTrigger?: "selection" | "post_save";
   force?: boolean;
   dependencies?: Partial<SharedMatchMediaUploadDependencies>;
   publicationDependencies?: Partial<ParentMatchMediaPublicationDependencies>;
@@ -68,7 +72,29 @@ export type ParentSharedMatchMediaUploadRequest = {
 export async function uploadParentSelectedSharedMatchMedia(
   input: ParentSharedMatchMediaUploadRequest,
 ): Promise<ParentSharedMatchMediaUploadOutcome> {
+  const sharedAthleteId =
+    typeof input.sharedAthleteId === "string" ? input.sharedAthleteId.trim() : "";
+  const sharedCompetitionId =
+    typeof input.sharedCompetitionId === "string" ? input.sharedCompetitionId.trim() : "";
+  const matchLineageKey =
+    typeof input.matchLineageKey === "string" ? input.matchLineageKey.trim() : "";
+  const traceId = input.traceId?.trim() || `parent-match-media-${Date.now().toString(36)}`;
+  const traceIdentity = {
+    traceId,
+    sharedAthleteId: sharedAthleteId || null,
+    sharedCompetitionId: sharedCompetitionId || null,
+    matchLineageKey: matchLineageKey || null,
+    trigger: input.traceTrigger ?? "selection",
+  };
+  logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_REQUESTED", {
+    ...traceIdentity,
+    hasLocalSource: Boolean(typeof input.localUri === "string" && input.localUri.trim()),
+  });
   if (!sharedMatchMediaUploadClientEnabled && !input.force) {
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
+      ...traceIdentity,
+      reason: "client_flag_off",
+    });
     return {
       ok: false,
       skipped: true,
@@ -78,14 +104,11 @@ export async function uploadParentSelectedSharedMatchMedia(
   }
 
   const localUri = typeof input.localUri === "string" ? input.localUri.trim() : "";
-  const sharedAthleteId =
-    typeof input.sharedAthleteId === "string" ? input.sharedAthleteId.trim() : "";
-  const sharedCompetitionId =
-    typeof input.sharedCompetitionId === "string" ? input.sharedCompetitionId.trim() : "";
-  const matchLineageKey =
-    typeof input.matchLineageKey === "string" ? input.matchLineageKey.trim() : "";
-
   if (!localUri) {
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
+      ...traceIdentity,
+      reason: "missing_associations",
+    });
     return {
       ok: false,
       skipped: true,
@@ -94,6 +117,10 @@ export async function uploadParentSelectedSharedMatchMedia(
     };
   }
   if (/^https?:\/\//i.test(localUri)) {
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
+      ...traceIdentity,
+      reason: "http_or_remote_uri",
+    });
     return {
       ok: false,
       skipped: true,
@@ -102,6 +129,10 @@ export async function uploadParentSelectedSharedMatchMedia(
     };
   }
   if (!sharedAthleteId || !sharedCompetitionId || !matchLineageKey) {
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
+      ...traceIdentity,
+      reason: "missing_associations",
+    });
     return {
       ok: false,
       skipped: true,
@@ -122,6 +153,11 @@ export async function uploadParentSelectedSharedMatchMedia(
     existing.matchMediaAssetId &&
     existing.objectVersion
   ) {
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
+      ...traceIdentity,
+      reason: "already_upload_complete",
+      matchMediaAssetId: existing.matchMediaAssetId,
+    });
     logUpload("already_upload_complete", {
       sharedAthleteId,
       sharedCompetitionId,
@@ -138,6 +174,10 @@ export async function uploadParentSelectedSharedMatchMedia(
 
   const target = await resolveLinkedTargetForParentWriter(sharedAthleteId);
   if (!target) {
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED", {
+      ...traceIdentity,
+      reason: "no_parent_writer_target",
+    });
     return {
       ok: false,
       skipped: true,
@@ -214,6 +254,13 @@ export async function uploadParentSelectedSharedMatchMedia(
       verification: false,
       publication: publication?.outcome ?? false,
     });
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_RESULT", {
+      ...traceIdentity,
+      uploadComplete: true,
+      serverReportedVerified: result.serverReportedVerified,
+      publicationOutcome: publication?.outcome ?? null,
+      matchMediaAssetId: record.matchMediaAssetId,
+    });
 
     return { ok: true, result, record, ...(publication ? { publication } : {}) };
   } catch (error) {
@@ -222,6 +269,11 @@ export async function uploadParentSelectedSharedMatchMedia(
       sharedAthleteId,
       sharedCompetitionId,
       matchLineageKey,
+      error: message,
+    });
+    logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_PUBLICATION_RESULT", {
+      ...traceIdentity,
+      uploadComplete: false,
       error: message,
     });
     return {
@@ -243,8 +295,16 @@ export function scheduleUploadParentSelectedSharedMatchMedia(
     onComplete?: (record: SharedMatchMediaUploadRecord) => void;
   },
 ): void {
+  const traceId = input.traceId?.trim() || `parent-match-media-${Date.now().toString(36)}`;
+  logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_SCHEDULED", {
+    traceId,
+    sharedAthleteId: input.sharedAthleteId?.trim() || null,
+    sharedCompetitionId: input.sharedCompetitionId?.trim() || null,
+    matchLineageKey: input.matchLineageKey?.trim() || null,
+    trigger: input.traceTrigger ?? "selection",
+  });
   void (async () => {
-    const outcome = await uploadParentSelectedSharedMatchMedia(input);
+    const outcome = await uploadParentSelectedSharedMatchMedia({ ...input, traceId });
     if (outcome.ok) {
       hooks?.onComplete?.(outcome.record);
       return;

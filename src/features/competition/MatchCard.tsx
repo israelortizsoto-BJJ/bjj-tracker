@@ -124,6 +124,15 @@ export function MatchCard({
       sharedCompetitionId: competitionId,
       matchLineageKey: lineage,
     }).then((row) => {
+      logCoachMediaCorridorTrace("MATCH_MEDIA_SELECTOR_RESULT", {
+        sharedAthleteId: athleteId,
+        sharedCompetitionId: competitionId,
+        matchLineageKey: lineage,
+        attachmentState: row?.state ?? null,
+        attachmentRevision: row?.revision ?? null,
+        matchMediaAssetId: row?.state === "attached" ? row.matchMediaAssetId : null,
+        canOpenFilmRoom: row?.state === "attached",
+      });
       if (!cancelled) setMatchMediaAttachment(row);
     });
     return () => {

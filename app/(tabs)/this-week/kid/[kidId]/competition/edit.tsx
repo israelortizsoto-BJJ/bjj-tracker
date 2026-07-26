@@ -202,6 +202,8 @@ export default function KidCompetitionEditScreen() {
   const [notesDraft, setNotesDraft] = useState("");
   const [medalImageDraft, setMedalImageDraft] = useState<string | undefined>();
   const [matches, setMatches] = useState<LocalMatch[]>([]);
+  // Trace-only: retains one Parent media-attempt correlation across selection and post-save retry.
+  const parentMatchMediaTraceIdsRef = useRef<Record<string, string>>({});
   const [sharedCompetitionId, setSharedCompetitionId] = useState<string | null>(null);
   const [sharedAthleteId, setSharedAthleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -375,12 +377,16 @@ export default function KidCompetitionEditScreen() {
         if (typeof videoUri === "string" && videoUri.trim() && match) {
           // Parent-selected local video enters Shared Match Media upload client.
           // device-local URI remains for local preview; never treated as cross-device media.
+          const traceId = `parent-match-media-${Date.now().toString(36)}-${matchIndex}`;
+          parentMatchMediaTraceIdsRef.current[match.id] = traceId;
           scheduleUploadParentSelectedSharedMatchMedia(
             {
               localUri: videoUri,
               sharedAthleteId: sharedAthleteId || unlinkedParentAthleteId || null,
               sharedCompetitionId,
               matchLineageKey: match.id,
+              traceId,
+              traceTrigger: "selection",
             },
             {
               onFailure: (message) => {
@@ -660,6 +666,10 @@ export default function KidCompetitionEditScreen() {
               sharedAthleteId: postSaveSharedAthleteId,
               sharedCompetitionId: postSaveSharedCompetitionId,
               matchLineageKey: match.id,
+              traceId:
+                parentMatchMediaTraceIdsRef.current[match.id] ??
+                `parent-match-media-post-save-${Date.now().toString(36)}`,
+              traceTrigger: "post_save",
             },
             {
               onFailure: (message) => {

@@ -1,6 +1,7 @@
 import {
   applyCoachMatchMediaAttachmentSet,
 } from "../../storage/coachMatchMediaAttachmentStore";
+import { logCoachMediaCorridorTrace } from "../../dev/coachMediaCorridorTrace";
 import type {
   CoachWeeklySyncSessionResponse,
   SyncedMatchMediaAttachmentProjectionSet,
@@ -64,13 +65,27 @@ export async function reconcileCoachMatchMediaAttachments(opts: {
   totalActiveWriterCount: number;
 }): Promise<void> {
   const { successfulSnapshots, totalActiveWriterCount } = opts;
-  if (totalActiveWriterCount <= 0 || successfulSnapshots.length === 0) return;
+  if (totalActiveWriterCount <= 0 || successfulSnapshots.length === 0) {
+    logCoachMediaCorridorTrace("MATCH_MEDIA_RECONCILIATION_INPUT", {
+      result: "preserved",
+      reason: "no_successful_snapshots",
+      totalActiveWriterCount,
+      successfulSnapshotCount: successfulSnapshots.length,
+    });
+    return;
+  }
 
   const withSession = successfulSnapshots.filter(
     (s): s is MatchMediaAttachmentWriterSnapshot & { session: CoachWeeklySyncSessionResponse } =>
       Boolean(s.session),
   );
-  if (withSession.length === 0) return;
+  if (withSession.length === 0) {
+    logCoachMediaCorridorTrace("MATCH_MEDIA_RECONCILIATION_INPUT", {
+      result: "preserved",
+      reason: "no_session_payloads",
+    });
+    return;
+  }
 
   const sessionsOrdered = sortWriterSessionSnapshotsNewestFirst(withSession)
     .map((s) => s.session)
@@ -90,6 +105,12 @@ export async function reconcileCoachMatchMediaAttachments(opts: {
       }),
     ),
   ];
+  logCoachMediaCorridorTrace("MATCH_MEDIA_RECONCILIATION_INPUT", {
+    result: athleteIds.length > 0 ? "present_sets" : "preserved",
+    reason: athleteIds.length > 0 ? null : "projection_omitted_or_empty",
+    successfulSessionCount: sessionsOrdered.length,
+    projectedAthleteIds: athleteIds,
+  });
 
   for (const sharedAthleteId of athleteIds) {
     const presentSets = collectPresentAttachmentSetsForAthlete(
@@ -99,6 +120,16 @@ export async function reconcileCoachMatchMediaAttachments(opts: {
     for (const attachmentSet of presentSets) {
       // Empty attachment arrays still "present" but apply no row deletes (preserve).
       await applyCoachMatchMediaAttachmentSet(attachmentSet);
+      logCoachMediaCorridorTrace("MATCH_MEDIA_RECONCILIATION_APPLIED", {
+        sharedAthleteId: attachmentSet.sharedAthleteId,
+        attachmentCount: attachmentSet.attachments.length,
+        attachmentIdentities: attachmentSet.attachments.map((attachment) => ({
+          sharedCompetitionId: attachment.sharedCompetitionId,
+          matchLineageKey: attachment.matchLineageKey,
+          state: attachment.state,
+          revision: attachment.revision,
+        })),
+      });
     }
   }
 }

@@ -23,6 +23,8 @@ describe("Parent Shared Match Media upload corridor wiring", () => {
     assert.match(parentEdit, /scheduleUploadParentSelectedSharedMatchMedia/);
     assert.match(parentEdit, /onVideoChange=\{/);
     assert.match(parentEdit, /Match video upload failed/);
+    assert.match(parentEdit, /traceTrigger: "selection"/);
+    assert.match(parentEdit, /traceTrigger: "post_save"/);
   });
 
   it("upload client uses authenticated match-media multipart foundation contracts", () => {
@@ -70,5 +72,8 @@ describe("Parent Shared Match Media upload corridor wiring", () => {
     assert.match(domain, /already_upload_complete/);
     assert.match(domain, /upload_failed/);
     assert.doesNotMatch(domain, /status:\s*"verified"|status:\s*"published"/);
+    assert.match(domain, /PARENT_MATCH_MEDIA_PUBLICATION_REQUESTED/);
+    assert.match(domain, /PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED/);
+    assert.match(domain, /PARENT_MATCH_MEDIA_PUBLICATION_RESULT/);
   });
 });

@@ -108,5 +108,12 @@ export async function bestEffortUploadCoachCommentaryMedia(input: {
     }
   }
 
+  logCoachMediaCorridorTrace("VOICE_UPLOAD_SUMMARY", {
+    traceId: input.traceId ?? null,
+    sharedAthleteId,
+    attempted,
+    uploaded,
+    result: uploaded > 0 ? "media_id_published" : attempted > 0 ? "upload_failed" : "skipped",
+  });
   return { attempted, uploaded };
 }
