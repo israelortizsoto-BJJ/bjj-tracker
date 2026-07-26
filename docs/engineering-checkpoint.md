@@ -10,6 +10,81 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-26
+
+## Investigation
+
+Parent verified-completion replay prerequisite investigation and retained DEV-only forensic capability
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+A DEV-only local inspector can determine whether one explicitly identified verified-completion replay candidate has the exact persisted upload_complete record, immutable completion identity, local source presence, and locally available Parent writer credentials without invoking replay, publication, a Worker route, or a live session/topology request.
+
+## Latest Runtime Behavior
+
+The Parent DEV inspector returned record_missing for the retained Canary candidate. recordExists is false, so uploadComplete, association, immutable session/asset/object-version, and localSourceUri prerequisites are unavailable. localParentWriterCredentialsAvailable is true, while liveParentAuthorityAndTopologyUnverified remains true. The replay controller returns record_missing before trace creation or replay invocation; the false identity/version checks are missing-record defaults, not independent mismatch evidence. Live authority/topology verification cannot restore the absent local upload_complete row or its local source URI. The retained candidate is terminally denied.
+
+## Next Experiment
+
+NOT YET AUTHORIZED: after separate approval, perform one fresh isolated Parent Match 1 selection/save with every media capability still off and capture the canonical athlete, competition, and lineage association plus the explicit client-flag-off scheduling result. Do not claim or reconstruct historical upload evidence. A fresh upload-foundation experiment requires separate later authorization.
+
+## Do Not
+
+- Do not retry the retained Canary candidate with altered identifiers or scan, seed, reconstruct, or migrate local upload records.
+- Do not invoke replay, upload, completion, publication, resolution, or live session/topology requests.
+- Do not enable client or Worker capabilities, change Worker/Cloudflare state, or begin Build 84, Metro, device, or fresh Match 1 work.
+- Do not update the Parking Lot: the proposed experiment is not an explicitly deferred item.
+
+## Notes
+
+- Commit ecc547b5c084c1b2770c7eac3adf3269e1e6eb5c retained the DEV-only inspector and Dev Settings navigation in exactly seven paths.
+- Focused validation: prerequisite inspector 4/4, replay controller 8/8, DEV navigation 1/1, focused lint, and git diff --check passed.
+- Replay remains denied; SHARED_MATCH_MEDIA upload, verification, publication, and resolution capabilities remain "0".
+- The local-only inspector intentionally preserves liveParentAuthorityAndTopologyUnverified: true.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M docs/master-prompt-daily-restart.md
+ M docs/master-prompt-developer.md
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? scripts/__pycache__/
+```
+
+### git log --oneline --decorate -8
+
+```text
+ecc547b (HEAD -> coach-commentary-media-metadata) Retain verified-completion replay prerequisite inspector
+58bec25 Certify Worker floor and repair checkpoint compatibility
+df90ac6 Add controlled Parent verified completion replay caller
+e4e9787 Add verified completion replay for Parent media uploads
+b957769 Preserve competition saves on topology publish failure
+2428120 Extend coach media corridor traces across Parent upload and Coach hydrate paths
+e722a23 Add schema v2 publication interlock
+752c01a Transport certified voice-note alignment through Match Breakdown v2
+```
+
+### git diff --stat
+
+```text
+ docs/master-prompt-daily-restart.md                | 631 ++++++++++--------
+ docs/master-prompt-developer.md                    | 717 +-------------------
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 4 files changed, 1016 insertions(+), 1073 deletions(-)
+```
+
 # ENGINEERING CHECKPOINT — 2026-07-25
 
 ## Investigation

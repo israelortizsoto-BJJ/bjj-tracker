@@ -91,6 +91,47 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-26
+
+## Session Summary
+
+Closed the Parent verified-completion replay prerequisite investigation and retained a reusable DEV-only local forensic inspector.
+
+The retained Canary replay candidate is terminally blocked: the exact keyed device-local upload_complete record is absent, so replay has no local source URI or immutable completion identity to send.
+
+## Runtime Evidence
+
+The Parent DEV inspector returned:
+
+- outcome: `record_missing`
+- `recordExists=false`
+- `uploadComplete=false`
+- association/session/asset/object-version checks false as missing-record defaults
+- `localSourceUriPresent=false`
+- `localParentWriterCredentialsAvailable=true`
+- `liveParentAuthorityAndTopologyUnverified=true`
+
+The replay controller returns on `record_missing` before trace creation or replay invocation. The false identity/version checks are not independent evidence of a mismatched candidate. A live authority or topology check cannot restore the absent local row or URI.
+
+## Retained Forensic Capability
+
+Commit `ecc547b5c084c1b2770c7eac3adf3269e1e6eb5c` — `Retain verified-completion replay prerequisite inspector` — committed exactly seven DEV-only inspector/navigation/test paths.
+
+The inspector reads one explicit local upload key and local active Parent credential presence. It does not scan storage, reveal a URI/token/secret, call a Worker route, invoke replay, publication, or session fetches. It intentionally leaves live authority/topology unverified.
+
+Validation: prerequisite inspector 4/4; existing replay-controller 8/8; DEV navigation 1/1; focused lint and `git diff --check` passed.
+
+## Current Boundary
+
+- Retained Canary replay: terminally denied.
+- Replay authorization: denied.
+- Worker media capabilities: all remain `"0"`.
+- Fresh Parent Match 1 experiment: NOT YET AUTHORIZED.
+
+## Next Mission
+
+Candidate only, not authorized: one fresh isolated Parent Match 1 selection/save with media capabilities still off, proving canonical athlete/competition/lineage association and explicit client-flag-off scheduling. This must not manufacture historical upload evidence; any fresh upload-foundation experiment requires separate authorization.
+
 # DEV HANDOFF — 2026-07-25 20:00
 
 ## Session Summary
