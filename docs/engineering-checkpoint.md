@@ -10,6 +10,115 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-25
+
+## Investigation
+
+Live Cloudflare Worker fail-closed floor provenance and documentation reconciliation
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+A strictly read-only Cloudflare and repository provenance review can determine whether the Worker version that superseded the documented version-50 floor remains fail-closed and whether its deployed script can be mapped exactly to the repository Worker tree, without executing a runtime probe, replay, deployment, capability change, or device action.
+
+## Latest Runtime Behavior
+
+### Accepted Verdict — Repository-Mapped Fail-Closed Floor
+
+The currently active Cloudflare Worker deployment is version `bef65f66-e9c3-4d62-9aa9-96fefce42684` (version 51), deployed through deployment `4b77c455-02e1-4e8d-a9de-96688996d2b9` at `2026-07-25T04:01:57.011304Z`.
+
+The retrieved live script has content SHA-256 `8cc517dd090c73f9c654167e4eb7d39c5b71fe2d4f4d828ac6294ad2379a9737` and is byte-identical to the local Wrangler dry-run `index.js` produced from the current `coach-sync-worker` repository tree.
+
+The Worker source lineage was established at commit `e722a23` (`Add schema v2 publication interlock`) and remained unchanged through repository HEAD `df90ac6`. Commits `e4e9787` and `df90ac6` are client-side replay/caller changes and do not modify Worker source. Their later commit times therefore do not prove that the live Worker lacked the verified-completion corridor.
+
+The live Worker contains the `upload_complete`, production verification, publication, attachment projection, resolution, and schema-v2 code corridors. Every related live capability remains fail-closed:
+
+- `SHARED_MATCH_MEDIA_UPLOAD_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID=""`
+- `SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION=""`
+- `SHARED_MATCH_MEDIA_PUBLICATION_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_RESOLUTION_ENABLED="0"`
+- `COACH_MATCH_BREAKDOWN_SCHEMA_V2_PUBLICATION_ENABLED="0"`
+- Operator secret absent
+- KV `SESSIONS` binding present
+- R2 `MEDIA` binding present
+
+The prior documented live floor `1f046eaf-6635-46a6-8439-c73860cdeba9` is superseded as the current live identity. Its historical role as the post-canary fail-closed floor remains valid and must not be rewritten. The unexplained version-51 upload remains an operational provenance observation because the deployment message is empty, but deployed script identity and fail-closed capability state are now proven.
+
+No HTTP runtime probe, replay, deployment, capability activation, canary configuration, Build 84 action, Metro restart, or device action was performed.
+
+## Next Experiment
+
+Documentation reconciliation closes this provenance mission. The smallest subsequent engineering mission, only after independent review and separate authorization, is to define the next controlled client replay-readiness step using the certified fail-closed Worker floor. Do not activate capabilities, configure a canary, execute replay, start Build 84, or perform device action from this checkpoint.
+
+## Do Not
+
+- Do not replace historical evidence showing version 1f046eaf-6635-46a6-8439-c73860cdeba9 as the post-canary fail-closed floor; mark it as superseded only in the new 2026-07-25 record.
+- Do not claim that Cloudflare's script etag algorithm was reproduced locally; exact mapping was established by retrieving and hashing the deployed script content and comparing it with the local dry-run bundle.
+- Do not claim that client commits e4e9787 or df90ac6 changed Worker source.
+- Do not interpret the unexplained version-51 upload as uncertainty about the retrieved script contents.
+- Do not authorize runtime activation, deployment, rollback, capability changes, canary configuration, Build 84, Metro restart, replay, or device action.
+- Do not alter Worker source, application source, Wrangler configuration, Timeline Builder, debug logs, cache, historical Canary JSON, or any stash.
+- Do not stage or commit until independent review is complete.
+
+## Notes
+
+- Investigation lifecycle: COMPLETE.
+- Current certified live Worker version: bef65f66-e9c3-4d62-9aa9-96fefce42684.
+- Current deployment: 4b77c455-02e1-4e8d-a9de-96688996d2b9.
+- Deployment timestamp: 2026-07-25T04:01:57.011304Z.
+- Cloudflare script etag: eedaea48b057fa917ce55b2d7926266abac07923b7348a058dd8e51a503ce64e.
+- Retrieved script content SHA-256: 8cc517dd090c73f9c654167e4eb7d39c5b71fe2d4f4d828ac6294ad2379a9737.
+- Repository mapping: retrieved live script is byte-identical to the Wrangler dry-run bundle from the current coach-sync-worker tree.
+- Worker source lineage: e722a23, unchanged through df90ac6.
+- Client replay/caller commits e4e9787 and df90ac6 do not modify Worker source.
+- Prior version-50 floor 1f046eaf-6635-46a6-8439-c73860cdeba9 is superseded as the live identity but remains valid historical post-canary evidence.
+- All observed upload, verification, publication, projection, resolution, and schema-v2 controls remain disabled; canary identities are empty and the operator secret is absent.
+- Remaining unknown: why version 51 was uploaded; its Cloudflare deployment message is empty.
+- Certification boundary: live Worker script identity plus fail-closed configuration only. No runtime route behavior, client replay, publication, UI hydration, or general large-media behavior was newly tested.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M scripts/write_engineering_checkpoint.py
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? scripts/__pycache__/
+```
+
+### git log --oneline --decorate -8
+
+```text
+df90ac6 (HEAD -> coach-commentary-media-metadata) Add controlled Parent verified completion replay caller
+e4e9787 Add verified completion replay for Parent media uploads
+b957769 Preserve competition saves on topology publish failure
+2428120 Extend coach media corridor traces across Parent upload and Coach hydrate paths
+e722a23 Add schema v2 publication interlock
+752c01a Transport certified voice-note alignment through Match Breakdown v2
+5661197 Align voice notes to confirmed shared media
+967cad7 Establish shared editor media binding lifecycle
+```
+
+### git diff --stat
+
+```text
+ scripts/write_engineering_checkpoint.py            |  48 +-
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 3 files changed, 655 insertions(+), 134 deletions(-)
+```
+
 # ENGINEERING CHECKPOINT — 2026-07-23
 
 ## Investigation

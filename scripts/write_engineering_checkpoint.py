@@ -8,6 +8,7 @@ Python validates, formats, writes, and verifies only.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -29,6 +30,27 @@ PERMANENT_HEADER = """# MatMind Engineering Checkpoint Register
 > ChatGPT supplies the engineering model.
 > Python writes and verifies this document.
 """
+
+ENGINEERING_OS_VNEXT_PERMANENT_HEADER = (
+    PERMANENT_HEADER.rstrip()
+    + """
+
+Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
+"""
+)
+
+RECOGNIZED_PERMANENT_HEADERS = frozenset(
+    {
+        PERMANENT_HEADER.rstrip(),
+        ENGINEERING_OS_VNEXT_PERMANENT_HEADER.rstrip(),
+    }
+)
+
+# Exact pre-schema historical entry only. Not a date-based legacy policy.
+ALLOWLISTED_PRE_SCHEMA_ENTRY_DATE = "2026-07-14"
+ALLOWLISTED_PRE_SCHEMA_ENTRY_SHA256 = (
+    "46cf7685f0602e31e839bf09847647812fe79bc2c62c3089eb0909163e8cedb0"
+)
 
 ALLOWED_STATUS = frozenset({"ACTIVE", "PAUSED", "COMPLETE"})
 REQUIRED_FIELDS = (
@@ -232,6 +254,20 @@ def entry_date(entry: str) -> str:
     return validate_iso_date(match.group(1), field="entry date")
 
 
+def entry_content_sha256(entry: str) -> str:
+    return hashlib.sha256(entry.encode("utf-8")).hexdigest()
+
+
+def is_allowlisted_pre_schema_entry(entry: str) -> bool:
+    """Accept only the exact existing 2026-07-14 pre-schema entry by date and SHA-256."""
+    try:
+        if entry_date(entry) != ALLOWLISTED_PRE_SCHEMA_ENTRY_DATE:
+            return False
+    except ValidationError:
+        return False
+    return entry_content_sha256(entry) == ALLOWLISTED_PRE_SCHEMA_ENTRY_SHA256
+
+
 def sort_entries_newest_first(entries: list[str]) -> list[str]:
     indexed = list(enumerate(entries))
     indexed.sort(
@@ -257,10 +293,10 @@ def assemble_document(header: str, entries: list[str]) -> str:
 def build_document(existing: str, model: dict[str, Any], snapshot: dict[str, str]) -> str:
     header, entries = split_document(existing) if existing.strip() else ("", [])
     if not header.strip():
-        header = PERMANENT_HEADER.rstrip()
-    elif header.rstrip() != PERMANENT_HEADER.rstrip():
+        header = ENGINEERING_OS_VNEXT_PERMANENT_HEADER.rstrip()
+    elif header.rstrip() not in RECOGNIZED_PERMANENT_HEADERS:
         raise ValidationError(
-            "Permanent header is present but does not match the required constant."
+            "Permanent header is present but does not match a recognized canonical header."
         )
 
     new_entry = render_entry(model, snapshot).rstrip()
@@ -287,6 +323,10 @@ def verify_entry(entry: str) -> str:
     expected_title = f"# ENGINEERING CHECKPOINT — {date_value}"
     if not entry.startswith(expected_title):
         raise ValidationError(f"Entry for {date_value} has an invalid title line.")
+
+    # Exact allowlisted pre-schema entry: preserve byte-for-byte; do not migrate.
+    if is_allowlisted_pre_schema_entry(entry):
+        return date_value
 
     positions: list[int] = []
     for heading in REQUIRED_SECTION_ORDER:
@@ -349,7 +389,7 @@ def verify_document(content: str) -> None:
         raise ValidationError("Document must end with exactly one trailing newline.")
 
     header, entries = split_document(content)
-    if header.rstrip() != PERMANENT_HEADER.rstrip():
+    if header.rstrip() not in RECOGNIZED_PERMANENT_HEADERS:
         raise ValidationError("Permanent header is missing or has been altered.")
 
     if not entries:

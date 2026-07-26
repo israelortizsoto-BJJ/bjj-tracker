@@ -91,6 +91,145 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-25 20:00
+
+## Session Summary
+
+Completed the read-only provenance review of the Cloudflare Worker version that superseded the documented Production Verification Canary v1 fail-closed floor.
+
+The current live Worker is not an unknown-code deployment. Its retrieved script content is byte-identical to the Wrangler dry-run bundle generated from the current repository Worker tree, and all relevant capabilities remain fail-closed.
+
+No deployment, runtime probe, replay, capability activation, canary configuration, Build 84 action, Metro restart, or device action was performed.
+
+## Current Certified Live Worker Floor
+
+- Account: `Admin@ortizdigitalstudio.com's Account`
+- Account ID: `9014361709b3169cc261237c717ec0b6`
+- Worker: `matmind-coach-sync`
+- Environment: default
+- Active version: `bef65f66-e9c3-4d62-9aa9-96fefce42684`
+- Version number: 51
+- Deployment: `4b77c455-02e1-4e8d-a9de-96688996d2b9`
+- Deployment timestamp: `2026-07-25T04:01:57.011304Z`
+- Cloudflare script etag: `eedaea48b057fa917ce55b2d7926266abac07923b7348a058dd8e51a503ce64e`
+- Retrieved script content SHA-256: `8cc517dd090c73f9c654167e4eb7d39c5b71fe2d4f4d828ac6294ad2379a9737`
+
+## Repository Mapping
+
+The retrieved live Worker script is byte-identical to the local Wrangler dry-run `index.js` produced from the current `coach-sync-worker` tree.
+
+- Worker source lineage: `e722a23` — `Add schema v2 publication interlock`
+- Worker tree unchanged through repository HEAD: `df90ac6`
+- Client replay contract commit: `e4e9787`
+- Controlled client caller commit: `df90ac6`
+
+Commits `e4e9787` and `df90ac6` are client-side changes. They do not modify Worker source. The fact that version 51 was uploaded before those client commits does not mean the Worker lacked its existing `upload_complete` or verified-completion corridor.
+
+## Live Capability State
+
+The live Worker contains the upload-complete, production verification, publication, attachment projection, resolution, and schema-v2 code corridors, but every related capability remains closed:
+
+- `SHARED_MATCH_MEDIA_UPLOAD_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_VERIFICATION_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_VERIFICATION_CANARY_ASSET_ID=""`
+- `SHARED_MATCH_MEDIA_VERIFICATION_CANARY_OBJECT_VERSION=""`
+- `SHARED_MATCH_MEDIA_PUBLICATION_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_ATTACHMENT_PROJECTION_ENABLED="0"`
+- `SHARED_MATCH_MEDIA_RESOLUTION_ENABLED="0"`
+- `COACH_MATCH_BREAKDOWN_SCHEMA_V2_PUBLICATION_ENABLED="0"`
+- Operator secret: absent
+- KV `SESSIONS`: bound
+- R2 `MEDIA`: bound
+
+## Supersession and Historical Boundary
+
+The prior documented floor `1f046eaf-6635-46a6-8439-c73860cdeba9` is superseded as the current live Worker identity.
+
+Its historical meaning remains valid: it was the fail-closed floor recorded immediately after the successful Production Verification Canary v1 execution. Existing historical records must not be rewritten as though that version was never live.
+
+The new conclusion is additive:
+
+- `1f046eaf…` remains the historical post-canary floor.
+- `bef65f66…` is the current repository-mapped live fail-closed floor.
+- Version 51's deployment message is empty, so the reason for its upload remains unknown.
+- The empty message is an operational-control observation, not a remaining uncertainty about deployed script content.
+
+## Corrected Interpretation
+
+A prior interim interpretation stated that the live Worker might not contain the replay or verified-completion corridor because the live upload predated client commits `e4e9787` and `df90ac6`.
+
+That interpretation is superseded.
+
+The retrieved live script proves that the Worker already contains its upload-complete and verification-related code. The later client commits provide the replay contract and controlled caller on the client side; they do not establish Worker-source availability.
+
+## Certification Boundary
+
+Certified by this review:
+
+- exact live version and deployment identity;
+- retrieved deployed-script content hash;
+- byte-identical mapping to the repository Worker bundle;
+- Worker source lineage;
+- fail-closed capability values;
+- canary identities empty;
+- operator secret absent;
+- required KV and R2 bindings present.
+
+Not certified or executed by this review:
+
+- HTTP route behavior;
+- device-side upload-complete record suitability;
+- client replay execution;
+- client publication;
+- UI hydration;
+- general large-media behavior;
+- capability activation;
+- Build 84.
+
+## Remaining Unknown
+
+Why version 51 was uploaded remains unknown because the Cloudflare deployment message is empty. No repository deployment note was found that explains the upload.
+
+This unknown does not weaken the exact deployed-content match or the observed fail-closed capability state.
+
+## Current Boundary
+
+### CLOSED BY THIS RECORD
+
+- live Worker provenance review;
+- exact repository mapping of version 51;
+- fail-closed configuration confirmation;
+- correction of the Worker-versus-client commit interpretation;
+- supersession of version 50 as the current live identity.
+
+### STILL OPEN / UNAUTHORIZED
+
+- any runtime activation or capability change;
+- canary configuration;
+- client replay;
+- Build 84;
+- Metro restart;
+- device action;
+- destructive cleanup of retained Canary v1 artifacts;
+- client publication and UI hydration certification;
+- general large-media certification.
+
+### PRESERVED
+
+- historical Production Verification Canary v1 SUCCESS;
+- historical version-50 post-canary floor record;
+- historical Canary JSON evidence;
+- protected Timeline Builder/debug/cache dirt;
+- six stashes.
+
+## Next Mission
+
+Candidate only. Not authorized by this documentation entry:
+
+Independent review of the DOCOPS compatibility repair and the two Python-written documentation updates.
+
+After that review, You + ChatGPT must separately decide whether to authorize the smallest controlled client replay-readiness mission. No runtime action begins automatically.
+
 # DEV HANDOFF — 2026-07-23 22:53
 
 ## Session Summary
