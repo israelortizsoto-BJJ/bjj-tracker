@@ -63,6 +63,38 @@ describe("Parent canonical media scheduling corridor", () => {
     assert.doesNotMatch(postSaveMediaScheduling, /videoUri\s*[:=]\s*(undefined|null)/);
   });
 
+  it("records each post-save scheduling decision before continuing or scheduling", () => {
+    assert.match(editor, /PARENT_MATCH_MEDIA_POST_SAVE_EVALUATED/);
+    assert.match(editor, /if \(!__DEV__\) return;/);
+    assert.match(editor, /persistedDetailPresent/);
+    assert.match(editor, /postSaveScopePresent/);
+    assert.match(editor, /topologyAccepted/);
+    assert.match(editor, /stableLineage/);
+    assert.match(editor, /acceptedLineage/);
+    assert.match(editor, /hasLocalSource/);
+    assert.match(editor, /remoteUri/);
+    assert.match(editor, /willSchedule/);
+    assert.match(
+      editor,
+      /missing_persisted_detail[\s\S]*?missing_post_save_scope[\s\S]*?topology_not_accepted[\s\S]*?unstable_lineage[\s\S]*?accepted_lineage_absent[\s\S]*?missing_local_source[\s\S]*?remote_source[\s\S]*?eligible/,
+    );
+    assert.match(
+      editor,
+      /tracePostSaveMediaDecision\(traceId, match\.id,[\s\S]*?if \(!willSchedule[\s\S]*?scheduleUploadParentSelectedSharedMatchMedia/s,
+    );
+  });
+
+  it("keeps remote source values out of the decision trace", () => {
+    const decisionStart = editor.indexOf("const tracePostSaveMediaDecision");
+    const decisionTrace = editor.slice(
+      decisionStart,
+      editor.indexOf("if (!persistedDetail?.detail)", decisionStart),
+    );
+    assert.match(decisionTrace, /remoteUri: boolean;/);
+    assert.doesNotMatch(decisionTrace, /localUri,/);
+    assert.doesNotMatch(decisionTrace, /videoUri,/);
+  });
+
   it("does not mislabel intentional non-accepted receipts as a failed save", () => {
     assert.match(
       editor,

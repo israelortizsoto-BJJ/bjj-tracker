@@ -68,6 +68,7 @@ import {
   type LocalMatch,
 } from "@/src/features/competition/competitionMatchEditor";
 import { logCompSaveRouteState } from "@/src/features/competition/compSaveExitTelemetry";
+import { logCoachMediaCorridorTrace } from "@/src/dev/coachMediaCorridorTrace";
 import {
   logCompetitionLaunchContextValidation,
   validateCompetitionLaunchContext,
@@ -677,26 +678,92 @@ export default function KidCompetitionEditScreen() {
         postSaveSharedCompetitionId
           ? topologyPublication.matchLineageKeysByCompetitionId[postSaveSharedCompetitionId] ?? []
           : [];
-      if (postSaveSharedAthleteId && postSaveSharedCompetitionId && persistedDetail?.detail) {
+      const postSaveScopePresent = Boolean(postSaveSharedAthleteId && postSaveSharedCompetitionId);
+      const tracePostSaveMediaDecision = (
+        traceId: string,
+        matchLineageKey: string | null,
+        fields: {
+          persistedDetailPresent: boolean;
+          topologyAccepted: boolean;
+          stableLineage: boolean;
+          acceptedLineage: boolean;
+          hasLocalSource: boolean;
+          remoteUri: boolean;
+          willSchedule: boolean;
+          reason:
+            | "missing_persisted_detail"
+            | "missing_post_save_scope"
+            | "topology_not_accepted"
+            | "unstable_lineage"
+            | "accepted_lineage_absent"
+            | "missing_local_source"
+            | "remote_source"
+            | "eligible";
+        },
+      ) => {
+        if (!__DEV__) return;
+        logCoachMediaCorridorTrace("PARENT_MATCH_MEDIA_POST_SAVE_EVALUATED", {
+          traceId,
+          sharedAthleteId: postSaveSharedAthleteId,
+          sharedCompetitionId: postSaveSharedCompetitionId,
+          matchLineageKey,
+          postSaveScopePresent,
+          ...fields,
+        });
+      };
+
+      if (!persistedDetail?.detail) {
+        tracePostSaveMediaDecision(`parent-match-media-post-save-${Date.now().toString(36)}`, null, {
+          persistedDetailPresent: false,
+          topologyAccepted: Boolean(topologyPublication?.accepted),
+          stableLineage: false,
+          acceptedLineage: false,
+          hasLocalSource: false,
+          remoteUri: false,
+          willSchedule: false,
+          reason: "missing_persisted_detail",
+        });
+      } else {
         for (const match of persistedDetail.detail.matches) {
           const localUri = typeof match.videoUri === "string" ? match.videoUri.trim() : "";
-          if (
-            !localUri ||
-            /^https?:\/\//i.test(localUri) ||
-            !isStableMatchLineageKey(match.id) ||
-            !acceptedMatchLineageKeys.includes(match.id)
-          ) {
-            continue;
-          }
+          const remoteUri = /^https?:\/\//i.test(localUri);
+          const stableLineage = isStableMatchLineageKey(match.id);
+          const acceptedLineage = acceptedMatchLineageKeys.includes(match.id);
+          const traceId =
+            parentMatchMediaTraceIdsRef.current[match.id] ??
+            `parent-match-media-post-save-${Date.now().toString(36)}`;
+          const reason = !postSaveScopePresent
+            ? "missing_post_save_scope"
+            : !localUri
+                ? "missing_local_source"
+                : remoteUri
+                  ? "remote_source"
+                  : !stableLineage
+                    ? "unstable_lineage"
+                    : !topologyPublication?.accepted
+                      ? "topology_not_accepted"
+                      : !acceptedLineage
+                        ? "accepted_lineage_absent"
+                        : "eligible";
+          const willSchedule = reason === "eligible";
+          tracePostSaveMediaDecision(traceId, match.id, {
+            persistedDetailPresent: true,
+            topologyAccepted: Boolean(topologyPublication?.accepted),
+            stableLineage,
+            acceptedLineage,
+            hasLocalSource: Boolean(localUri),
+            remoteUri,
+            willSchedule,
+            reason,
+          });
+          if (!willSchedule || !postSaveSharedAthleteId || !postSaveSharedCompetitionId) continue;
           scheduleUploadParentSelectedSharedMatchMedia(
             {
               localUri,
               sharedAthleteId: postSaveSharedAthleteId,
               sharedCompetitionId: postSaveSharedCompetitionId,
               matchLineageKey: match.id,
-              traceId:
-                parentMatchMediaTraceIdsRef.current[match.id] ??
-                `parent-match-media-post-save-${Date.now().toString(36)}`,
+              traceId,
               traceTrigger: "post_save",
             },
             {
