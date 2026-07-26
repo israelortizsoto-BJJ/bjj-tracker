@@ -11,6 +11,101 @@ import { resolveLinkedTargetForParentWriter } from "../../family/parentKidCompet
 import { coachSyncPutCompetitionTopology } from "../../services/coachWeeklySyncApi";
 import { buildCompetitionTopologyArtifact } from "./buildCompetitionTopologyArtifact";
 
+export type ParentCompetitionTopologyPublicationReceipt =
+  | {
+      accepted: true;
+      sharedAthleteId: string;
+      matchLineageKeysByCompetitionId: Readonly<Record<string, readonly string[]>>;
+    }
+  | {
+      accepted: false;
+      reason:
+        | "missing_shared_athlete"
+        | "topology_publish_flag_off"
+        | "no_linked_target"
+        | "publish_failed";
+    };
+
+export async function publishParentCompetitionTopology(
+  sharedAthleteId: string,
+  auditTransitionId?: string,
+): Promise<ParentCompetitionTopologyPublicationReceipt> {
+  const trimmed = sharedAthleteId.trim();
+  if (!trimmed) return { accepted: false, reason: "missing_shared_athlete" };
+  const transitionId =
+    auditTransitionId?.trim() ||
+    peekActiveCompetitionTransition(trimmed) ||
+    generateCompetitionTransitionId();
+  const traceId = __DEV__ ? createCompetitionTopologyTraceId("parent-publish") : undefined;
+  if (!topologyPublishV2) {
+    logCompPublishGuard({
+      sharedAthleteId: trimmed,
+      operationKind: "server",
+      surface: "publishParentCompetitionTopology",
+      phaseDetail: "topologyPublishV2_flag_off",
+    });
+    recordParentPublishAudit({
+      sharedAthleteId: trimmed,
+      transitionId,
+      publishLane: "topology_put",
+      publishOutcome: "skipped",
+      skipReason: "topologyPublishV2_flag_off",
+    });
+    return { accepted: false, reason: "topology_publish_flag_off" };
+  }
+
+  const target = await resolveLinkedTargetForParentWriter(trimmed, undefined, undefined, {
+    requireAthleteOnSessionRoster: true,
+  });
+  if (!target) {
+    logCompPublishGuard({
+      sharedAthleteId: trimmed,
+      operationKind: "server",
+      surface: "publishParentCompetitionTopology",
+      phaseDetail: "publish_skipped_no_linked_target_rosterOnly",
+    });
+    recordParentPublishAudit({
+      sharedAthleteId: trimmed,
+      transitionId,
+      publishLane: "topology_put",
+      publishOutcome: "skipped",
+      skipReason: "publish_skipped_no_linked_target_rosterOnly",
+    });
+    return { accepted: false, reason: "no_linked_target" };
+  }
+
+  const artifact = await buildCompetitionTopologyArtifact(trimmed, traceId);
+  const totalMatches = artifact.competitions.reduce(
+    (sum, competition) => sum + competition.matches.length,
+    0,
+  );
+  await coachSyncPutCompetitionTopology(
+    target.linkToken,
+    target.parentWriterSecret,
+    artifact,
+    target.apiBaseUrl,
+    traceId,
+    transitionId,
+  );
+  logCompSave("COMPLETE", {
+    sharedAthleteId: trimmed,
+    operationKind: "server",
+    surface: "publishParentCompetitionTopology",
+    canonicalPayloadIds: artifact.competitions.map((c) => c.sharedCompetitionId),
+    overlayCount: totalMatches,
+  });
+  return {
+    accepted: true,
+    sharedAthleteId: trimmed,
+    matchLineageKeysByCompetitionId: Object.fromEntries(
+      artifact.competitions.map((competition) => [
+        competition.sharedCompetitionId,
+        competition.matches.map((match) => match.matchLineageKey),
+      ]),
+    ),
+  };
+}
+
 /**
  * Fire-and-forget: publish a full parent-owned topology overwrite. Local saves never wait on sync.
  */
@@ -58,106 +153,27 @@ export function schedulePublishParentCompetitionTopology(
       phaseDetail: "scheduled_fire_and_forget",
     });
     try {
-      const target = await resolveLinkedTargetForParentWriter(trimmed, undefined, undefined, {
-        requireAthleteOnSessionRoster: true,
-      });
-      if (!target) {
-        logCompPublishGuard({
-          sharedAthleteId: trimmed,
-          operationKind: "server",
-          surface: "publishParentCompetitionTopology",
-          phaseDetail: "publish_skipped_no_linked_target_rosterOnly",
-        });
-        recordParentPublishAudit({
-          sharedAthleteId: trimmed,
-          transitionId,
-          publishLane: "topology_put",
-          publishOutcome: "skipped",
-          skipReason: "publish_skipped_no_linked_target_rosterOnly",
-        });
-        console.log("[COMP_TOPOLOGY_TRACE] publish_skipped_no_linked_target", {
-          sharedAthleteId: trimmed,
-          resolverMode: "rosterOnly",
-        });
-        return;
-      }
-
-      const artifact = await buildCompetitionTopologyArtifact(trimmed, traceId);
-      const totalMatches = artifact.competitions.reduce(
-        (sum, competition) => sum + competition.matches.length,
-        0,
-      );
-      console.log("[COMP_TOPOLOGY_TRACE]", {
-        stage: "build_ok",
-        ...(traceId ? { traceId } : {}),
-        sharedAthleteId: trimmed,
-        totalCompetitionCount: artifact.competitions.length,
-        totalMatchCount: totalMatches,
-        updatedAt: artifact.updatedAt,
-      });
-      const putPath = `/v1/sessions/${encodeURIComponent(target.linkToken)}/competition-topology`;
-      console.log("[COMP_TOPOLOGY_TRACE]", {
-        stage: "put_request_payload",
-        ...(traceId ? { traceId } : {}),
-        sharedAthleteId: trimmed,
-        totalCompetitionCount: artifact.competitions.length,
-        totalMatchCount: totalMatches,
-        updatedAt: artifact.updatedAt,
-      });
-      console.log("[COMP_TOPOLOGY_TRACE] publish_attempt", {
-        ...(traceId ? { traceId } : {}),
-        sharedAthleteId: trimmed,
-        operation: "PUT",
-        putPath,
-        apiBaseUrl: target.apiBaseUrl,
-        linkTokenTail:
-          target.linkToken.length > 8 ? target.linkToken.slice(-8) : target.linkToken,
-        competitionCount: artifact.competitions.length,
-        totalMatches,
-        lineageKeyCount: totalMatches,
-        updatedAt: artifact.updatedAt,
-      });
-      for (const competition of artifact.competitions) {
-        console.log("[COACH_TOPOLOGY_MATCH_TRACE]", {
-          stage: "parent_topology_publish",
-          sharedCompetitionId: competition.sharedCompetitionId,
-          updatedAt: artifact.updatedAt,
-          matchCount: competition.matches.length,
-          firstFiveMatchIds: competition.matches
-            .slice(0, 5)
-            .map((match) => match.matchLineageKey),
-          firstFiveMatchResults: competition.matches.slice(0, 5).map((match) => match.result),
-        });
-      }
-      await coachSyncPutCompetitionTopology(
-        target.linkToken,
-        target.parentWriterSecret,
-        artifact,
-        target.apiBaseUrl,
-        traceId,
-        transitionId,
-      );
-      logCompSave("COMPLETE", {
-        sharedAthleteId: trimmed,
-        operationKind: "server",
-        surface: "publishParentCompetitionTopology",
-        canonicalPayloadIds: artifact.competitions.map((c) => c.sharedCompetitionId),
-        overlayCount: totalMatches,
-      });
+      const receipt = await publishParentCompetitionTopology(trimmed, transitionId);
+      if (!receipt.accepted) return;
       console.log("[COMP_TOPOLOGY_TRACE] publish_ok", {
         ...(traceId ? { traceId } : {}),
         sharedAthleteId: trimmed,
-        competitionCount: artifact.competitions.length,
-        totalMatches,
-        updatedAt: artifact.updatedAt,
+        competitionCount: Object.keys(receipt.matchLineageKeysByCompetitionId).length,
+        totalMatches: Object.values(receipt.matchLineageKeysByCompetitionId).reduce(
+          (sum, matches) => sum + matches.length,
+          0,
+        ),
       });
       console.log("[COMP_TOPOLOGY_TRACE]", {
         stage: "put_http_ok",
         ...(traceId ? { traceId } : {}),
         sharedAthleteId: trimmed,
-        totalCompetitionCount: artifact.competitions.length,
-        totalMatchCount: totalMatches,
-        updatedAt: artifact.updatedAt,
+        totalCompetitionCount: Object.keys(receipt.matchLineageKeysByCompetitionId).length,
+        totalMatchCount: Object.values(receipt.matchLineageKeysByCompetitionId).reduce(
+          (sum, matches) => sum + matches.length,
+          0,
+        ),
+        updatedAt: null,
       });
     } catch (error) {
       logCompSave("ERROR", {

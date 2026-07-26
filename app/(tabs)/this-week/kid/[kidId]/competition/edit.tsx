@@ -39,6 +39,8 @@ import {
   toggleCompetitionResultDraft,
 } from "@/src/domain/competition/competitionResultDraft";
 import { scheduleUploadParentSelectedSharedMatchMedia } from "@/src/domain/competition/uploadParentSharedMatchMedia";
+import type { ParentCompetitionTopologyPublicationReceipt } from "@/src/domain/competition/publishParentCompetitionTopology";
+import { isStableMatchLineageKey } from "@/src/domain/competition/parentResultsRecorded";
 import {
   competitionVideoRefsFromMatches,
   getCompetitionDetailForEntry,
@@ -374,7 +376,12 @@ export default function KidCompetitionEditScreen() {
         const next = prev.map((m, i) => (i === matchIndex ? { ...m, ...patch } : m));
         const match = next[matchIndex];
         const videoUri = patch.videoUri;
-        if (typeof videoUri === "string" && videoUri.trim() && match) {
+        if (
+          typeof videoUri === "string" &&
+          videoUri.trim() &&
+          match &&
+          isStableMatchLineageKey(match.id)
+        ) {
           // Parent-selected local video enters Shared Match Media upload client.
           // device-local URI remains for local preview; never treated as cross-device media.
           const traceId = `parent-match-media-${Date.now().toString(36)}-${matchIndex}`;
@@ -541,6 +548,7 @@ export default function KidCompetitionEditScreen() {
         (unlinkedParentAthleteId ?? "").trim() || sharedFromRoster || undefined;
 
       let savedCompetitionId = entryId;
+      let topologyPublication: ParentCompetitionTopologyPublicationReceipt | undefined;
       if (isNew) {
         const created = await createCompetition({
           surface: "kid",
@@ -556,6 +564,7 @@ export default function KidCompetitionEditScreen() {
           coachNotes: notesDraft,
           competitionVideos,
           matchSnapshots: snapshots,
+          awaitTopologyPublication: true,
         });
         if (!created.ok) {
           logCompSave("ERROR", {
@@ -587,6 +596,7 @@ export default function KidCompetitionEditScreen() {
           return;
         }
         savedCompetitionId = created.savedCompetitionId;
+        topologyPublication = created.topologyPublication;
       } else {
         const updated = await updateCompetition({
           surface: "kid",
@@ -603,6 +613,7 @@ export default function KidCompetitionEditScreen() {
           coachNotes: notesDraft,
           competitionVideos,
           matchSnapshots: snapshots,
+          awaitTopologyPublication: true,
         });
         if (!updated.ok) {
           logCompSave("ERROR", {
@@ -635,6 +646,7 @@ export default function KidCompetitionEditScreen() {
           return;
         }
         savedCompetitionId = updated.savedCompetitionId;
+        topologyPublication = updated.topologyPublication;
       }
       logCompSave("COMPLETE", {
         competitionId: savedCompetitionId,
@@ -644,9 +656,12 @@ export default function KidCompetitionEditScreen() {
         surface: "parentKidCompetitionEdit",
       });
 
-      // After associations are durable, retry Parent-selected local videos through the upload client.
+      // Reload the authoritative detail because save stabilizes transient editor lineage keys.
       const savedEntry = savedCompetitionId
         ? await getKidCompetitionEntryById(savedCompetitionId)
+        : null;
+      const persistedDetail = savedEntry
+        ? await getCompetitionDetailForEntry(savedEntry)
         : null;
       const postSaveSharedCompetitionId = savedEntry
         ? getWorkerCompetitionIdForEntry(savedEntry) || sharedCompetitionId
@@ -656,10 +671,23 @@ export default function KidCompetitionEditScreen() {
         savedEntry?.sharedAthleteId?.trim() ||
         sharedAthleteId ||
         null;
-      if (postSaveSharedAthleteId && postSaveSharedCompetitionId) {
-        for (const match of matches) {
+      const acceptedMatchLineageKeys =
+        topologyPublication?.accepted &&
+        topologyPublication.sharedAthleteId === postSaveSharedAthleteId &&
+        postSaveSharedCompetitionId
+          ? topologyPublication.matchLineageKeysByCompetitionId[postSaveSharedCompetitionId] ?? []
+          : [];
+      if (postSaveSharedAthleteId && postSaveSharedCompetitionId && persistedDetail?.detail) {
+        for (const match of persistedDetail.detail.matches) {
           const localUri = typeof match.videoUri === "string" ? match.videoUri.trim() : "";
-          if (!localUri || /^https?:\/\//i.test(localUri)) continue;
+          if (
+            !localUri ||
+            /^https?:\/\//i.test(localUri) ||
+            !isStableMatchLineageKey(match.id) ||
+            !acceptedMatchLineageKeys.includes(match.id)
+          ) {
+            continue;
+          }
           scheduleUploadParentSelectedSharedMatchMedia(
             {
               localUri,
@@ -678,6 +706,13 @@ export default function KidCompetitionEditScreen() {
             },
           );
         }
+      }
+
+      if (!topologyPublication?.accepted && topologyPublication?.reason === "publish_failed") {
+        Alert.alert(
+          "Competition saved",
+          "Parent sync is incomplete and can be retried on a later save.",
+        );
       }
 
       exitEditor({

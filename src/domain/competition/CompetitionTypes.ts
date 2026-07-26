@@ -1,4 +1,5 @@
 import type { CompetitionDetailMatchSnapshot } from "../../storage/competitionStore";
+import type { ParentCompetitionTopologyPublicationReceipt } from "./publishParentCompetitionTopology";
 import type {
   KidCompetitionEventStatus,
   KidCompetitionFormat,
@@ -61,6 +62,8 @@ export type KidCreateCompetitionInput = {
   coachNotes: string;
   competitionVideos: KidCompetitionVideoRef[];
   matchSnapshots: CompetitionDetailMatchSnapshot[];
+  /** The Parent editor needs durable topology acceptance before scheduling shared media. */
+  awaitTopologyPublication?: boolean;
 };
 
 export type KidUpdateCompetitionInput = {
@@ -78,6 +81,8 @@ export type KidUpdateCompetitionInput = {
   coachNotes: string;
   competitionVideos: KidCompetitionVideoRef[];
   matchSnapshots: CompetitionDetailMatchSnapshot[];
+  /** The Parent editor needs durable topology acceptance before scheduling shared media. */
+  awaitTopologyPublication?: boolean;
 };
 
 export type FamilySaveBlocked =
@@ -86,11 +91,19 @@ export type FamilySaveBlocked =
   | { kind: "sync_api"; message: string };
 
 export type CreateCompetitionResult =
-  | { ok: true; savedCompetitionId: string }
+  | {
+      ok: true;
+      savedCompetitionId: string;
+      topologyPublication?: ParentCompetitionTopologyPublicationReceipt;
+    }
   | { ok: false; blocked: FamilySaveBlocked };
 
 export type UpdateCompetitionResult =
-  | { ok: true; savedCompetitionId: string }
+  | {
+      ok: true;
+      savedCompetitionId: string;
+      topologyPublication?: ParentCompetitionTopologyPublicationReceipt;
+    }
   | { ok: false; blocked: FamilySaveBlocked };
 
 export type DeleteCompetitionInput = {

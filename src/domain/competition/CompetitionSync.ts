@@ -31,7 +31,11 @@ import {
   logCompSave,
 } from "../../dev/competitionMutationDevLog";
 import { schedulePublishParentCompetitionAggregate } from "./publishParentCompetitionAggregate";
-import { schedulePublishParentCompetitionTopology } from "./publishParentCompetitionTopology";
+import {
+  publishParentCompetitionTopology,
+  schedulePublishParentCompetitionTopology,
+  type ParentCompetitionTopologyPublicationReceipt,
+} from "./publishParentCompetitionTopology";
 import { stabilizeCompetitionMatchLineageBeforePersist } from "./stabilizeCompetitionMatchLineage";
 import { athleteIdForFamilyRemoteUpdate, rosterSharedAthleteId, workerCompetitionIdForEntry } from "./CompetitionSelectors";
 import {
@@ -431,6 +435,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
     coachNotes,
     competitionVideos,
     matchSnapshots,
+    awaitTopologyPublication,
   } = input;
 
   const kids = await getKidsById();
@@ -528,7 +533,25 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         triggerReason: "createCompetitionKid_after_detail_persisted",
         transitionId,
       });
-      schedulePublishParentCompetitionTopology(trimmedResolved, transitionId);
+      let topologyPublication: ParentCompetitionTopologyPublicationReceipt | undefined;
+      if (awaitTopologyPublication) {
+        try {
+          topologyPublication = await publishParentCompetitionTopology(trimmedResolved, transitionId);
+        } catch (error) {
+          logCompSave("ERROR", {
+            competitionId: created.id,
+            athleteId: kidId,
+            sharedAthleteId: trimmedResolved,
+            operationKind: "server",
+            surface: "CompetitionSync.createCompetitionKid",
+            phaseDetail: "topology_publication_failed_after_persistence",
+            error: toOpErrorMessage(error),
+          });
+          topologyPublication = { accepted: false, reason: "publish_failed" };
+        }
+      } else {
+        schedulePublishParentCompetitionTopology(trimmedResolved, transitionId);
+      }
       completeParentCompetitionMutation({
         sharedAthleteId: trimmedResolved,
         transitionId,
@@ -546,7 +569,7 @@ async function createCompetitionKid(input: KidCreateCompetitionInput): Promise<C
         sharedAthleteId: trimmedResolved ?? null,
         actorRole: "parent",
       });
-      return { ok: true, savedCompetitionId: created.id };
+      return { ok: true, savedCompetitionId: created.id, topologyPublication };
     } catch (e) {
       endCompetitionTransition(transitionId);
       logCompSave("ERROR", {
@@ -801,6 +824,7 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
     coachNotes,
     competitionVideos,
     matchSnapshots,
+    awaitTopologyPublication,
   } = input;
 
   const kids = await getKidsById();
@@ -907,6 +931,7 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
   } else {
     await setCompetitionDetailForEntryId(entryId, { matches: detailMatchSnapshots });
   }
+  let topologyPublication: ParentCompetitionTopologyPublicationReceipt | undefined;
   if (publishAthleteId) {
     logCompSave("PUBLISH", {
       competitionId: entryId,
@@ -924,7 +949,27 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
       triggerReason: "updateCompetitionKid_after_detail_persisted",
       transitionId: transitionId ?? undefined,
     });
-    schedulePublishParentCompetitionTopology(publishAthleteId, transitionId ?? undefined);
+    if (awaitTopologyPublication) {
+      try {
+        topologyPublication = await publishParentCompetitionTopology(
+          publishAthleteId,
+          transitionId ?? undefined,
+        );
+      } catch (error) {
+        logCompSave("ERROR", {
+          competitionId: entryId,
+          athleteId: kidId,
+          sharedAthleteId: publishAthleteId,
+          operationKind: "server",
+          surface: "CompetitionSync.updateCompetitionKid",
+          phaseDetail: "topology_publication_failed_after_persistence",
+          error: toOpErrorMessage(error),
+        });
+        topologyPublication = { accepted: false, reason: "publish_failed" };
+      }
+    } else {
+      schedulePublishParentCompetitionTopology(publishAthleteId, transitionId ?? undefined);
+    }
     if (transitionId) {
       completeParentCompetitionMutation({
         sharedAthleteId: publishAthleteId,
@@ -947,5 +992,5 @@ async function updateCompetitionKid(input: KidUpdateCompetitionInput): Promise<U
     sharedAthleteId: trimmedResolved ?? null,
     actorRole: "parent",
   });
-  return { ok: true, savedCompetitionId: entryId };
+  return { ok: true, savedCompetitionId: entryId, topologyPublication };
 }
