@@ -615,6 +615,19 @@ export default function DevSettingsScreen() {
   </View>
 ) : null}
 
+        {__DEV__ ? (
+          <View style={{ marginTop: 18 }}>
+            <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
+              VERIFIED COMPLETION
+            </Text>
+            <DevNavButton
+              title="Verified Completion Prerequisites"
+              subtitle="DEV-only local prerequisite inspection"
+              path={"/dev/verified-completion-replay-prerequisites" as Href}
+            />
+          </View>
+        ) : null}
+
 <View style={{ marginTop: 18 }}>
   <Text style={{ fontSize: 12, letterSpacing: 0.6, opacity: 0.7 }}>
     DEV DATA
