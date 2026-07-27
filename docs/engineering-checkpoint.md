@@ -10,6 +10,94 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-27
+
+## Investigation
+
+DOCOPS Mission A closeout: advance engineering floor through Film Room CTA restoration at 6c8bc6b while preserving historical handoff/checkpoint facts
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+Append-only DOCOPS repair can restore the overwritten ecc547b 2026-07-26 handoff, record distinct historical floors for 02d1f51 and e8dab45, and advance the current checkpoint floor to local unpushed 6c8bc6b without staging master prompts, Timeline Builder, debug evidence, cache, product source, push, deploy, or Film Room device validation.
+
+## Latest Runtime Behavior
+
+Committed product floor is 6c8bc6b Restore dual-path Film Room CTA on branch coach-commentary-media-metadata. Exact committed paths are src/features/competition/MatchCard.tsx and src/features/filmRoom/tests/coachMatchMediaPlaybackCorridor.test.ts. Root cause: commit 8165722 replaced the established MatchBreakdown CTA gate with attachment-only canOpenFilmRoom = Boolean(attachedMatchMedia) while publication, projection, and resolution remained disabled. Restored architecture prefers an attached Shared Match Media projection when present (matchMediaAssetId + expectedRevision, legacy videoUri suppressed); otherwise hydrated legacy mediaId restores MatchBreakdown Film Room entry using mediaId + snapshot.videoUri; mediaId is never treated as matchMediaAssetId; raw videoUri or local “Video: Attached” alone cannot expose the CTA. Validation at that commit: 11/11 coachMatchMediaPlaybackCorridor, 12/12 filmRoomExperienceV1Corridor, 23/23 focused tests, ESLint clean, git diff --check clean, independent Cursor review PASS. Distinct prior historical floors remain: e8dab45 Guard exact Match media upload admission (coach-sync-worker/src/index.ts, sharedMatchMediaUpload.ts, sharedMatchMediaUpload.test.ts, wrangler.toml) added default-empty SHARED_MATCH_MEDIA_EXPERIMENT_* scope, fail-closed after Parent authentication/topology validation and before intent metadata or R2 multipart creation, with empty/incomplete/mismatched scope returning opaque not-found, and did not enable uploads or downstream capabilities; 02d1f51 Instrument parent post-save media scheduling decision remains a distinct historical observability floor; 319c9d5 was the docs-only closeout that recorded the ecc547b floor into the DOCOPS pair and requires no separate product-source floor; the overwritten ecc547b 2026-07-26 handoff/checkpoint facts are preserved as history. Downstream publication, projection, resolution, replay, schema-v2, and canary capabilities remained disabled. 6c8bc6b remains local and unpushed. Nothing was deployed. Film Room device validation has not occurred. Match 1 remains unauthorized. Immediately before this Mission A edit: nothing was staged; uncommitted DOCOPS dirt included the two Mission A docs plus both master prompts; separate Timeline Builder dirt, debug-logs evidence, and scripts/__pycache__ generated cache remained present and unstaged.
+
+## Next Experiment
+
+The next product/runtime action is not authorized by this DOCOPS mission. After Mission A is checkpointed, Mission B must reconstruct and preserve required master-prompt doctrine in a separate mission. Film Room device validation requires separate authorization after DOCOPS containment.
+
+## Do Not
+
+- Do not edit, stage, or commit either master prompt in Mission A.
+- Do not retire or relocate Build/TestFlight doctrine from this closeout.
+- Do not touch Timeline Builder, debug-logs, or cache.
+- Do not modify product source or Worker configuration.
+- Do not operate Parent, Coach, or Film Room; do not perform another Save; do not conduct device validation.
+- Do not resume the scheduler/upload investigation; do not enable any downstream capability.
+- Do not push or deploy; do not clean, stash, restore, or delete unrelated dirt.
+- Do not authorize Match 1 from this checkpoint.
+
+## Notes
+
+- Current committed product floor: 6c8bc6b on coach-commentary-media-metadata.
+- Uncommitted DOCOPS dirt (Mission A pair being repaired; Mission B master prompts remain blocked/unstaged) is distinct from the committed product floor.
+- Separate Timeline Builder dirt remains unstaged and outside this closeout.
+- Debug evidence under debug-logs/ remains untracked evidence and outside this closeout.
+- Generated cache under scripts/__pycache__/ remains outside this closeout.
+- Nothing is staged unless verification after write proves otherwise; pre-edit verification showed nothing staged.
+- 6c8bc6b remains local and unpushed; nothing was deployed; Film Room device validation has not occurred; Match 1 remains unauthorized.
+- Historical checkpoint entry 2026-07-26 preserves the ecc547b / 319c9d5 closeout facts and is not silently rewritten.
+- Historical handoff entries for 02d1f51 and e8dab45 are distinct from the 6c8bc6b current floor.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M docs/dev-handoff.md
+ M docs/engineering-checkpoint.md
+ M docs/master-prompt-daily-restart.md
+ M docs/master-prompt-developer.md
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? scripts/__pycache__/
+```
+
+### git log --oneline --decorate -8
+
+```text
+6c8bc6b (HEAD -> coach-commentary-media-metadata) Restore dual-path Film Room CTA
+e8dab45 Guard exact Match media upload admission
+02d1f51 Instrument parent post-save media scheduling decision
+319c9d5 Close retained Canary replay investigation
+ecc547b Retain verified-completion replay prerequisite inspector
+58bec25 Certify Worker floor and repair checkpoint compatibility
+df90ac6 Add controlled Parent verified completion replay caller
+e4e9787 Add verified completion replay for Parent media uploads
+```
+
+### git diff --stat
+
+```text
+ docs/dev-handoff.md                                |  57 +-
+ docs/engineering-checkpoint.md                     |  30 +-
+ docs/master-prompt-daily-restart.md                | 631 ++++++++++--------
+ docs/master-prompt-developer.md                    | 717 +-------------------
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 6 files changed, 1069 insertions(+), 1107 deletions(-)
+```
+
 # ENGINEERING CHECKPOINT — 2026-07-26
 
 ## Investigation

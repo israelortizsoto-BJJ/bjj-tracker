@@ -91,6 +91,147 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-27
+
+## Session Summary
+
+Restored the dual-path Film Room CTA at commit `6c8bc6b` — `Restore dual-path Film Room CTA`.
+
+## Root Cause
+
+Commit `8165722` replaced the established MatchBreakdown CTA gate with attachment-only `canOpenFilmRoom = Boolean(attachedMatchMedia)`, while publication, projection, and resolution remained disabled.
+
+## Restored Architecture
+
+- Prefer an attached Shared Match Media projection when present.
+- Shared path passes `matchMediaAssetId` + `expectedRevision` and suppresses legacy `videoUri`.
+- Otherwise, hydrated legacy `mediaId` restores the established MatchBreakdown Film Room entry using `mediaId` + `snapshot.videoUri`.
+- `mediaId` is never treated as `matchMediaAssetId`.
+- Raw `videoUri` or local “Video: Attached” alone cannot expose the CTA.
+
+## Exact Committed Paths
+
+- `src/features/competition/MatchCard.tsx`
+- `src/features/filmRoom/tests/coachMatchMediaPlaybackCorridor.test.ts`
+
+## Validation
+
+- 11/11 `coachMatchMediaPlaybackCorridor` tests passed
+- 12/12 `filmRoomExperienceV1Corridor` tests passed
+- 23/23 focused tests total
+- ESLint clean
+- `git diff --check` clean
+- Independent Cursor review: PASS
+
+## Containment
+
+- Downstream publication, projection, resolution, replay, schema-v2, and canary capabilities remained disabled.
+- Nothing was pushed or deployed.
+- Film Room device validation has not occurred.
+- Match 1 remains unauthorized.
+- Commit `6c8bc6b` remains local and unpushed.
+
+## Current Boundary
+
+- Committed product floor: `6c8bc6b` on `coach-commentary-media-metadata`.
+- Uncommitted DOCOPS dirt remains outside this product floor.
+- Separate Timeline Builder dirt, debug evidence, and generated cache remain untouched by this product commit.
+- Nothing is staged for this product floor.
+
+## Next Mission
+
+The next product/runtime action is not authorized by this DOCOPS mission. After Mission A is checkpointed, Mission B must reconstruct and preserve required master-prompt doctrine in a separate mission. Film Room device validation requires separate authorization after DOCOPS containment.
+
+# DEV HANDOFF — 2026-07-26 21:50
+
+## Session Summary
+
+Recorded historical floor `e8dab45` — `Guard exact Match media upload admission`.
+
+## Subject
+
+Guard exact Match media upload admission
+
+## Committed Paths
+
+- `coach-sync-worker/src/index.ts`
+- `sharedMatchMediaUpload.ts`
+- `sharedMatchMediaUpload.test.ts`
+- `wrangler.toml`
+
+## Guard Behavior
+
+- Adds default-empty `SHARED_MATCH_MEDIA_EXPERIMENT_*` scope.
+- Guard is fail-closed after Parent authentication/topology validation and before intent metadata or R2 multipart creation.
+- Empty, incomplete, or mismatched scope returns opaque not-found behavior.
+- The commit did not enable uploads or downstream capabilities.
+
+## Boundary
+
+Distinct historical floor. Not folded into the `02d1f51` floor. No push, deploy, or device validation is claimed for this floor.
+
+# DEV HANDOFF — 2026-07-26 12:05
+
+## Session Summary
+
+Closed the Parent canonical Match media post-save scheduling observability gap with commit `02d1f5195d8f79b54c819e491595109c50a843c5` — `Instrument parent post-save media scheduling decision`.
+
+The trace was required because a missing post-save scheduling event previously could not distinguish missing persisted detail, missing post-save scope, topology non-acceptance, unstable or absent accepted lineage, missing local source, or a remote source. It does not alter the Parent media corridor.
+
+## Retained DEV-Only Trace
+
+`PARENT_MATCH_MEDIA_POST_SAVE_EVALUATED` is emitted before every relevant post-save continue or unchanged scheduler call.
+
+It records only the approved canonical identity triple (`sharedAthleteId`, `sharedCompetitionId`, `matchLineageKey`) and booleans: `persistedDetailPresent`, `postSaveScopePresent`, `topologyAccepted`, `stableLineage`, `acceptedLineage`, `hasLocalSource`, `remoteUri`, and `willSchedule`, plus one deterministic reason.
+
+It never logs a URI, upload/session identifier, credential, token, object key, or media content. The event is DEV-only. Original predicate order, production behavior, scheduler behavior, and capability state are unchanged. Eligible evaluations reuse the trace ID supplied to the existing scheduler.
+
+Reason codes:
+
+- `missing_persisted_detail`
+- `missing_post_save_scope`
+- `topology_not_accepted`
+- `unstable_lineage`
+- `accepted_lineage_absent`
+- `missing_local_source`
+- `remote_source`
+- `eligible`
+
+## Code and Validation Boundary
+
+Commit `02d1f5195d8f79b54c819e491595109c50a843c5` contains exactly:
+
+- `app/(tabs)/this-week/kid/[kidId]/competition/edit.tsx`
+- `src/dev/coachMediaCorridorTrace.ts`
+- `src/domain/competition/tests/parentCanonicalMediaScheduling.test.ts`
+
+Validation passed:
+
+- canonical scheduling tests: 10/10;
+- Parent upload-corridor tests: 7/7;
+- focused ESLint: no errors, with only the accepted pre-existing unchanged `edit.tsx:321` hook-dependency warning;
+- cached diff check: passed.
+
+With every Worker capability still `"0"`, the expected gate-off sequence remains:
+
+`PARENT_MATCH_MEDIA_SCHEDULED → PARENT_MATCH_MEDIA_PUBLICATION_REQUESTED → PARENT_MATCH_MEDIA_PUBLICATION_SKIPPED(client_flag_off)`.
+
+## Historical Boundary At This Floor
+
+- Retained Canary replay: terminally denied by `record_missing`.
+- Replay authorization: denied.
+- `liveParentAuthorityAndTopologyUnverified`: true.
+- Worker media capabilities: all remain `"0"`.
+- Fresh Parent Match 1 experiment: proposed next at this floor, **NOT YET AUTHORIZED**.
+
+No app, device, media, network, topology, replay, upload, completion, publication, resolution, Worker, or Cloudflare operation occurred in this checkpoint.
+
+## Historical Next Mission At This Floor
+
+Only after separate authorization: perform one fresh isolated Parent Match 1 selection/save with all media capabilities still off; capture the post-save evaluation and explicit client-flag-off sequence. Do not execute replay, upload, completion, publication, resolution, or a fresh upload-foundation experiment.
+
+This entry is a distinct historical floor. It is not the current repository floor.
+
 # DEV HANDOFF — 2026-07-26
 
 ## Session Summary
