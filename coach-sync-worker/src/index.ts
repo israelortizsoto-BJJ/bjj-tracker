@@ -37,6 +37,7 @@ import {
 } from "./matchMediaResolution";
 import { createConditionalObjectVerificationRecordStore } from "../../shared-match-media-production-verification/src/index";
 import { handleOperatorInspectionHttpRequest } from "./productionVerification/operatorInspection";
+import { handleGoldenR2IdentityProbeHttpRequest } from "./productionVerification/goldenR2IdentityProbe";
 import { createR2ConditionalObjectStore } from "./productionVerification/r2ConditionalObjectStore";
 import {
   isVerificationFeatureEnabled,
@@ -3837,6 +3838,18 @@ export default {
           readBodyText: () => request.text(),
           store,
           now: () => new Date(),
+        });
+        return json(result.body, result.status);
+      }
+
+      // One-purpose, operator-only diagnostic for the certified Golden object.
+      // It accepts no caller-controlled object identity and performs R2 HEAD only.
+      if (path === "/internal/v1/shared-match-media/golden-r2-identity-probe") {
+        const result = await handleGoldenR2IdentityProbeHttpRequest({
+          method: request.method,
+          authorizationHeader: request.headers.get("Authorization"),
+          operatorSecret: env.SHARED_MATCH_MEDIA_VERIFICATION_OPERATOR_SECRET,
+          bucket: env.MEDIA,
         });
         return json(result.body, result.status);
       }
