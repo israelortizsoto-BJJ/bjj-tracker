@@ -106,9 +106,12 @@ export function MatchCard({
     matchMediaAttachment?.state === "attached" ? matchMediaAttachment : null;
   const tombstonedMatchMedia =
     matchMediaAttachment?.state === "tombstoned" ? matchMediaAttachment : null;
-  // Shared-media Film Room corridor: attached hydrated Coach projection only.
-  // mediaId alone (voice) must not open this corridor.
-  const canOpenFilmRoom = Boolean(attachedMatchMedia);
+  // Prefer the canonical Shared Match Media attachment when available. The
+  // established Match Breakdown route remains available for hydrated coach media.
+  // A device-local videoUri alone never authorizes either route.
+  const canOpenSharedFilmRoom = Boolean(attachedMatchMedia);
+  const canOpenLegacyFilmRoom = Boolean(mediaId);
+  const canOpenFilmRoom = canOpenSharedFilmRoom || canOpenLegacyFilmRoom;
 
   useEffect(() => {
     const athleteId = sharedAthleteId.trim();

@@ -26,14 +26,29 @@ describe("Coach Match Media Film Room playback corridor (source)", () => {
   const resolutionApi = source("src/services/coachMatchMediaResolutionApi.ts");
   const attachmentStore = source("src/storage/coachMatchMediaAttachmentStore.ts");
 
-  it("MatchCard gates Film Room on attached projection only (not mediaId alone)", () => {
-    assert.match(matchCard, /canOpenFilmRoom = Boolean\(attachedMatchMedia\)/);
-    assert.doesNotMatch(matchCard, /canOpenFilmRoom = Boolean\(mediaId\s*\|\|/);
+  it("MatchCard prefers an attached projection and retains the hydrated legacy Match Breakdown route", () => {
+    assert.match(matchCard, /const canOpenSharedFilmRoom = Boolean\(attachedMatchMedia\)/);
+    assert.match(matchCard, /const canOpenLegacyFilmRoom = Boolean\(mediaId\)/);
+    assert.match(matchCard, /const canOpenFilmRoom = canOpenSharedFilmRoom \|\| canOpenLegacyFilmRoom/);
     assert.match(matchCard, /matchMediaAttachment\?\.state === "attached"/);
     assert.match(matchCard, /matchMediaAttachment\?\.state === "tombstoned"/);
     assert.match(matchCard, /Video removed/);
-    // mediaId remains identity for voice commentary — never opens this corridor alone.
+    // mediaId is the legacy Match Breakdown identity; it is never shared-media identity.
     assert.match(matchCard, /const mediaId = snapshot\.mediaId/);
+    assert.match(matchCard, /videoUri: attachedMatchMedia \? null : snapshot\.videoUri/);
+    assert.match(matchCard, /matchMediaAssetId: attachedMatchMedia\?\.matchMediaAssetId/);
+    assert.match(matchCard, /expectedRevision: attachedMatchMedia\?\.revision/);
+  });
+
+  it("keeps legacy and shared Film Room route identities separate", () => {
+    // The legacy URI is emitted only without a shared-media identity.
+    assert.match(matchCard, /if \(videoUri && !input\.matchMediaAssetId\?\.trim\(\)\) params\.set\("videoUri", videoUri\)/);
+    // matchMediaAssetId originates only from the attached canonical row, never mediaId.
+    assert.doesNotMatch(matchCard, /matchMediaAssetId:\s*mediaId/);
+    assert.doesNotMatch(matchCard, /matchMediaAssetId:\s*snapshot\.mediaId/);
+    // Neither local video label nor raw videoUri appears in the CTA gate.
+    assert.doesNotMatch(matchCard, /canOpen(?:Shared|Legacy|)FilmRoom\s*=\s*Boolean\(snapshot\.videoUri\)/);
+    assert.doesNotMatch(matchCard, /canOpen(?:Shared|Legacy|)FilmRoom\s*=\s*Boolean\(videoLabel/);
   });
 
   it("MatchCard does not call resolution and passes identity only", () => {
