@@ -167,6 +167,16 @@ export type ProductionVerificationHandOffResult = Readonly<{
 
 export type SharedMatchMediaUploadDependencies = {
   enabled: boolean;
+  /**
+   * Narrow, default-empty server admission scope for a separately authorized
+   * experiment. The intent route fails closed unless all three values are
+   * present, schema-valid, and exactly match the Parent-authorized topology.
+   */
+  experimentScope?: Readonly<{
+    sharedAthleteId?: string;
+    sharedCompetitionId?: string;
+    matchLineageKey?: string;
+  }>;
   metadataStore: UploadIntentMetadataStore;
   bucket: UploadIntentBucket;
   readParentSession(token: string): Promise<MatchMediaParentSession | null>;
@@ -311,6 +321,35 @@ function parseIntentBody(raw: unknown): CreateUploadIntentBody | null {
     declaredByteCount,
     ...(declaredSha256 ? { declaredSha256 } : {}),
   };
+}
+
+function exactConfiguredScopeId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  if (value !== value.trim()) return null;
+  if (!value || value.length > MAX_DOMAIN_ID_CHARS || value.includes("\u001f")) return null;
+  return value;
+}
+
+/**
+ * Fail-closed containment for the one approved experiment. This is deliberately
+ * evaluated only after Parent authorization and topology validation, but before
+ * intent metadata or an R2 multipart upload can be created.
+ */
+function matchesConfiguredExperimentScope(
+  body: CreateUploadIntentBody,
+  scope: SharedMatchMediaUploadDependencies["experimentScope"],
+): boolean {
+  const sharedAthleteId = exactConfiguredScopeId(scope?.sharedAthleteId);
+  const sharedCompetitionId = exactConfiguredScopeId(scope?.sharedCompetitionId);
+  const matchLineageKey = exactConfiguredScopeId(scope?.matchLineageKey);
+  return Boolean(
+    sharedAthleteId &&
+      sharedCompetitionId &&
+      matchLineageKey &&
+      body.sharedAthleteId === sharedAthleteId &&
+      body.sharedCompetitionId === sharedCompetitionId &&
+      body.matchLineageKey === matchLineageKey,
+  );
 }
 
 function sessionContainsMatch(
@@ -573,6 +612,9 @@ export async function handleCreateSharedMatchMediaUploadIntent(
   const body = parseIntentBody(rawBody);
   if (!body) return uploadError("Invalid upload intent", 400);
   if (!sessionContainsMatch(session, body)) return uploadError("Match not found", 404);
+  if (!matchesConfiguredExperimentScope(body, dependencies.experimentScope)) {
+    return opaqueNotFound();
+  }
 
   const idempotencyHash = await sha256Hex(`${token}:match-media-upload:${idempotencyKey}`);
   const recordKey = `match-media/upload-intents/${token}/${idempotencyHash}.json`;

@@ -61,6 +61,14 @@ export interface Env {
   MEDIA: R2Bucket;
   /** Independent server kill switch. Upload Foundation is inert unless exactly "1". */
   SHARED_MATCH_MEDIA_UPLOAD_ENABLED?: string;
+  /**
+   * Default-empty exact scope for one separately authorized Shared Match Media
+   * experiment. All three values must be present and match before upload intent
+   * creation; this never enables the upload capability.
+   */
+  SHARED_MATCH_MEDIA_EXPERIMENT_SHARED_ATHLETE_ID?: string;
+  SHARED_MATCH_MEDIA_EXPERIMENT_SHARED_COMPETITION_ID?: string;
+  SHARED_MATCH_MEDIA_EXPERIMENT_MATCH_LINEAGE_KEY?: string;
   /** Independent server kill switch. Production Verification is inert unless exactly "1". */
   SHARED_MATCH_MEDIA_VERIFICATION_ENABLED?: string;
   /** Server-controlled canary asset id. Empty default bypasses verification. */
@@ -1841,6 +1849,11 @@ function createSharedMatchMediaUploadDependencies(
   );
   return {
     enabled: env.SHARED_MATCH_MEDIA_UPLOAD_ENABLED === "1",
+    experimentScope: {
+      sharedAthleteId: env.SHARED_MATCH_MEDIA_EXPERIMENT_SHARED_ATHLETE_ID,
+      sharedCompetitionId: env.SHARED_MATCH_MEDIA_EXPERIMENT_SHARED_COMPETITION_ID,
+      matchLineageKey: env.SHARED_MATCH_MEDIA_EXPERIMENT_MATCH_LINEAGE_KEY,
+    },
     metadataStore: {
       get: async (key) => {
         const object = await env.MEDIA.get(key);

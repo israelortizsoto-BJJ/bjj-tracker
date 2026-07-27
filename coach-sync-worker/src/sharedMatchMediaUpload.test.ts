@@ -76,6 +76,11 @@ function harness(
   const completions: Array<ReadonlyArray<{ partNumber: number; etag: string }>> = [];
   const dependencies: SharedMatchMediaUploadDependencies = {
     enabled: true,
+    experimentScope: {
+      sharedAthleteId: "shared_ath_1",
+      sharedCompetitionId: "shared_comp_1",
+      matchLineageKey: "match_1",
+    },
     metadataStore: {
       get: async (key) => records.get(key) ?? null,
       putIfAbsent: async (key, value) => {
@@ -174,7 +179,52 @@ function authorizedRequest(method = "GET", secret = PARENT_SECRET): Request {
 }
 
 describe("Shared Match Media Upload Foundation", () => {
-  it("creates a Match-bound immutable asset and real multipart upload session", async () => {
+  it("fails closed before multipart creation when the experiment scope is empty, incomplete, or malformed", async () => {
+    const cases: Array<SharedMatchMediaUploadDependencies["experimentScope"]> = [
+      undefined,
+      {},
+      { sharedAthleteId: "shared_ath_1" },
+      {
+        sharedAthleteId: " shared_ath_1",
+        sharedCompetitionId: "shared_comp_1",
+        matchLineageKey: "match_1",
+      },
+    ];
+
+    for (const experimentScope of cases) {
+      const state = harness({ experimentScope });
+      const result = await handleCreateSharedMatchMediaUploadIntent(
+        request(),
+        TOKEN,
+        state.dependencies,
+      );
+      assert.equal(result.status, 404);
+      assert.equal(state.multipartKeys.length, 0);
+      assert.equal(state.records.size, 0);
+    }
+  });
+
+  it("rejects any configured-scope mismatch before multipart mutation", async () => {
+    const cases = [
+      { sharedAthleteId: "other", sharedCompetitionId: "shared_comp_1", matchLineageKey: "match_1" },
+      { sharedAthleteId: "shared_ath_1", sharedCompetitionId: "other", matchLineageKey: "match_1" },
+      { sharedAthleteId: "shared_ath_1", sharedCompetitionId: "shared_comp_1", matchLineageKey: "other" },
+    ];
+
+    for (const experimentScope of cases) {
+      const state = harness({ experimentScope });
+      const result = await handleCreateSharedMatchMediaUploadIntent(
+        request(),
+        TOKEN,
+        state.dependencies,
+      );
+      assert.equal(result.status, 404);
+      assert.equal(state.multipartKeys.length, 0);
+      assert.equal(state.records.size, 0);
+    }
+  });
+
+  it("creates a Match-bound immutable asset and real multipart upload session for the exact configured scope", async () => {
     const { dependencies, records, multipartKeys } = harness();
 
     const result = await handleCreateSharedMatchMediaUploadIntent(

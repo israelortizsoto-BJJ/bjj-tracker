@@ -5,6 +5,12 @@ compatibility_date = "2024-12-01"
 [vars]
 # Upload Foundation remains completely inert until explicitly enabled per environment.
 SHARED_MATCH_MEDIA_UPLOAD_ENABLED = "0"
+# Exact one-Match experiment scope. All empty by default; upload intent fails
+# closed unless all three are explicitly configured and match the live topology.
+# These values do not enable SHARED_MATCH_MEDIA_UPLOAD_ENABLED.
+SHARED_MATCH_MEDIA_EXPERIMENT_SHARED_ATHLETE_ID = ""
+SHARED_MATCH_MEDIA_EXPERIMENT_SHARED_COMPETITION_ID = ""
+SHARED_MATCH_MEDIA_EXPERIMENT_MATCH_LINEAGE_KEY = ""
 # Production Verification remains completely inert until explicitly enabled per environment.
 SHARED_MATCH_MEDIA_VERIFICATION_ENABLED = "0"
 # Canary identity defaults empty (fail-closed bypass). Never commit real canary identities.
