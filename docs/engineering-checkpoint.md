@@ -14,7 +14,7 @@ Under Engineering OS vNext, this register is the engineering session snapshot. C
 
 ## Investigation
 
-DOCOPS Mission A closeout: advance engineering floor through Film Room CTA restoration at 6c8bc6b while preserving historical handoff/checkpoint facts
+Film Room dual-path CTA restoration and bounded legacy device validation closeout
 
 ## Status
 
@@ -22,38 +22,28 @@ COMPLETE
 
 ## Hypothesis
 
-Append-only DOCOPS repair can restore the overwritten ecc547b 2026-07-26 handoff, record distinct historical floors for 02d1f51 and e8dab45, and advance the current checkpoint floor to local unpushed 6c8bc6b without staging master prompts, Timeline Builder, debug evidence, cache, product source, push, deploy, or Film Room device validation.
+Restoring the legacy hydrated MatchBreakdown mediaId gate alongside the preferred canonical attached Shared Match Media gate restores Film Room reachability without treating a mediaId or local video indicator as Shared Match Media authority.
 
 ## Latest Runtime Behavior
 
-Committed product floor is 6c8bc6b Restore dual-path Film Room CTA on branch coach-commentary-media-metadata. Exact committed paths are src/features/competition/MatchCard.tsx and src/features/filmRoom/tests/coachMatchMediaPlaybackCorridor.test.ts. Root cause: commit 8165722 replaced the established MatchBreakdown CTA gate with attachment-only canOpenFilmRoom = Boolean(attachedMatchMedia) while publication, projection, and resolution remained disabled. Restored architecture prefers an attached Shared Match Media projection when present (matchMediaAssetId + expectedRevision, legacy videoUri suppressed); otherwise hydrated legacy mediaId restores MatchBreakdown Film Room entry using mediaId + snapshot.videoUri; mediaId is never treated as matchMediaAssetId; raw videoUri or local “Video: Attached” alone cannot expose the CTA. Validation at that commit: 11/11 coachMatchMediaPlaybackCorridor, 12/12 filmRoomExperienceV1Corridor, 23/23 focused tests, ESLint clean, git diff --check clean, independent Cursor review PASS. Distinct prior historical floors remain: e8dab45 Guard exact Match media upload admission (coach-sync-worker/src/index.ts, sharedMatchMediaUpload.ts, sharedMatchMediaUpload.test.ts, wrangler.toml) added default-empty SHARED_MATCH_MEDIA_EXPERIMENT_* scope, fail-closed after Parent authentication/topology validation and before intent metadata or R2 multipart creation, with empty/incomplete/mismatched scope returning opaque not-found, and did not enable uploads or downstream capabilities; 02d1f51 Instrument parent post-save media scheduling decision remains a distinct historical observability floor; 319c9d5 was the docs-only closeout that recorded the ecc547b floor into the DOCOPS pair and requires no separate product-source floor; the overwritten ecc547b 2026-07-26 handoff/checkpoint facts are preserved as history. Downstream publication, projection, resolution, replay, schema-v2, and canary capabilities remained disabled. 6c8bc6b remains local and unpushed. Nothing was deployed. Film Room device validation has not occurred. Match 1 remains unauthorized. Immediately before this Mission A edit: nothing was staged; uncommitted DOCOPS dirt included the two Mission A docs plus both master prompts; separate Timeline Builder dirt, debug-logs evidence, and scripts/__pycache__ generated cache remained present and unstaged.
+Commit 6c8bc6b restored canOpenSharedFilmRoom = Boolean(attachedMatchMedia), canOpenLegacyFilmRoom = Boolean(mediaId), and their OR gate. Parent DEV reloaded from Metro serving the current HEAD. NC QA25 proved that Video: Attached alone did not render the CTA. NC24 Match 1 rendered Watch Coach Match Breakdown; tapping it opened Film Room with sharedCompetitionId shared_comp_f8b356bde7d6fa5bb25f2d6d2ea117af, matchLineageKey match-lineage-shared_comp_f8b356bde7d6fa5bb25f2d6d2ea117af-slot-1, and mediaId 10a6de6b6f041bffdd3bdde76fd22556. MATCHCARD_RENDER reported hasMediaId:true. MATCH_MEDIA_SELECTOR_RESULT reported attachmentState:null, matchMediaAssetId:null, attachmentRevision:null, and canOpenFilmRoom:false, proving the restored legacy mediaId plus snapshot.videoUri route selected without shared identity or expectedRevision. Film Room playback itself was not tested. No Edit, Save, upload, publication, projection, resolution, replay, or Worker operation occurred. Golden Match 1 remains unauthorized.
 
 ## Next Experiment
 
-The next product/runtime action is not authorized by this DOCOPS mission. After Mission A is checkpointed, Mission B must reconstruct and preserve required master-prompt doctrine in a separate mission. Film Room device validation requires separate authorization after DOCOPS containment.
+No runtime action is authorized by this documentation closeout. A separately authorized bounded playback observation may validate legacy Film Room playback only; it must not open Match Edit, Save, or enter the Golden Match 1 upload corridor. The shared attached-media runtime path remains conditional on an already-existing valid projection and must not be manufactured.
 
 ## Do Not
 
-- Do not edit, stage, or commit either master prompt in Mission A.
-- Do not retire or relocate Build/TestFlight doctrine from this closeout.
-- Do not touch Timeline Builder, debug-logs, or cache.
-- Do not modify product source or Worker configuration.
-- Do not operate Parent, Coach, or Film Room; do not perform another Save; do not conduct device validation.
-- Do not resume the scheduler/upload investigation; do not enable any downstream capability.
-- Do not push or deploy; do not clean, stash, restore, or delete unrelated dirt.
-- Do not authorize Match 1 from this checkpoint.
+- Do not treat mediaId as matchMediaAssetId or raw videoUri/local Video: Attached state as CTA authority.
+- Do not open Match Edit, Save, schedule upload, create an intent, upload, complete, verify, publish, project, resolve, replay, or operate Golden Match 1.
+- Do not change Worker source, Worker configuration, capability values, scope values, bindings, secrets, routes, R2, or KV.
+- Do not push, deploy, build, update DOCOPS beyond this closeout, or touch Timeline Builder, debug logs, cache, or stashes.
 
 ## Notes
 
-- Current committed product floor: 6c8bc6b on coach-commentary-media-metadata.
-- Uncommitted DOCOPS dirt (Mission A pair being repaired; Mission B master prompts remain blocked/unstaged) is distinct from the committed product floor.
-- Separate Timeline Builder dirt remains unstaged and outside this closeout.
-- Debug evidence under debug-logs/ remains untracked evidence and outside this closeout.
-- Generated cache under scripts/__pycache__/ remains outside this closeout.
-- Nothing is staged unless verification after write proves otherwise; pre-edit verification showed nothing staged.
-- 6c8bc6b remains local and unpushed; nothing was deployed; Film Room device validation has not occurred; Match 1 remains unauthorized.
-- Historical checkpoint entry 2026-07-26 preserves the ecc547b / 319c9d5 closeout facts and is not silently rewritten.
-- Historical handoff entries for 02d1f51 and e8dab45 are distinct from the 6c8bc6b current floor.
+- 6c8bc6b changed exactly src/features/competition/MatchCard.tsx and src/features/filmRoom/tests/coachMatchMediaPlaybackCorridor.test.ts. Focused validation: 11/11 coachMatchMediaPlaybackCorridor and 12/12 filmRoomExperienceV1Corridor; ESLint and git diff --check passed.
+- Current HEAD 114e437 Restore master-prompt operating doctrine is a later documentation-only commit. No remote-tracking upstream is configured for this branch, so the relevant commit stack must be treated as local and unpushed until separately authorized push evidence exists.
+- Current deployed Worker version 54 f7bfffbd-5af0-499c-ae88-0589ba85ef92 has upload enabled only for the exact Golden scope. Verification, publication, attachment projection, resolution, schema-v2 are 0; canary values are empty. This was not exercised by the CTA validation.
 
 ## Repository State
 
@@ -61,10 +51,6 @@ The next product/runtime action is not authorized by this DOCOPS mission. After 
 
 ```text
 ## coach-commentary-media-metadata
- M docs/dev-handoff.md
- M docs/engineering-checkpoint.md
- M docs/master-prompt-daily-restart.md
- M docs/master-prompt-developer.md
  M timeline-builder/google-sheets-live/src/Constants.gs
  M timeline-builder/google-sheets-live/src/TimelineV2.gs
 ?? debug-logs/codex/
@@ -76,26 +62,22 @@ The next product/runtime action is not authorized by this DOCOPS mission. After 
 ### git log --oneline --decorate -8
 
 ```text
-6c8bc6b (HEAD -> coach-commentary-media-metadata) Restore dual-path Film Room CTA
+114e437 (HEAD -> coach-commentary-media-metadata) Restore master-prompt operating doctrine
+7537808 Advance engineering floor through Film Room CTA restoration
+6c8bc6b Restore dual-path Film Room CTA
 e8dab45 Guard exact Match media upload admission
 02d1f51 Instrument parent post-save media scheduling decision
 319c9d5 Close retained Canary replay investigation
 ecc547b Retain verified-completion replay prerequisite inspector
 58bec25 Certify Worker floor and repair checkpoint compatibility
-df90ac6 Add controlled Parent verified completion replay caller
-e4e9787 Add verified completion replay for Parent media uploads
 ```
 
 ### git diff --stat
 
 ```text
- docs/dev-handoff.md                                |  57 +-
- docs/engineering-checkpoint.md                     |  30 +-
- docs/master-prompt-daily-restart.md                | 631 ++++++++++--------
- docs/master-prompt-developer.md                    | 717 +-------------------
  .../google-sheets-live/src/Constants.gs            |   6 +-
  .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
- 6 files changed, 1069 insertions(+), 1107 deletions(-)
+ 2 files changed, 611 insertions(+), 130 deletions(-)
 ```
 
 # ENGINEERING CHECKPOINT — 2026-07-26

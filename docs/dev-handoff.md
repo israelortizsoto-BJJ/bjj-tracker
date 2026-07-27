@@ -95,52 +95,57 @@ scripts/write_engineering_checkpoint.py
 
 ## Session Summary
 
-Restored the dual-path Film Room CTA at commit `6c8bc6b` — `Restore dual-path Film Room CTA`.
+Closed the bounded Film Room dual-path CTA restoration with repository proof and Parent DEV device validation.
 
-## Root Cause
+## Committed Product and Documentation Floors
 
-Commit `8165722` replaced the established MatchBreakdown CTA gate with attachment-only `canOpenFilmRoom = Boolean(attachedMatchMedia)`, while publication, projection, and resolution remained disabled.
+- `6c8bc6b` — `Restore dual-path Film Room CTA`
+  - `src/features/competition/MatchCard.tsx`
+  - `src/features/filmRoom/tests/coachMatchMediaPlaybackCorridor.test.ts`
+- `114e437` — `Restore master-prompt operating doctrine`
 
-## Restored Architecture
+The branch has no remote-tracking upstream. Treat this stack as local and unpushed until a separately authorized push supplies evidence.
 
-- Prefer an attached Shared Match Media projection when present.
-- Shared path passes `matchMediaAssetId` + `expectedRevision` and suppresses legacy `videoUri`.
-- Otherwise, hydrated legacy `mediaId` restores the established MatchBreakdown Film Room entry using `mediaId` + `snapshot.videoUri`.
-- `mediaId` is never treated as `matchMediaAssetId`.
-- Raw `videoUri` or local “Video: Attached” alone cannot expose the CTA.
+## Restored CTA Contract
 
-## Exact Committed Paths
+- `canOpenSharedFilmRoom = Boolean(attachedMatchMedia)`.
+- `canOpenLegacyFilmRoom = Boolean(mediaId)`.
+- Shared attached-media identity is preferred when present: `matchMediaAssetId` plus `expectedRevision`; legacy `videoUri` is suppressed.
+- Otherwise, hydrated legacy MatchBreakdown identity uses `mediaId` plus `snapshot.videoUri`.
+- A `mediaId` is never a `matchMediaAssetId`.
+- Raw `videoUri` or local `Video: Attached` alone never exposes the CTA.
 
-- `src/features/competition/MatchCard.tsx`
-- `src/features/filmRoom/tests/coachMatchMediaPlaybackCorridor.test.ts`
+## Device Validation — GREEN
+
+Parent DEV reloaded from Metro serving the current HEAD.
+
+- NC QA25: `Video: Attached` alone did **not** expose the CTA.
+- NC24 Match 1 displayed `Watch Coach Match Breakdown`.
+- Tapping the CTA opened Film Room.
+- Runtime identity:
+  - `sharedCompetitionId`: `shared_comp_f8b356bde7d6fa5bb25f2d6d2ea117af`
+  - `matchLineageKey`: `match-lineage-shared_comp_f8b356bde7d6fa5bb25f2d6d2ea117af-slot-1`
+  - `mediaId`: `10a6de6b6f041bffdd3bdde76fd22556`
+- `MATCHCARD_RENDER`: `hasMediaId:true`.
+- `MATCH_MEDIA_SELECTOR_RESULT`: `attachmentState:null`, `matchMediaAssetId:null`, `attachmentRevision:null`, `canOpenFilmRoom:false`.
+
+This proves the legacy `mediaId` plus `snapshot.videoUri` route was selected without `matchMediaAssetId` or `expectedRevision`. Film Room playback itself was not tested.
 
 ## Validation
 
-- 11/11 `coachMatchMediaPlaybackCorridor` tests passed
-- 12/12 `filmRoomExperienceV1Corridor` tests passed
-- 23/23 focused tests total
-- ESLint clean
-- `git diff --check` clean
-- Independent Cursor review: PASS
+- `coachMatchMediaPlaybackCorridor`: 11/11 passed.
+- `filmRoomExperienceV1Corridor`: 12/12 passed.
+- Focused ESLint and `git diff --check`: passed.
 
 ## Containment
 
-- Downstream publication, projection, resolution, replay, schema-v2, and canary capabilities remained disabled.
-- Nothing was pushed or deployed.
-- Film Room device validation has not occurred.
-- Match 1 remains unauthorized.
-- Commit `6c8bc6b` remains local and unpushed.
+No Edit, Save, upload, publication, projection, resolution, replay, Worker operation, deployment, or capability change occurred during device validation.
 
-## Current Boundary
-
-- Committed product floor: `6c8bc6b` on `coach-commentary-media-metadata`.
-- Uncommitted DOCOPS dirt remains outside this product floor.
-- Separate Timeline Builder dirt, debug evidence, and generated cache remain untouched by this product commit.
-- Nothing is staged for this product floor.
+The separately armed Golden Worker scope remains out of this result: version 54 permits upload only for its exact Golden triple; verification, publication, attachment projection, resolution, schema-v2 remain `0` and canary values remain empty. Golden Match 1 remains unauthorized.
 
 ## Next Mission
 
-The next product/runtime action is not authorized by this DOCOPS mission. After Mission A is checkpointed, Mission B must reconstruct and preserve required master-prompt doctrine in a separate mission. Film Room device validation requires separate authorization after DOCOPS containment.
+No runtime action is authorized by this closeout. The narrowest candidate is a separately authorized legacy Film Room playback observation only. It must use an existing hydrated MatchBreakdown record, avoid Match Edit and Save, and must not enter the Golden upload corridor. The shared attached-media path remains conditional on an already-existing valid projection; do not manufacture one.
 
 # DEV HANDOFF — 2026-07-26 21:50
 
