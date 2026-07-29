@@ -1,0 +1,78 @@
+{
+  "schema_version": "engineering-closeout.v1",
+  "closeout_date": "2026-07-29",
+  "expected_branch": "coach-commentary-media-metadata",
+  "expected_head": "88f4db4649eb2b41489ab77bc1da0de6f77877d2",
+  "documentation_triggers": {
+    "engineering_checkpoint": {
+      "enabled": true,
+      "repository_snapshot": {
+        "status_sb": "## coach-commentary-media-metadata",
+        "log": "88f4db4 Engineering OS v1.1 floor",
+        "diff_stat": "scripts/run_engineering_closeout.py | new"
+      },
+      "model": {
+        "date": "2026-07-29",
+        "investigation": "Engineering OS v1.1 executable closeout Phase 1",
+        "status": "COMPLETE",
+        "hypothesis": "A single repository command can validate GPT-authored closeout content and deterministically write only triggered canonical documents.",
+        "latest_runtime_behavior": "Preview and apply modes validate schema, map triggers, write owned docs, verify ordering/idempotence, and refuse push.",
+        "next_experiment": "Use the closeout command on the next authorized engineering day with GPT-authored structured input.",
+        "do_not": [
+          "Do not push from the closeout pipeline.",
+          "Do not infer engineering conclusions in Python.",
+          "Do not touch Timeline Builder, debug logs, or protected dirty scopes."
+        ],
+        "notes": [
+          "GPT authors structured content; Python validates/writes/verifies; Cursor executes."
+        ]
+      }
+    },
+    "engineering_daily": {
+      "enabled": true,
+      "model": {
+        "date": "2026-07-29",
+        "primary_objective": "Ship the smallest executable Engineering Closeout pipeline under Engineering OS v1.1.",
+        "repository_floor": [
+          "Branch: coach-commentary-media-metadata",
+          "Expected HEAD: 88f4db4649eb2b41489ab77bc1da0de6f77877d2",
+          "Engineering OS v1.1 effective and authoritative"
+        ],
+        "completed_outcomes": [
+          "Implemented scripts/run_engineering_closeout.py with preview and apply modes.",
+          "Implemented scripts/write_engineering_daily.py with one-entry-per-date and labeled amendment rules.",
+          "Added versioned closeout JSON contract and Engineering OS v1.1 example fixture.",
+          "Added bounded tests for schema, triggers, duplicate protection, idempotence, and commit authorization."
+        ],
+        "evidence_and_certification_movement": "Living engineering memory writers gained an orchestrated closeout path. Architecture certification registers were not rewritten.",
+        "stops_and_remaining_unknowns": [
+          "Historical 2026-07-28 living-memory gap remains unreconciled unless separately authorized.",
+          "Legacy write_dev_handoff.py remains a hardcoded generator; closeout uses GPT session_markdown + ordering module."
+        ],
+        "protected_and_unrelated_scopes": [
+          "timeline-builder/**",
+          "debug-logs/**",
+          "protected stashes",
+          "unrelated parent-canonical dirty scopes"
+        ],
+        "next_authorized_mission": "Restart engineering using docs/master-prompt-daily-restart.md and select the single highest-ROI product or certification mission from repository truth."
+      }
+    },
+    "dev_handoff": {
+      "enabled": true,
+      "session_date": "2026-07-29",
+      "session_markdown": "# DEV HANDOFF — 2026-07-29\n\n## Summary\n\nEngineering OS v1.1 Phase 1 executable closeout pipeline landed.\n\n## Owned Outcomes\n\n- Canonical command: `scripts/run_engineering_closeout.py`\n- Modes: preview (no writes) and apply (verified writes only)\n- GPT supplies structured JSON; Python validates/writes/verifies\n- Push prohibited\n\n## Next Mission\n\nRestart from repository truth and choose one highest-ROI mission.\n"
+    }
+  },
+  "architecture_verification": true,
+  "protected_excluded_paths": [
+    "timeline-builder/",
+    "debug-logs/",
+    "app/(tabs)/this-week/",
+    "src/domain/competition/",
+    "src/dev/",
+    "src/storage/"
+  ],
+  "commit_authorization": false,
+  "push_authorization": false
+}

@@ -252,7 +252,9 @@ Codex commits authorized documentation
 
 Canonical MatMind writers:
 
+- `scripts/run_engineering_closeout.py` — executable Engineering Closeout entrypoint (`--mode preview|apply`)
 - `scripts/write_engineering_checkpoint.py`
+- `scripts/write_engineering_daily.py`
 - `scripts/write_dev_handoff.py`
 - `scripts/dev_handoff_ordering.py`
 - `scripts/write_architecture_certification.py`
