@@ -316,6 +316,64 @@ Engineering commands must not rely on conversational interpretation. Each comman
 
 Canonical Engineering Commands must derive execution mode, mission owner, and active mission scope from repository and environment evidence. They must not infer these from conversational memory.
 
+### Operator Repository Truth Preflight
+
+The Operator supplies fresh repository truth before either startup or closeout continues.
+
+Required commands:
+
+```bash
+git status -sb
+git diff --stat
+git log --oneline --decorate -10
+git stash list
+```
+
+Optional only when the status indicates relevant changes:
+
+```bash
+git diff
+```
+
+The pasted terminal output becomes the canonical repository-truth input for that command execution.
+
+**Freshness:** Preflight output is fresh only when it was produced for the current invocation of the command. Do not reuse Git output from an earlier day or earlier command execution unless the Operator explicitly confirms that no repository activity occurred since that output.
+
+**Safety:** If the Operator cannot provide repository truth, report `REPOSITORY TRUTH BLOCKED`. Do not guess branch, HEAD, dirty work, current mission, or closeout scope. Do not import stale conversational mission details as current truth.
+
+#### Run end-of-day tasks — preflight gate
+
+If fresh preflight output has not yet been supplied in the current command execution:
+
+1. Respond with `MISSION OWNER: Git Operator / Israel`.
+2. Explain that the Operator owns repository-truth capture.
+3. Return the exact Bash commands above.
+4. Ask the Operator to paste the terminal output.
+5. Stop.
+6. Do not perform mission recap, certification review, documentation planning, or Git conclusions yet.
+
+After the Operator supplies the output:
+
+- validate branch, HEAD, dirty scopes, recent commits, and stash state;
+- then continue the Engineering Closeout Procedure;
+- use repository truth as authoritative over conversation memory.
+
+#### Restart engineering — preflight gate
+
+If fresh preflight output has not yet been supplied in the current command execution:
+
+1. Respond with `MISSION OWNER: Git Operator / Israel`.
+2. Return the same Bash preflight.
+3. Ask the Operator to paste the terminal output.
+4. Stop.
+5. Do not infer the active mission from prior conversation.
+
+After the Operator supplies the output:
+
+- establish repository truth first;
+- then read the Operating Surface, Checkpoint, Active Investigation Register, certification floor, and Product Roadmap;
+- resolve the current mission and owner from that evidence.
+
 ### Command Routing and Owner Resolution
 
 #### 1. Determine repository availability
@@ -388,6 +446,8 @@ If repository scope cannot be established:
 
 **Purpose:** Execute the Engineering Closeout Procedure.
 
+Require Operator Repository Truth Preflight before Planning Mode or Execution Mode continues.
+
 **Planning Mode** — Repository mutation unavailable.
 
 Required behavior:
@@ -413,6 +473,8 @@ Stop when Planning Mode would require mutation, when a required writer or owners
 ### Restart engineering
 
 **Purpose:** Restore the engineering floor.
+
+Require Operator Repository Truth Preflight before reconstructing the active mission or assigning a non-Operator owner.
 
 Minimum required outputs:
 
