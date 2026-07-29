@@ -62,7 +62,7 @@ Do not release while documentation claims an investigation is complete when it i
 
 Before submitting any production or feedback TestFlight build:
 - confirm `docs/dev-handoff.md` reflects what this build actually validates vs what remains Dev-only
-- run `python3 tools/docs_ops/audit_docs.py` and `python3 tools/docs_ops/compare_docs.py` if canonical docs changed this cycle
+- if canonical docs changed this cycle, follow the Engineering OS documentation workflow in `docs/ENGINEERING_OS.md` (§11 Documentation Pipeline and §13 Closeout)
 - ensure release notes / recap updates are queued per **Release notes / tracking** below
 
 ## Preflight

@@ -92,6 +92,7 @@ Repository state, tests, runtime observations, provider responses, and committed
 | Founder-approved deferral | `docs/engineering-parking-lot.md` | Deferred work with a resume trigger |
 | Developer doctrine | `docs/master-prompt-developer.md` | Stable execution guidance |
 | Daily startup procedure | `docs/master-prompt-daily-restart.md` | Startup and closeout sequence only |
+| Documentation ownership and update triggers | `docs/documentation-governance.md` | Living-document ownership map; update triggers only |
 
 Write information once in its canonical home and reference it elsewhere. Engineering Daily is an index, not a duplicate evidence archive.
 
@@ -249,6 +250,13 @@ Codex verifies repository ownership
 Codex commits authorized documentation
 ```
 
+Canonical MatMind writers:
+
+- `scripts/write_engineering_checkpoint.py`
+- `scripts/write_dev_handoff.py`
+- `scripts/dev_handoff_ordering.py`
+- `scripts/write_architecture_certification.py`
+
 Required rules:
 
 - Reuse an existing repository writer when it owns the target document.
@@ -284,6 +292,10 @@ Engineering Daily does not replace:
 - Parking Lot for founder-approved deferral.
 
 ## 13. Closeout
+
+The founder command **Run end-of-day tasks** means: execute this Engineering Closeout Procedure.
+
+Do not create a standalone MatMind EOD artifact. ODS EOD is not MatMind authority and does not authorize MatMind documentation or code changes.
 
 Before ending an engineering day or authorized slice:
 
