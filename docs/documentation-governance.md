@@ -1,10 +1,37 @@
 # Documentation Governance
 
-**Status:** Authoritative under Engineering OS vNext  
-**Effective:** 2026-07-17  
-**Scope:** Living MatMind documents — ownership, update triggers, and prohibited content  
+**Status:** Authoritative under Engineering OS v1.1
+**Effective:** 2026-07-17
+**Scope:** Living MatMind documents — ownership, update triggers, and prohibited content
 
-Engineering OS vNext establishes a single owner and responsibility for every living document.
+This document is the subordinate living-document ownership map under `docs/ENGINEERING_OS.md`.
+
+`docs/ENGINEERING_OS.md` is the supreme MatMind engineering authority. This file maps document ownership and update triggers. `docs/engineering-daily.md` is the single daily index. No separate MatMind EOD artifact is created.
+
+Engineering OS v1.1 establishes a single owner and responsibility for every living document.
+
+---
+
+## Engineering OS
+
+| | |
+| --- | --- |
+| **Path** | `docs/ENGINEERING_OS.md` |
+| **Owner** | Engineering Leadership |
+| **Updated when** | Explicit Engineering Leadership mission with a version update |
+| **Never contains** | Session diary; product roadmap; separate EOD artifact |
+
+---
+
+## Engineering Daily
+
+| | |
+| --- | --- |
+| **Path** | `docs/engineering-daily.md` |
+| **Owner** | Engineering |
+| **Updated when** | Daily closeout is authorized — one concise append-only entry per engineering day |
+| **Never contains** | Duplicate evidence archive; separate EOD artifact |
+| **Rule** | Single daily index. Corrections append as labeled amendments. History is never silently rewritten. |
 
 ---
 
@@ -85,6 +112,8 @@ Engineering OS vNext establishes a single owner and responsibility for every liv
 
 | Document | Owner | Update cadence | Forbidden content / rule |
 | --- | --- | --- | --- |
+| Engineering OS | Engineering Leadership | Explicit mission + version update | Session diary, product roadmap, separate EOD |
+| Engineering Daily | Engineering | Authorized daily closeout (one entry per day) | Duplicate evidence archive; separate EOD; never rewrite |
 | Product Roadmap | Product | Direction / Epic / Release change | Commits, investigations, debugging |
 | Engineering Checkpoint | Engineering | Every engineering session | Product roadmap duplication |
 | Dev Handoff | Engineering | Append on closeout | Never rewrite |
@@ -101,6 +130,8 @@ Every class of information has one canonical destination. Write it there. Refere
 
 | Information Type | Canonical Document | Owner | When Updated | Never Duplicate In |
 | --- | --- | --- | --- | --- |
+| Engineering Operating Contract | `docs/ENGINEERING_OS.md` | Engineering Leadership | Explicit mission with version update | Engineering Daily; Checkpoint; Dev Handoff; Product Roadmap |
+| Daily Engineering Index | `docs/engineering-daily.md` | Engineering | Authorized daily closeout — one entry per day | Separate EOD artifact; Checkpoint as diary substitute; long investigation narrative copies |
 | Product Mission | `docs/product/product-roadmap.md` | Product | Product direction / mission changes | Engineering Checkpoint; Dev Handoff; Parking Lot; master prompts |
 | Product Vision | `docs/product/coach-experience-vision.md` | Product | Vision / North Star changes | Engineering Checkpoint; Dev Handoff; Parking Lot; Product Roadmap Epic bodies |
 | Product Epics | `docs/product/product-roadmap.md` | Product | Epic create / status / sequencing changes | Engineering Checkpoint; Dev Handoff; Parking Lot |
