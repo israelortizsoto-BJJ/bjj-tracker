@@ -311,16 +311,15 @@ MatMind script preference:
 
 Do not redesign, improve, or simplify this workflow. Adapt repository paths only.
 
-### Documentation Ops (DOCOPS) workflow
+### MatMind documentation authority
 
-Canonical docs follow the Documentation Ops pipeline:
+MatMind DOCOPS is the only documentation authority. Documentation updates use the MatMind writers listed above.
 
-1. Review reports in `reports/*.review.md` (DOCOPS-005)
-2. Founder approves recommendations
-3. Unified diffs in `reports/diffs/` (DOCOPS-006)
-4. Apply engine runs only after explicit approval (DOCOPS-007)
+Clarifications:
 
-Do not hand-edit canonical docs outside this pipeline unless the change is tiny and emergency-level.
+* Engineering Daily replaces standalone EOD artifacts.
+* Restart restores the engineering floor.
+* Closeout executes the Engineering Closeout Procedure in `docs/ENGINEERING_OS.md`.
 
 Do not automatically require an independent review for ordinary documentation changes. Use one when permanent history, architecture certification, production evidence, or an unusual writer change creates meaningful risk.
 
