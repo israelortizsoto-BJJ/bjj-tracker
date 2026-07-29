@@ -312,6 +312,76 @@ Before ending an engineering day or authorized slice:
 
 Engineering commands must not rely on conversational interpretation. Each command defines purpose, execution modes or required outputs, and stop conditions.
 
+Canonical Engineering Commands must derive execution mode, mission owner, and active mission scope from repository and environment evidence. They must not infer these from conversational memory.
+
+### Command Routing and Owner Resolution
+
+#### 1. Determine repository availability
+
+**Repository Available:** The actual BJJ Tracker Git worktree and canonical Operating Surface are readable.
+
+**Repository Unavailable:** The environment cannot read the actual BJJ Tracker worktree or canonical Operating Surface.
+
+#### 2. Determine execution mode
+
+- Repository unavailable → Planning Mode.
+- Repository available but mutation unavailable or unauthorized → Planning Mode.
+- Repository available and required mutation is available and authorized → Execution Mode.
+
+#### 3. Determine mission owner
+
+**Planning Mode:** MISSION OWNER = ChatGPT.
+
+Reason: The work is interpretation, scope determination, sequencing, and blocked-action reporting.
+
+**Execution Mode** involving repository inspection, edits, writers, tests, runtime, or Git preparation: MISSION OWNER = Cursor.
+
+Reason: The work requires direct repository execution.
+
+**Git push or consequential production authorization:** MISSION OWNER = Git Operator / Israel.
+
+**Codex:** Do not assign Codex by default.
+
+Codex may own a mission only when explicitly authorized for:
+
+- independent architecture review;
+- unresolved root-cause investigation;
+- competing design evaluation;
+- high-risk certification review.
+
+#### 4. Determine active mission scope
+
+The active mission must be derived from repository evidence in this order:
+
+1. `docs/engineering-checkpoint.md`
+2. `docs/architecture/certification/active-investigation-register.md`
+3. `docs/product/product-roadmap.md`
+4. current Git state and recent commits
+5. canonical living documents
+
+Conversation history may be used only as secondary context.
+
+If repository scope cannot be established:
+
+- state SCOPE UNRESOLVED;
+- do not import stale mission details;
+- do not fabricate a mission recap;
+- limit output to Planning Mode findings and exact blocked actions.
+
+#### 5. Apply to “Run end-of-day tasks”
+
+**Planning Mode:**
+
+- owner must be ChatGPT;
+- do not assign Codex;
+- do not reconstruct stale product work as current mission truth;
+- clearly separate repository-proven facts, conversation-supported context, and unknowns.
+
+**Execution Mode:**
+
+- owner must be Cursor;
+- execute the Engineering Closeout Procedure using repository truth.
+
 ### Run end-of-day tasks
 
 **Purpose:** Execute the Engineering Closeout Procedure.
