@@ -10,6 +10,112 @@
 
 Under Engineering OS vNext, this register is the engineering session snapshot. Closeout updates Checkpoint, Dev Handoff, and Parking Lot as needed — never a separate EOD artifact.
 
+# ENGINEERING CHECKPOINT — 2026-07-29
+
+## Investigation
+
+Engineering OS v1.1 / Executable Engineering Closeout
+
+## Status
+
+COMPLETE
+
+## Hypothesis
+
+Engineering OS v1.1 and Closeout Pipeline Version 1 establish a recoverable MatMind engineering floor where GPT supplies structured content, Cursor executes, and Python deterministically validates, writes, and verifies.
+
+## Latest Runtime Behavior
+
+Live repository acceptance runs preview then apply for Checkpoint, Engineering Daily, and Dev Handoff only. Architecture verification hook is enabled. Push remains prohibited. Certified implementation HEAD is e84badc.
+
+## Next Experiment
+
+Return to the Production Media Corridor / Film Room certification work already active in the separate thread. Do not begin Engineering OS v1.2, Operating Surface redesign, Roadmap/Parking Lot automation, or 2026-07-28 reconciliation from this closeout.
+
+## Do Not
+
+- Do not push from the closeout pipeline.
+- Do not reconcile 2026-07-28 Film Room closeout in this mission.
+- Do not claim Product Roadmap, Parking Lot automation, product/runtime certification, or Shared Match Media outcomes.
+- Do not redesign Engineering OS or the Operating Surface from this closeout.
+- Do not stage unrelated dirty scopes (Timeline Builder, debug-logs, parent-canonical WIP).
+
+## Notes
+
+- Engineering floor: CERTIFIED at e84badc.
+- Authority/OS commits: 25cb1ce, c8ade57, add7bf9, cea01e0, 4480cc4, 014407e, 88f4db4.
+- Executable closeout commit: e84badc — Reduce Engineering Closeout Pipeline to Version 1.
+- Version 1 provides preview/apply, Checkpoint, Daily, Handoff ordering, architecture verification hook, schema validation, idempotence, protected-scope preservation, and no automatic push.
+- Responsibility boundary: GPT authors; Cursor executes; Python validates/writes/verifies; Israel retains push and consequential production authorization.
+
+## Repository State
+
+### git status -sb
+
+```text
+## coach-commentary-media-metadata
+ M .gitignore
+ M app/(tabs)/profile/dev-settings.tsx
+ M app/(tabs)/this-week/kid/[kidId]/competition/edit.tsx
+ M docs/architecture/certification/active-investigation-register.md
+ M src/dev/VerifiedCompletionReplayPrerequisiteInspectorDevScreen.tsx
+ M src/dev/coachMediaCorridorTrace.ts
+ M src/domain/competition/parentVerifiedCompletionReplayPrerequisiteInspector.ts
+ M src/domain/competition/tests/parentCanonicalMediaScheduling.test.ts
+ M src/domain/competition/tests/parentVerifiedCompletionReplayPrerequisiteInspector.test.mjs
+ M timeline-builder/google-sheets-live/src/Constants.gs
+ M timeline-builder/google-sheets-live/src/TimelineV2.gs
+?? app/dev/parent-canonical-target-certification.tsx
+?? debug-logs/codex/
+?? debug-logs/corridor-qa/
+?? debug-logs/playback-forensics/
+?? scripts/__pycache__/
+?? scripts/parent-canonical-target-handoff.mjs
+?? scripts/tests/__pycache__/
+?? scripts/tests/parent-canonical-target-handoff.test.mjs
+?? src/dev/ParentCanonicalTargetCertificationInspectorDevScreen.tsx
+?? src/dev/parentCanonicalTargetProtectedBridge.ts
+?? src/dev/parentMatchMediaEditIdentityTrace.ts
+?? src/dev/tests/parentMatchMediaEditIdentityTrace.test.mjs
+?? src/domain/competition/parentCanonicalTargetCertificationInspector.ts
+?? src/domain/competition/parentCanonicalTargetProtectedBridge.ts
+?? src/domain/competition/parentCanonicalTargetProtectedPriorScope.ts
+?? src/domain/competition/parentCanonicalTargetSafeLog.ts
+?? src/domain/competition/tests/parentCanonicalTargetCertificationInspector.test.mjs
+?? src/domain/competition/tests/parentCanonicalTargetProtectedBridge.test.mjs
+?? src/storage/parentCanonicalTargetCertificationReadStore.ts
+```
+
+### git log --oneline --decorate -8
+
+```text
+e84badc (HEAD -> coach-commentary-media-metadata) Reduce Engineering Closeout Pipeline to Version 1
+88f4db4 Define Engineering OS command routing
+014407e Define canonical Engineering OS commands
+4480cc4 Improve Engineering OS discoverability
+cea01e0 Demote codex-system to historical guidance
+add7bf9 Remove legacy DOCOPS references from restart prompt
+c8ade57 Align documentation governance with Engineering OS v1.1
+25cb1ce Establish Engineering OS authority boundary
+```
+
+### git diff --stat
+
+```text
+.gitignore                                         |   3 +
+ app/(tabs)/profile/dev-settings.tsx                |   5 +
+ .../this-week/kid/[kidId]/competition/edit.tsx     |  26 +-
+ .../certification/active-investigation-register.md |   4 +
+ ...pletionReplayPrerequisiteInspectorDevScreen.tsx |  34 +
+ src/dev/coachMediaCorridorTrace.ts                 |   1 +
+ ...erifiedCompletionReplayPrerequisiteInspector.ts |  90 +++
+ .../tests/parentCanonicalMediaScheduling.test.ts   |  12 +
+ ...dCompletionReplayPrerequisiteInspector.test.mjs | 110 ++-
+ .../google-sheets-live/src/Constants.gs            |   6 +-
+ .../google-sheets-live/src/TimelineV2.gs           | 735 +++++++++++++++++----
+ 11 files changed, 893 insertions(+), 133 deletions(-)
+```
+
 # ENGINEERING CHECKPOINT — 2026-07-27
 
 ## Investigation

@@ -91,6 +91,66 @@ scripts/write_engineering_checkpoint.py
 
 ---
 
+# DEV HANDOFF — 2026-07-29
+
+## Summary
+
+Engineering OS v1.1 / Executable Engineering Closeout Pipeline Version 1 live-repository certification.
+
+## Investigation Status
+
+COMPLETE
+
+## Engineering Floor
+
+CERTIFIED at `e84badc`.
+
+## Authority and Operating Surface Commits
+
+- `25cb1ce` — Establish Engineering OS authority boundary
+- `c8ade57` — Align documentation governance with Engineering OS v1.1
+- `add7bf9` — Remove legacy DOCOPS references from restart prompt
+- `cea01e0` — Demote codex-system to historical guidance
+- `4480cc4` — Improve Engineering OS discoverability
+- `014407e` — Define canonical Engineering OS commands
+- `88f4db4` — Define Engineering OS command routing
+
+## Executable Closeout Commit
+
+- `e84badc` — Reduce Engineering Closeout Pipeline to Version 1
+
+## Version 1 Capabilities
+
+- preview and apply
+- deterministic Checkpoint writing
+- deterministic Engineering Daily writing
+- deterministic Dev Handoff ordering
+- architecture verification hook
+- schema validation
+- idempotence verification
+- protected-scope preservation
+- no automatic push
+
+## Responsibility Boundary
+
+- GPT supplies structured engineering conclusions and content
+- Cursor executes the repository command
+- Python validates, writes, orders, and verifies
+- Israel retains push and consequential production authorization
+
+## Explicit Exclusions
+
+- no Engineering OS v1.2
+- no Operating Surface redesign
+- no Product Roadmap or Parking Lot automation
+- no product/runtime certification
+- no Film Room or Shared Match Media claim
+- no 2026-07-28 reconciliation
+
+## Next Engineering Direction
+
+Return to the Production Media Corridor / Film Room certification work already active in the separate thread.
+
 # DEV HANDOFF — 2026-07-27
 
 ## Session Summary
