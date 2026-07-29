@@ -1,5 +1,15 @@
 Codex System — Operating Rules (v2)
 
+> This document is retained for historical compatibility.
+>
+> Current engineering authority is defined by:
+>
+> - `docs/ENGINEERING_OS.md`
+> - `docs/master-prompt-developer.md`
+> - `docs/master-prompt-daily-restart.md`
+
+This file is not living engineering authority. Prefer the documents above for operating rules, daily restart, protection, and documentation workflow. Content below is preserved as historical Codex Builder/Patcher guidance.
+
 Core Workflow
 
 1. GPT → defines scope + constraints
@@ -17,26 +27,26 @@ Founder Velocity constraint
 * Stop when scope expands beyond the approved intent
 * Do not drift into architecture exploration, repo-wide cleanup, or elegance theater
 
-Documentation Ops workflow
+Documentation (MatMind DOCOPS)
 
-* `docs/dev-handoff.md` remains engineering source of truth
-* Documentation changes flow: review reports → founder approval → unified diffs → explicit apply
-* Generate diffs with `python3 tools/docs_ops/generate_diffs.py`; apply only after founder approves the diff
-* Codex generates code diffs; canonical documentation patches use the Documentation Ops pipeline unless the operator explicitly approves an exception
+* MatMind DOCOPS is the documentation authority — not this file and not the retired `tools/docs_ops/*` / `reports/*` pipeline
+* Ownership and update triggers: `docs/ENGINEERING_OS.md`, `docs/documentation-governance.md`
+* Writers: `scripts/write_engineering_checkpoint.py`, `scripts/write_dev_handoff.py`, `scripts/dev_handoff_ordering.py`, `scripts/write_architecture_certification.py`
 
 Architecture Certification workflow
 
 Before modifying an architectural subsystem:
 
-1. Read CertifiedArchitectureRegister-v1.md
-2. Read protected-systems-register.md
+1. Read `docs/architecture/certification/CertifiedArchitectureRegister-v1.md`
+2. Read `docs/architecture/certification/protected-systems-register.md` (Protected Systems Register)
 3. Confirm the subsystem is not already certified.
 4. If certification changes, update the certification docs before closing the work.
 
+Do not maintain a local protection list here; the Protected Systems Register is authoritative.
+
 Non-Negotiables
 
-* DO NOT modify Training tab unless explicitly required
-* DO NOT modify execution layer: app/(tabs)/training/[id].tsx
+* DO NOT modify protected systems without evidence — see `docs/architecture/certification/protected-systems-register.md`
 * DO NOT introduce new architecture
 * ALWAYS match existing storage (AsyncStorage + StorageKeys)
 * ALWAYS inspect repo before generating code
