@@ -1,14 +1,14 @@
 # MatMind Engineering OS
 
-**Version:** 1.0
+**Version:** 1.1
 
 **Status:** ACTIVE
 
-**Effective:** 2026-07-21
+**Effective:** 2026-07-29
 
 **Authority:** Engineering Leadership
 
-Engineering OS is the operating contract for building MatMind safely, quickly, and recoverably.
+Engineering OS is the operating contract for building MatMind safely, quickly, and recoverably. This document is the supreme MatMind engineering authority for this repository.
 
 It governs how engineering work begins, how evidence changes direction, how certified systems are protected, how documentation is recorded, and how a clean recovery point is left behind.
 
@@ -94,6 +94,19 @@ Repository state, tests, runtime observations, provider responses, and committed
 | Daily startup procedure | `docs/master-prompt-daily-restart.md` | Startup and closeout sequence only |
 
 Write information once in its canonical home and reference it elsewhere. Engineering Daily is an index, not a duplicate evidence archive.
+
+### Authority Boundary
+
+Living MatMind engineering memory and procedure use only the Canonical Information Homes above.
+
+`ods-eos/` is a separate portfolio operating system. Its mission, restart, EOD, knowledge, and parking projections do not authorize MatMind code changes and do not override MatMind living documents.
+
+The following are historical reference only and are not authoritative for MatMind living memory or procedure:
+
+- `docs/recaps/`
+- `docs/handovers/`
+- `docs/dev-handoff.backup.md`
+- `docs/codex-system.md`
 
 ## 4. Daily Startup
 
