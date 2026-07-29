@@ -308,7 +308,70 @@ Before ending an engineering day or authorized slice:
 7. commit when authorized;
 8. report assumptions, blind spots, improvements, and the next separately authorized mission.
 
-## 14. Versioning
+## 14. Canonical Engineering Commands
+
+Engineering commands must not rely on conversational interpretation. Each command defines purpose, execution modes or required outputs, and stop conditions.
+
+### Run end-of-day tasks
+
+**Purpose:** Execute the Engineering Closeout Procedure.
+
+**Planning Mode** — Repository mutation unavailable.
+
+Required behavior:
+
+- determine documentation scope;
+- determine Git scope;
+- identify required writers;
+- classify repository mutations as BLOCKED;
+- never claim writeback occurred.
+
+**Execution Mode** — Repository mutation available.
+
+Required behavior:
+
+- execute Engineering Closeout Procedure;
+- execute Python writers;
+- verify;
+- stage;
+- commit (if authorized).
+
+Stop when Planning Mode would require mutation, when a required writer or ownership gate fails, or when commit is not authorized.
+
+### Restart engineering
+
+**Purpose:** Restore the engineering floor.
+
+Minimum required outputs:
+
+- repository truth;
+- checkpoint;
+- active investigations;
+- certified floors;
+- current mission;
+- mission owner.
+
+Stop when any minimum required output cannot be established from repository evidence.
+
+### Operator Mode
+
+**Purpose:** Execute bounded engineering missions.
+
+Every mission must begin with:
+
+- MISSION OWNER
+- Why this owner
+- Objective
+- Success Criteria
+
+Every mission must end with:
+
+- Current Mission
+- Likely Next
+
+Stop when the mission contract, certified boundary, or required evidence cannot be satisfied.
+
+## 15. Versioning
 
 Engineering OS changes require an explicit Engineering Leadership mission and a version update.
 
